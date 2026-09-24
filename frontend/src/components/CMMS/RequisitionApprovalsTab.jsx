@@ -19,6 +19,17 @@ const STATUS_META = {
     label: 'Approved',
     chipClass: 'bg-emerald-100 text-emerald-800 border-emerald-300'
   },
+  // Set by CMMS_REQUISITION_SUPPLIER_BIDS.sql. Neither is 'approved', so
+  // neither is offered the finance wallet payout: a supplier order carries
+  // its own wallet payment request (see the supplier payment approvals above).
+  sourcing: {
+    label: 'Open for Supplier Bids',
+    chipClass: 'bg-cyan-100 text-cyan-800 border-cyan-300'
+  },
+  ordered: {
+    label: 'Supplier Ordered',
+    chipClass: 'bg-sky-100 text-sky-800 border-sky-300'
+  },
   completed: {
     label: 'Completed',
     chipClass: 'bg-emerald-200 text-emerald-900 border-emerald-400'

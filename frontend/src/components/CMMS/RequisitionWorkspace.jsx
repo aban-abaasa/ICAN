@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ChevronDown, Clipboard, Loader, Package, Plus, Search } from 'lucide-react';
 import cmmsService from '../../lib/supabase/services/cmmsService';
+import cmmsRequisitionBidsService from '../../services/cmmsRequisitionBidsService';
+import RequisitionSupplierBids from './RequisitionSupplierBids';
 
 const STATUS_META = {
   pending_department_head: {
@@ -14,6 +16,14 @@ const STATUS_META = {
   approved: {
     label: 'Approved',
     badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+  },
+  sourcing: {
+    label: 'Open for Supplier Bids',
+    badgeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+  },
+  ordered: {
+    label: 'Supplier Ordered',
+    badgeClass: 'bg-sky-500/20 text-sky-300 border-sky-500/40'
   },
   completed: {
     label: 'Completed',
@@ -84,12 +94,15 @@ const emptyForm = {
 
 const formatUgx = (value) => `UGX ${Number(value || 0).toLocaleString()}`;
 
-const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData, userDepartmentId, canView = true, canCreate = false }) => {
+const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData, userDepartmentId, canView = true, canCreate = false, canSource = false, canViewBids = false }) => {
   const [form, setForm] = useState(emptyForm);
   const [selectedItem, setSelectedItem] = useState('');
   const [itemQuantity, setItemQuantity] = useState(1);
+  const [itemUnit, setItemUnit] = useState('');
   const [itemCost, setItemCost] = useState('');
   const [itemCondition, setItemCondition] = useState('');
+  const [tenders, setTenders] = useState({});
+  const [lowStockNotice, setLowStockNotice] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(false);
@@ -113,13 +126,51 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
     return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
   }, [cmmsData.inventory]);
 
+  // Inventory rows carry either the DB names (reorder_level/unit_price) or the
+  // ones the inventory screen writes (minimum_stock_level/unit_cost).
+  const stockLevel = (item) => Number(item.quantity_in_stock ?? 0);
+  const minimumLevel = (item) => Number(item.minimum_stock_level ?? item.reorder_level ?? 0);
+  const inventoryUnitCost = (item) => Number(item.unit_cost ?? item.unit_price ?? 0);
+
+  const lowStockItems = useMemo(
+    () => (cmmsData.inventory || []).filter(
+      (item) => item.is_active !== false && minimumLevel(item) > 0 && stockLevel(item) <= minimumLevel(item)
+    ),
+    [cmmsData.inventory]
+  );
+
+  // Picking (or typing) an item that exists in inventory pre-fills its unit
+  // and last known cost; anything else is a free-text "item to buy".
+  const handleItemNameChange = (name) => {
+    setSelectedItem(name);
+    const match = (cmmsData.inventory || []).find((item) => (item.item_name || item.itemName) === name);
+    if (!match) return;
+    if (!itemUnit) setItemUnit(match.unit_of_measure || '');
+    if (!itemCost && inventoryUnitCost(match) > 0) setItemCost(String(inventoryUnitCost(match)));
+  };
+
+  // Latest supply request (bid opportunity) per requisition. Newest first from
+  // the service, so the first row seen for a requisition is its current one.
+  const loadTenders = useCallback(async (rows) => {
+    const result = await cmmsRequisitionBidsService.getTendersForRequisitions(
+      rows.map((row) => row.id).filter(Boolean)
+    );
+    const latest = {};
+    (result.data || []).forEach((tender) => {
+      if (!latest[tender.cmms_requisition_id]) latest[tender.cmms_requisition_id] = tender;
+    });
+    setTenders(latest);
+  }, []);
+
+  // `silent` refreshes in place (after an award/cancel) without swapping the
+  // list for a spinner, which would collapse the card being worked on.
   const loadRequisitions = useCallback(
-    async (force = false) => {
+    async (force = false, silent = false) => {
       if (!companyId) return;
       if (hasLoaded.current && !force) return;
 
       hasLoaded.current = true;
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       try {
         const { data, error } = await cmmsService.getCompanyRequisitions(companyId);
         if (error) {
@@ -132,13 +183,14 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
           ...prev,
           requisitions: transformed
         }));
+        loadTenders(transformed);
       } catch (error) {
         console.error('Error loading requisitions:', error);
       } finally {
-        setIsLoading(false);
+        if (!silent) setIsLoading(false);
       }
     },
-    [companyId, setCmmsData]
+    [companyId, setCmmsData, loadTenders]
   );
 
   useEffect(() => {
@@ -169,8 +221,9 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
 
     const item = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      equipment: selectedItem,
+      equipment: selectedItem.trim(),
       quantity,
+      unit_of_measure: itemUnit.trim() || 'unit',
       costPerUnit: unitCost,
       totalCost: quantity * unitCost,
       condition: itemCondition.trim()
@@ -187,8 +240,56 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
 
     setSelectedItem('');
     setItemQuantity(1);
+    setItemUnit('');
     setItemCost('');
     setItemCondition('');
+  };
+
+  // "Items to buy" shortcut: every active inventory item at or below its
+  // minimum level, sized to refill toward twice the minimum (or the item's own
+  // reorder quantity when it has one). Items with no known unit cost are
+  // skipped -- a requisition line needs a cost -- and reported instead.
+  const handleAddLowStockItems = () => {
+    const existing = new Set(form.items.map((item) => item.equipment.toLowerCase()));
+    const added = [];
+    let skippedNoCost = 0;
+
+    lowStockItems.forEach((inventoryItem) => {
+      const name = inventoryItem.item_name || inventoryItem.itemName;
+      if (!name || existing.has(name.toLowerCase())) return;
+      const unitCost = inventoryUnitCost(inventoryItem);
+      if (!(unitCost > 0)) { skippedNoCost += 1; return; }
+      const quantity = Math.ceil(Math.max(
+        Number(inventoryItem.reorder_quantity) || 0,
+        minimumLevel(inventoryItem) * 2 - stockLevel(inventoryItem),
+        1
+      ));
+      added.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        equipment: name,
+        quantity,
+        unit_of_measure: inventoryItem.unit_of_measure || 'unit',
+        costPerUnit: unitCost,
+        totalCost: quantity * unitCost,
+        condition: 'New (stock replenishment)'
+      });
+    });
+
+    if (added.length > 0) {
+      setForm((prev) => {
+        const items = [...prev.items, ...added];
+        return {
+          ...prev,
+          items,
+          estimatedCost: items.reduce((sum, current) => sum + Number(current.totalCost || 0), 0)
+        };
+      });
+    }
+
+    const parts = [];
+    parts.push(added.length > 0 ? `Added ${added.length} low-stock item${added.length === 1 ? '' : 's'}.` : 'No new low-stock items to add.');
+    if (skippedNoCost > 0) parts.push(`${skippedNoCost} skipped: no unit cost in inventory — add ${skippedNoCost === 1 ? 'it' : 'them'} manually with an estimated cost.`);
+    setLowStockNotice(parts.join(' '));
   };
 
   const handleRemoveLineItem = (itemId) => {
@@ -286,8 +387,10 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
       setForm(emptyForm);
       setSelectedItem('');
       setItemQuantity(1);
+      setItemUnit('');
       setItemCost('');
       setItemCondition('');
+      setLowStockNotice('');
       alert(`Requisition created: ${data.requisition_number || data.id}`);
     } catch (error) {
       console.error('Unexpected error creating requisition:', error);
@@ -401,7 +504,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                 New Maintenance Requisition
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Redesigned intake form with line items and automatic totals.
+                List the items to buy, from inventory or typed in. Once approved, you can open the list to suppliers for bids.
               </p>
             </div>
             <button
@@ -409,8 +512,10 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                 setForm(emptyForm);
                 setSelectedItem('');
                 setItemQuantity(1);
+                setItemUnit('');
                 setItemCost('');
                 setItemCondition('');
+                setLowStockNotice('');
               }}
               className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800/70 transition-colors"
             >
@@ -470,22 +575,35 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
 
             <div className="lg:col-span-2 space-y-3">
               <div className="rounded-xl border border-cyan-500/25 bg-slate-950/55 p-3">
-                <h4 className="text-sm font-semibold text-cyan-200 mb-2">Line Items</h4>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h4 className="text-sm font-semibold text-cyan-200">Items to buy</h4>
+                  {lowStockItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleAddLowStockItems}
+                      className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-200 hover:bg-amber-500/20"
+                    >
+                      Add {lowStockItems.length} low-stock item{lowStockItems.length === 1 ? '' : 's'}
+                    </button>
+                  )}
+                </div>
+                {lowStockNotice && <p className="mb-2 text-[11px] text-amber-200">{lowStockNotice}</p>}
                 <div className="space-y-2">
-                  <select
+                  <input
+                    type="text"
+                    list="requisition-inventory-items"
                     value={selectedItem}
-                    onChange={(e) => setSelectedItem(e.target.value)}
-                    className="w-full rounded-lg border border-white/15 bg-slate-900 px-2.5 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
-                  >
-                    <option value="">Select inventory item</option>
+                    onChange={(e) => handleItemNameChange(e.target.value)}
+                    placeholder="Item — pick from inventory or type a new one"
+                    className="w-full rounded-lg border border-white/15 bg-slate-900 px-2.5 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                  />
+                  <datalist id="requisition-inventory-items">
                     {inventoryOptions.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
+                      <option key={name} value={name} />
                     ))}
-                  </select>
+                  </datalist>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <input
                       type="number"
                       min="1"
@@ -495,12 +613,19 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                       className="rounded-lg border border-white/15 bg-slate-900 px-2.5 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
                     />
                     <input
+                      type="text"
+                      value={itemUnit}
+                      onChange={(e) => setItemUnit(e.target.value)}
+                      placeholder="Unit (pcs, kg…)"
+                      className="rounded-lg border border-white/15 bg-slate-900 px-2.5 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                    />
+                    <input
                       type="number"
                       min="0"
                       step="0.01"
                       value={itemCost}
                       onChange={(e) => setItemCost(e.target.value)}
-                      placeholder="Unit cost"
+                      placeholder="Est. unit cost"
                       className="rounded-lg border border-white/15 bg-slate-900 px-2.5 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
                     />
                   </div>
@@ -508,7 +633,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                     type="text"
                     value={itemCondition}
                     onChange={(e) => setItemCondition(e.target.value)}
-                    placeholder="Condition (required)"
+                    placeholder="Condition / specification (required)"
                     className="w-full rounded-lg border border-white/15 bg-slate-900 px-2.5 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
                   />
                   <p className="text-[11px] text-slate-400">
@@ -553,7 +678,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-start">
                         <div>
                           <div className="text-[10px] uppercase tracking-wide text-slate-400">Required Qty</div>
-                          <div className="text-sm text-white">{item.quantity}</div>
+                          <div className="text-sm text-white">{item.quantity}{item.unit_of_measure ? ` ${item.unit_of_measure}` : ''}</div>
                         </div>
                         <div>
                           <div className="text-[10px] uppercase tracking-wide text-slate-400">Unit Cost</div>
@@ -724,7 +849,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                                 <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-2">
                                   <div>
                                     <p className="text-[10px] uppercase tracking-wide text-slate-500">Required Qty</p>
-                                    <p className="text-sm text-white">{Number(item.quantity || 0)}</p>
+                                    <p className="text-sm text-white">{Number(item.quantity || 0)}{item.unit_of_measure && item.unit_of_measure !== 'unit' ? ` ${item.unit_of_measure}` : ''}</p>
                                   </div>
                                   <div>
                                     <p className="text-[10px] uppercase tracking-wide text-slate-500">Unit Cost</p>
@@ -744,6 +869,15 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                           </div>
                         </div>
                       )}
+
+                      <RequisitionSupplierBids
+                        requisition={req}
+                        tender={tenders[req.id]}
+                        companyId={companyId}
+                        canSource={canSource}
+                        canViewBids={canViewBids}
+                        onChanged={() => loadRequisitions(true, true)}
+                      />
                     </div>
                   )}
                 </article>

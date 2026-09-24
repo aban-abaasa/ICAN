@@ -9119,6 +9119,10 @@ const CMMSModule = ({
               userDepartmentId={currentUserDeptId}
               canView={hasToolAction('requisitions', 'view')}
               canCreate={hasToolAction('requisitions', 'create')}
+              // Same rules the database enforces in cmms_can_source_requisition
+              // and the cmms_biz_bids_select policy (CMMS_REQUISITION_SUPPLIER_BIDS.sql).
+              canSource={hasToolAction('requisitions', 'purchase') || hasToolAction('opportunities', 'manage')}
+              canViewBids={hasToolAction('requisitions', 'purchase') || hasToolAction('requisitions', 'approve') || hasToolAction('opportunities', 'view')}
             />
           </>
         )}

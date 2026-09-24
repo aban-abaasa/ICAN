@@ -79,7 +79,11 @@ export const getOpportunitiesForCompany = async (companyId) => {
     .eq('cmms_company_id', companyId)
     .order('created_at', { ascending: false });
   if (error) return { success: false, error: error.message, data: [] };
-  return { success: true, data: data || [] };
+  // Requisition supply requests (opportunity_kind 'supply') carry itemised
+  // supplier bids and are awarded from the requisition, not from here -- see
+  // cmmsRequisitionBidsService.js. Filtered client-side so this keeps working
+  // before CMMS_REQUISITION_SUPPLIER_BIDS.sql adds the column.
+  return { success: true, data: (data || []).filter((o) => o.opportunity_kind !== 'supply') };
 };
 
 export const getBidsForOpportunity = async (opportunityId) => {
@@ -129,7 +133,9 @@ export const getOpenOpportunities = async () => {
     .eq('status', 'open')
     .order('created_at', { ascending: false });
   if (error) return { success: false, error: error.message, data: [] };
-  return { success: true, data: data || [] };
+  // Supply requests take itemised bids from published supplier businesses
+  // (Supplier Portal), not a flat bid from another CMMS company.
+  return { success: true, data: (data || []).filter((o) => o.opportunity_kind !== 'supply') };
 };
 
 /** Companies the current user is an active member of -- the "which

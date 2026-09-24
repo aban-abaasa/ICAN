@@ -2378,6 +2378,23 @@ const OpportunityDetailModal = ({ opportunity, onClose, onShare, viewerUser, onW
             )}
           </div>
           <p className="nb-text-muted whitespace-pre-wrap leading-relaxed">{opportunity.description}</p>
+          {opportunity.opportunity_kind === 'supply' && (
+            <div className="mt-4">
+              <p className="text-sm font-semibold nb-text mb-1">Items requested</p>
+              {Array.isArray(opportunity.items) && opportunity.items.length > 0 ? (
+                <ul className="text-sm nb-text-muted space-y-0.5">
+                  {opportunity.items.map((item, index) => (
+                    <li key={`${item.item_name}-${index}`}>
+                      {Number(item.quantity)} {item.unit} × {item.item_name}{item.description ? ` — ${item.description}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm nb-text-faint">Loading items…</p>
+              )}
+              {opportunity.delivery_location && <p className="text-sm nb-text-muted mt-2">Deliver to: {opportunity.delivery_location}</p>}
+            </div>
+          )}
           {opportunity.document_url && (
             <a href={opportunity.document_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-4 nb-link text-sm font-semibold">
               <FileText className="w-4 h-4" /> Full details (PDF)
@@ -2385,6 +2402,12 @@ const OpportunityDetailModal = ({ opportunity, onClose, onShare, viewerUser, onW
           )}
           {opportunity.is_open === false ? (
             <p className="mt-6 nb-closed-banner rounded-lg px-4 py-2.5 text-sm font-semibold text-center">This opportunity is no longer open for bids.</p>
+          ) : opportunity.opportunity_kind === 'supply' ? (
+            // Itemised supply request: only a published supplier business can
+            // quote it, from its Supplier Portal -- no anonymous flat bid.
+            <p className="mt-6 nb-chip-green rounded-lg px-4 py-2.5 text-sm font-semibold text-center">
+              Supplier businesses: sign in to your Supplier Portal to see this request and quote a price for each item.
+            </p>
           ) : (
             <button
               onClick={() => setShowBidForm(true)}
