@@ -13,7 +13,7 @@ const EMPLOYMENT_LABELS = {
 };
 
 // Landing-page shelf of public CMMS notices/jobs from EVERY business on
-// ICANEra, browsable with no account -- same "no login required" posture as
+// IcanEra, browsable with no account -- same "no login required" posture as
 // DropshipPreview, just for company notice boards instead of the
 // marketplace. Clicking a card hands off to that business's own public
 // board (/notices/:companyId?post=:id, handled in main.jsx) rather than
@@ -45,7 +45,7 @@ const CMMSNoticeBoardPreview = () => {
             <Megaphone className="w-4 h-4" />
             Notices &amp; Jobs
           </div>
-          <h2 className={`text-2xl md:text-4xl font-black ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>Announcements &amp; Job Openings from ICANEra Businesses</h2>
+          <h2 className={`text-2xl md:text-4xl font-black ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>Announcements &amp; Job Openings from IcanEra Businesses</h2>
           <p className={`mt-2 text-sm md:text-base ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Public notices and vacancies posted straight from CMMS — no account needed to browse or apply.</p>
         </div>
 

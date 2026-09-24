@@ -127,7 +127,7 @@ const PublicPitchViewer = ({ pitchId }) => {
     const shareUrl = `https://icanera.space/pitchin/${pitch.id}`;
     const shareData = {
       title: pitch.title || 'Check out this pitch!',
-      text: pitch.description || 'Discover this amazing investment opportunity on ICANEra',
+      text: pitch.description || 'Discover this amazing investment opportunity on IcanEra',
       url: shareUrl
     };
     try {
@@ -221,7 +221,7 @@ const PublicPitchViewer = ({ pitchId }) => {
           onClick={goToApp}
           className="icon-btn-transparent px-5 py-2.5 bg-pink-500 hover:bg-pink-600 text-white rounded-lg font-semibold transition"
         >
-          Open ICANEra
+          Open IcanEra
         </button>
       </div>
     );
@@ -235,7 +235,7 @@ const PublicPitchViewer = ({ pitchId }) => {
       {/* Top bar -- branding + close. Anonymous visitors get a sign-in nudge
           here too, not just on the gated action buttons below. */}
       <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
-        <span className="text-white font-bold text-sm tracking-wide">ICANEra</span>
+        <span className="text-white font-bold text-sm tracking-wide">IcanEra</span>
         <div className="flex items-center gap-2">
           {!authLoading && !user && (
             <button
@@ -245,7 +245,7 @@ const PublicPitchViewer = ({ pitchId }) => {
               Sign up
             </button>
           )}
-          <button onClick={goToApp} className="icon-btn-transparent p-1 text-white" title="Open ICANEra">
+          <button onClick={goToApp} className="icon-btn-transparent p-1 text-white" title="Open IcanEra">
             <X className="w-6 h-6" />
           </button>
         </div>

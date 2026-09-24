@@ -1193,7 +1193,7 @@ const SocialRow = ({ company, className = '' }) => {
 // directions, visit their real website, share this page -- built from
 // whatever contact fields the business filled in. This, more than the
 // notices feed itself, is what makes the page read as the business's own
-// site rather than a job board bolted onto ICANEra.
+// site rather than a job board bolted onto IcanEra.
 // Call/WhatsApp (whichever exists) leads as a filled, brand-colored button --
 // the one action most visitors actually came to take -- everything else
 // (Email, Directions, Website) trails as a lighter outline pill, the same
@@ -1392,7 +1392,7 @@ const InfoRow = ({ icon: Icon, label, value, href, external }) => {
 // hope -- using the same "business name, location" text the Directions
 // button already sends. No Google Maps API key needed: this is the
 // well-established keyless `maps?q=...&output=embed` iframe, so it works the
-// moment a business fills in a location, no billing/API setup on ICANEra's
+// moment a business fills in a location, no billing/API setup on IcanEra's
 // side. Google's own geocoder resolves it, so whenever this business is a
 // real, findable place on Google Maps the pin centers on it; otherwise it
 // falls back to the general area, same as the Directions link would.
@@ -1495,7 +1495,7 @@ const EmptyState = ({ icon: Icon, text }) => (
 // A real "what this business does" section, in the owner's own words (set
 // from CMMSAnnouncementsPanel's "Board profile" tab) -- this is what makes
 // the board read as the business's own site rather than just a job/notice
-// feed bolted onto ICANEra.
+// feed bolted onto IcanEra.
 const AboutCard = ({ company }) => (
   <div className="nb-card rounded-2xl shadow-sm p-5 lg:p-6 mb-5 animate-fadeInUp">
     <h2 className="text-sm font-bold nb-text uppercase tracking-wide mb-2">About {company.company_name}</h2>
@@ -1782,11 +1782,11 @@ const VEHICLE_TYPE_OPTIONS = [
   { value: 'van', label: '🚐 Van' },
 ];
 
-// Browsing is free for anyone; paying is a real ICANEra wallet transfer, so
+// Browsing is free for anyone; paying is a real IcanEra wallet transfer, so
 // it needs an account. An anonymous visitor who hits "Pay" gets the signup
 // form right here (no navigating away, cart stays intact) -- once they have
 // an account, the exact same button pays instantly, same as anywhere else
-// in ICANEra. This is the whole "click a product -> get an ICANEra wallet,
+// in IcanEra. This is the whole "click a product -> get an IcanEra wallet,
 // or transact seamlessly if you already have one" flow.
 const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user, authLoading }) => {
   const [showCart, setShowCart] = useState(false);
@@ -1940,7 +1940,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
           <CheckCircle2 className="w-9 h-9" />
         </div>
         <h3 className="text-lg font-bold nb-text mb-1">Order placed!</h3>
-        <p className="nb-text-muted text-sm mb-4">Paid with your ICANEra wallet.</p>
+        <p className="nb-text-muted text-sm mb-4">Paid with your IcanEra wallet.</p>
         <div className="nb-card rounded-2xl p-4 text-left space-y-2">
           <div className="flex justify-between text-sm"><span className="nb-text-faint">Receipt number</span><span className="nb-text font-mono">{receipt.customer_receipt_number}</span></div>
           <div className="flex justify-between text-sm"><span className="nb-text-faint">Items</span><span className="nb-text">{receipt.items_count}</span></div>
@@ -1971,7 +1971,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm nb-text-muted">Browse for free. Pay with your ICANEra wallet when you're ready to order.</p>
+        <p className="text-sm nb-text-muted">Browse for free. Pay with your IcanEra wallet when you're ready to order.</p>
         <button onClick={() => setShowCart(true)} className="relative p-2.5 rounded-full nb-share-btn flex-shrink-0">
           <ShoppingCart className="w-4 h-4" />
           {cartCount > 0 && (
@@ -2145,7 +2145,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                 className="w-full py-2.5 rounded-xl nb-btn-primary disabled:opacity-50 text-sm font-semibold transition flex items-center justify-center gap-2"
               >
                 {placing ? <Loader className="w-4 h-4 animate-spin" /> : null}
-                {!user ? 'Sign up free to pay with ICANEra' : !deliveryCoords ? 'Share your delivery location to continue' : `Pay ${formatUGX(orderTotal)} with ICANEra`}
+                {!user ? 'Sign up free to pay with IcanEra' : !deliveryCoords ? 'Share your delivery location to continue' : `Pay ${formatUGX(orderTotal)} with IcanEra`}
               </button>
             </div>
           )}

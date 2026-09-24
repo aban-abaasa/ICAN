@@ -4,7 +4,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { fetchPublicStatusStories } from '../../services/landingStatusService';
 import { fmtRelativeTime } from './relativeTime';
 
-// Real public Status posts (photos/videos, 24h stories) from ICANera's
+// Real public Status posts (photos/videos, 24h stories) from IcanEra's
 // dashboard, surfaced here read-only for anonymous visitors. Fails silently
 // to an empty list (section just doesn't render) if the storage bucket's
 // policy doesn't permit anonymous signed-URL generation — see

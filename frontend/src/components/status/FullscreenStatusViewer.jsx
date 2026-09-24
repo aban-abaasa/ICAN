@@ -421,7 +421,7 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
                   const shareUrl = `https://icanera.space/status/${currentStatus.id}`;
                   if (navigator.share) {
                     navigator.share({
-                      title: 'Check this update on ICANEra',
+                      title: 'Check this update on IcanEra',
                       text: currentStatus.caption,
                       url: shareUrl
                     }).catch(() => {});

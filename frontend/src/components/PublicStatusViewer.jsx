@@ -103,7 +103,7 @@ const PublicStatusViewer = ({ statusId }) => {
     const shareUrl = `https://icanera.space/status/${status.id}`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'Check this update on ICANEra', text: status.caption, url: shareUrl });
+        await navigator.share({ title: 'Check this update on IcanEra', text: status.caption, url: shareUrl });
       } else {
         await navigator.clipboard.writeText(shareUrl);
         setCopied(true);
@@ -135,7 +135,7 @@ const PublicStatusViewer = ({ statusId }) => {
           {expired ? 'This update has expired' : "This update isn't available anymore"}
         </p>
         <button onClick={goToApp} className="icon-btn-transparent px-5 py-2.5 bg-pink-500 hover:bg-pink-600 text-white rounded-lg font-semibold transition">
-          Open ICANEra
+          Open IcanEra
         </button>
       </div>
     );
@@ -218,7 +218,7 @@ const PublicStatusViewer = ({ statusId }) => {
                 Sign up
               </button>
             )}
-            <button onClick={goToApp} className="icon-btn-transparent p-2 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm transition-all" title="Open ICANEra">
+            <button onClick={goToApp} className="icon-btn-transparent p-2 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-sm transition-all" title="Open IcanEra">
               <X className="w-6 h-6" />
             </button>
           </div>

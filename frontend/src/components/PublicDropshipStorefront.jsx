@@ -33,7 +33,7 @@ const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG',
 // Rendered instead of the normal authenticated app (see main.jsx) when the URL
 // is a shared dropship storefront link (/store/:businessProfileId) -- same
 // "public to view, sign in in place to act" pattern as PublicStatusViewer and
-// PublicPitchViewer. Browsing works for anyone; checkout requires an ICANera
+// PublicPitchViewer. Browsing works for anyone; checkout requires an IcanEra
 // wallet since payment is a live transfer_ican() split between the source
 // store and this reseller.
 const PublicDropshipStorefront = ({ businessProfileId }) => {
@@ -214,7 +214,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
         <AlertCircle className="w-14 h-14 text-slate-500" />
         <p className="text-white text-lg font-semibold">This storefront isn't available right now</p>
         <button onClick={goToApp} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold transition">
-          Open ICANEra
+          Open IcanEra
         </button>
       </div>
     );
@@ -252,7 +252,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
             </p>
           </div>
           <button onClick={goToApp} className="mt-6 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold transition">
-            Open ICANEra
+            Open IcanEra
           </button>
         </div>
       </div>
@@ -452,7 +452,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                     className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2"
                   >
                     {placing ? <Loader className="w-4 h-4 animate-spin" /> : null}
-                    {!user ? 'Sign in to pay with ICANera' : !deliveryCoords ? 'Share your delivery location to continue' : `Pay ${formatUGX(orderTotal)} with ICANera`}
+                    {!user ? 'Sign in to pay with IcanEra' : !deliveryCoords ? 'Share your delivery location to continue' : `Pay ${formatUGX(orderTotal)} with IcanEra`}
                   </button>
                 </>
               )}
