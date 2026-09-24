@@ -36,5 +36,8 @@ export const downloadCmmsQrPdf = async ({ type, url, location, companyName, titl
   pdf.setFontSize(9);
   pdf.setTextColor(90);
   pdf.text(note || DEFAULT_NOTES[type] || '', pageWidth / 2, 220, { align: 'center' });
+  pdf.setFontSize(8);
+  pdf.setTextColor(140);
+  pdf.text('Powered by IcanEra', pageWidth / 2, 230, { align: 'center' });
   pdf.save(filename || `ican-cmms-${type}-qr-${safeFilename(location)}.pdf`);
 };

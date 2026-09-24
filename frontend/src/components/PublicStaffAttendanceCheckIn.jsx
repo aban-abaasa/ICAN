@@ -118,7 +118,6 @@ const PublicStaffAttendanceCheckIn = () => {
         <div className="mb-6 flex items-center gap-3">
           <div className="rounded-2xl bg-indigo-500/20 p-3"><ShieldCheck className="h-7 w-7 text-indigo-300" /></div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-300">IcanEra</p>
             <h1 className="text-xl font-bold">{qr?.company_name || 'Staff attendance'}</h1>
             <p className="text-sm text-slate-400">Staff attendance</p>
           </div>
@@ -230,6 +229,8 @@ const PublicStaffAttendanceCheckIn = () => {
             )}
           </div>
         )}
+
+        <p className="mt-6 text-center text-[11px] uppercase tracking-widest text-slate-500">Powered by IcanEra</p>
       </section>
     </main>
   );
