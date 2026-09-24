@@ -1320,6 +1320,176 @@ export const updateInventoryQuantity = async (itemId, newQuantity, reason = 'Qua
 };
 
 // ============================================
+// ITEM CUSTODY (STAFF SIGN-OUT / SIGN-IN)
+// ============================================
+// Lets a staff member "sign" for a specific inventory item when they take it
+// and sign again when they bring it back, so the business has proof of who
+// has which item and when. The acting staff member is always resolved
+// server-side from their signed-in email (see fn_checkout_inventory_item /
+// fn_return_inventory_item in backend/CMMS_STAFF_ITEM_CUSTODY_LOG.sql).
+
+/**
+ * Sign a specific inventory item out to a staff member (defaults to the
+ * caller themself; an inventory manager may sign it out to someone else).
+ * @param {string} itemId - cmms_inventory_items UUID
+ * @param {Object} options
+ * @param {number} [options.quantity=1]
+ * @param {string} [options.purpose]
+ * @param {string} [options.cmmsUserId] - who is taking it; omit for self
+ * @param {string} [options.expectedReturnAt] - ISO timestamp
+ * @param {string} [options.signatureMethod] - e.g. 'wallet_pin'
+ * @param {string} [options.pinMasked] - masked PIN, never the raw PIN
+ */
+export const checkoutInventoryItem = async (itemId, options = {}) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_checkout_inventory_item', {
+      p_inventory_item_id: itemId,
+      p_quantity: options.quantity ?? 1,
+      p_purpose: options.purpose || null,
+      p_cmms_user_id: options.cmmsUserId || null,
+      p_expected_return_at: options.expectedReturnAt || null,
+      p_signature_method: options.signatureMethod || null,
+      p_pin_masked: options.pinMasked || null
+    });
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error signing out inventory item:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Sign a checked-out item back in, closing its custody record.
+ * @param {string} custodyId - cmms_item_custody_log UUID
+ * @param {Object} options
+ * @param {'good'|'damaged'|'lost'} [options.condition='good']
+ * @param {string} [options.notes]
+ * @param {string} [options.signatureMethod]
+ * @param {string} [options.pinMasked]
+ */
+export const returnInventoryItem = async (custodyId, options = {}) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_return_inventory_item', {
+      p_custody_id: custodyId,
+      p_condition: options.condition || 'good',
+      p_return_notes: options.notes || null,
+      p_signature_method: options.signatureMethod || null,
+      p_pin_masked: options.pinMasked || null
+    });
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error signing inventory item back in:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Get the item custody log (proof of who took what and when) for a company.
+ * @param {string} companyId
+ * @param {Object} [filters]
+ * @param {'checked_out'|'returned'|'lost'} [filters.status]
+ * @param {string} [filters.cmmsUserId]
+ * @param {string} [filters.inventoryItemId]
+ */
+export const getItemCustodyLog = async (companyId, filters = {}) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_get_item_custody_log', {
+      p_cmms_company_id: companyId,
+      p_status: filters.status || null,
+      p_cmms_user_id: filters.cmmsUserId || null,
+      p_inventory_item_id: filters.inventoryItemId || null
+    });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Error fetching item custody log:', error);
+    return { data: [], error };
+  }
+};
+
+/** What the signed-in person may do with item requests/custody in this company (role-based). */
+export const getMyItemCustodyAccess = async (companyId) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_get_my_item_custody_access', { p_cmms_company_id: companyId });
+    if (error) throw error;
+    return {
+      data: {
+        cmmsUserId: data?.cmms_user_id || null,
+        canRequest: Boolean(data?.can_request),
+        canSeeAll: Boolean(data?.can_see_all),
+        canManage: Boolean(data?.can_manage)
+      },
+      error: null
+    };
+  } catch (error) {
+    console.error('Error fetching item custody access:', error);
+    return { data: { cmmsUserId: null, canRequest: false, canSeeAll: false, canManage: false }, error };
+  }
+};
+
+/** Employee asks for an inventory item; an inventory manager approves or declines. */
+export const requestInventoryItem = async (itemId, { quantity = 1, purpose } = {}) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_request_inventory_item', {
+      p_inventory_item_id: itemId,
+      p_quantity: quantity,
+      p_purpose: purpose || null
+    });
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error requesting inventory item:', error);
+    return { data: null, error };
+  }
+};
+
+/** Approve (signs the item out to the requester) or decline a pending request. */
+export const decideItemRequest = async (requestId, approve, note) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_decide_item_request', {
+      p_request_id: requestId,
+      p_approve: Boolean(approve),
+      p_note: note || null
+    });
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error deciding item request:', error);
+    return { data: null, error };
+  }
+};
+
+export const cancelItemRequest = async (requestId) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_cancel_item_request', { p_request_id: requestId });
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error cancelling item request:', error);
+    return { data: null, error };
+  }
+};
+
+export const getItemRequests = async (companyId, status) => {
+  try {
+    const { data, error } = await supabase.rpc('fn_get_item_requests', {
+      p_cmms_company_id: companyId,
+      p_status: status || null
+    });
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error) {
+    console.error('Error fetching item requests:', error);
+    return { data: [], error };
+  }
+};
+
+// ============================================
 // BUDGET TRACKING
 // ============================================
 
@@ -2067,6 +2237,14 @@ export default {
   updateInventoryItem,
   updateInventoryQuantity,
   deleteInventoryItem,
+  checkoutInventoryItem,
+  returnInventoryItem,
+  getItemCustodyLog,
+  getMyItemCustodyAccess,
+  requestInventoryItem,
+  decideItemRequest,
+  cancelItemRequest,
+  getItemRequests,
   getCompanyBudget,
   getCompanyEquipment,
   getMaintenancePlans,

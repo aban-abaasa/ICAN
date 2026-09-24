@@ -12,6 +12,8 @@ import {
 } from '../services/businessManagementService';
 import { ICAN_TO_UGX, transferFromBusinessWallet } from '../services/icanWalletService';
 import CMMSWelfareAdminPanel from './CMMSWelfareAdminPanel.jsx';
+import CMMSItemCustodyPanel from './CMMSItemCustodyPanel.jsx';
+import CMMSEmployeeWelfare from './CMMSEmployeeWelfare.jsx';
 
 const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator, hasToolAction }) => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -20,6 +22,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   const [qrCodes, setQrCodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('summary');
+  const [welfareView, setWelfareView] = useState('decide');
   const today = new Date().toISOString().split('T')[0];
   const defaultSummaryStart = new Date();
   defaultSummaryStart.setDate(defaultSummaryStart.getDate() - 29);
@@ -72,15 +75,29 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   // granting one doesn't silently grant the other. Mirrors
   // cmms_can_manage_welfare() in backend/CMMS_EMPLOYEE_WELFARE_SYSTEM.sql,
   // which checks the identical "welfare" action server-side.
-  const canManageWelfare = isFullAdmin || Boolean(hasToolAction?.('attendance', 'welfare'));
+  const canManageWelfare = isFullAdmin || Boolean(hasToolAction?.('attendance', 'welfare'))
+    || Boolean(hasToolAction?.('leave-welfare', 'approve'));
   // A role granted only "Welfare" (no "View") should still see the Leave &
   // Welfare sub-tab -- it doesn't need staff-wide attendance visibility to
   // decide HR requests.
-  const canSeeWelfareTab = canViewAll || canManageWelfare;
+  const canSeeWelfareTab = canViewAll || canManageWelfare || Boolean(hasToolAction?.('leave-welfare', 'see_all'));
+  // Items taken/returned is its own admin-picked permission (Role and tool
+  // configuration -> "Item requests & custody": request / see all / manage),
+  // enforced server-side; the panel itself asks the server what this person
+  // may do, so this only decides whether the tab is offered.
+  const canSeeItemsTab = isFullAdmin || userRole === 'storeman'
+    || ['request', 'see_all', 'manage'].some((action) => Boolean(hasToolAction?.('item-custody', action)));
 
   useEffect(() => {
     loadData();
   }, [companyProfile, startDate, endDate, selectedStaffId]);
+
+  // Someone who can decide leave/welfare but can't see other staff's
+  // attendance (a dedicated "Leave & welfare approvals" role) lands on the
+  // tab they actually work from instead of an empty summary.
+  useEffect(() => {
+    if (!canViewAll && canSeeWelfareTab) setActiveTab((tab) => (tab === 'summary' ? 'welfare' : tab));
+  }, [canViewAll, canSeeWelfareTab]);
 
   useEffect(() => {
     // A regular staff member only ever gets their own single row back from
@@ -740,16 +757,26 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
         >
           Rewards
         </button>
-        {canSeeWelfareTab && (
+        <button
+          onClick={() => setActiveTab('welfare')}
+          className={`px-4 py-2 font-semibold ${
+            activeTab === 'welfare'
+              ? 'border-b-2 border-indigo-500 text-indigo-400'
+              : 'text-slate-400 hover:text-slate-300'
+          }`}
+        >
+          Leave &amp; Welfare
+        </button>
+        {canSeeItemsTab && (
           <button
-            onClick={() => setActiveTab('welfare')}
+            onClick={() => setActiveTab('items')}
             className={`px-4 py-2 font-semibold ${
-              activeTab === 'welfare'
+              activeTab === 'items'
                 ? 'border-b-2 border-indigo-500 text-indigo-400'
                 : 'text-slate-400 hover:text-slate-300'
             }`}
           >
-            Leave &amp; Welfare
+            Items Taken/Returned
           </button>
         )}
       </div>
@@ -1537,8 +1564,36 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
         </div>
       )}
 
-      {activeTab === 'welfare' && canSeeWelfareTab && (
-        <CMMSWelfareAdminPanel companyProfile={companyProfile} cmmsUsers={cmmsUsers} canManage={canManageWelfare} />
+      {activeTab === 'welfare' && (
+        <div className="space-y-4">
+          {canSeeWelfareTab && (
+            <div className="flex flex-wrap gap-2">
+              {[['decide', 'Requests to decide'], ['mine', 'Request leave / HR help / items']].map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setWelfareView(id)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold ${
+                    welfareView === id ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {canSeeWelfareTab && welfareView === 'decide' ? (
+            <CMMSWelfareAdminPanel companyProfile={companyProfile} cmmsUsers={cmmsUsers} canManage={canManageWelfare} />
+          ) : (
+            <>
+              <CMMSEmployeeWelfare companyProfile={companyProfile} />
+              <CMMSItemCustodyPanel companyProfile={companyProfile} cmmsUsers={cmmsUsers} embedded />
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'items' && canSeeItemsTab && (
+        <CMMSItemCustodyPanel companyProfile={companyProfile} cmmsUsers={cmmsUsers} />
       )}
     </div>
   );

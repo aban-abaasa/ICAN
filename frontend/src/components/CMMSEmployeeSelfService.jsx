@@ -6,6 +6,7 @@ import cmmsEmploymentDocumentsService from '../services/cmmsEmploymentDocumentsS
 import { EMPLOYEE_DOCUMENT_CATEGORIES, addEmployeeDocument, removeEmployeeDocument, getMyEmployeeDocuments, getApplicationDocumentsForEmployee, importApplicationDocument } from '../services/cmmsEmployeeDocumentsService';
 import CMMSDocumentSignModal from './CMMSDocumentSignModal';
 import CMMSEmployeeWelfare from './CMMSEmployeeWelfare.jsx';
+import CMMSItemCustodyPanel from './CMMSItemCustodyPanel.jsx';
 
 const money = (value, currency = 'UGX') => `${currency} ${Number(value || 0).toLocaleString()}`;
 
@@ -324,6 +325,7 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
       </form>}
     </section>
     <CMMSEmployeeWelfare companyProfile={companyProfile} />
+    <CMMSItemCustodyPanel companyProfile={companyProfile} embedded />
     <section>
       <h3 className="mb-2 flex items-center gap-2 font-semibold text-white"><UploadCloud className="h-4 w-4" /> My documents</h3>
       <p className="mb-2 text-xs text-slate-500">Add your National ID, certificates, CV, bank details, tax PIN/NSSF certificates, or anything else HR needs on file for your payroll record. Only you and payroll staff can see these.</p>

@@ -20,6 +20,26 @@ export const CMMS_TOOL_OPTIONS = [
   // handing out HR approval power, or vice versa. See
   // cmms_can_manage_welfare() in backend/CMMS_EMPLOYEE_WELFARE_SYSTEM.sql.
   { id: 'attendance', label: 'Staff attendance & QR check-in', permission: 'canManageAttendance', actions: ['view', 'manual', 'days', 'print', 'welfare'] },
+  // Leave & welfare: every employee can already REQUEST leave/welfare help;
+  // this is who may decide those requests. Read server-side by
+  // cmms_can_manage_welfare()/cmms_can_view_welfare() -- see
+  // backend/CMMS_LEAVE_APPROVAL_ROLE_ACCESS.sql. Separate from the attendance
+  // tool's "welfare" tick so approving leave doesn't also expose every staff
+  // member's attendance records.
+  // approve: decide leave, probation and welfare requests.
+  // see_all: read-only view of the company-wide leave/welfare dashboard.
+  { id: 'leave-welfare', label: 'Leave & welfare approvals', permission: 'canApproveLeave', actions: ['approve', 'see_all'], permissionOnly: true },
+  // Items taken/returned (Staff Attendance -> "Items Taken/Returned" and the
+  // employee Leave & Welfare screen). Read server-side by
+  // _cmms_item_custody_can() in backend/CMMS_STAFF_ITEM_CUSTODY_LOG.sql --
+  // keep the action keys in sync if you rename them.
+  // request: ask for an item and sign it back in when returned.
+  // see_all: see every staff member's item requests/records (otherwise only your own).
+  // manage: approve/decline requests, record who took an item, receive returns
+  //   for others -- implies request and see_all.
+  // permissionOnly: a permission set, not a business module/tab, so it stays out
+  // of the "Choose CMMS features" module switches.
+  { id: 'item-custody', label: 'Item requests & custody (take/return)', permission: 'canRequestItems', actions: ['request', 'see_all', 'manage'], permissionOnly: true },
   { id: 'visitor-mgmt', label: 'Visitor management', permission: 'canManageVisitors', actions: ['view', 'create', 'edit', 'flag', 'approve'] },
   { id: 'payroll', label: 'Payroll', permission: 'canViewFinancials', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
   { id: 'fees', label: 'School fees', permission: 'canManageFees', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
@@ -232,7 +252,7 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold capitalize border transition-colors ${active ? 'bg-green-500 border-green-400 text-white shadow-sm shadow-green-900/40' : 'bg-white/5 border-white/15 text-gray-500 active:bg-white/10'}`}
                       >
                         {active && <Check className="w-3.5 h-3.5" />}
-                        {action}
+                        {action.replace(/_/g, ' ')}
                       </button>;
                     })}
                     {tool.scopes && <div className="basis-full mt-2">

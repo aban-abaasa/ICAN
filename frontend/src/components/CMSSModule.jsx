@@ -38,7 +38,9 @@ import {
   Link2,
   Check,
   MapPin,
-  Globe
+  Globe,
+  LogOut,
+  RotateCcw
 } from 'lucide-react';
 
 // Import Supabase CMMS service
@@ -1185,7 +1187,7 @@ const CMMSModule = ({
     // enabled business-module records yet. Do not turn that missing optional
     // configuration into a denial of the tools the role was granted.
     const hasBusinessModuleConfiguration = businessModules.length > 0;
-    const availableTools = CMMS_TOOL_OPTIONS.filter((tool) => (
+    const availableTools = CMMS_TOOL_OPTIONS.filter((tool) => !tool.permissionOnly).filter((tool) => (
       businessModulesLoaded
       && (!hasBusinessModuleConfiguration || categoryAllows(tool.id))
     ));
@@ -1204,6 +1206,13 @@ const CMMSModule = ({
     // schedule and run the reviewable attendance-deduction calculation.
     if (permittedTools.includes('attendance') && categoryAllows('payroll') && !permittedTools.includes('payroll')) {
       permittedTools.push('payroll');
+    }
+    // Leave & welfare approvers work from the Leave & Welfare sub-tab inside
+    // Staff Attendance, so a role granted only that permission still needs the
+    // tab listed. The panel limits what they see to what the server allows.
+    if (!permittedTools.includes('attendance') && categoryAllows('attendance')
+      && (hasToolAction('leave-welfare', 'approve') || hasToolAction('leave-welfare', 'see_all'))) {
+      permittedTools.push('attendance');
     }
     return permittedTools;
   };
@@ -6882,6 +6891,103 @@ const CMMSModule = ({
     const [editError, setEditError] = useState(null);
     const [availableSuppliers, setAvailableSuppliers] = useState([]);
 
+    // Item custody (staff sign-out / sign-in) — gives a proof trail of who
+    // currently holds which item, separate from edit/delete permissions:
+    // any active company member can sign an item out to themselves.
+    const [custodyLog, setCustodyLog] = useState([]);
+    const [isLoadingCustody, setIsLoadingCustody] = useState(false);
+    const [checkoutItem, setCheckoutItem] = useState(null);
+    const [checkoutForm, setCheckoutForm] = useState({ quantity: 1, purpose: '' });
+    const [isSubmittingCheckout, setIsSubmittingCheckout] = useState(false);
+    const [checkoutError, setCheckoutError] = useState(null);
+    const [returnRecord, setReturnRecord] = useState(null);
+    const [returnForm, setReturnForm] = useState({ condition: 'good', notes: '' });
+    const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+    const [returnError, setReturnError] = useState(null);
+
+    const loadCustodyLog = useCallback(async () => {
+      if (!cmmsData.companyProfile?.id) return;
+      setIsLoadingCustody(true);
+      const { data, error } = await cmmsService.getItemCustodyLog(cmmsData.companyProfile.id, { status: 'checked_out' });
+      if (!error) setCustodyLog(data || []);
+      setIsLoadingCustody(false);
+    }, [cmmsData.companyProfile?.id]);
+
+    useEffect(() => {
+      loadCustodyLog();
+    }, [loadCustodyLog]);
+
+    const openCheckout = (item) => {
+      setCheckoutItem(item);
+      setCheckoutForm({ quantity: 1, purpose: '' });
+      setCheckoutError(null);
+    };
+
+    const submitCheckout = async () => {
+      if (!checkoutItem) return;
+      const quantity = Number(checkoutForm.quantity);
+      if (!quantity || quantity <= 0) {
+        setCheckoutError('Enter a quantity greater than zero.');
+        return;
+      }
+      if (quantity > checkoutItem.quantity_in_stock) {
+        setCheckoutError(`Only ${checkoutItem.quantity_in_stock} in stock.`);
+        return;
+      }
+      setIsSubmittingCheckout(true);
+      setCheckoutError(null);
+      const { data, error } = await cmmsService.checkoutInventoryItem(checkoutItem.id, {
+        quantity,
+        purpose: checkoutForm.purpose.trim() || undefined
+      });
+      setIsSubmittingCheckout(false);
+      if (error || !data?.success) {
+        setCheckoutError(error?.message || 'Could not sign this item out.');
+        return;
+      }
+      setCmmsData(prev => ({
+        ...prev,
+        inventory: prev.inventory.map(it =>
+          it.id === checkoutItem.id ? { ...it, quantity_in_stock: it.quantity_in_stock - quantity } : it
+        )
+      }));
+      setCheckoutItem(null);
+      loadCustodyLog();
+    };
+
+    const openReturn = (record) => {
+      setReturnRecord(record);
+      setReturnForm({ condition: 'good', notes: '' });
+      setReturnError(null);
+    };
+
+    const submitReturn = async () => {
+      if (!returnRecord) return;
+      setIsSubmittingReturn(true);
+      setReturnError(null);
+      const { data, error } = await cmmsService.returnInventoryItem(returnRecord.id, {
+        condition: returnForm.condition,
+        notes: returnForm.notes.trim() || undefined
+      });
+      setIsSubmittingReturn(false);
+      if (error || !data?.success) {
+        setReturnError(error?.message || 'Could not sign this item back in.');
+        return;
+      }
+      if (returnForm.condition !== 'lost') {
+        setCmmsData(prev => ({
+          ...prev,
+          inventory: prev.inventory.map(it =>
+            it.id === returnRecord.inventory_item_id
+              ? { ...it, quantity_in_stock: it.quantity_in_stock + returnRecord.quantity }
+              : it
+          )
+        }));
+      }
+      setReturnRecord(null);
+      loadCustodyLog();
+    };
+
     const toggleExpandItem = (itemId) => {
       setExpandedItems(prev => ({
         ...prev,
@@ -7629,6 +7735,20 @@ const CMMSModule = ({
                         )}
                       </div>
 
+                      {/* Sign Out — inventory managers only; employees request items from Staff Attendance → Items Taken/Returned */}
+                      {canEditInventory && (
+                      <div className="mt-4 pt-4 border-t border-white border-opacity-10">
+                        <button
+                          onClick={() => openCheckout(item)}
+                          disabled={item.quantity_in_stock <= 0}
+                          className="w-full px-3 py-2 bg-indigo-500 bg-opacity-20 text-indigo-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <LogOut className="w-3 h-3" />
+                          {item.quantity_in_stock <= 0 ? 'Out of Stock' : 'Sign Out This Item'}
+                        </button>
+                      </div>
+                      )}
+
                       {/* Edit/Delete Actions - Only for authorized users */}
                       {canEditInventory && (
                         <div className="mt-4 pt-4 border-t border-white border-opacity-10 flex gap-2">
@@ -7665,6 +7785,164 @@ const CMMSModule = ({
             )}
           </div>
         </div>
+
+        {/* Item Custody Log — proof of who currently has which item */}
+        <div className="glass-card p-6">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <LogOut className="w-5 h-5 text-indigo-400" />
+              Signed-Out Items ({custodyLog.length})
+            </h3>
+            <button
+              onClick={loadCustodyLog}
+              disabled={isLoadingCustody}
+              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-xs text-white"
+            >
+              {isLoadingCustody ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+          <p className="text-gray-300 text-xs md:text-sm mb-4">
+            Every take/return is a signed record — proof of who has each item and when it's due back.
+          </p>
+          <div className="space-y-2">
+            {custodyLog.map(record => (
+              <div key={record.id} className="rounded-lg border border-white border-opacity-20 bg-white bg-opacity-5 p-3">
+                <div className="flex justify-between items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white font-semibold text-sm truncate">{record.item_name}</div>
+                    <div className="text-xs text-gray-300 mt-1">
+                      <span className="text-indigo-300">👤 {record.holder_name}</span>
+                      <span className="text-gray-500 mx-1">•</span>
+                      <span className="text-green-400">Qty: {record.quantity}</span>
+                      <span className="text-gray-500 mx-1">•</span>
+                      <span>Taken: {new Date(record.taken_at).toLocaleString()}</span>
+                    </div>
+                    {record.purpose && (
+                      <div className="text-xs text-gray-400 mt-1">Purpose: {record.purpose}</div>
+                    )}
+                    {record.issued_by_name && (
+                      <div className="text-xs text-gray-500 mt-1">Signed out by {record.issued_by_name}</div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => openReturn(record)}
+                    className="flex-shrink-0 px-3 py-1.5 bg-emerald-500 bg-opacity-20 text-emerald-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center gap-1.5"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Sign Back In
+                  </button>
+                </div>
+              </div>
+            ))}
+            {custodyLog.length === 0 && !isLoadingCustody && (
+              <div className="text-center py-6 text-gray-400 text-sm">
+                No items currently signed out.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Sign-Out Modal */}
+        {checkoutItem && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md glass-card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <LogOut className="w-5 h-5 text-indigo-400" />
+                  Sign Out: {checkoutItem.item_name}
+                </h3>
+                <button onClick={() => setCheckoutItem(null)} className="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              {checkoutError && (
+                <div className="mb-3 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">{checkoutError}</div>
+              )}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wider">Quantity (of {checkoutItem.quantity_in_stock} available)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={checkoutItem.quantity_in_stock}
+                    value={checkoutForm.quantity}
+                    onChange={(e) => setCheckoutForm(f => ({ ...f, quantity: e.target.value }))}
+                    className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-indigo-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wider">Purpose (optional)</label>
+                  <input
+                    type="text"
+                    value={checkoutForm.purpose}
+                    onChange={(e) => setCheckoutForm(f => ({ ...f, purpose: e.target.value }))}
+                    placeholder="e.g. Site visit, repair job..."
+                    className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-indigo-400"
+                  />
+                </div>
+                <button
+                  onClick={submitCheckout}
+                  disabled={isSubmittingCheckout}
+                  className="w-full px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg transition-colors font-semibold flex items-center justify-center gap-2"
+                >
+                  {isSubmittingCheckout ? <Loader className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                  {isSubmittingCheckout ? 'Signing Out...' : 'Confirm Sign Out'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sign Back In Modal */}
+        {returnRecord && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md glass-card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <RotateCcw className="w-5 h-5 text-emerald-400" />
+                  Sign Back In: {returnRecord.item_name}
+                </h3>
+                <button onClick={() => setReturnRecord(null)} className="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              {returnError && (
+                <div className="mb-3 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">{returnError}</div>
+              )}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wider">Condition</label>
+                  <select
+                    value={returnForm.condition}
+                    onChange={(e) => setReturnForm(f => ({ ...f, condition: e.target.value }))}
+                    className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-emerald-400"
+                  >
+                    <option value="good">Good — back in stock</option>
+                    <option value="damaged">Damaged — back in stock</option>
+                    <option value="lost">Lost — not returned</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wider">Notes (optional)</label>
+                  <textarea
+                    value={returnForm.notes}
+                    onChange={(e) => setReturnForm(f => ({ ...f, notes: e.target.value }))}
+                    rows={2}
+                    className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-emerald-400 resize-none"
+                  />
+                </div>
+                <button
+                  onClick={submitReturn}
+                  disabled={isSubmittingReturn}
+                  className="w-full px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-lg transition-colors font-semibold flex items-center justify-center gap-2"
+                >
+                  {isSubmittingReturn ? <Loader className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                  {isSubmittingReturn ? 'Signing In...' : 'Confirm Return'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -7707,7 +7985,7 @@ const CMMSModule = ({
           <p className="mt-1 text-sm text-gray-300">Nothing is enabled by default. Turn on only the tabs your business needs; changes apply immediately for the whole company.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {CMMS_TOOL_OPTIONS.map((tool) => {
+          {CMMS_TOOL_OPTIONS.filter((tool) => !tool.permissionOnly).map((tool) => {
             const enabled = enabledKeys.has(tool.id);
             const saving = savingModule === tool.id;
             return (
