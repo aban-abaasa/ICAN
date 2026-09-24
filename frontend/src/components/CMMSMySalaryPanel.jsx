@@ -4,6 +4,7 @@ import { decideSalaryAdvance, getBusinessAccessMembers, getCompanySalaryAdvances
 import { ICAN_TO_UGX, transferFromBusinessWallet } from '../services/icanWalletService';
 import { supabase } from '../lib/supabase/client';
 import CMMSEmployeeSelfService from './CMMSEmployeeSelfService.jsx';
+import TimeZoneSelect from './TimeZoneSelect.jsx';
 
 const today = new Date().toISOString().slice(0, 10);
 const amount = (value, currency = 'UGX') => `${currency} ${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -165,7 +166,7 @@ export default function CMMSMySalaryPanel({ companyProfile, users = [], currentU
       <form onSubmit={saveSchedule} className="grid gap-3 rounded-2xl border border-indigo-800/60 bg-indigo-950/20 p-4 md:p-6 md:grid-cols-3">
         <h3 className="flex items-center gap-2 font-semibold text-white md:col-span-3"><Clock3 size={17} className="text-indigo-300" />Work schedule</h3>
         <label className="flex items-center gap-2 text-sm text-slate-200"><input type="checkbox" checked={schedule.enabled} onChange={(e) => setSchedule((v) => ({ ...v, enabled: e.target.checked }))} /> Enable attendance deductions</label>
-        <label className="text-sm text-slate-300">Time zone<input required value={schedule.timezone} onChange={(e) => setSchedule((v) => ({ ...v, timezone: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>
+        <label className="text-sm text-slate-300">Time zone<TimeZoneSelect value={schedule.timezone} onChange={(timezone) => setSchedule((v) => ({ ...v, timezone }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>
         <label className="text-sm text-slate-300">Grace minutes<input required min="0" max="240" type="number" value={schedule.grace_minutes} onChange={(e) => setSchedule((v) => ({ ...v, grace_minutes: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>
         <label className="text-sm text-slate-300">Work start<input required type="time" value={schedule.scheduled_start} onChange={(e) => setSchedule((v) => ({ ...v, scheduled_start: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>
         <label className="text-sm text-slate-300">Work end<input required type="time" value={schedule.scheduled_end} onChange={(e) => setSchedule((v) => ({ ...v, scheduled_end: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>

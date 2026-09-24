@@ -61,10 +61,11 @@ export class GlobalNavigator {
     try {
       const prompt = this.buildRequirementsPrompt(country, mode, sector);
       
-      const response = await fetch(`${this.geminiApiUrl}?key=${this.geminiApiKey}`, {
+      const response = await fetch(this.geminiApiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-goog-api-key': this.geminiApiKey,
         },
         body: JSON.stringify({
           contents: [{
@@ -76,7 +77,9 @@ export class GlobalNavigator {
             temperature: 0.1,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 2048,
+            // Gemini's hidden thinking counts against this limit; 2048 got the
+            // answer cut off and silently replaced by mock data.
+            maxOutputTokens: 8192,
           }
         })
       });
@@ -88,7 +91,7 @@ export class GlobalNavigator {
       const data = await response.json();
       
       if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-        const requirementsText = data.candidates[0].content.parts[0].text;
+        const requirementsText = (data.candidates[0].content.parts || []).filter((part) => !part.thought).map((part) => part.text || '').join('');
         return this.parseRequirementsResponse(requirementsText);
       }
       

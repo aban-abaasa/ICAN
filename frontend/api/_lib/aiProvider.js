@@ -14,15 +14,26 @@
  * that provider is used directly. Throws if neither is set.
  */
 
-const OPENAI_MODEL = 'gpt-4o-mini';
-// gemini-2.0-flash was shut down June 2026 — do not use. 2.5-flash is the
-// current stable choice as of this writing; revisit as models evolve.
-const GEMINI_MODEL = 'gemini-2.5-flash';
+// Every AI setting comes from the environment. It is read under its plain name
+// first and then under the VITE_ name this project's env files already use
+// (VITE_GEMINI_API_KEY, VITE_OPENAI_API_KEY, ...), so either spelling works.
+// Values are trimmed: a key pasted with a trailing newline is rejected by the
+// provider and looks like "not configured".
+const fromEnv = (name) => String(process.env[name] || process.env[`VITE_${name}`] || '').trim().replace(/^["']|["']$/g, '');
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+// Both model names can be changed from the host's environment variables
+// (OPENAI_MODEL / GEMINI_MODEL) when a provider retires one - no code change.
+const OPENAI_MODEL = fromEnv('OPENAI_MODEL') || 'gpt-4o-mini';
+// Google retires Gemini models on a rolling basis: gemini-2.0-flash shut down in
+// June 2026, and gemini-2.5-flash now answers "no longer available to new users"
+// on newly created API keys (live error, Sept 2026). Set GEMINI_MODEL in the host's
+// environment to move to the next model without a code change.
+const GEMINI_MODEL = fromEnv('GEMINI_MODEL') || 'gemini-3.6-flash';
+
+const GEMINI_API_KEY = fromEnv('GEMINI_API_KEY');
 
 async function callOpenAI({ messages, temperature = 0.5, maxTokens = 900, jsonMode = false }) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = fromEnv('OPENAI_API_KEY');
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
 
   const payload = {
@@ -74,7 +85,10 @@ async function callGemini({ messages, temperature = 0.5, maxTokens = 900, jsonMo
     ...(systemText ? { systemInstruction: { parts: [{ text: systemText }] } } : {}),
     generationConfig: {
       temperature,
-      maxOutputTokens: maxTokens,
+      // Thinking models spend part of this limit before writing the answer, so
+      // the caller's answer length gets thinking headroom on top (900 alone
+      // returned nothing at all on gemini-3.6-flash).
+      maxOutputTokens: maxTokens + 4096,
       ...(jsonMode ? { responseMimeType: 'application/json' } : {})
     }
   };
@@ -88,7 +102,7 @@ async function callGemini({ messages, temperature = 0.5, maxTokens = 900, jsonMo
   const data = await res.json();
   if (!res.ok) throw new Error(`Gemini error: ${data?.error?.message || res.statusText}`);
 
-  const content = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
+  const content = (data.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('');
   if (!content) throw new Error('Gemini returned an empty response');
   return { provider: 'gemini', content };
 }
@@ -98,7 +112,7 @@ async function callGemini({ messages, temperature = 0.5, maxTokens = 900, jsonMo
  * @returns {Promise<{provider: 'openai'|'gemini', content: string}>}
  */
 export async function callAI({ messages, temperature, maxTokens, jsonMode }) {
-  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
+  const hasOpenAI = Boolean(fromEnv('OPENAI_API_KEY'));
   const hasGemini = Boolean(GEMINI_API_KEY);
 
   const attempts = [];

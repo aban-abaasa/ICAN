@@ -94,6 +94,24 @@ const emptyForm = {
 
 const formatUgx = (value) => `UGX ${Number(value || 0).toLocaleString()}`;
 
+// Product photo with a neutral placeholder when there is none or it fails to load.
+const ProductThumb = ({ src, alt, className = '' }) => {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [src]);
+
+  if (!src || failed) {
+    return (
+      <div className={`flex items-center justify-center bg-slate-800 text-slate-500 ${className}`}>
+        <Package className="h-7 w-7" />
+      </div>
+    );
+  }
+  return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={`object-cover ${className}`} />;
+};
+
+const INPUT_CLASS = 'w-full rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2.5 text-base sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60';
+const ITEM_INPUT_CLASS = 'w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2.5 text-base sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60';
+
 const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData, userDepartmentId, canView = true, canCreate = false, canSource = false, canViewBids = false }) => {
   const [form, setForm] = useState(emptyForm);
   const [selectedItem, setSelectedItem] = useState('');
@@ -119,18 +137,37 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
   const canCreateRequisition = canCreate;
   const canViewRequisitionList = canView;
 
-  const inventoryOptions = useMemo(() => {
-    const names = (cmmsData.inventory || [])
-      .map((item) => item.item_name || item.itemName)
-      .filter(Boolean);
-    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
-  }, [cmmsData.inventory]);
-
   // Inventory rows carry either the DB names (reorder_level/unit_price) or the
   // ones the inventory screen writes (minimum_stock_level/unit_cost).
   const stockLevel = (item) => Number(item.quantity_in_stock ?? 0);
   const minimumLevel = (item) => Number(item.minimum_stock_level ?? item.reorder_level ?? 0);
   const inventoryUnitCost = (item) => Number(item.unit_cost ?? item.unit_price ?? 0);
+  const inventoryImage = (item) => item.image_url || item.photo_url || item.image || '';
+
+  // One card per distinct item name, for the tap-to-pick product grid.
+  const inventoryProducts = useMemo(() => {
+    const byName = new Map();
+    (cmmsData.inventory || []).forEach((item) => {
+      const name = item.item_name || item.itemName;
+      if (!name || item.is_active === false || byName.has(name)) return;
+      byName.set(name, {
+        name,
+        unit: item.unit_of_measure || '',
+        cost: inventoryUnitCost(item),
+        stock: stockLevel(item),
+        low: minimumLevel(item) > 0 && stockLevel(item) <= minimumLevel(item),
+        image: inventoryImage(item),
+        category: item.category || ''
+      });
+    });
+    return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [cmmsData.inventory]);
+
+  const visibleProducts = useMemo(() => {
+    const term = selectedItem.trim().toLowerCase();
+    if (!term) return inventoryProducts;
+    return inventoryProducts.filter((product) => `${product.name} ${product.category}`.toLowerCase().includes(term));
+  }, [inventoryProducts, selectedItem]);
 
   const lowStockItems = useMemo(
     () => (cmmsData.inventory || []).filter(
@@ -147,6 +184,14 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
     if (!match) return;
     if (!itemUnit) setItemUnit(match.unit_of_measure || '');
     if (!itemCost && inventoryUnitCost(match) > 0) setItemCost(String(inventoryUnitCost(match)));
+  };
+
+  // Tapping a product card always replaces unit and cost, so switching from
+  // one product to another never leaves the previous one's price behind.
+  const handlePickProduct = (product) => {
+    setSelectedItem(product.name);
+    setItemUnit(product.unit || '');
+    setItemCost(product.cost > 0 ? String(product.cost) : '');
   };
 
   // Latest supply request (bid opportunity) per requisition. Newest first from
@@ -453,10 +498,9 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
   }, [userScopedRequisitions]);
 
   return (
-    <div className="space-y-6">
-      {/* Department scope banner */}
+    <div className="space-y-4 sm:space-y-6">
       {/* Department / ownership scope banner */}
-      <div className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border ${
+      <div className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium border ${
         userRole === 'service-provider'
           ? 'bg-violet-500/10 border-violet-500/30 text-violet-300'
           : userDepartmentId
@@ -475,32 +519,32 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
       </div>
 
       {canViewRequisitionList && (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4">
-          <div className="text-xs uppercase tracking-wide text-cyan-300">Total Requisitions</div>
-          <div className="mt-2 text-2xl font-bold text-white">{metrics.all}</div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 sm:p-4">
+          <div className="text-[11px] sm:text-xs uppercase tracking-wide text-cyan-300">Total Requisitions</div>
+          <div className="mt-1 sm:mt-2 text-xl sm:text-2xl font-bold text-white">{metrics.all}</div>
         </div>
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-          <div className="text-xs uppercase tracking-wide text-amber-300">Open Queue</div>
-          <div className="mt-2 text-2xl font-bold text-white">{metrics.pending}</div>
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 sm:p-4">
+          <div className="text-[11px] sm:text-xs uppercase tracking-wide text-amber-300">Open Queue</div>
+          <div className="mt-1 sm:mt-2 text-xl sm:text-2xl font-bold text-white">{metrics.pending}</div>
         </div>
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-          <div className="text-xs uppercase tracking-wide text-emerald-300">Completed</div>
-          <div className="mt-2 text-2xl font-bold text-white">{metrics.completed}</div>
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 sm:p-4">
+          <div className="text-[11px] sm:text-xs uppercase tracking-wide text-emerald-300">Completed</div>
+          <div className="mt-1 sm:mt-2 text-xl sm:text-2xl font-bold text-white">{metrics.completed}</div>
         </div>
-        <div className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 p-4">
-          <div className="text-xs uppercase tracking-wide text-fuchsia-300">Estimated Value</div>
-          <div className="mt-2 text-xl font-bold text-white">UGX {metrics.totalEstimated.toLocaleString()}</div>
+        <div className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 p-3 sm:p-4">
+          <div className="text-[11px] sm:text-xs uppercase tracking-wide text-fuchsia-300">Estimated Value</div>
+          <div className="mt-1 sm:mt-2 text-base sm:text-xl font-bold text-white break-words">UGX {metrics.totalEstimated.toLocaleString()}</div>
         </div>
       </div>
       )}
 
       {canCreateRequisition ? (
-        <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/55 to-cyan-900/35 p-5">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                <Plus className="w-5 h-5 text-cyan-300" />
+        <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/55 to-cyan-900/35 p-3 sm:p-5">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="min-w-0">
+              <h3 className="text-base sm:text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                <Plus className="w-5 h-5 shrink-0 text-cyan-300" />
                 New Maintenance Requisition
               </h3>
               <p className="text-xs text-slate-400 mt-1">
@@ -517,7 +561,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                 setItemCondition('');
                 setLowStockNotice('');
               }}
-              className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800/70 transition-colors"
+              className="shrink-0 min-h-[40px] px-3 py-2 text-xs font-semibold rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800/70 transition-colors"
             >
               Reset
             </button>
@@ -532,7 +576,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                   value={form.title}
                   onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
                   placeholder="Example: Generator preventive service"
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                  className={`mt-1 ${INPUT_CLASS}`}
                 />
               </div>
 
@@ -543,7 +587,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                   onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
                   rows={4}
                   placeholder="Describe the maintenance requirement and expected outcome."
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                  className={`mt-1 ${INPUT_CLASS}`}
                 />
               </div>
 
@@ -553,7 +597,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                   <select
                     value={form.priority}
                     onChange={(e) => setForm((prev) => ({ ...prev, priority: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                    className={`mt-1 ${INPUT_CLASS}`}
                   >
                     <option value="low">Low</option>
                     <option value="normal">Normal</option>
@@ -567,21 +611,21 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                     type="date"
                     value={form.requiredByDate}
                     onChange={(e) => setForm((prev) => ({ ...prev, requiredByDate: e.target.value }))}
-                    className="mt-1 w-full rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                    className={`mt-1 ${INPUT_CLASS}`}
                   />
                 </div>
               </div>
             </div>
 
-            <div className="lg:col-span-2 space-y-3">
-              <div className="rounded-xl border border-cyan-500/25 bg-slate-950/55 p-3">
-                <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="lg:col-span-2 space-y-3 min-w-0">
+              <div className="rounded-xl border border-cyan-500/25 bg-slate-950/55 p-2.5 sm:p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                   <h4 className="text-sm font-semibold text-cyan-200">Items to buy</h4>
                   {lowStockItems.length > 0 && (
                     <button
                       type="button"
                       onClick={handleAddLowStockItems}
-                      className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-200 hover:bg-amber-500/20"
+                      className="min-h-[36px] rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-200 hover:bg-amber-500/20"
                     >
                       Add {lowStockItems.length} low-stock item{lowStockItems.length === 1 ? '' : 's'}
                     </button>
@@ -591,133 +635,181 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                 <div className="space-y-2">
                   <input
                     type="text"
-                    list="requisition-inventory-items"
                     value={selectedItem}
                     onChange={(e) => handleItemNameChange(e.target.value)}
-                    placeholder="Item — pick from inventory or type a new one"
-                    className="w-full rounded-lg border border-white/15 bg-slate-900 px-2.5 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                    placeholder={inventoryProducts.length > 0 ? 'Search inventory or type a new item' : 'Type the item to buy'}
+                    className={ITEM_INPUT_CLASS}
                   />
-                  <datalist id="requisition-inventory-items">
-                    {inventoryOptions.map((name) => (
-                      <option key={name} value={name} />
-                    ))}
-                  </datalist>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <input
-                      type="number"
-                      min="1"
-                      value={itemQuantity}
-                      onChange={(e) => setItemQuantity(Number(e.target.value) || 1)}
-                      placeholder="Required Qty"
-                      className="rounded-lg border border-white/15 bg-slate-900 px-2.5 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
-                    />
-                    <input
-                      type="text"
-                      value={itemUnit}
-                      onChange={(e) => setItemUnit(e.target.value)}
-                      placeholder="Unit (pcs, kg…)"
-                      className="rounded-lg border border-white/15 bg-slate-900 px-2.5 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
-                    />
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={itemCost}
-                      onChange={(e) => setItemCost(e.target.value)}
-                      placeholder="Est. unit cost"
-                      className="rounded-lg border border-white/15 bg-slate-900 px-2.5 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
-                    />
+                  {/* Inventory products: tap a card to fill the item, unit and price */}
+                  {inventoryProducts.length > 0 && (
+                    <div>
+                      <p className="mb-1.5 text-[11px] uppercase tracking-wide text-slate-400">
+                        {selectedItem.trim() ? `${visibleProducts.length} matching` : 'Tap an inventory item'}
+                      </p>
+                      {visibleProducts.length === 0 ? (
+                        <p className="rounded-lg border border-dashed border-slate-600 px-3 py-3 text-center text-[11px] text-slate-400">
+                          Not in inventory — it will be added as a new item to buy.
+                        </p>
+                      ) : (
+                        <div className="grid max-h-80 grid-cols-2 gap-2 overflow-y-auto pr-0.5">
+                          {visibleProducts.map((product) => {
+                            const active = product.name === selectedItem.trim();
+                            return (
+                              <button
+                                type="button"
+                                key={product.name}
+                                onClick={() => handlePickProduct(product)}
+                                aria-pressed={active}
+                                className={`overflow-hidden rounded-xl border text-left transition-colors ${
+                                  active
+                                    ? 'border-cyan-300 bg-cyan-500/15 ring-2 ring-cyan-400/70'
+                                    : 'border-white/10 bg-slate-900/70 hover:border-white/25'
+                                }`}
+                              >
+                                <div className="relative aspect-[4/3] w-full">
+                                  <ProductThumb src={product.image} alt={product.name} className="h-full w-full" />
+                                  <span className="absolute bottom-1.5 left-1.5 max-w-[calc(100%-0.75rem)] truncate rounded-md bg-amber-400 px-1.5 py-0.5 text-[11px] font-bold text-slate-900 shadow">
+                                    {product.cost > 0 ? `${formatUgx(product.cost)}${product.unit ? ` / ${product.unit}` : ''}` : 'No price yet'}
+                                  </span>
+                                  {product.low && (
+                                    <span className="absolute right-1.5 top-1.5 rounded-md bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white shadow">Low stock</span>
+                                  )}
+                                </div>
+                                <div className="p-2">
+                                  <p className="line-clamp-2 text-sm font-semibold leading-snug text-white">{product.name}</p>
+                                  <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                                    {product.stock} in stock{product.category ? ` · ${product.category}` : ''}
+                                  </p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2">
+                    <div>
+                      <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">Required Qty</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="1"
+                        value={itemQuantity}
+                        onChange={(e) => setItemQuantity(Number(e.target.value) || 1)}
+                        className={ITEM_INPUT_CLASS}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">Unit</label>
+                      <input
+                        type="text"
+                        value={itemUnit}
+                        onChange={(e) => setItemUnit(e.target.value)}
+                        placeholder="pcs, kg…"
+                        className={ITEM_INPUT_CLASS}
+                      />
+                    </div>
+                    <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
+                      <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">Est. unit cost (UGX)</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={itemCost}
+                        onChange={(e) => setItemCost(e.target.value)}
+                        placeholder="0"
+                        className={ITEM_INPUT_CLASS}
+                      />
+                    </div>
                   </div>
                   <input
                     type="text"
                     value={itemCondition}
                     onChange={(e) => setItemCondition(e.target.value)}
                     placeholder="Condition / specification (required)"
-                    className="w-full rounded-lg border border-white/15 bg-slate-900 px-2.5 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                    className={ITEM_INPUT_CLASS}
                   />
-                  <p className="text-[11px] text-slate-400">
-                    Required amount per item = Required Qty x Unit cost
-                  </p>
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
-                    <p className="text-[11px] uppercase tracking-wide text-amber-200">Required Amount (This Item)</p>
-                    <p className="text-sm font-semibold text-amber-100">{formatUgx(pendingRequiredAmount)}</p>
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-[11px] uppercase tracking-wide text-amber-200">Required Amount (This Item)</p>
+                      <p className="text-[10px] text-slate-400">Required Qty × Unit cost</p>
+                    </div>
+                    <p className="shrink-0 text-sm font-semibold text-amber-100">{formatUgx(pendingRequiredAmount)}</p>
                   </div>
 
                   <button
                     type="button"
                     onClick={handleAddLineItem}
-                    className="w-full rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors"
+                    className="w-full min-h-[44px] rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-500 transition-colors"
                   >
                     Add Item
                   </button>
                 </div>
 
-                <div className="mt-3 space-y-2 max-h-52 overflow-y-auto">
+                <div className="mt-3 space-y-2 max-h-96 overflow-y-auto">
                   {form.items.length === 0 && (
                     <div className="rounded-lg border border-dashed border-slate-600 px-3 py-4 text-xs text-slate-400 text-center">
                       No line items yet.
                     </div>
                   )}
-                  {form.items.length > 0 && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-lg border border-white/10 bg-slate-900/50 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-400">
-                      <span>Required Qty</span>
-                      <span>Unit Cost</span>
-                      <span>Condition</span>
-                      <span className="text-right sm:text-left">Required Amount</span>
-                    </div>
-                  )}
-                  {form.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-lg border border-white/10 bg-slate-900/70 px-3 py-3"
-                    >
-                      <div className="min-w-0 mb-2">
-                        <p className="text-sm text-white truncate">{item.equipment}</p>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-start">
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wide text-slate-400">Required Qty</div>
-                          <div className="text-sm text-white">{item.quantity}{item.unit_of_measure ? ` ${item.unit_of_measure}` : ''}</div>
+                  {form.items.map((item) => {
+                    const stockMatch = inventoryProducts.find((product) => product.name === item.equipment);
+                    return (
+                      <div
+                        key={item.id}
+                        className="rounded-lg border border-white/10 bg-slate-900/70 p-2.5"
+                      >
+                        <div className="flex items-start gap-2.5">
+                          {stockMatch && (
+                            <ProductThumb src={stockMatch.image} alt={item.equipment} className="h-14 w-14 shrink-0 rounded-lg" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-white break-words">{item.equipment}</p>
+                            <span className="mt-1 inline-block rounded-md bg-amber-400 px-1.5 py-0.5 text-[11px] font-bold text-slate-900">
+                              {formatUgx(item.costPerUnit)}{item.unit_of_measure && item.unit_of_measure !== 'unit' ? ` / ${item.unit_of_measure}` : ''}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveLineItem(item.id)}
+                            className="shrink-0 min-h-[36px] rounded-md px-2 text-xs text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+                          >
+                            Remove
+                          </button>
                         </div>
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wide text-slate-400">Unit Cost</div>
-                          <div className="text-sm text-white">{formatUgx(item.costPerUnit)}</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wide text-slate-400">Condition</div>
-                          <div className="text-sm text-white">{item.condition || 'Not specified'}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[10px] uppercase tracking-wide text-slate-400">Required Amount</div>
-                          <div className="text-sm text-amber-300 font-semibold">
-                            {formatUgx(item.totalCost)}
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <div>
+                            <div className="text-[10px] uppercase tracking-wide text-slate-400">Required Qty</div>
+                            <div className="text-sm text-white">{item.quantity}{item.unit_of_measure ? ` ${item.unit_of_measure}` : ''}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[10px] uppercase tracking-wide text-slate-400">Required Amount</div>
+                            <div className="text-sm text-amber-300 font-semibold">{formatUgx(item.totalCost)}</div>
+                          </div>
+                          <div className="col-span-2">
+                            <div className="text-[10px] uppercase tracking-wide text-slate-400">Condition</div>
+                            <div className="text-sm text-white break-words">{item.condition || 'Not specified'}</div>
                           </div>
                         </div>
                       </div>
-                      <div className="mt-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveLineItem(item.id)}
-                          className="text-xs text-rose-300 hover:text-rose-200"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
                 <div className="text-xs uppercase tracking-wide text-amber-200">Estimated Total</div>
-                <div className="mt-1 text-xl font-bold text-white">{formatUgx(form.estimatedCost)}</div>
+                <div className="mt-1 text-xl font-bold text-white break-words">{formatUgx(form.estimatedCost)}</div>
               </div>
 
               <button
                 onClick={handleCreateRequisition}
                 disabled={isSubmitting}
-                className="w-full rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:from-cyan-500 hover:to-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full min-h-[48px] rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:from-cyan-500 hover:to-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? 'Creating...' : 'Create Requisition'}
               </button>
@@ -732,13 +824,13 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
       )}
 
       {canViewRequisitionList && (
-      <section className="rounded-2xl border border-white/10 bg-slate-900/45 p-5">
+      <section className="rounded-2xl border border-white/10 bg-slate-900/45 p-3 sm:p-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-          <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-            <Clipboard className="w-5 h-5 text-cyan-300" />
+          <h3 className="text-base sm:text-lg md:text-xl font-bold text-white flex items-center gap-2">
+            <Clipboard className="w-5 h-5 shrink-0 text-cyan-300" />
             Requisition Register
           </h3>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
@@ -746,13 +838,13 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search requisitions"
-                className="pl-8 pr-3 py-2 rounded-lg border border-white/15 bg-slate-950/50 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+                className="w-full sm:w-auto pl-8 pr-3 py-2.5 rounded-lg border border-white/15 bg-slate-950/50 text-base sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
               />
             </div>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-white/15 bg-slate-950/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+              className="w-full sm:w-auto rounded-lg border border-white/15 bg-slate-950/50 px-3 py-2.5 text-base sm:text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
             >
               <option value="all">All statuses</option>
               {Object.entries(STATUS_META).map(([status, meta]) => (
@@ -767,7 +859,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                 loadRequisitions(true);
               }}
               disabled={isLoading}
-              className="rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-3 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-60"
+              className="min-h-[44px] sm:min-h-0 rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-3 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-60"
             >
               Refresh
             </button>
@@ -793,32 +885,35 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                 <article
                   key={req.id}
                   onClick={() => setExpandedReqId(isExpanded ? null : req.id)}
-                  className="rounded-xl border border-white/10 bg-gradient-to-br from-slate-950/65 to-slate-900/45 p-4 cursor-pointer transition-all hover:border-white/20"
+                  className="rounded-xl border border-white/10 bg-gradient-to-br from-slate-950/65 to-slate-900/45 p-3 sm:p-4 cursor-pointer transition-all hover:border-white/20"
                 >
                   {/* Always visible: title row */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center flex-wrap gap-2 min-w-0">
-                      <h4 className="text-base font-semibold text-white truncate">{req.title}</h4>
-                      <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs text-slate-300 flex-shrink-0">
-                        {req.requisitionNumber || req.id}
-                      </span>
-                      <span className={`rounded-md border px-2 py-0.5 text-xs flex-shrink-0 ${status.badgeClass}`}>
-                        {status.label}
-                      </span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-base font-semibold text-white break-words">{req.title}</h4>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs text-slate-300 break-all">
+                          {req.requisitionNumber || req.id}
+                        </span>
+                        <span className={`rounded-md border px-2 py-0.5 text-xs ${status.badgeClass}`}>
+                          {status.label}
+                        </span>
+                        <span className="text-xs font-semibold text-amber-300 sm:hidden">{formatUgx(req.estimatedCost)}</span>
+                      </div>
                     </div>
-                    <ChevronDown className={`w-5 h-5 text-slate-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-5 h-5 mt-0.5 text-slate-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                   </div>
 
                   {/* Expanded details */}
                   {isExpanded && (
-                    <div className="mt-4">
-                      <p className="text-sm text-slate-300 mb-3">{req.description}</p>
-                      <div className="flex items-center justify-between mb-3">
+                    <div className="mt-4" onClick={(e) => e.stopPropagation()}>
+                      <p className="text-sm text-slate-300 mb-3 break-words">{req.description}</p>
+                      <div className="flex items-center justify-between gap-3 mb-3">
                         <span className="text-xs text-slate-400">Estimated Cost</span>
-                        <span className="text-base font-bold text-amber-300">{formatUgx(req.estimatedCost)}</span>
+                        <span className="text-base font-bold text-amber-300 text-right">{formatUgx(req.estimatedCost)}</span>
                       </div>
 
-                      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                         <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
                           <p className="text-[11px] uppercase tracking-wide text-slate-500">Priority</p>
                           <p className="text-sm text-white">{PRIORITY_META[req.priority] || 'Normal'}</p>
@@ -843,29 +938,39 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                         <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/40 p-2.5">
                           <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-2">Line Items</p>
                           <div className="space-y-2">
-                            {req.items.map((item, index) => (
-                              <div key={item.id || `${req.id}-item-${index}`} className="rounded-md border border-white/10 bg-slate-900/60 p-2">
-                                <p className="text-sm text-white truncate">{item.equipment || item.item_name || 'Inventory item'}</p>
-                                <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                  <div>
-                                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Required Qty</p>
-                                    <p className="text-sm text-white">{Number(item.quantity || 0)}{item.unit_of_measure && item.unit_of_measure !== 'unit' ? ` ${item.unit_of_measure}` : ''}</p>
+                            {req.items.map((item, index) => {
+                              const itemName = item.equipment || item.item_name || 'Inventory item';
+                              const stockMatch = inventoryProducts.find((product) => product.name === itemName);
+                              return (
+                                <div key={item.id || `${req.id}-item-${index}`} className="rounded-md border border-white/10 bg-slate-900/60 p-2.5">
+                                  <div className="flex items-start gap-2.5">
+                                    {stockMatch && (
+                                      <ProductThumb src={stockMatch.image} alt={itemName} className="h-14 w-14 shrink-0 rounded-lg" />
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-semibold text-white break-words">{itemName}</p>
+                                      <span className="mt-1 inline-block rounded-md bg-amber-400 px-1.5 py-0.5 text-[11px] font-bold text-slate-900">
+                                        {formatUgx(item.costPerUnit)}{item.unit_of_measure && item.unit_of_measure !== 'unit' ? ` / ${item.unit_of_measure}` : ''}
+                                      </span>
+                                    </div>
                                   </div>
-                                  <div>
-                                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Unit Cost</p>
-                                    <p className="text-sm text-white">{formatUgx(item.costPerUnit)}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Condition</p>
-                                    <p className="text-sm text-white">{item.condition || 'Not specified'}</p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-[10px] uppercase tracking-wide text-slate-500">Required Amount</p>
-                                    <p className="text-sm font-semibold text-amber-300">{formatUgx(item.totalCost)}</p>
+                                  <div className="mt-2 grid grid-cols-2 gap-2">
+                                    <div>
+                                      <p className="text-[10px] uppercase tracking-wide text-slate-500">Required Qty</p>
+                                      <p className="text-sm text-white">{Number(item.quantity || 0)}{item.unit_of_measure && item.unit_of_measure !== 'unit' ? ` ${item.unit_of_measure}` : ''}</p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-[10px] uppercase tracking-wide text-slate-500">Required Amount</p>
+                                      <p className="text-sm font-semibold text-amber-300">{formatUgx(item.totalCost)}</p>
+                                    </div>
+                                    <div className="col-span-2">
+                                      <p className="text-[10px] uppercase tracking-wide text-slate-500">Condition</p>
+                                      <p className="text-sm text-white break-words">{item.condition || 'Not specified'}</p>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       )}

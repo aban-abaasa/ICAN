@@ -28,7 +28,7 @@ const PAYMENT_LABEL = {
   cancelled: 'Payment cancelled',
 };
 
-const inputClass = 'mt-1 w-full rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60';
+const inputClass = 'mt-1 w-full rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2.5 text-base sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60';
 
 /**
  * The supplier-bidding side of one requisition (rendered inside its expanded
@@ -141,7 +141,7 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
     if (!canSource) return null;
     return (
       <div onClick={stop} className="mt-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-cyan-100 flex items-center gap-1.5"><Store className="w-4 h-4" /> Get supplier bids</p>
             <p className="text-xs text-slate-300 mt-1">
@@ -149,7 +149,7 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
             </p>
           </div>
           {!showForm && (
-            <button onClick={() => setShowForm(true)} className="shrink-0 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-2 text-xs font-semibold text-white">
+            <button onClick={() => setShowForm(true)} className="shrink-0 min-h-[44px] sm:min-h-0 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-2 text-sm sm:text-xs font-semibold text-white">
               Request supplier bids
             </button>
           )}
@@ -169,8 +169,8 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
               <textarea rows={2} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Brand, quality, warranty or delivery expectations (optional)" className={inputClass} />
             </div>
             <div className="sm:col-span-2 flex justify-end gap-2">
-              <button onClick={() => { setShowForm(false); setError(''); }} className="px-3 py-2 text-xs text-slate-300 hover:text-white">Cancel</button>
-              <button disabled={busy || !form.deadline} onClick={handlePublish} className="rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 px-4 py-2 text-xs font-semibold text-white">
+              <button onClick={() => { setShowForm(false); setError(''); }} className="min-h-[44px] sm:min-h-0 px-3 py-2 text-sm sm:text-xs text-slate-300 hover:text-white">Cancel</button>
+              <button disabled={busy || !form.deadline} onClick={handlePublish} className="min-h-[44px] sm:min-h-0 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 px-4 py-2 text-sm sm:text-xs font-semibold text-white">
                 {busy ? 'Publishing…' : 'Publish for bids'}
               </button>
             </div>
@@ -194,7 +194,7 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
         <div className="flex items-center gap-2">
           <span className={`rounded-md border px-2 py-0.5 text-xs ${status.className}`}>{status.label}</span>
           {canSource && tender.status === 'open' && (
-            <button disabled={busy} onClick={handleCancel} className="text-xs text-rose-300 hover:text-rose-200 disabled:opacity-50">Cancel request</button>
+            <button disabled={busy} onClick={handleCancel} className="min-h-[36px] px-2 text-xs text-rose-300 hover:text-rose-200 disabled:opacity-50">Cancel request</button>
           )}
         </div>
       </div>
@@ -231,7 +231,7 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
                 <div key={bid.id} className={`rounded-lg border p-2.5 ${bid.status === 'selected' ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-white/10 bg-slate-900/60'}`}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm text-white font-semibold">
+                      <p className="text-sm text-white font-semibold break-words">
                         {bid.bidder_name}
                         {bid.id === cheapestId && <span className="ml-2 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">Lowest</span>}
                       </p>
@@ -251,7 +251,8 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
                     </div>
                   </div>
 
-                  <table className="mt-2 w-full text-xs text-slate-300">
+                  <div className="mt-2 -mx-1 overflow-x-auto px-1">
+                  <table className="w-full min-w-[360px] text-xs text-slate-300">
                     <thead>
                       <tr className="text-[10px] uppercase tracking-wide text-slate-500">
                         <th className="text-left font-medium py-0.5">Item</th>
@@ -277,12 +278,13 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
                       })}
                     </tbody>
                   </table>
+                  </div>
 
                   {bid.proposal && bid.proposal !== 'Itemised quotation' && <p className="mt-2 text-xs text-slate-400">{bid.proposal}</p>}
 
                   {canAward && (
-                    <div className="mt-2 flex justify-end">
-                      <button disabled={busy} onClick={() => handleAward(bid)} className="flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-1.5 text-xs font-semibold text-white">
+                    <div className="mt-2 flex sm:justify-end">
+                      <button disabled={busy} onClick={() => handleAward(bid)} className="flex w-full sm:w-auto min-h-[44px] sm:min-h-0 items-center justify-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3 py-1.5 text-xs font-semibold text-white">
                         <Award className="w-3.5 h-3.5" /> Award this bid
                       </button>
                     </div>

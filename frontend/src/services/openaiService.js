@@ -343,12 +343,17 @@ Rules:
     // 2 retries with a short backoff covers a momentary hiccup without
     // making the admin manually re-click "Generate with AI".
     const callGemini = async (attempt = 0) => {
-      const response = await fetch(`${geminiApiUrl}?key=${geminiApiKey}`, {
+      const response = await fetch(geminiApiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // Key in a header, not the URL, so it never lands in logs or referrers
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiApiKey },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.6, maxOutputTokens: 2000 },
+          // Current Gemini models "think" before answering and that thinking
+          // counts against maxOutputTokens: at 2000 it used ~1900 and the JSON
+          // was cut off mid-question ("Invalid JSON response"). Leave generous
+          // headroom, and ask for JSON directly instead of hoping for it.
+          generationConfig: { temperature: 0.6, maxOutputTokens: 8192, responseMimeType: 'application/json' },
         }),
       });
       if (response.status === 503 && attempt < 2) {
@@ -362,11 +367,18 @@ Rules:
     try {
       const response = await callGemini();
       const data = await response.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const candidate = data?.candidates?.[0];
+      // Join every answer part (skipping any "thought" part) rather than trusting parts[0]
+      const text = (candidate?.content?.parts || []).filter((part) => !part.thought).map((part) => part.text || '').join('');
       if (!text) throw new Error('Invalid response from Gemini API');
 
       const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) throw new Error('Invalid JSON response from Gemini');
+      if (!jsonMatch) {
+        console.warn('Gemini reply had no complete JSON array', { finishReason: candidate?.finishReason, usage: data?.usageMetadata });
+        throw new Error(candidate?.finishReason === 'MAX_TOKENS'
+          ? 'The AI ran out of space before finishing the questions. Please try again.'
+          : 'Invalid JSON response from Gemini');
+      }
       const questions = JSON.parse(jsonMatch[0]);
       if (!Array.isArray(questions) || questions.length === 0) {
         throw new Error('No questions were generated');
