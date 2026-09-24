@@ -8977,74 +8977,78 @@ Data Freshness: ${reportData.metadata.dataFreshness}
   };
 
   const renderSecurityMandate = () => (
-    <div className="space-y-6">
-      <div className="glass-card p-6">
-        <div className="flex items-center gap-3 mb-4">
+    <div className="max-w-6xl mx-auto w-full space-y-6">
+      <div className="glass-card p-6 lg:p-8">
+        <div className="flex items-center gap-3 mb-6">
           <Shield className="w-6 h-6 text-blue-400" />
           <h2 className="text-xl font-semibold text-white">Treasury Guardian</h2>
         </div>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-white font-medium mb-2">Contract Text</label>
-            <textarea
-              value={contractText}
-              onChange={(e) => setContractText(e.target.value)}
-              placeholder="Paste contract or terms & conditions here..."
-              className="w-full h-40 px-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
-          </div>
-          
-          <button
-            onClick={() => handleSecureAction('Contract Analysis', analyzeContract)}
-            disabled={!contractText.trim() || isLoading}
-            className="w-full py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-          >
-            {isLoading ? 'Analyzing Contract...' : 'Analyze Contract (Secure)'}
-          </button>
-        </div>
 
-        {contractAnalysis && (
-          <div className="mt-6 space-y-4">
-            <div className="bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30 rounded-lg p-4">
-              <h3 className="text-green-400 font-semibold mb-2">Financial Safety Score</h3>
-              <div className="text-2xl font-bold text-white">
-                {contractAnalysis.safetyScore.toFixed(1)}/10.0
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            <div>
+              <label className="block text-white font-medium mb-2">Contract Text</label>
+              <textarea
+                value={contractText}
+                onChange={(e) => setContractText(e.target.value)}
+                placeholder="Paste contract or terms & conditions here..."
+                className="w-full h-48 lg:h-64 px-4 py-3 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+            </div>
+
+            <button
+              onClick={() => handleSecureAction('Contract Analysis', analyzeContract)}
+              disabled={!contractText.trim() || isLoading}
+              className="w-full py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+            >
+              {isLoading ? 'Analyzing Contract...' : 'Analyze Contract (Secure)'}
+            </button>
+
+            {contractAnalysis && (
+              <div className="bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-30 rounded-lg p-4">
+                <h3 className="text-yellow-400 font-semibold mb-2">Critical Liability Flags</h3>
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1">
+                  {contractAnalysis.liabilityFlags.map((flag, index) => (
+                    <li key={index} className="text-white flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                      {flag}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {contractAnalysis && (
+            <div className="space-y-4">
+              <div className="bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30 rounded-lg p-4">
+                <h3 className="text-green-400 font-semibold mb-2">Financial Safety Score</h3>
+                <div className="text-2xl font-bold text-white">
+                  {contractAnalysis.safetyScore.toFixed(1)}/10.0
+                </div>
+              </div>
+
+              <div className="bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-30 rounded-lg p-4">
+                <h3 className="text-blue-400 font-semibold mb-2">Recommendation</h3>
+                <p className="text-white">{contractAnalysis.recommendation}</p>
               </div>
             </div>
-
-            <div className="bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-30 rounded-lg p-4">
-              <h3 className="text-yellow-400 font-semibold mb-2">Critical Liability Flags</h3>
-              <ul className="space-y-1">
-                {contractAnalysis.liabilityFlags.map((flag, index) => (
-                  <li key={index} className="text-white flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
-                    {flag}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-30 rounded-lg p-4">
-              <h3 className="text-blue-400 font-semibold mb-2">Recommendation</h3>
-              <p className="text-white">{contractAnalysis.recommendation}</p>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
 
   const renderReadinessMandate = () => (
-    <div className="space-y-6">
-      <div className="glass-card p-6">
-        <div className="flex items-center gap-3 mb-4">
+    <div className="max-w-6xl mx-auto w-full space-y-6">
+      <div className="glass-card p-6 lg:p-8">
+        <div className="flex items-center gap-3 mb-6">
           <Globe className="w-6 h-6 text-green-400" />
           <h2 className="text-xl font-semibold text-white">Global Navigator</h2>
         </div>
 
-        <div className="mb-4">
-          <div className="flex items-center gap-4 mb-4">
+        <div className="mb-6">
+          <div className="flex flex-wrap items-end gap-4 mb-4">
             <div>
               <label className="block text-white font-medium mb-2">Operating Mode</label>
               <select
@@ -9056,7 +9060,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
                 <option value="BO">BO - Business Owner</option>
               </select>
             </div>
-            
+
             <div>
               <label className="block text-white font-medium mb-2">Country</label>
               <select
@@ -9070,51 +9074,53 @@ Data Freshness: ${reportData.metadata.dataFreshness}
                 <option value="Rwanda">Rwanda</option>
               </select>
             </div>
-          </div>
 
-          <button
-            onClick={performComplianceCheck}
-            disabled={isLoading}
-            className="w-full py-3 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-          >
-            {isLoading ? 'Checking Compliance...' : 'Perform Regulatory Gap Analysis'}
-          </button>
+            <button
+              onClick={performComplianceCheck}
+              disabled={isLoading}
+              className="flex-1 min-w-[220px] py-2.5 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+            >
+              {isLoading ? 'Checking Compliance...' : 'Perform Regulatory Gap Analysis'}
+            </button>
+          </div>
         </div>
 
         {complianceData && (
-          <div className="space-y-4">
-            <div className="bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30 rounded-lg p-4">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30 rounded-lg p-4 lg:col-span-1 lg:self-start">
               <h3 className="text-green-400 font-semibold mb-2">Compliance Status</h3>
               <div className="text-2xl font-bold text-white">
                 {Math.round(complianceData.compliancePercentage)}% Complete
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 lg:col-span-3">
               <h3 className="text-white font-semibold">Compliance Checklist</h3>
-              {complianceData.checklist.map((item, index) => (
-                <div key={index} className={`flex items-center gap-3 p-3 rounded-lg ${
-                  item.status === 'completed' ? 'bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30' :
-                  item.status === 'pending' ? 'bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-30' :
-                  'bg-red-500 bg-opacity-20 border border-red-500 border-opacity-30'
-                }`}>
-                  {item.status === 'completed' ? 
-                    <CheckCircle className="w-5 h-5 text-green-400" /> :
-                    <AlertTriangle className="w-5 h-5 text-yellow-400" />
-                  }
-                  <div className="flex-1">
-                    <span className="text-white font-medium">{item.item}</span>
-                    {item.required && <span className="text-red-400 ml-2">*Required</span>}
-                  </div>
-                  <span className={`text-sm px-2 py-1 rounded ${
-                    item.status === 'completed' ? 'bg-green-600 text-white' :
-                    item.status === 'pending' ? 'bg-yellow-600 text-white' :
-                    'bg-red-600 text-white'
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {complianceData.checklist.map((item, index) => (
+                  <div key={index} className={`flex items-center gap-3 p-3 rounded-lg ${
+                    item.status === 'completed' ? 'bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30' :
+                    item.status === 'pending' ? 'bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-30' :
+                    'bg-red-500 bg-opacity-20 border border-red-500 border-opacity-30'
                   }`}>
-                    {item.status.replace('-', ' ')}
-                  </span>
-                </div>
-              ))}
+                    {item.status === 'completed' ?
+                      <CheckCircle className="w-5 h-5 text-green-400" /> :
+                      <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                    }
+                    <div className="flex-1">
+                      <span className="text-white font-medium">{item.item}</span>
+                      {item.required && <span className="text-red-400 ml-2">*Required</span>}
+                    </div>
+                    <span className={`text-sm px-2 py-1 rounded ${
+                      item.status === 'completed' ? 'bg-green-600 text-white' :
+                      item.status === 'pending' ? 'bg-yellow-600 text-white' :
+                      'bg-red-600 text-white'
+                    }`}>
+                      {item.status.replace('-', ' ')}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -9123,30 +9129,30 @@ Data Freshness: ${reportData.metadata.dataFreshness}
   );
 
   const renderGrowthMandate = () => (
-    <div className="space-y-6">
-      <div className="glass-card p-6">
-        <div className="flex items-center gap-3 mb-4">
+    <div className="max-w-6xl mx-auto w-full space-y-6">
+      <div className="glass-card p-6 lg:p-8">
+        <div className="flex items-center gap-3 mb-6">
           <TrendingUp className="w-6 h-6 text-purple-400" />
           <h2 className="text-xl font-semibold text-white">Prosperity Architect</h2>
         </div>
 
-        <div className="mb-4">
-          <p className="text-gray-300 mb-4">
+        <div className="mb-6 flex flex-wrap items-center gap-4">
+          <p className="text-gray-300 flex-1 min-w-[260px]">
             Optimize your schedule for maximum value creation while maintaining spiritual and physical alignment.
           </p>
-          
+
           <button
             onClick={optimizeSchedule}
             disabled={isLoading}
-            className="w-full py-3 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+            className="py-3 px-6 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
           >
             {isLoading ? 'Optimizing Schedule...' : 'Optimize Daily Schedule'}
           </button>
         </div>
 
         {scheduleData && (
-          <div className="space-y-4">
-            <div className="bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-30 rounded-lg p-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-30 rounded-lg p-4 lg:self-start">
               <h3 className="text-purple-400 font-semibold mb-2">Optimization Score</h3>
               <div className="text-2xl font-bold text-white">
                 {Math.round(scheduleData.optimizationScore)}%
@@ -9182,9 +9188,9 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     const scores = getPillarScores();
     
     return (
-    <div className="space-y-6">
-      <div className="glass-card p-6">
-        <div className="flex items-center gap-3 mb-4">
+    <div className="max-w-6xl mx-auto w-full space-y-6">
+      <div className="glass-card p-6 lg:p-8">
+        <div className="flex items-center gap-3 mb-6">
           <Settings className="w-6 h-6 text-gray-400" />
           <h2 className="text-xl font-semibold text-white">Settings</h2>
         </div>
@@ -9193,8 +9199,8 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           {/* Readiness Pillars - Moved from Dashboard */}
           <div className="bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-30 rounded-lg p-4">
             <h3 className="text-blue-400 font-semibold mb-4">📊 Readiness Pillars</h3>
-            
-            <div className="space-y-3">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <PillarStatus
                 title="Financial Capital"
                 icon={DollarSign}
@@ -9232,59 +9238,61 @@ Data Freshness: ${reportData.metadata.dataFreshness}
             </div>
           </div>
 
-          {/* Profile Settings */}
-          <div>
-            <h3 className="text-white font-semibold mb-3">Profile Configuration</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-white font-medium mb-2">Target Net Worth (UGX)</label>
-                <input
-                  type="number"
-                  value={goals.targetNetWorth}
-                  onChange={(e) => setGoals({...goals, targetNetWorth: parseFloat(e.target.value)})}
-                  className="w-full px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Profile Settings */}
+            <div>
+              <h3 className="text-white font-semibold mb-3">Profile Configuration</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-white font-medium mb-2">Target Net Worth (UGX)</label>
+                  <input
+                    type="number"
+                    value={goals.targetNetWorth}
+                    onChange={(e) => setGoals({...goals, targetNetWorth: parseFloat(e.target.value)})}
+                    className="w-full px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Legal Disclaimer */}
-          <div className="bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-30 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5" />
-              <div>
-                <h3 className="text-yellow-400 font-semibold mb-2">Legal Disclaimer</h3>
-                <p className="text-white text-sm leading-relaxed">
-                  <strong>NOT LEGAL OR FINANCIAL ADVICE:</strong> The IcanEra Capital Engine is a risk assessment and organizational tool.
-                  All analysis, recommendations, and scores are for informational purposes only. 
-                  Consult qualified professionals before making legal, financial, or business decisions. 
-                  The creators assume no liability for decisions made based on this tool's output.
-                </p>
+            {/* Legal Disclaimer */}
+            <div className="bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-30 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="text-yellow-400 font-semibold mb-2">Legal Disclaimer</h3>
+                  <p className="text-white text-sm leading-relaxed">
+                    <strong>NOT LEGAL OR FINANCIAL ADVICE:</strong> The IcanEra Capital Engine is a risk assessment and organizational tool.
+                    All analysis, recommendations, and scores are for informational purposes only.
+                    Consult qualified professionals before making legal, financial, or business decisions.
+                    The creators assume no liability for decisions made based on this tool's output.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Data Management */}
-          <div>
-            <h3 className="text-white font-semibold mb-3">Data Management</h3>
-            <div className="flex gap-3">
-              <button
-                onClick={saveUserData}
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-              >
-                Save Data
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm('Are you sure? This will clear all your data.')) {
-                    localStorage.clear();
-                    window.location.reload();
-                  }
-                }}
-                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
-              >
-                Clear All Data
-              </button>
+            {/* Data Management */}
+            <div>
+              <h3 className="text-white font-semibold mb-3">Data Management</h3>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={saveUserData}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                >
+                  Save Data
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm('Are you sure? This will clear all your data.')) {
+                      localStorage.clear();
+                      window.location.reload();
+                    }
+                  }}
+                  className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+                >
+                  Clear All Data
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -9507,7 +9515,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       </nav>
 
       {/* Main Content */}
-      <main className="p-4">
+      <main className={activeTab === 'dashboard' ? 'p-4' : 'p-4 lg:p-8'}>
         {activeTab === 'dashboard' && (
           <section className="w-full min-h-screen overflow-y-auto -mx-4 -mt-4">
             <MobileView userProfile={dashboardUserProfile} isWebDashboard />
