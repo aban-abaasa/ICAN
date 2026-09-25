@@ -43,12 +43,28 @@
 -- ----------------------------------------------------------------------------
 -- 1. The live UGX price of one icaneracoin (refuses rather than guesses)
 -- ----------------------------------------------------------------------------
+-- The ICAN app's own Buy / Sell / Portfolio screens show ican_get_market_snapshot().price_ugx (its
+-- "live engine" price), while the wallet badge shows ican_get_price_in_currency(). They come from
+-- the same engine but are separate calls, so this takes the HIGHER of the two: a sale or purchase
+-- here is never priced below what the ICAN app itself is showing.
 CREATE OR REPLACE FUNCTION public.ican_live_ugx_price()
 RETURNS NUMERIC LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  v_price NUMERIC;
+  v_market   NUMERIC;
+  v_currency NUMERIC;
+  v_price    NUMERIC;
 BEGIN
-  SELECT price_local INTO v_price FROM public.ican_get_price_in_currency('UGX'::VARCHAR) LIMIT 1;
+  BEGIN
+    SELECT price_ugx INTO v_market FROM public.ican_get_market_snapshot() LIMIT 1;
+  EXCEPTION WHEN OTHERS THEN
+    v_market := NULL;
+  END;
+  BEGIN
+    SELECT price_local INTO v_currency FROM public.ican_get_price_in_currency('UGX'::VARCHAR) LIMIT 1;
+  EXCEPTION WHEN OTHERS THEN
+    v_currency := NULL;
+  END;
+  v_price := GREATEST(COALESCE(v_market, 0), COALESCE(v_currency, 0));
   IF v_price IS NULL OR v_price <= 0 THEN
     RAISE EXCEPTION 'The live icaneracoin price is not available right now — please try again in a moment';
   END IF;
@@ -126,6 +142,9 @@ BEGIN
   END IF;
 
   RETURN v_sell_result || jsonb_build_object('wallet_balance', v_new_balance);
+EXCEPTION WHEN OTHERS THEN
+  -- Everything above is undone with this block; the real reason goes back to the app instead of a bare 500.
+  RETURN jsonb_build_object('success', false, 'error', SQLERRM);
 END;
 $$;
 
@@ -202,6 +221,8 @@ BEGIN
     'wallet_balance', v_new_balance,
     'actor_role',     v_actor_role
   );
+EXCEPTION WHEN OTHERS THEN
+  RETURN jsonb_build_object('success', false, 'error', SQLERRM);
 END;
 $$;
 REVOKE ALL ON FUNCTION public.buy_ican_coins_from_wallet(UUID, DECIMAL, TEXT, TEXT) FROM PUBLIC, anon;
