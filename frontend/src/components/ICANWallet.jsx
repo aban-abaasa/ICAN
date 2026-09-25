@@ -6454,10 +6454,36 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
       {/* TOP UP MODAL — full-screen sheet on mobile (proper "fitability" +
           a real back arrow), centered dialog from sm: up */}
-      {activeModal === 'topup' && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 sm:flex sm:items-center sm:justify-center sm:p-4">
-          <div className="glass-card !rounded-none sm:!rounded-2xl w-full h-full sm:h-auto sm:max-w-md sm:max-h-[calc(100vh-4rem)] overflow-y-auto flex flex-col">
-            <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-4 border-b border-white/10 bg-[var(--color-bgSecondary)] sm:!rounded-t-2xl">
+      {activeModal === 'topup' && (() => {
+        const isCardMethod = ['visa', 'mastercard', 'verve', 'card'].includes(topupForm.method);
+        const topupMethods = [
+          { id: 'mtn', label: 'MTN', sub: 'Mobile Money', Icon: Phone },
+          { id: 'airtel', label: 'Airtel', sub: 'Money', Icon: Phone },
+          { id: 'visa', label: 'Visa', sub: 'Card', Icon: CreditCard },
+          { id: 'mastercard', label: 'Mastercard', sub: 'Card', Icon: CreditCard }
+        ];
+        const quickAmounts = selectedCurrency === 'UGX'
+          ? [10000, 20000, 50000, 100000]
+          : [10, 25, 50, 100];
+        const amountNum = parseFloat(topupForm.amount);
+        const fieldStyle = {
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.14)'
+        };
+        return (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 sm:flex sm:items-center sm:justify-center sm:p-4">
+          <div
+            className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[calc(100vh-4rem)] overflow-y-auto flex flex-col sm:rounded-2xl sm:shadow-2xl"
+            style={{
+              background: 'linear-gradient(180deg, var(--color-bgSecondary), var(--color-bg))',
+              border: '1px solid rgba(245,158,11,0.28)'
+            }}
+          >
+            {/* Header */}
+            <div
+              className="sticky top-0 z-10 flex items-center gap-3 px-4 py-4 sm:rounded-t-2xl"
+              style={{ background: 'var(--color-bgSecondary)', borderBottom: '1px solid rgba(245,158,11,0.22)' }}
+            >
               <button
                 type="button"
                 onClick={closeTopUpModal}
@@ -6466,93 +6492,176 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               >
                 <ArrowLeft className="w-5 h-5 text-white" />
               </button>
-              <h3 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-                <Plus className="w-5 h-5 text-green-400 shrink-0" />
-                Top Up Wallet
-              </h3>
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold text-white tracking-wide leading-tight">Top Up Wallet</h3>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-amber-400/80">Add funds securely</p>
+              </div>
+              <div className="ml-auto flex items-center gap-1.5 text-[11px] text-emerald-300/90 shrink-0">
+                <Lock className="w-3.5 h-3.5" />
+                <span>Secured</span>
+              </div>
             </div>
 
             <div className="p-4 sm:p-6 flex-1">
-              <form onSubmit={handleTopUp} className="space-y-4">
+              <form onSubmit={handleTopUp} className="space-y-6">
+                {/* 1 · Method */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Payment Method</label>
-                  <select
-                    value={topupForm.method || ''}
-                    onChange={(e) => setTopupForm({ ...topupForm, method: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white text-base focus:border-green-400 focus:outline-none transition-all"
-                  >
-                    <option value="">Select method...</option>
-                    <option value="mtn">MTN Mobile Money</option>
-                    <option value="vodafone">Vodafone Money</option>
-                    <option value="airtel">Airtel Money</option>
-                    <option value="visa">Visa Card</option>
-                    <option value="mastercard">MasterCard</option>
-                  </select>
+                  <label className="block text-[11px] uppercase tracking-[0.18em] text-gray-400 mb-3">
+                    Payment method
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {topupMethods.map(({ id, label, sub, Icon }) => {
+                      const active = topupForm.method === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setTopupForm({ ...topupForm, method: id })}
+                          aria-pressed={active}
+                          className="flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all active:scale-[0.98]"
+                          style={{
+                            background: active ? 'rgba(245,158,11,0.10)' : 'rgba(255,255,255,0.04)',
+                            border: active ? '1px solid rgba(245,158,11,0.75)' : '1px solid rgba(255,255,255,0.12)',
+                            boxShadow: active ? '0 0 0 3px rgba(245,158,11,0.10)' : 'none'
+                          }}
+                        >
+                          <span
+                            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                            style={{ background: active ? 'rgba(245,158,11,0.18)' : 'rgba(255,255,255,0.06)' }}
+                          >
+                            <Icon className={`w-4.5 h-4.5 ${active ? 'text-amber-300' : 'text-gray-300'}`} style={{ width: 18, height: 18 }} />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold text-white leading-tight">{label}</span>
+                            <span className="block text-[11px] text-gray-400">{sub}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
+                {/* 2 · Account */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    {topupForm.method === 'card' ? 'Card Number' : 'Phone/Account'}
+                  <label className="block text-[11px] uppercase tracking-[0.18em] text-gray-400 mb-2">
+                    {isCardMethod ? 'Card number' : 'Mobile money number'}
                   </label>
-                  <input
-                    type="text"
-                    inputMode={topupForm.method === 'card' ? 'numeric' : 'tel'}
-                    placeholder={topupForm.method === 'card' ? '4532015112830366' : '256701234567'}
-                    value={topupForm.paymentInput}
-                    onChange={handlePaymentInputChange}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white text-base placeholder-gray-400 focus:border-green-400 focus:outline-none transition-all"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                      {isCardMethod ? <CreditCard className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
+                    </span>
+                    <input
+                      type="text"
+                      inputMode={isCardMethod ? 'numeric' : 'tel'}
+                      autoComplete={isCardMethod ? 'cc-number' : 'tel'}
+                      placeholder={isCardMethod ? '4532 0151 1283 0366' : '256701234567'}
+                      value={topupForm.paymentInput}
+                      onChange={handlePaymentInputChange}
+                      className="w-full pl-11 pr-4 py-3.5 rounded-xl text-white text-base tracking-wide placeholder-gray-500 focus:outline-none focus:border-amber-400 transition-all"
+                      style={fieldStyle}
+                    />
+                  </div>
                   {detectedPaymentMethod && (
-                    <p className="mt-2 text-xs text-green-400">
-                      ✨ Detected: {detectedPaymentMethod.name} {detectedPaymentMethod.icon}
+                    <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1.5">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      Detected: {detectedPaymentMethod.name} {detectedPaymentMethod.icon}
                     </p>
                   )}
                 </div>
 
+                {/* 3 · Amount */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Amount ({selectedCurrency})</label>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="50000"
-                    value={topupForm.amount}
-                    onChange={(e) => setTopupForm({ ...topupForm, amount: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white text-base placeholder-gray-400 focus:border-green-400 focus:outline-none transition-all"
-                  />
+                  <label className="block text-[11px] uppercase tracking-[0.18em] text-gray-400 mb-2">
+                    Amount
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-amber-300 pointer-events-none">
+                      {selectedCurrency}
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      value={topupForm.amount}
+                      onChange={(e) => setTopupForm({ ...topupForm, amount: e.target.value })}
+                      className="w-full pl-16 pr-4 py-3.5 rounded-xl text-white text-2xl font-semibold text-right placeholder-gray-600 focus:outline-none focus:border-amber-400 transition-all"
+                      style={fieldStyle}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {quickAmounts.map((q) => {
+                      const active = amountNum === q;
+                      return (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => setTopupForm({ ...topupForm, amount: String(q) })}
+                          className="px-3 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95"
+                          style={{
+                            background: active ? 'rgba(245,158,11,0.16)' : 'rgba(255,255,255,0.05)',
+                            border: active ? '1px solid rgba(245,158,11,0.7)' : '1px solid rgba(255,255,255,0.12)',
+                            color: active ? '#fcd34d' : '#d1d5db'
+                          }}
+                        >
+                          {q.toLocaleString()}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4">
+                {/* Actions */}
+                <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
                   <button
                     type="button"
                     onClick={closeTopUpModal}
-                    className="flex-1 px-4 py-3 bg-white/10 text-white rounded-lg hover:bg-white/20 active:bg-white/20 transition-all"
+                    className="flex-1 px-4 py-3.5 text-gray-200 rounded-xl hover:bg-white/10 active:bg-white/20 transition-all"
+                    style={{ border: '1px solid rgba(255,255,255,0.16)' }}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={transactionInProgress}
-                    className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:shadow-lg hover:shadow-green-500/30 disabled:opacity-50 transition-all font-semibold"
+                    className="flex-[1.4] px-4 py-3.5 rounded-xl font-semibold tracking-wide text-black disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.99]"
+                    style={{
+                      background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                      boxShadow: '0 8px 24px rgba(245,158,11,0.25)'
+                    }}
                   >
-                    {transactionInProgress ? 'Processing...' : '💳 Top Up'}
+                    {transactionInProgress
+                      ? 'Processing…'
+                      : `Top Up${amountNum > 0 ? ` ${selectedCurrency} ${amountNum.toLocaleString()}` : ''}`}
                   </button>
                 </div>
+
+                <p className="text-center text-[11px] text-gray-500 flex items-center justify-center gap-1.5">
+                  <Lock className="w-3 h-3" />
+                  Payments are encrypted and processed by Flutterwave
+                </p>
               </form>
 
               {transactionResult && transactionResult.type === 'topup' && (
-                <div className={`mt-4 p-4 rounded-lg ${transactionResult.success ? 'bg-green-500/20 border border-green-500/50' : 'bg-red-500/20 border border-red-500/50'}`}>
-                  <p className={`text-sm font-medium ${transactionResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                <div
+                  className="mt-5 p-4 rounded-xl"
+                  style={{
+                    background: transactionResult.success ? 'rgba(16,185,129,0.10)' : 'rgba(239,68,68,0.10)',
+                    border: `1px solid ${transactionResult.success ? 'rgba(16,185,129,0.45)' : 'rgba(239,68,68,0.45)'}`
+                  }}
+                >
+                  <p className={`text-sm font-medium ${transactionResult.success ? 'text-emerald-300' : 'text-red-300'}`}>
                     {transactionResult.message}
                   </p>
                   {transactionResult.transactionId && (
-                    <p className="text-xs text-gray-400 mt-2 break-all">ID: {transactionResult.transactionId}</p>
+                    <p className="text-xs text-gray-400 mt-2 break-all">Ref: {transactionResult.transactionId}</p>
                   )}
                 </div>
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Agent Terminal Tab */}
       {activeTab === 'agent' && (
