@@ -20,6 +20,19 @@ const ReportPreviewCard = ({ report }) => {
 
   return (
     <div className="space-y-6">
+      {/* Whose report this is — business name, or the owner's name for a personal report */}
+      {report.reportFor && (
+        <div className="rounded-lg border border-purple-200 bg-purple-50 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">
+            {report.accountType ? `${report.accountType} report` : 'Report'}
+          </p>
+          <p className="text-lg font-bold text-purple-900">{report.reportFor}</p>
+          {report.accountHolder && (
+            <p className="text-xs text-purple-700">Account holder: {report.accountHolder}</p>
+          )}
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {report.type === 'tax-return' && (

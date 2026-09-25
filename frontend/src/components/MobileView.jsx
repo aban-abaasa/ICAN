@@ -3650,40 +3650,206 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     })();
   }, [showExpenseIncomePanel, transactions]);
 
-  // Download filtered transactions as CSV
+  // ── Who a downloaded file belongs to ──────────────────────────────────────
+  // Every downloaded transaction file / report is stamped with the owner's name
+  // and whether it is a Personal or a specific Business record, so a file can
+  // never be mistaken for someone else's (or another business's) records.
+  const getOwnerName = () => (
+    getDisplayName?.() ||
+    profileConfigFormData.fullName ||
+    userProfile?.full_name ||
+    userProfile?.name ||
+    (userProfile?.email || '').split('@')[0] ||
+    'Account holder'
+  );
+
+  const fileSafe = (text) => String(text || '')
+    .normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 40);
+
+  // scope: 'personal' | 'business' | 'all'. businessName only for 'business'.
+  const buildDownloadOwner = (scope, businessName = '', businessId = null) => {
+    const holder = getOwnerName();
+    if (scope === 'business') {
+      const name = businessName || 'Business';
+      return {
+        scope, businessId, businessName: name, accountHolder: holder,
+        accountType: 'Business',
+        title: name,
+        subtitle: `Business account · Account holder: ${holder}`,
+        fileTag: fileSafe(name) || 'Business',
+      };
+    }
+    if (scope === 'all') {
+      return {
+        scope, businessId: null, businessName: '', accountHolder: holder,
+        accountType: 'Combined',
+        title: `${holder} — Personal + Business (combined)`,
+        subtitle: `Account holder: ${holder}`,
+        fileTag: `${fileSafe(holder) || 'Account'}-Combined`,
+      };
+    }
+    return {
+      scope: 'personal', businessId: null, businessName: '', accountHolder: holder,
+      accountType: 'Personal',
+      title: `${holder} — Personal`,
+      subtitle: `Personal account · Account holder: ${holder}`,
+      fileTag: `${fileSafe(holder) || 'Account'}-Personal`,
+    };
+  };
+
+  // Asks "Personal or Business?" (and which business, when there are several)
+  // before a transaction file is downloaded. Resolves with the owner + only that
+  // owner's records, or null when cancelled.
+  const askDownloadOwner = async (records) => {
+    const isBiz = (t) => (t.record_category || t.metadata?.record_category) === 'business';
+    const bizId = (t) => t.business_profile_id || t.metadata?.business_profile_id || null;
+
+    let profiles = dashboardBusinessProfiles || [];
+    if (!profiles.length) {
+      try {
+        const { data: { user: authedUser } } = await supabase.auth.getUser();
+        profiles = (await getAllAccessibleBusinessProfiles(authedUser?.id, authedUser?.email)) || [];
+      } catch (err) {
+        console.warn('Could not load businesses for the download chooser:', err);
+      }
+    }
+
+    // With exactly one business, its untagged (older) business records are unambiguous.
+    const belongsTo = (t, p) => bizId(t) === p.id || (profiles.length === 1 && !bizId(t));
+    const bizRecs = records.filter(isBiz);
+    const options = [{
+      icon: '👤', title: `Personal — ${getOwnerName()}`, sub: 'Your personal records',
+      recs: records.filter((t) => !isBiz(t)), owner: buildDownloadOwner('personal'),
+    }];
+    profiles.forEach((p) => {
+      options.push({
+        icon: '🏢', title: p.business_name || 'Business', sub: 'Business records',
+        recs: bizRecs.filter((t) => belongsTo(t, p)), owner: buildDownloadOwner('business', p.business_name, p.id),
+      });
+    });
+    // Business records not linked to any business the user can pick (older entries).
+    const unlinked = bizRecs.filter((t) => !profiles.some((p) => belongsTo(t, p)));
+    if (unlinked.length) {
+      options.push({
+        icon: '🏢', title: profiles.length ? 'Other business records' : 'Business records',
+        sub: 'Not linked to a named business', recs: unlinked, owner: buildDownloadOwner('business', 'Business records'),
+      });
+    }
+
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;';
+      const box = document.createElement('div');
+      box.style.cssText = 'background:#1e293b;border-radius:16px;padding:22px;max-width:340px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);';
+      const finish = (value) => { overlay.remove(); resolve(value); };
+
+      const heading = document.createElement('h3');
+      heading.style.cssText = 'color:#f1f5f9;font-size:17px;font-weight:700;margin:0 0 6px;';
+      heading.textContent = 'Download for which account?';
+      const hint = document.createElement('p');
+      hint.style.cssText = 'color:#94a3b8;font-size:12px;margin:0 0 16px;';
+      hint.textContent = 'Choose Personal or a Business. The file will carry that name and only include its records.';
+      box.append(heading, hint);
+
+      options.forEach((o) => {
+        const btn = document.createElement('button');
+        btn.disabled = o.recs.length === 0;
+        btn.style.cssText = `display:flex;align-items:center;gap:10px;width:100%;text-align:left;margin-bottom:8px;padding:12px;border:1px solid #334155;border-radius:10px;background:#0f172a;color:#f1f5f9;cursor:${btn.disabled ? 'not-allowed' : 'pointer'};opacity:${btn.disabled ? '0.4' : '1'};`;
+        const icon = document.createElement('span');
+        icon.style.fontSize = '20px';
+        icon.textContent = o.icon;
+        const text = document.createElement('span');
+        text.style.cssText = 'flex:1;min-width:0;';
+        const t1 = document.createElement('div');
+        t1.style.cssText = 'font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;';
+        t1.textContent = o.title;
+        const t2 = document.createElement('div');
+        t2.style.cssText = 'font-size:11px;color:#94a3b8;';
+        t2.textContent = `${o.sub} · ${o.recs.length} record${o.recs.length === 1 ? '' : 's'}`;
+        text.append(t1, t2);
+        btn.append(icon, text);
+        btn.addEventListener('click', () => finish({ ...o.owner, records: o.recs }));
+        box.appendChild(btn);
+      });
+
+      const cancel = document.createElement('button');
+      cancel.textContent = 'Cancel';
+      cancel.style.cssText = 'width:100%;margin-top:4px;padding:11px;border:none;border-radius:10px;background:#334155;color:#cbd5e1;font-size:14px;font-weight:600;cursor:pointer;';
+      cancel.addEventListener('click', () => finish(null));
+      box.appendChild(cancel);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+    });
+  };
+
+  // The owner a generated report is for, taken from the Record Scope / Business
+  // picked in the Reports panel — so the report says exactly whose numbers it holds.
+  const buildReportOwner = () => {
+    if (reportRecordScope === 'business') {
+      const biz = reportBusinessId
+        ? reportBusinessProfiles.find((p) => p.id === reportBusinessId)
+        : (reportBusinessProfiles.length === 1 ? reportBusinessProfiles[0] : null);
+      if (biz) return buildDownloadOwner('business', biz.business_name, biz.id);
+      return buildDownloadOwner('business', 'All my businesses (combined)');
+    }
+    return buildDownloadOwner(reportRecordScope === 'personal' ? 'personal' : 'all');
+  };
+
+  // File-name tag for a generated report, from the owner fields stamped onto it.
+  const reportFileTag = (rpt) => (
+    rpt?.accountType === 'Business'
+      ? (fileSafe(rpt.businessName) || 'Business')
+      : `${fileSafe(rpt?.accountHolder) || 'Account'}-${rpt?.accountType || 'Report'}`
+  );
+
   // Download transactions as CSV
-  const handleDownloadTransactions = (filtered, period) => {
-    const rows = [['Date', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Chain Hash']];
+  const handleDownloadTransactions = async (allFiltered, period, ownerArg) => {
+    const owner = ownerArg || await askDownloadOwner(allFiltered);
+    if (!owner) return;
+    const filtered = owner.records;
+    const rows = [['Account Holder', 'Account', 'Business Name', 'Date', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Chain Hash']];
     filtered.forEach(t => {
       const hash = txChainHashes[t.id] || t.data_hash || '';
       rows.push([
+        owner.accountHolder,
+        owner.accountType,
+        owner.businessName,
         new Date(t.created_at).toLocaleString(),
         t.transaction_type || '',
         t.record_category || t.metadata?.record_category || '',
-        (t.description || '').replace(/"/g, '""'),
+        t.description || '',
         t.metadata?.quantity ?? '',
         t.metadata?.unit_price ?? '',
         Math.abs(t.amount || 0),
         hash.slice(0, 20) || ''
       ]);
     });
-    const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `IcanEra-Transactions-${period}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `IcanEra-Transactions-${owner.fileTag}-${period}-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   // Download transactions as a real .xlsx workbook (not CSV) — same column
   // layout the Excel importer below reads, so an exported file can be edited
-  // and re-imported without reshaping it.
-  const handleDownloadExcel = (filtered, period) => {
+  // and re-imported without reshaping it. The owner is carried in the
+  // 'Account Holder' / 'Business Name' columns (the importer already reads
+  // 'Business Name'); the title block lives on a second "Report Info" sheet
+  // because the importer only reads the first sheet.
+  const handleDownloadExcel = async (allFiltered, period, ownerArg) => {
+    const owner = ownerArg || await askDownloadOwner(allFiltered);
+    if (!owner) return;
+    const filtered = owner.records;
     const rows = filtered.map(t => ({
       Date: new Date(t.created_at).toLocaleDateString(),
       Type: (t.record_category || t.metadata?.record_category) === 'business' ? 'Business' : 'Personal',
+      'Business Name': owner.businessName,
+      'Account Holder': owner.accountHolder,
       Flow: t.transaction_type === 'income' ? 'Income' : 'Expense',
       Category: t.metadata?.category || t.metadata?.categoryName || '',
       Description: t.description || '',
@@ -3693,10 +3859,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       'Chain Hash': (txChainHashes[t.id] || t.data_hash || '').slice(0, 20)
     }));
     const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Info: 'No transactions in this period' }]);
-    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 22 }];
+    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 24 }, { wch: 22 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 22 }];
+    const info = XLSX.utils.aoa_to_sheet([
+      ['IcanEra Transaction Report'],
+      [owner.scope === 'business' ? 'Business' : 'Account', owner.title],
+      ['Account Holder', owner.accountHolder],
+      ['Account Type', owner.accountType],
+      ['Period', period],
+      ['Generated', new Date().toLocaleString()],
+      ['Records', filtered.length],
+    ]);
+    info['!cols'] = [{ wch: 16 }, { wch: 44 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
-    XLSX.writeFile(wb, `IcanEra-Transactions-${period}-${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, info, 'Report Info');
+    XLSX.writeFile(wb, `IcanEra-Transactions-${owner.fileTag}-${period}-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   // Bulk-import transactions from an uploaded Excel file. Expects columns
@@ -3810,7 +3987,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   };
 
   // Download transactions as a branded PDF
-  const handleDownloadPDF = (filtered, period) => {
+  const handleDownloadPDF = async (allFiltered, period, ownerArg) => {
+    const owner = ownerArg || await askDownloadOwner(allFiltered);
+    if (!owner) return;
+    const filtered = owner.records;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const pageW = 210;
     const dateStr = new Date().toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric' });
@@ -3821,21 +4001,27 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     // ── Header band — Light professional colors ──
     doc.setFillColor(241, 245, 249);    // slate-100 (light background)
-    doc.rect(0, 0, pageW, 32, 'F');
+    doc.rect(0, 0, pageW, 42, 'F');
     doc.setFillColor(34, 197, 94);      // green-500 accent strip
-    doc.rect(0, 30, pageW, 2, 'F');
+    doc.rect(0, 40, pageW, 2, 'F');
     doc.setTextColor(15, 23, 42);       // slate-900 (dark text on light bg)
     doc.setFontSize(18); doc.setFont('helvetica', 'bold');
     doc.text('IcanEra', 14, 13);
     doc.setFontSize(10); doc.setFont('helvetica', 'normal');
     doc.setTextColor(22, 163, 74);      // green-600
     doc.text('Transaction Report', 14, 20);
+    // Whose records these are — business name (or the owner's name for Personal), large and bold
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+    doc.text(doc.splitTextToSize(owner.title, pageW - 28)[0], 14, 28);
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105);      // slate-600
-    doc.text(`Period: ${period}`, 14, 27);
-    doc.text(`Generated: ${dateStr}`, pageW - 14, 27, { align: 'right' });
+    doc.text(doc.splitTextToSize(owner.subtitle, pageW - 28)[0], 14, 33.5);
+    doc.text(`Period: ${period}`, 14, 38);
+    doc.text(`Generated: ${dateStr}`, pageW - 14, 38, { align: 'right' });
 
     // ── Summary strip — Light colors ──
-    let y = 40;
+    let y = 50;
     const summaries = [
       { label: 'Total Records', value: String(filtered.length) },
       { label: 'Income',        value: `UGX ${income.toLocaleString()}` },
@@ -3932,16 +4118,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       doc.setFillColor(15, 23, 42);
       doc.rect(0, 286, pageW, 11, 'F');
       doc.setFontSize(7); doc.setTextColor(100, 116, 139);
-      doc.text('IcanEra · Confidential · 🔐 Blockchain Secured', 14, 292);
+      doc.text(`IcanEra · ${owner.title} · Confidential · 🔐 Blockchain Secured`.slice(0, 110), 14, 292);
       doc.text(`Page ${i} of ${pages}`, pageW - 14, 292, { align: 'right' });
     }
 
-    doc.save(`IcanEra-Transactions-${period}-${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`IcanEra-Transactions-${owner.fileTag}-${period}-${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   // Share transactions summary via Web Share API (mobile) or clipboard
   // Smart multi-format sharing: PDF, Excel via Email & WhatsApp
-  const handleShareTransactions = async (filtered, period) => {
+  const handleShareTransactions = async (allFiltered, period) => {
+    // Ask Personal / which Business first, so what is shared is clearly one owner's records
+    const owner = await askDownloadOwner(allFiltered);
+    if (!owner) return;
+    const filtered = owner.records;
     // Create a modal to choose format and method
     const shareFormat = await new Promise((resolve) => {
       const modal = document.createElement('div');
@@ -3949,6 +4139,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       modal.innerHTML = `
         <div style="background:#1e293b;border-radius:16px;padding:24px;max-width:320px;width:90%;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
           <h3 style="color:#f1f5f9;font-size:18px;font-weight:700;margin:0 0 16px;">Share Transactions</h3>
+          <p data-owner-line style="color:#e2e8f0;font-size:13px;font-weight:600;margin:0 0 4px;"></p>
           <p style="color:#94a3b8;font-size:13px;margin:0 0 20px;">${filtered.length} records · ${period}</p>
           
           <div style="display:grid;gap:10px;margin-bottom:20px;">
@@ -3972,6 +4163,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       `;
       
+      modal.querySelector('[data-owner-line]').textContent = owner.title;
       modal.addEventListener('click', (e) => {
         const action = e.target.closest('[data-action]')?.dataset.action;
         if (action) {
@@ -3990,7 +4182,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     try {
       if (format === 'pdf') {
         // Generate PDF
-        handleDownloadPDF(filtered, period);
+        await handleDownloadPDF(filtered, period, owner);
         const pdfBlob = await new Promise(resolve => {
           const doc = new jsPDF({ unit: 'mm', format: 'a4' });
           // PDF generation code is in handleDownloadPDF, we'll get the blob
@@ -3998,12 +4190,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         });
         
         if (method === 'email') {
-          const subject = encodeURIComponent(`IcanEra Transaction Report - ${period}`);
-          const body = encodeURIComponent(`Please find attached the transaction report for ${period}.\n\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\n🔐 Secured by IcanEra`);
+          const subject = encodeURIComponent(`IcanEra Transaction Report - ${owner.title} - ${period}`);
+          const body = encodeURIComponent(`Please find attached the transaction report for ${owner.title}, ${period}.\n\n${owner.subtitle}\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\n🔐 Secured by IcanEra`);
           window.location.href = `mailto:?subject=${subject}&body=${body}`;
           alert('📧 Opening email client. Please attach the downloaded PDF file.');
         } else if (method === 'whatsapp') {
-          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\nPeriod: ${period}\nRecords: ${filtered.length}\n\n_PDF report downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
+          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\n${owner.title}\n${owner.subtitle}\nPeriod: ${period}\nRecords: ${filtered.length}\n\n_PDF report downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
           window.open(`https://wa.me/?text=${text}`, '_blank');
           alert('📱 PDF downloaded. Please attach it in WhatsApp.');
         }
@@ -4011,6 +4203,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         // Generate Excel
         const ws_data = [
           ['IcanEra Transaction Report'],
+          [owner.scope === 'business' ? 'Business:' : 'Account:', owner.title],
+          ['Account Holder:', owner.accountHolder],
           [`Period: ${period}`, `Generated: ${new Date().toLocaleDateString()}`],
           [],
           ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Blockchain Hash']
@@ -4037,15 +4231,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(ws_data);
         XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
-        XLSX.writeFile(wb, `IcanEra_Transactions_${period.replace(/\s/g, '_')}.xlsx`);
+        XLSX.writeFile(wb, `IcanEra_Transactions_${owner.fileTag}_${period.replace(/\s/g, '_')}.xlsx`);
         
         if (method === 'email') {
-          const subject = encodeURIComponent(`IcanEra Transaction Report - ${period}`);
-          const body = encodeURIComponent(`Please find attached the transaction report for ${period}.\n\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\n🔐 Secured by IcanEra`);
+          const subject = encodeURIComponent(`IcanEra Transaction Report - ${owner.title} - ${period}`);
+          const body = encodeURIComponent(`Please find attached the transaction report for ${owner.title}, ${period}.\n\n${owner.subtitle}\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\n🔐 Secured by IcanEra`);
           window.location.href = `mailto:?subject=${subject}&body=${body}`;
           alert('📧 Opening email client. Please attach the downloaded Excel file.');
         } else if (method === 'whatsapp') {
-          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\nPeriod: ${period}\nRecords: ${filtered.length}\n\n_Excel file downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
+          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\n${owner.title}\n${owner.subtitle}\nPeriod: ${period}\nRecords: ${filtered.length}\n\n_Excel file downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
           window.open(`https://wa.me/?text=${text}`, '_blank');
           alert('📱 Excel downloaded. Please attach it in WhatsApp.');
         }
@@ -9784,6 +9978,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       const salaryExpense = fm ? (fm.salaryExpense || 0) : 0;
                       const netWorth = velocityMetrics?.netWorth || 0;
                       const userId   = userProfile?.id;
+                      const reportOwner = buildReportOwner();
+                      // Plain fields (not a nested object) so they lead every export: PDF, CSV, Excel, JSON, email.
+                      const ownerFields = {
+                        reportFor: reportOwner.title,
+                        accountType: reportOwner.accountType,
+                        accountHolder: reportOwner.accountHolder,
+                        businessName: reportOwner.businessName,
+                      };
                       const { start: periodStart, end: periodEnd } = getReportDateRange();
                       const fd = {
                         revenue: income,
@@ -9826,7 +10028,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         result = await generateCountryComplianceReport(fd, selectedCountry, userId);
                       } else {
                         // Generic — save to Supabase financial_reports
-                        result = { ...fd, type: selectedReportType, country: selectedCountry, generated: new Date().toLocaleDateString() };
+                        result = { ...ownerFields, ...fd, type: selectedReportType, country: selectedCountry, generated: new Date().toLocaleDateString() };
                         if (userId) {
                           await supabase.from('financial_reports').insert([{
                             user_id: userId,
@@ -9837,7 +10039,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                           }]).then(({ error }) => { if(error) console.error('Save report:', error); });
                         }
                       }
-                      setGeneratedReportData({ ...result, reportName: reportTypes[selectedReportType]?.name, generated: new Date().toLocaleDateString() });
+                      setGeneratedReportData({ ...ownerFields, ...result, reportName: reportTypes[selectedReportType]?.name, generated: new Date().toLocaleDateString() });
                     } catch(e) {
                       console.error('Report generation error:', e);
                       setGeneratedReportData({ error: true, reportName: reportTypes[selectedReportType]?.name, generated: new Date().toLocaleDateString() });
@@ -9929,7 +10131,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               const blob = new Blob([csv], {type:'text/csv'});
                               const url = URL.createObjectURL(blob);
                               const a = document.createElement('a'); a.href=url;
-                              a.download = `ICAN_${selectedReportType}_${Date.now()}.csv`;
+                              a.download = `ICAN_${selectedReportType}_${reportFileTag(generatedReportData)}_${new Date().toISOString().split('T')[0]}.csv`;
                               a.click(); URL.revokeObjectURL(url);
                             }}
                             className={`flex-1 min-w-[60px] py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
@@ -9953,7 +10155,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               ws['!cols'] = [{wch:40},{wch:30}];
                               const wb = XLSX.utils.book_new();
                               XLSX.utils.book_append_sheet(wb, ws, 'Report');
-                              XLSX.writeFile(wb, `ICAN_${selectedReportType}_${Date.now()}.xlsx`);
+                              XLSX.writeFile(wb, `ICAN_${selectedReportType}_${reportFileTag(generatedReportData)}_${new Date().toISOString().split('T')[0]}.xlsx`);
                             }}
                             className={`flex-1 min-w-[60px] py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
                               exportFormat==='excel' ? 'bg-green-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'
@@ -9967,7 +10169,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               const blob = new Blob([json], {type:'application/json'});
                               const url = URL.createObjectURL(blob);
                               const a = document.createElement('a'); a.href=url;
-                              a.download = `ICAN_${selectedReportType}_${Date.now()}.json`;
+                              a.download = `ICAN_${selectedReportType}_${reportFileTag(generatedReportData)}_${new Date().toISOString().split('T')[0]}.json`;
                               a.click(); URL.revokeObjectURL(url);
                             }}
                             className={`flex-1 min-w-[60px] py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
@@ -9984,16 +10186,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               const title = rpt.reportName || selectedReportType.replace(/-/g,' ').toUpperCase();
                               // Header band
                               doc.setFillColor(147, 51, 234);
-                              doc.rect(0, 0, 210, 28, 'F');
+                              doc.rect(0, 0, 210, 38, 'F');
                               doc.setTextColor(255, 255, 255);
                               doc.setFontSize(16); doc.setFont('helvetica','bold');
                               doc.text('IcanEra Financial Report', 14, 12);
                               doc.setFontSize(10); doc.setFont('helvetica','normal');
-                              doc.text(`${title} · ${countryName}`, 14, 20);
-                              doc.text(`Generated: ${rpt.generated || new Date().toLocaleDateString()}`, 150, 20);
+                              doc.text(`${title} · ${countryName}`, 14, 19);
+                              // Whose report this is — business name (or the owner's name for Personal)
+                              doc.setFontSize(13); doc.setFont('helvetica','bold');
+                              doc.text(doc.splitTextToSize(rpt.reportFor || getOwnerName(), 182)[0], 14, 27);
+                              doc.setFontSize(9); doc.setFont('helvetica','normal');
+                              doc.text(`${rpt.accountType || ''} report · Account holder: ${rpt.accountHolder || getOwnerName()}`, 14, 33);
+                              doc.text(`Generated: ${rpt.generated || new Date().toLocaleDateString()}`, 196, 33, { align: 'right' });
                               // Body
                               doc.setTextColor(30, 30, 30);
-                              let y = 36;
+                              let y = 46;
                               const addSection = (heading, obj) => {
                                 if (!obj || typeof obj !== 'object') return;
                                 doc.setFontSize(11); doc.setFont('helvetica','bold');
@@ -10029,9 +10236,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               for (let i = 1; i <= pages; i++) {
                                 doc.setPage(i);
                                 doc.setFontSize(8); doc.setTextColor(160,160,160);
-                                doc.text(`IcanEra · Confidential · Page ${i} of ${pages}`, 14, 290);
+                                doc.text(`IcanEra · ${rpt.reportFor || ''} · Confidential · Page ${i} of ${pages}`.slice(0, 110), 14, 290);
                               }
-                              doc.save(`ICAN_${selectedReportType}_${Date.now()}.pdf`);
+                              doc.save(`ICAN_${selectedReportType}_${reportFileTag(rpt)}_${new Date().toISOString().split('T')[0]}.pdf`);
                             }}
                             className={`flex-1 min-w-[60px] py-2 rounded-lg text-xs font-bold transition active:scale-95 ${
                               exportFormat==='pdf' ? 'bg-rose-600 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'
@@ -10043,7 +10250,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             onClick={() => {
                               const rpt = generatedReportData;
                               const countryName = countries?.find(c => c.code === selectedCountry)?.name || 'Uganda';
-                              const subject = encodeURIComponent(`IcanEra Financial Report — ${rpt.reportName || selectedReportType} (${countryName})`);
+                              const subject = encodeURIComponent(`IcanEra Financial Report — ${rpt.reportFor ? rpt.reportFor + ' — ' : ''}${rpt.reportName || selectedReportType} (${countryName})`);
                               const lines = [];
                               const flatten = (obj, prefix='') => {
                                 Object.entries(obj).forEach(([k,v]) => {
@@ -10055,6 +10262,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               flatten(rpt);
                               const body = encodeURIComponent(
                                 `IcanEra Financial Report\n` +
+                                `For: ${rpt.reportFor || ''}\n` +
+                                `Account holder: ${rpt.accountHolder || ''}\n` +
                                 `Type: ${rpt.reportName || selectedReportType}\n` +
                                 `Country: ${countryName}\n` +
                                 `Generated: ${rpt.generated || new Date().toLocaleDateString()}\n\n` +
