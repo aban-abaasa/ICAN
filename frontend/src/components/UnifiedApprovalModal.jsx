@@ -1,20 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Lock,
-  X,
-  CheckCircle,
-  AlertCircle,
-  Send,
-  ArrowDownLeft,
-  ArrowUpRight,
-  CreditCard,
-  DollarSign,
-  TrendingUp,
-  Eye,
-  EyeOff,
-  Delete,
-  Shield,
-} from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { Lock, X, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import universalTransactionService from '../services/universalTransactionService';
 import PINRecoveryModal from './PINRecoveryModal';
 import './UnifiedApprovalModal.css';
@@ -25,8 +11,8 @@ import './UnifiedApprovalModal.css';
  * Appears for ANY transaction requiring approval:
  * - Send, Receive, Withdraw, Deposit
  * - Cash-In, Cash-Out, Top-Up
- * - PIN entry only
- * - Mobile-optimized with creative UI
+ * - PIN entry only, typed on the phone's own numeric keyboard (no custom pad)
+ * - Classic, mobile-first layout
  */
 const UnifiedApprovalModal = ({
   isOpen,
@@ -51,6 +37,7 @@ const UnifiedApprovalModal = ({
   const [localError, setLocalError] = useState(error);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPINRecovery, setShowPINRecovery] = useState(false);
+  const pinInputRef = useRef(null);
   // A failed PIN attempt sets localError (line ~191) without ever touching
   // the error prop, since that only flows down from the parent's own state.
   // Checking error alone here missed the lock message entirely — the text
@@ -70,6 +57,13 @@ const UnifiedApprovalModal = ({
     } catch (err) {
       console.warn('Could not load saved PIN:', err);
     }
+  }, [isOpen]);
+
+  // Bring up the device's numeric keyboard as soon as the sheet opens.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const t = setTimeout(() => pinInputRef.current?.focus(), 250);
+    return () => clearTimeout(t);
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -100,18 +94,6 @@ const UnifiedApprovalModal = ({
     const value = e.target.value.replace(/[^\d]/g, '').slice(0, 4);
     setPin(value);
     setLocalError(null);
-  };
-
-  const handleNumericInput = (num) => {
-    if (pin.length < 4) {
-      const newPin = pin + num;
-      setPin(newPin);
-      setLocalError(null);
-    }
-  };
-
-  const handleBackspace = () => {
-    setPin(pin.slice(0, -1));
   };
 
   // Handle approval
@@ -172,155 +154,150 @@ const UnifiedApprovalModal = ({
     onCancel();
   };
 
-  return (
-    <div className="unified-approval-overlay">
-      <div className="unified-approval-container">
-        {/* Header - Fixed */}
-        <div className="approval-header">
+  const busy = isSubmitting || isLoading;
+
+  // Portaled to <body>: rendered in place it inherits the wallet page's stacking
+  // context, so the fixed bottom tab bar (z-50 in MobileView) paints over the sheet.
+  return createPortal(
+    <div className="unified-approval-overlay" onClick={() => { if (!isSubmitting) handleCancel(); }}>
+      <div className="uam-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="uam-header">
           <button
-            className="close-btn"
+            type="button"
+            className="uam-close"
             onClick={handleCancel}
             disabled={isSubmitting}
+            aria-label="Close"
           >
             <X size={20} />
           </button>
-          <div className="header-title">
-            <span className="transaction-icon">
-              {transactionIcons[transactionType] || '💰'}
-            </span>
-            <h2>Confirm Transaction</h2>
-          </div>
+          <h2 className="uam-title">Confirm Transaction</h2>
         </div>
 
-        {/* Transaction Summary Card */}
-        <div className="transaction-summary">
-          <div className="transaction-detail">
-            <span className="label">Type</span>
-            <span className="value">
-              {transactionLabels[transactionType] || 'Transaction'}
-            </span>
+        <form
+          className="uam-body"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (pin.length === 4 && !busy) handleApprove();
+          }}
+        >
+          <div className="uam-summary">
+            <div className="uam-row">
+              <span className="uam-label">Type</span>
+              <span className="uam-value">
+                {transactionIcons[transactionType] || '💰'} {transactionLabels[transactionType] || 'Transaction'}
+              </span>
+            </div>
+            <div className="uam-row">
+              <span className="uam-label">Amount</span>
+              <span className="uam-amount">{amount} {currency}</span>
+            </div>
+            {recipient && (
+              <div className="uam-row">
+                <span className="uam-label">To</span>
+                <span className="uam-value">{recipient}</span>
+              </div>
+            )}
+            {description && (
+              <div className="uam-row">
+                <span className="uam-label">Note</span>
+                <span className="uam-value">{description}</span>
+              </div>
+            )}
           </div>
 
-          <div className="divider"></div>
-
-          <div className="transaction-detail">
-            <span className="label">Amount</span>
-            <span className="amount">
-              {amount} {currency}
-            </span>
-          </div>
-
-          {recipient && (
-            <>
-              <div className="divider"></div>
-              <div className="transaction-detail">
-                <span className="label">To</span>
-                <span className="value recipient-info">
-                  {recipient}
-                </span>
+          <div className="uam-pin-block">
+            <p className="uam-pin-title">Enter your 4-digit PIN</p>
+            <div className="uam-pin-wrap">
+              <div className="uam-pin-boxes" aria-hidden="true">
+                {[0, 1, 2, 3].map((index) => (
+                  <div
+                    key={index}
+                    className={`uam-pin-box${index < pin.length ? ' filled' : ''}${index === pin.length ? ' active' : ''}`}
+                  >
+                    {pin[index] ? (showPin ? pin[index] : '•') : ''}
+                  </div>
+                ))}
               </div>
-            </>
-          )}
-
-          {description && (
-            <>
-              <div className="divider"></div>
-              <div className="transaction-detail">
-                <span className="label">Description</span>
-                <span className="value">{description}</span>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* PIN Entry */}
-        <div className="pin-entry-section">
-          {/* PIN Display */}
-          <div className="pin-display-container">
-            <div className="pin-dots">
-              {[0, 1, 2, 3].map((index) => (
-                <div
-                  key={index}
-                  className={`pin-dot ${index < pin.length ? 'filled' : ''}`}
-                >
-                  {showPin && pin[index] ? pin[index] : '•'}
-                </div>
-              ))}
+              {/* The real field: invisible, sits over the boxes so a tap opens the phone's numeric keyboard */}
+              <input
+                ref={pinInputRef}
+                className="uam-pin-input"
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="one-time-code"
+                maxLength={4}
+                value={pin}
+                onChange={handlePinChange}
+                disabled={isSubmitting}
+                aria-label="Transaction PIN"
+              />
             </div>
             <button
               type="button"
-              className="show-pin-toggle"
+              className="uam-toggle"
               onClick={() => setShowPin(!showPin)}
-              title={showPin ? 'Hide PIN' : 'Show PIN'}
             >
-              {showPin ? '👁️‍🗨️' : '👁️'}
+              {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showPin ? 'Hide PIN' : 'Show PIN'}
             </button>
           </div>
 
-          {/* Error Message */}
           {(localError || error) && (
-            <div className="error-message">
+            <div className="uam-error">
               <AlertCircle size={16} />
               <div>
                 <p>{localError || error}</p>
                 {attemptsRemaining && (
-                  <p className="attempts-info">
-                    Attempts remaining: {attemptsRemaining}
-                  </p>
+                  <p className="uam-attempts">Attempts remaining: {attemptsRemaining}</p>
                 )}
               </div>
             </div>
           )}
 
-          {/* Numeric Keypad */}
-          <div className="numeric-keypad">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-              <button
-                key={num}
-                type="button"
-                className="keypad-btn number-btn"
-                onClick={() => handleNumericInput(num)}
-                disabled={pin.length >= 4 || isSubmitting}
-              >
-                {num}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="keypad-btn zero-btn"
-              onClick={() => handleNumericInput(0)}
-              disabled={pin.length >= 4 || isSubmitting}
-            >
-              0
-            </button>
-            <button
-              type="button"
-              className="keypad-btn backspace-btn"
-              onClick={handleBackspace}
-              disabled={pin.length === 0 || isSubmitting}
-            >
-              ⌫
-            </button>
-          </div>
-
           {isAccountLocked && (
             <button
+              type="button"
               onClick={() => setShowPINRecovery(true)}
-              className="mt-4 w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="uam-reset"
             >
-              <Lock size={18} />
+              <Lock size={16} />
               Reset PIN - Unlock Account
             </button>
           )}
 
-          {/* Security Info */}
-          <div className="security-info">
-            <Lock size={14} />
+          <div className="uam-secure">
+            <Lock size={13} />
             <span>Your transaction is protected with end-to-end encryption</span>
           </div>
-        </div>
 
-        {/* PIN Recovery Modal */}
+          <div className="uam-actions">
+            <button
+              type="button"
+              className="uam-btn uam-btn-cancel"
+              onClick={handleCancel}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="uam-btn uam-btn-approve"
+              disabled={pin.length !== 4 || busy}
+            >
+              {busy ? (
+                <>
+                  <span className="uam-spinner" />
+                  Verifying...
+                </>
+              ) : (
+                'Approve'
+              )}
+            </button>
+          </div>
+        </form>
+
         {isOpen && (
           <PINRecoveryModal
             isOpen={showPINRecovery}
@@ -329,34 +306,9 @@ const UnifiedApprovalModal = ({
             userEmail={userEmail}
           />
         )}
-
-        {/* Action Buttons - Fixed at bottom */}
-        <div className="approval-actions">
-          <button
-            className="btn-cancel"
-            onClick={handleCancel}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </button>
-
-          <button
-            className="btn-approve"
-            onClick={handleApprove}
-            disabled={pin.length !== 4 || isSubmitting || isLoading}
-          >
-            {isSubmitting || isLoading ? (
-              <>
-                <div className="spinner"></div>
-                Verifying...
-              </>
-            ) : (
-              'Approve'
-            )}
-          </button>
-        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

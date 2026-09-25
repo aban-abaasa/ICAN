@@ -67,8 +67,28 @@ import PayMoneyModal from './PayMoneyModal';
 import IcanPaymentReceiptModal from './IcanPaymentReceiptModal';
 import PINRecoveryModal from './PINRecoveryModal';
 
+// Big balances (14,378,412 UGX) overflow the balance card, so the headline shows
+// them short: 1K, 14.38M, 5T. Under 1,000 it stays exact. Up to 2 decimals,
+// trailing zeros dropped (1.50K -> 1.5K). Tapping the number shows the exact
+// figure. Truncates rather than rounds so the card never reads higher than the
+// real balance.
+const formatCompactBalance = (value) => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '0';
+  const abs = Math.abs(n);
+  const units = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
+  for (const [size, suffix] of units) {
+    if (abs >= size) {
+      const short = Math.floor((abs / size) * 100) / 100;
+      return `${n < 0 ? '-' : ''}${short.toString()}${suffix}`;
+    }
+  }
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+};
+
 const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = null, onTabChange = null }) => {
   const [showBalance, setShowBalance] = useState(true);
+  const [showExactBalance, setShowExactBalance] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
   const [userCountry, setUserCountry] = useState('UG');
   const [activeTab, _setActiveTab] = useState('overview');
@@ -4647,13 +4667,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         <div className="solid-card p-6" style={walletUi.balanceCardUnique}>
           <div className="mb-6">
             <p className="mb-2 text-sm font-medium" style={walletUi.balanceLabel}>Total Balance</p>
-            <div className="flex items-center gap-4 mb-6">
-              <div className="text-5xl font-bold" style={walletUi.balanceAmount}>
-                {showBalance ? `${currentWallet.flag} ${currentWallet.balance.toLocaleString()}` : '••••••••'}
+            <div className="flex items-center gap-3 mb-6">
+              <div
+                className={`min-w-0 flex-1 font-bold leading-tight ${showBalance && showExactBalance ? 'text-3xl break-all' : 'text-4xl sm:text-5xl truncate'}`}
+                style={{ ...walletUi.balanceAmount, cursor: showBalance ? 'pointer' : 'default' }}
+                title={showBalance ? 'Tap to switch between short and exact amount' : undefined}
+                onClick={() => showBalance && setShowExactBalance(v => !v)}
+              >
+                {showBalance
+                  ? `${currentWallet.flag} ${showExactBalance ? Number(currentWallet.balance).toLocaleString() : formatCompactBalance(currentWallet.balance)}`
+                  : '••••••••'}
               </div>
               <button
                 onClick={() => setShowBalance(!showBalance)}
-                className="p-3 rounded-lg hover:opacity-90 transition-all"
+                className="p-3 rounded-lg hover:opacity-90 transition-all flex-shrink-0"
                 style={walletUi.eyeButton}
               >
                 {showBalance ? <Eye className="w-5 h-5 text-gray-300" /> : <EyeOff className="w-5 h-5 text-gray-300" />}

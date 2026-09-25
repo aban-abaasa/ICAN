@@ -1,1297 +1,350 @@
-/* 🔐 UNIFIED APPROVAL MODAL STYLES */
+/* 🔐 UNIFIED APPROVAL MODAL — classic bottom sheet.
+   Every class is prefixed uam- (or is the single overlay) so nothing here can
+   collide with the global .pin-dot / .keypad-btn / .transaction-summary /
+   .btn-cancel rules in CashInPinModal.css and IcanTrading.css. */
 
 .unified-approval-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  z-index: 2000;
-  animation: fadeIn 0.2s ease-out;
-  padding: 0;
+  z-index: 10000; /* above the bottom tab bar and the chat bubble */
+  animation: uam-fade 0.2s ease-out;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+@keyframes uam-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.unified-approval-container {
-  background: white;
-  border-radius: 24px 24px 0 0;
-  box-shadow: 0 -5px 40px rgba(0, 0, 0, 0.1);
-  max-width: 100%;
+@keyframes uam-slide {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.uam-sheet {
+  background: #ffffff;
+  color: #0f172a;
   width: 100%;
-  max-height: 90vh;
-  max-height: 90dvh;
-  animation: slideUp 0.3s ease-out;
+  max-width: 480px;
+  max-height: 92vh;
+  max-height: 92dvh;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 32px rgba(15, 23, 42, 0.18);
   display: flex;
   flex-direction: column;
-  /* Prevent conflict with bottom nav (iOS safe area) */
-  padding-bottom: max(20px, env(safe-area-inset-bottom));
   overflow: hidden;
-  position: relative;
+  animation: uam-slide 0.25s ease-out;
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+@media (min-width: 520px) {
+  .unified-approval-overlay { align-items: center; }
+  .uam-sheet { border-radius: 20px; }
 }
 
-/* Header - Fixed */
-.approval-header {
+/* Header */
+.uam-header {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px 20px;
   flex-shrink: 0;
-  border-bottom: 1px solid #f0f0f0;
-  background: white;
-  z-index: 10;
-}
-
-.close-btn {
-  position: absolute;
-  left: 20px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  color: #666;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s;
+  min-height: 56px;
+  padding: 0 56px;
+  border-bottom: 1px solid #e2e8f0;
 }
 
-.close-btn:hover:not(:disabled) {
-  background: #f0f0f0;
-  color: #333;
-}
-
-.close-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.header-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  justify-content: center;
-}
-
-.transaction-icon {
-  font-size: 28px;
-}
-
-.header-title h2 {
-  font-size: 20px;
-  font-weight: 700;
-  color: #2c3e50;
+.uam-title {
   margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: center;
 }
 
-/* Content Area - Scrollable */
-.pin-entry-section,
-.biometric-section {
+.uam-close {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #475569;
+  cursor: pointer;
+}
+
+.uam-close:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Body scrolls if a small screen + keyboard leaves too little room */
+.uam-body {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  flex: 1;
-  padding: 20px;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
-/* Transaction Summary Card */
-.transaction-summary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 16px;
-  padding: 20px;
-  color: white;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-  flex-shrink: 0;
+/* Summary card */
+.uam-summary {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 4px 16px;
 }
 
-.transaction-detail {
+.uam-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
+  gap: 16px;
   padding: 12px 0;
 }
 
-.transaction-detail .label {
+.uam-row + .uam-row { border-top: 1px solid #e2e8f0; }
+
+.uam-label {
+  flex-shrink: 0;
   font-size: 12px;
-  font-weight: 500;
-  opacity: 0.9;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: #64748b;
 }
 
-.transaction-detail .value {
-  font-size: 16px;
+.uam-value {
+  font-size: 15px;
   font-weight: 600;
+  color: #0f172a;
   text-align: right;
   word-break: break-word;
-  max-width: 50%;
+  min-width: 0;
 }
 
-.transaction-detail .amount {
-  font-size: 24px;
-  font-weight: 700;
-  color: #ffd700;
+.uam-amount {
+  font-size: 22px;
+  font-weight: 800;
+  color: #4338ca;
+  text-align: right;
+  word-break: break-word;
 }
 
-.transaction-detail .recipient-info {
-  max-width: 200px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* PIN entry */
+.uam-pin-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
 
-.divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.2);
+.uam-pin-title {
   margin: 0;
-}
-
-/* Authentication Method Selector */
-.auth-method-selector {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  flex-shrink: 0;
-  padding: 0 20px;
-  margin-top: 0;
-}
-
-.auth-method-btn {
-  padding: 12px 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
-  background: white;
-  cursor: pointer;
   font-size: 14px;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.2s ease;
-  color: #666;
+  color: #334155;
 }
 
-.auth-method-btn:hover:not(:disabled) {
-  border-color: #667eea;
-  background: #f8f9ff;
-  color: #667eea;
+.uam-pin-wrap {
+  position: relative;
+  display: inline-block;
 }
 
-.auth-method-btn.active {
-  border-color: #667eea;
-  background: #667eea;
-  color: white;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-
-.auth-method-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* PIN Entry Section */
-.pin-entry-section {
-  padding: 20px;
-}
-
-.pin-display-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 15px;
-  flex-shrink: 0;
-  padding: 20px 0;
-}
-
-.pin-dots {
+.uam-pin-boxes {
   display: flex;
   gap: 12px;
 }
 
-.pin-dot {
-  width: 50px;
-  height: 50px;
-  border: 2px solid #e0e0e0;
-  border-radius: 50%;
+.uam-pin-box {
+  width: 52px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
-  font-weight: 700;
-  color: #667eea;
-  background: #f8f9fa;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-
-.pin-dot.filled {
-  border-color: #667eea;
-  background: #f0f4ff;
-  box-shadow: 0 0 10px rgba(102, 126, 234, 0.2);
-}
-
-.show-pin-toggle {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  padding: 5px;
-  transition: transform 0.2s;
-  flex-shrink: 0;
-}
-
-.show-pin-toggle:hover {
-  transform: scale(1.1);
-}
-
-/* Error Message */
-.error-message {
-  background: #fee;
-  border: 1px solid #fcc;
+  border: 2px solid #cbd5e1;
   border-radius: 12px;
-  padding: 12px;
+  background: #ffffff;
+  font-size: 26px;
+  font-weight: 700;
+  color: #0f172a;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.uam-pin-box.filled { border-color: #4338ca; background: #eef2ff; }
+.uam-pin-box.active { border-color: #4338ca; box-shadow: 0 0 0 3px rgba(67, 56, 202, 0.15); }
+
+/* Invisible but real: taps land here and open the native numeric keyboard.
+   16px font stops iOS zooming into the field. */
+.uam-pin-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  font-size: 16px;
+  border: none;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  cursor: text;
+}
+
+.uam-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+}
+
+/* Error */
+.uam-error {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  animation: shake 0.3s ease-out;
-  flex-shrink: 0;
-}
-
-@keyframes shake {
-  0%, 100% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(-5px);
-  }
-  75% {
-    transform: translateX(5px);
-  }
-}
-
-.error-message p {
-  margin: 0;
-  font-size: 14px;
-  color: #c33;
-  font-weight: 500;
-}
-
-.error-message svg {
-  color: #c33;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.attempts-info {
-  font-size: 12px !important;
-  color: #e67 !important;
-  margin-top: 4px !important;
-}
-
-/* Numeric Keypad - Scrollable friendly */
-.numeric-keypad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 10px 0;
-  flex-shrink: 0;
-}
-
-.keypad-btn {
-  padding: 15px;
-  border: 2px solid #e0e0e0;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
   border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
-  background: white;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: #2c3e50;
-  min-height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
-.keypad-btn:hover:not(:disabled) {
-  border-color: #667eea;
-  background: #f0f4ff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-}
+.uam-error svg { flex-shrink: 0; margin-top: 2px; }
+.uam-error p { margin: 0; font-size: 14px; font-weight: 500; }
+.uam-error .uam-attempts { margin-top: 4px; font-size: 12px; color: #dc2626; }
 
-.keypad-btn:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.1);
-}
-
-.keypad-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.zero-btn {
-  grid-column: 1 / 3;
-}
-
-.backspace-btn {
-  background: #fee;
-  border-color: #fcc;
-  color: #c33;
-  font-size: 18px;
-}
-
-.backspace-btn:hover:not(:disabled) {
-  background: #fdd;
-  border-color: #faa;
-}
-
-/* Remember PIN Checkbox */
-.remember-pin-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 0;
-  flex-shrink: 0;
-}
-
-.remember-pin-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  user-select: none;
-  font-size: 14px;
-  color: #2c3e50;
-  transition: all 0.2s ease;
-}
-
-.remember-pin-label:hover {
-  color: #667eea;
-}
-
-.remember-pin-checkbox {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  accent-color: #667eea;
-  border-radius: 4px;
-}
-
-.remember-pin-checkbox:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Biometric Section */
-.biometric-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  padding: 40px 20px;
-  padding-bottom: 80px;
-}
-
-.biometric-scanning {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-}
-
-.fingerprint-scanner {
-  width: 100px;
-  height: 100px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f0f4ff;
-  border-radius: 50%;
-  border: 3px solid #667eea;
-  flex-shrink: 0;
-}
-
-.scanning-animation {
-  animation: pulse 1.5s ease-in-out infinite;
-  color: #667eea;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.6;
-    transform: scale(0.8);
-  }
-}
-
-.biometric-scanning p {
-  font-size: 16px;
-  color: #666;
-  margin: 0;
-}
-
-.biometric-success {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
-}
-
-.success-animation {
-  animation: scaleIn 0.5s ease-out;
-  color: #4caf50;
-  flex-shrink: 0;
-}
-
-@keyframes scaleIn {
-  from {
-    transform: scale(0);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.biometric-success p {
-  font-size: 18px;
-  font-weight: 600;
-  color: #4caf50;
-  margin: 0;
-}
-
-.biometric-failed {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
-}
-
-.biometric-failed svg {
-  color: #c33;
-  flex-shrink: 0;
-}
-
-.biometric-failed p {
-  font-size: 16px;
-  color: #666;
-  margin: 0;
-}
-
-.retry-btn {
-  padding: 12px 24px;
-  background: #667eea;
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex-shrink: 0;
-}
-
-.retry-btn:hover:not(:disabled) {
-  background: #5568d3;
-  transform: translateY(-2px);
-}
-
-.biometric-ready {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
-  flex-shrink: 0;
-}
-
-.fingerprint-icon {
-  color: #667eea;
-  opacity: 0.8;
-  flex-shrink: 0;
-}
-
-.biometric-instruction {
-  font-size: 16px;
-  color: #666;
-  text-align: center;
-  margin: 0;
-}
-
-.biometric-scan-btn {
-  padding: 14px 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-  flex-shrink: 0;
-}
-
-.biometric-scan-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-}
-
-.biometric-scan-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Action Buttons - Fixed at bottom */
-.approval-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 16px 20px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
-  background: white;
-  border-top: 1px solid #f0f0f0;
-  z-index: 20;
-  flex-shrink: 0;
-}
-
-.btn-cancel {
-  padding: 14px 20px;
-  background: #f0f0f0;
-  color: #2c3e50;
-  border: none;
-  border-radius: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-cancel:hover:not(:disabled) {
-  background: #e0e0e0;
-}
-
-.btn-approve {
-  padding: 14px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
+.uam-reset {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: #f97316;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.btn-approve:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-}
-
-.btn-approve:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top: 2px solid white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Security Info */
-.security-info {
+.uam-secure {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   font-size: 12px;
-  color: #999;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  flex-shrink: 0;
-  margin-bottom: 80px;
+  color: #64748b;
+  text-align: center;
 }
 
-.security-info svg {
-  flex-shrink: 0;
-}
+.uam-secure svg { flex-shrink: 0; }
 
-/* Responsive - Small phones */
-@media (max-width: 480px) {
-  .unified-approval-container {
-    max-height: 85vh;
-    max-height: 85dvh;
-  }
-
-  .approval-header {
-    padding: 12px 16px;
-  }
-
-  .header-title h2 {
-    font-size: 18px;
-  }
-
-  .transaction-icon {
-    font-size: 24px;
-  }
-
-  .pin-entry-section {
-    padding: 16px;
-  }
-
-  .transaction-summary {
-    padding: 16px;
-  }
-
-  .transaction-detail .value,
-  .transaction-detail .amount {
-    font-size: 14px;
-  }
-
-  .transaction-detail .amount {
-    font-size: 18px;
-  }
-
-  .pin-dot {
-    width: 44px;
-    height: 44px;
-    font-size: 20px;
-  }
-
-  .pin-display-container {
-    padding: 16px 0;
-  }
-
-  .keypad-btn {
-    padding: 12px;
-    font-size: 14px;
-    min-height: 45px;
-  }
-
-  .approval-actions {
-    padding: 12px 16px;
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
-    gap: 10px;
-  }
-
-  .btn-cancel,
-  .btn-approve {
-    padding: 12px 16px;
-    font-size: 14px;
-  }
-
-  .auth-method-selector {
-    padding: 0 16px;
-  }
-
-  .security-info {
-    margin-bottom: 70px;
-    font-size: 11px;
-    padding: 10px;
-  }
-}
-
-@media (max-width: 360px) {
-  .approval-header {
-    padding: 10px 12px;
-  }
-
-  .header-title h2 {
-    font-size: 16px;
-  }
-
-  .transaction-icon {
-    font-size: 22px;
-  }
-
-  .close-btn {
-    left: 12px;
-  }
-
-  .pin-entry-section {
-    padding: 12px;
-  }
-
-  .pin-dot {
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
-    border-width: 1.5px;
-  }
-
-  .keypad-btn {
-    padding: 10px;
-    font-size: 12px;
-    min-height: 42px;
-  }
-
-  .approval-actions {
-    padding: 10px 12px;
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
-    gap: 8px;
-  }
-
-  .btn-cancel,
-  .btn-approve {
-    padding: 10px 12px;
-    font-size: 12px;
-    border-radius: 10px;
-  }
-
-  .fingerprint-scanner {
-    width: 80px;
-    height: 80px;
-  }
-
-  .fingerprint-icon {
-    width: 50px;
-    height: 50px;
-  }
-
-  .auth-method-selector {
-    padding: 0 12px;
-  }
-
-  .security-info {
-    margin-bottom: 65px;
-    font-size: 10px;
-    padding: 8px;
-  }
-}
-
-.pin-display-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 15px;
-}
-
-.pin-dots {
-  display: flex;
+/* Actions — plain flow at the end of the body, never overlapping anything */
+.uam-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
-.pin-dot {
-  width: 50px;
-  height: 50px;
-  border: 2px solid #e0e0e0;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
+.uam-btn {
+  min-height: 48px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
   font-weight: 700;
-  color: #667eea;
-  background: #f8f9fa;
-  transition: all 0.2s ease;
-}
-
-.pin-dot.filled {
-  border-color: #667eea;
-  background: #f0f4ff;
-  box-shadow: 0 0 10px rgba(102, 126, 234, 0.2);
-}
-
-.show-pin-toggle {
-  background: none;
-  border: none;
-  font-size: 24px;
   cursor: pointer;
-  padding: 5px;
-  transition: transform 0.2s;
-}
-
-.show-pin-toggle:hover {
-  transform: scale(1.1);
-}
-
-/* Error Message */
-.error-message {
-  background: #fee;
-  border: 1px solid #fcc;
-  border-radius: 12px;
-  padding: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  animation: shake 0.3s ease-out;
-}
-
-@keyframes shake {
-  0%, 100% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(-5px);
-  }
-  75% {
-    transform: translateX(5px);
-  }
-}
-
-.error-message p {
-  margin: 0;
-  font-size: 14px;
-  color: #c33;
-  font-weight: 500;
-}
-
-.error-message svg {
-  color: #c33;
-  flex-shrink: 0;
-}
-
-.attempts-info {
-  font-size: 12px !important;
-  color: #e67 !important;
-  margin-top: 4px !important;
-}
-
-/* Numeric Keypad */
-.numeric-keypad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 10px 0;
-}
-
-.keypad-btn {
-  padding: 15px;
-  border: 2px solid #e0e0e0;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
-  background: white;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: #2c3e50;
-}
-
-.keypad-btn:hover:not(:disabled) {
-  border-color: #667eea;
-  background: #f0f4ff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-}
-
-.keypad-btn:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.1);
-}
-
-.keypad-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.zero-btn {
-  grid-column: 1 / 3;
-}
-
-.backspace-btn {
-  background: #fee;
-  border-color: #fcc;
-  color: #c33;
-  font-size: 18px;
-}
-
-.backspace-btn:hover:not(:disabled) {
-  background: #fdd;
-  border-color: #faa;
-}
-
-/* Remember PIN Checkbox */
-.remember-pin-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 0;
-}
-
-.remember-pin-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  user-select: none;
-  font-size: 14px;
-  color: #2c3e50;
-  transition: all 0.2s ease;
-}
-
-.remember-pin-label:hover {
-  color: #667eea;
-}
-
-.remember-pin-checkbox {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  accent-color: #667eea;
-  border-radius: 4px;
-}
-
-.remember-pin-checkbox:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Biometric Section */
-.biometric-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  padding: 40px 20px;
-}
-
-.biometric-scanning {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-}
-
-.fingerprint-scanner {
-  width: 100px;
-  height: 100px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f0f4ff;
-  border-radius: 50%;
-  border: 3px solid #667eea;
-}
-
-.scanning-animation {
-  animation: pulse 1.5s ease-in-out infinite;
-  color: #667eea;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.6;
-    transform: scale(0.8);
-  }
-}
-
-.biometric-scanning p {
-  font-size: 16px;
-  color: #666;
-  margin: 0;
-}
-
-.biometric-success {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
-}
-
-.success-animation {
-  animation: scaleIn 0.5s ease-out;
-  color: #4caf50;
-}
-
-@keyframes scaleIn {
-  from {
-    transform: scale(0);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.biometric-success p {
-  font-size: 18px;
-  font-weight: 600;
-  color: #4caf50;
-  margin: 0;
-}
-
-.biometric-failed {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
-}
-
-.biometric-failed svg {
-  color: #c33;
-}
-
-.biometric-failed p {
-  font-size: 16px;
-  color: #666;
-  margin: 0;
-}
-
-.retry-btn {
-  padding: 12px 24px;
-  background: #667eea;
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.retry-btn:hover:not(:disabled) {
-  background: #5568d3;
-  transform: translateY(-2px);
-}
-
-.biometric-ready {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 15px;
-}
-
-.fingerprint-icon {
-  color: #667eea;
-  opacity: 0.8;
-}
-
-.biometric-instruction {
-  font-size: 16px;
-  color: #666;
-  text-align: center;
-  margin: 0;
-}
-
-.biometric-scan-btn {
-  padding: 14px 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-}
-
-.biometric-scan-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-}
-
-.biometric-scan-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Action Buttons */
-.approval-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 10px;
-}
-
-.btn-cancel {
-  padding: 14px 20px;
-  background: #f0f0f0;
-  color: #2c3e50;
-  border: none;
-  border-radius: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-cancel:hover:not(:disabled) {
-  background: #e0e0e0;
-}
-
-.btn-approve {
-  padding: 14px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
 }
 
-.btn-approve:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-}
+.uam-btn-cancel { background: #f1f5f9; color: #334155; }
+.uam-btn-approve { background: #4338ca; color: #ffffff; }
+.uam-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.btn-approve:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.spinner {
+.uam-spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top: 2px solid white;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: uam-spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Security Info */
-.security-info {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #999;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 8px;
-}
-
-.security-info svg {
-  flex-shrink: 0;
-}
-
-/* Responsive */
-@media (max-width: 480px) {
-  .unified-approval-container {
-    padding: 16px;
-    gap: 16px;
-  }
-
-  .header-title h2 {
-    font-size: 20px;
-  }
-
-  .transaction-summary {
-    padding: 16px;
-  }
-
-  .transaction-detail .value,
-  .transaction-detail .amount {
-    font-size: 14px;
-  }
-
-  .transaction-detail .amount {
-    font-size: 20px;
-  }
-
-  .pin-dot {
-    width: 44px;
-    height: 44px;
-    font-size: 20px;
-  }
-
-  .keypad-btn {
-    padding: 12px;
-    font-size: 14px;
-  }
-
-  .fingerprint-icon {
-    width: 60px;
-    height: 60px;
-  }
-
-  .approval-actions {
-    grid-template-columns: 1fr 1fr;
-  }
+@keyframes uam-spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 360px) {
-  .unified-approval-container {
-    padding: 12px;
-    gap: 12px;
-  }
-
-  .header-title h2 {
-    font-size: 18px;
-  }
-
-  .pin-dot {
-    width: 40px;
-    height: 40px;
-    font-size: 18px;
-  }
-
-  .keypad-btn {
-    padding: 10px;
-    font-size: 12px;
-  }
-
-  .fingerprint-scanner {
-    width: 80px;
-    height: 80px;
-  }
-
-  .fingerprint-icon {
-    width: 50px;
-    height: 50px;
-  }
+  .uam-body { padding-left: 14px; padding-right: 14px; }
+  .uam-pin-box { width: 46px; height: 52px; }
+  .uam-pin-boxes { gap: 10px; }
 }
+
+/* ThemeContext injects `button { background-color/color/border-color: theme !important }`
+   for the whole app, which repaints every button here in the theme surface colour.
+   These !important overrides (scoped under the overlay, so higher specificity) keep the
+   classic look regardless of theme. */
+.unified-approval-overlay button.uam-close {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  border-color: transparent !important;
+  min-width: 0;
+  min-height: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.unified-approval-overlay button.uam-toggle {
+  background-color: transparent !important;
+  color: #64748b !important;
+  border-color: transparent !important;
+  min-width: 0;
+  min-height: 0;
+}
+
+.unified-approval-overlay button.uam-btn-cancel {
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+  border-color: transparent !important;
+}
+
+.unified-approval-overlay button.uam-btn-approve {
+  background-color: #4338ca !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+
+.unified-approval-overlay button.uam-reset {
+  background-color: #f97316 !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+
+.unified-approval-overlay input.uam-pin-input {
+  background-color: transparent !important;
+  color: transparent !important;
+  border-color: transparent !important;
+}
+
+.uam-title { white-space: nowrap; }
