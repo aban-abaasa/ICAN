@@ -59,6 +59,27 @@ export async function enableWalletPhoneAlerts() {
   return subscription;
 }
 
+// Called on sign-in: the same phone can be used by a different person, and a
+// browser can rotate its endpoint. The RPC is an upsert, so this simply
+// re-attaches an already-enabled device to whoever is signed in now.
+export async function refreshWalletPhoneAlerts() {
+  try {
+    const status = await getWalletPhoneAlertsStatus();
+    if (!status.enabled) return false;
+    const registration = await navigator.serviceWorker.getRegistration();
+    const subscription = registration ? await registration.pushManager.getSubscription() : null;
+    if (!subscription) return false;
+    const { error } = await supabase.rpc('ican_register_wallet_push_subscription', {
+      p_subscription: subscription.toJSON(),
+    });
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.warn('Push registration refresh failed:', error?.message || error);
+    return false;
+  }
+}
+
 export async function disableWalletPhoneAlerts() {
   if (!supportsWalletPush()) return false;
   const registration = await navigator.serviceWorker.getRegistration();

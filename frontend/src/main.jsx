@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
+import { injectSpeedInsights } from '@vercel/speed-insights';
 import './index.css';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -9,6 +10,10 @@ import { captureReferralFromUrl } from './services/referralCapture';
 // A shared referral link (/?ref=CODE) can land on any page, signed in or not:
 // remember the code now, App redeems it once the visitor has an account.
 captureReferralFromUrl();
+
+// Vercel Speed Insights (no-op outside a Vercel deployment). Called once here
+// rather than as a component so it covers every branch rendered below.
+injectSpeedInsights();
 
 // Keep QR attendance separate from the ICAN application bundle. A scanned
 // code renders only the small verification/check-in page and never mounts the
@@ -153,6 +158,7 @@ const CandidateInterviewRoom = lazyWithReloadOnChunkFailure(() => import('./comp
 const CandidateDocumentViewer = lazyWithReloadOnChunkFailure(() => import('./components/CandidateDocumentViewer'));
 const PublicDocumentVerify = lazyWithReloadOnChunkFailure(() => import('./components/PublicDocumentVerify'));
 const PublicServiceProviderContract = lazyWithReloadOnChunkFailure(() => import('./components/PublicServiceProviderContract'));
+const PhoneAlertsPrompt = lazyWithReloadOnChunkFailure(() => import('./components/PhoneAlertsPrompt'));
 const Loading = () => <div className="min-h-screen bg-slate-950" />;
 
 // Without this, ANY uncaught error during first render (a chunk failure that
@@ -217,7 +223,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                   : statusShareMatch ? <PublicStatusViewer statusId={statusShareMatch[1]} />
                   : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
                   : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />
-                  : <App />}
+                  : <><App /><PhoneAlertsPrompt /></>}
               </AuthProvider>
             </ThemeProvider>
           )}

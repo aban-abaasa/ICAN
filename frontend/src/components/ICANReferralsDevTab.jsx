@@ -230,7 +230,7 @@ export default function ICANReferralsDevTab({ devToken }) {
             </button>
           </div>
           <p className="mt-3 text-[10px]" style={{ color: 'var(--dp-muted)' }}>
-            Counts ICAN coin purchases and completed wallet top-ups (UGX, or other currencies that have a rate in ican_currency_rates); agent cash-in is not counted.
+            Counts icaneracoin purchases and completed wallet top-ups (UGX, or other currencies that have a rate in ican_currency_rates); agent cash-in is not counted.
             A reward is worth the set % of the deposit in UGX, turned into coins at the LIVE coin price at the moment of the deposit — that price is stored on each row, so a reward waiting for approval keeps the coins it was worth when earned.
             Rewards are credited straight to the referrer's ICAN wallet with no tithe and are new ICAN issued by the platform (like cashback) — "Paid out" above is their total cost.
             Changes apply to deposits made from now on; rewards already computed keep the rate and price they were computed at.
