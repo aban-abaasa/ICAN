@@ -8,6 +8,10 @@
 -- swapping between the two, so Buy no longer opens a payment window: it takes the UGX
 -- from the in-app wallet (section 4).
 --
+-- This is a global platform, so both happen in the USER'S OWN currency (their sign-up country's
+-- currency, the one the wallet badge shows), at the coin's live price in that currency —
+-- not in UGX (sections 1b, 3, 4). A UGX user sees exactly what they saw before.
+--
 -- Two problems this fixes:
 --
 --  1. sell_ican_coins() paid out at a hardcoded 5,000 UGX per coin
@@ -74,6 +78,83 @@ $$;
 GRANT EXECUTE ON FUNCTION public.ican_live_ugx_price() TO authenticated, service_role;
 
 -- ----------------------------------------------------------------------------
+-- 1b. Every user trades in THEIR OWN currency (this is a global platform)
+-- ----------------------------------------------------------------------------
+-- A user's currency is the country they chose at sign-up: user_accounts.country_code ->
+-- ican_country_currency_map, USD when the map / rate table has nothing for it — exactly how
+-- ican_get_user_wallet_display() (the wallet badge) resolves it, so a purchase is always in
+-- the currency the badge shows. (No country recorded = 'UG', as the badge does.)
+CREATE OR REPLACE FUNCTION public.ican_user_currency(p_user_id UUID)
+RETURNS VARCHAR LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_country VARCHAR(2);
+  v_curr    VARCHAR(3);
+BEGIN
+  SELECT UPPER(COALESCE(ua.country_code, 'UG'))::VARCHAR(2) INTO v_country
+  FROM public.user_accounts ua WHERE ua.user_id = p_user_id LIMIT 1;
+  v_country := COALESCE(v_country, 'UG');
+
+  SELECT ccm.currency_code INTO v_curr
+  FROM public.ican_country_currency_map ccm
+  WHERE UPPER(ccm.country_code) = v_country LIMIT 1;
+
+  IF v_curr IS NULL OR NOT EXISTS (
+    SELECT 1 FROM public.ican_currency_rates r WHERE UPPER(r.currency_code) = UPPER(v_curr)
+  ) THEN
+    v_curr := 'USD';
+  END IF;
+  RETURN UPPER(v_curr);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.ican_user_currency(UUID) TO authenticated, service_role;
+
+-- The live price of one icaneracoin in ANY currency (refuses rather than guesses). UGX keeps the
+-- rule above (never below what the ICAN app itself shows); every other currency is the price the
+-- wallet badge shows for it: ican_get_price_in_currency(currency).price_local.
+CREATE OR REPLACE FUNCTION public.ican_live_price_in_currency(p_currency VARCHAR)
+RETURNS NUMERIC LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_price NUMERIC;
+BEGIN
+  IF UPPER(p_currency) = 'UGX' THEN
+    RETURN public.ican_live_ugx_price();
+  END IF;
+  BEGIN
+    SELECT price_local INTO v_price FROM public.ican_get_price_in_currency(UPPER(p_currency)::VARCHAR) LIMIT 1;
+  EXCEPTION WHEN OTHERS THEN
+    v_price := NULL;
+  END;
+  IF v_price IS NULL OR v_price <= 0 THEN
+    RAISE EXCEPTION 'The live icaneracoin price in % is not available right now — please try again in a moment', UPPER(p_currency);
+  END IF;
+  RETURN v_price;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.ican_live_price_in_currency(VARCHAR) TO authenticated, service_role;
+
+-- What the Buy / Sell screens need in one call: the caller's currency, the live price of one coin in
+-- it, and the money they hold in that currency in the in-app wallet.
+CREATE OR REPLACE FUNCTION public.get_my_ican_trading_info()
+RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_curr    VARCHAR;
+  v_price   NUMERIC;
+  v_balance NUMERIC;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'Not signed in';
+  END IF;
+  v_curr    := public.ican_user_currency(auth.uid());
+  v_price   := public.ican_live_price_in_currency(v_curr);
+  SELECT COALESCE(SUM(balance), 0) INTO v_balance
+  FROM public.wallet_accounts WHERE user_id = auth.uid() AND UPPER(currency) = v_curr;
+  RETURN jsonb_build_object('currency', v_curr, 'price_per_ican', v_price, 'wallet_balance', v_balance);
+END;
+$$;
+REVOKE ALL ON FUNCTION public.get_my_ican_trading_info() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_my_ican_trading_info() TO authenticated;
+
+-- ----------------------------------------------------------------------------
 -- 2. sell_ican_coins(): gross UGX = coins x live price
 -- ----------------------------------------------------------------------------
 DO $$
@@ -111,42 +192,73 @@ BEGIN
 END $$;
 
 -- ----------------------------------------------------------------------------
--- 3. The in-app Sell action: coins -> the user's own in-app wallet balance
---    (same as ADD_SELL_ICAN_TO_APP_WALLET.sql)
+-- 3. The in-app Sell action: coins -> the user's own in-app wallet, IN THEIR OWN CURRENCY
+--    (extends ADD_SELL_ICAN_TO_APP_WALLET.sql)
 -- ----------------------------------------------------------------------------
+-- sell_ican_coins() does the coin side: debits the coins, books the sale, credits the 3% fee to the
+-- platform in ICAN, and reports a UGX payout. It is left alone (cash-outs to mobile money still use
+-- it). This wraps it for the in-app wallet: the payout is worked out at the coin's live price in the
+-- user's own currency, with the same fee share sell_ican_coins() applied, and credited to their
+-- wallet_accounts row in that currency. For a UGX user the figure is exactly sell_ican_coins()'s.
+--
+-- wallet_accounts is keyed by (user_id, currency): a user can hold several rows, so the credit
+-- targets ONE currency row (an unfiltered UPDATE ... RETURNING INTO fails with "query returned more
+-- than one row").
 CREATE OR REPLACE FUNCTION public.sell_ican_coins_to_wallet(
   p_user_id     UUID,
   p_ican_amount DECIMAL,
   p_source_app  TEXT    DEFAULT 'ican',
   p_reference   TEXT    DEFAULT NULL
-) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
+  v_curr        VARCHAR;
+  v_price       NUMERIC;
   v_sell_result JSONB;
-  v_ugx_payout  DECIMAL;
+  v_ugx_gross   DECIMAL;
+  v_ugx_net     DECIMAL;
+  v_gross       DECIMAL;
+  v_payout      DECIMAL;
   v_new_balance DECIMAL;
 BEGIN
+  -- Price first: if it cannot be read nothing is sold.
+  v_curr  := public.ican_user_currency(p_user_id);
+  v_price := public.ican_live_price_in_currency(v_curr);
+
   v_sell_result := public.sell_ican_coins(p_user_id, p_ican_amount, p_source_app, p_reference);
   IF NOT COALESCE((v_sell_result->>'success')::boolean, false) THEN
     RETURN v_sell_result;
   END IF;
 
-  v_ugx_payout := (v_sell_result->>'ugx_payout')::DECIMAL;
+  v_ugx_gross := (v_sell_result->>'ugx_gross')::DECIMAL;
+  v_ugx_net   := (v_sell_result->>'ugx_payout')::DECIMAL;
 
-  -- wallet_accounts is keyed by (user_id, currency): a user can hold several rows, so this must
-  -- target the UGX one only (an unfiltered UPDATE ... RETURNING INTO fails with "query returned
-  -- more than one row").
+  IF v_curr = 'UGX' THEN
+    v_gross  := v_ugx_gross;
+    v_payout := v_ugx_net;
+  ELSE
+    v_gross  := ROUND(p_ican_amount * v_price, 2);
+    -- The same share is kept as fee as sell_ican_coins() kept (3% of what is sold).
+    v_payout := ROUND(v_gross * (v_ugx_net / NULLIF(v_ugx_gross, 0)), 2);
+  END IF;
+
   UPDATE public.wallet_accounts
-  SET balance = balance + v_ugx_payout, updated_at = now()
-  WHERE user_id = p_user_id AND currency = 'UGX'
+  SET balance = balance + v_payout, updated_at = now()
+  WHERE user_id = p_user_id AND UPPER(currency) = v_curr
   RETURNING balance INTO v_new_balance;
 
   IF NOT FOUND THEN
     INSERT INTO public.wallet_accounts (user_id, currency, balance, created_at, updated_at)
-    VALUES (p_user_id, 'UGX', v_ugx_payout, now(), now())
+    VALUES (p_user_id, v_curr, v_payout, now(), now())
     RETURNING balance INTO v_new_balance;
   END IF;
 
-  RETURN v_sell_result || jsonb_build_object('wallet_balance', v_new_balance);
+  RETURN v_sell_result || jsonb_build_object(
+    'currency',       v_curr,
+    'price_per_ican', v_price,
+    'gross',          v_gross,
+    'payout',         v_payout,
+    'wallet_balance', v_new_balance
+  );
 EXCEPTION WHEN OTHERS THEN
   -- Everything above is undone with this block; the real reason goes back to the app instead of a bare 500.
   RETURN jsonb_build_object('success', false, 'error', SQLERRM);
@@ -157,7 +269,8 @@ REVOKE ALL ON FUNCTION public.sell_ican_coins_to_wallet(UUID, DECIMAL, TEXT, TEX
 GRANT EXECUTE ON FUNCTION public.sell_ican_coins_to_wallet(UUID, DECIMAL, TEXT, TEXT) TO authenticated;
 
 -- ----------------------------------------------------------------------------
--- 4. BUY from the in-app wallet: UGX out of wallet_accounts at the live price, coins in.
+-- 4. BUY from the in-app wallet: money out of the user's wallet_accounts row in THEIR OWN currency
+--    at the coin's live price in that currency, coins in.
 --    (buy_ican_coins() stays service-role-only: it mints coins with no payment, so it can
 --    never be a client call. This one is safe for clients because the payment IS the
 --    debit, taken in the same transaction, from the caller's own wallet only.)
@@ -170,8 +283,9 @@ CREATE OR REPLACE FUNCTION public.buy_ican_coins_from_wallet(
   p_reference   TEXT    DEFAULT NULL
 ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
+  v_curr        VARCHAR;
   v_price       NUMERIC;
-  v_ugx_cost    DECIMAL;
+  v_cost        DECIMAL;
   v_actor_role  TEXT;
   v_new_balance DECIMAL;
   v_tx_id       UUID;
@@ -186,21 +300,23 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Invalid source_app');
   END IF;
 
-  v_price      := public.ican_live_ugx_price();
-  v_ugx_cost   := ROUND(p_ican_amount * v_price, 2);
+  v_curr       := public.ican_user_currency(p_user_id);
+  v_price      := public.ican_live_price_in_currency(v_curr);
+  v_cost       := ROUND(p_ican_amount * v_price, 2);
   v_actor_role := ican_resolve_caller_role();
 
   -- The payment: one row-locked UPDATE with the funds check inside it. wallet_accounts is keyed by
-  -- (user_id, currency), so it is the user's UGX row only — without that filter a user holding more
-  -- than one currency fails with "query returned more than one row".
+  -- (user_id, currency), so it is the user's row in their own currency only — without that filter a
+  -- user holding more than one currency fails with "query returned more than one row".
   UPDATE public.wallet_accounts
-  SET balance = balance - v_ugx_cost, updated_at = now()
-  WHERE user_id = p_user_id AND currency = 'UGX' AND balance >= v_ugx_cost
+  SET balance = balance - v_cost, updated_at = now()
+  WHERE user_id = p_user_id AND UPPER(currency) = v_curr AND balance >= v_cost
   RETURNING balance INTO v_new_balance;
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error',
-      format('Not enough money in your IcanEra Wallet. This costs UGX %s.', to_char(v_ugx_cost, 'FM999,999,999,990')));
+      format('Not enough money in your IcanEra Wallet. This costs %s %s.', v_curr,
+             to_char(v_cost, CASE WHEN v_curr = 'UGX' THEN 'FM999,999,999,990' ELSE 'FM999,999,999,990.00' END)));
   END IF;
 
   PERFORM get_or_create_ican_wallet(p_user_id);
@@ -214,8 +330,8 @@ BEGIN
     (recipient_user_id, ican_amount, transaction_type, source_app, reference_id, note, actor_role)
   VALUES
     (p_user_id, p_ican_amount, 'buy', p_source_app, p_reference,
-     format('Bought %s ICAN for UGX %s from the in-app wallet at UGX %s per coin (ref: %s)',
-            p_ican_amount::TEXT, v_ugx_cost::TEXT, v_price::TEXT, coalesce(p_reference, '-')),
+     format('Bought %s ICAN for %s %s from the in-app wallet at %s %s per coin (ref: %s)',
+            p_ican_amount::TEXT, v_curr, v_cost::TEXT, v_curr, v_price::TEXT, coalesce(p_reference, '-')),
      v_actor_role)
   RETURNING id INTO v_tx_id;
 
@@ -223,7 +339,8 @@ BEGIN
     'success',        true,
     'tx_id',          v_tx_id,
     'ican_bought',    p_ican_amount,
-    'ugx_paid',       v_ugx_cost,
+    'currency',       v_curr,
+    'paid',           v_cost,
     'price_per_ican', v_price,
     'wallet_balance', v_new_balance,
     'actor_role',     v_actor_role
@@ -235,17 +352,12 @@ $$;
 REVOKE ALL ON FUNCTION public.buy_ican_coins_from_wallet(UUID, DECIMAL, TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.buy_ican_coins_from_wallet(UUID, DECIMAL, TEXT, TEXT) TO authenticated;
 
--- The in-app wallet's UGX balance, for showing next to a purchase.
-CREATE OR REPLACE FUNCTION public.get_my_wallet_ugx_balance()
-RETURNS DECIMAL LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT COALESCE((SELECT balance FROM public.wallet_accounts WHERE user_id = auth.uid() AND currency = 'UGX' LIMIT 1), 0);
-$$;
-REVOKE ALL ON FUNCTION public.get_my_wallet_ugx_balance() FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.get_my_wallet_ugx_balance() TO authenticated;
+-- Superseded by get_my_ican_trading_info() (any currency, not just UGX).
+DROP FUNCTION IF EXISTS public.get_my_wallet_ugx_balance();
 
 NOTIFY pgrst, 'reload schema';
 
 DO $$
 BEGIN
-  RAISE NOTICE '✅ Selling icaneracoin now pays at its live value (never below the 5,000 UGX floor); Buy takes UGX from the in-app wallet (buy_ican_coins_from_wallet) instead of Flutterwave; sell_ican_coins_to_wallet exists for the apps.';
+  RAISE NOTICE 'Buying and selling icaneracoin now work in each user''s OWN currency at its live value in that currency; Buy takes the money from the in-app wallet (buy_ican_coins_from_wallet) instead of Flutterwave; sell_ican_coins_to_wallet exists for the apps; get_my_ican_trading_info() gives the screens the currency, price and wallet balance.';
 END $$;
