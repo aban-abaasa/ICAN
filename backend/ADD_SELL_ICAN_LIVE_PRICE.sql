@@ -132,13 +132,18 @@ BEGIN
 
   v_ugx_payout := (v_sell_result->>'ugx_payout')::DECIMAL;
 
+  -- wallet_accounts is keyed by (user_id, currency): a user can hold several rows, so this must
+  -- target the UGX one only (an unfiltered UPDATE ... RETURNING INTO fails with "query returned
+  -- more than one row").
   UPDATE public.wallet_accounts
   SET balance = balance + v_ugx_payout, updated_at = now()
-  WHERE user_id = p_user_id
+  WHERE user_id = p_user_id AND currency = 'UGX'
   RETURNING balance INTO v_new_balance;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'In-app wallet not found for user %', p_user_id;
+    INSERT INTO public.wallet_accounts (user_id, currency, balance, created_at, updated_at)
+    VALUES (p_user_id, 'UGX', v_ugx_payout, now(), now())
+    RETURNING balance INTO v_new_balance;
   END IF;
 
   RETURN v_sell_result || jsonb_build_object('wallet_balance', v_new_balance);
@@ -185,10 +190,12 @@ BEGIN
   v_ugx_cost   := ROUND(p_ican_amount * v_price, 2);
   v_actor_role := ican_resolve_caller_role();
 
-  -- The payment: one row-locked UPDATE with the funds check inside it.
+  -- The payment: one row-locked UPDATE with the funds check inside it. wallet_accounts is keyed by
+  -- (user_id, currency), so it is the user's UGX row only — without that filter a user holding more
+  -- than one currency fails with "query returned more than one row".
   UPDATE public.wallet_accounts
   SET balance = balance - v_ugx_cost, updated_at = now()
-  WHERE user_id = p_user_id AND balance >= v_ugx_cost
+  WHERE user_id = p_user_id AND currency = 'UGX' AND balance >= v_ugx_cost
   RETURNING balance INTO v_new_balance;
 
   IF NOT FOUND THEN
@@ -231,7 +238,7 @@ GRANT EXECUTE ON FUNCTION public.buy_ican_coins_from_wallet(UUID, DECIMAL, TEXT,
 -- The in-app wallet's UGX balance, for showing next to a purchase.
 CREATE OR REPLACE FUNCTION public.get_my_wallet_ugx_balance()
 RETURNS DECIMAL LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT COALESCE((SELECT balance FROM public.wallet_accounts WHERE user_id = auth.uid()), 0);
+  SELECT COALESCE((SELECT balance FROM public.wallet_accounts WHERE user_id = auth.uid() AND currency = 'UGX' LIMIT 1), 0);
 $$;
 REVOKE ALL ON FUNCTION public.get_my_wallet_ugx_balance() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.get_my_wallet_ugx_balance() TO authenticated;
