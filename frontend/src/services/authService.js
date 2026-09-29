@@ -2,7 +2,6 @@
 // Unified authentication with wallet connectivity for the Capital Engine
 
 import { supabase } from '../lib/supabase/client';
-import { getBackendUrl } from '../lib/backendUrl';
 
 /**
  * Sign up a new user with blockchain wallet support
@@ -122,13 +121,10 @@ export async function getCurrentUser() {
  */
 export async function resetPassword(email) {
   try {
-    const response = await fetch(`${getBackendUrl()}/api/email/request-password-reset`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, redirectTo: window.location.origin })
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
     });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.success) throw new Error(data.message || 'Failed to send password reset email.');
+    if (error) throw error;
     return { data, error: null };
   } catch (error) {
     console.error('Error resetting password:', error);

@@ -4,11 +4,9 @@ import { getSupabaseClient } from '../lib/supabase/client';
 import { hashPIN } from '../services/walletAccountService';
 
 /**
- * Landing page for the self-service "reset my wallet PIN" email link
- * (see backend/routes/emailRoutes.js POST /request-pin-reset and
- * backend/PIN_RESET_EMAIL_SELFSERVICE.sql). Mirrors ResetPassword.jsx's
- * shape but redeems a one-time token via redeem_pin_reset_token() instead
- * of going through Supabase Auth's recovery session.
+ * Landing page for self-service wallet PIN recovery. New links use Supabase
+ * Auth's recovery session and an account-scoped RPC. Older emailed token
+ * links remain supported through redeem_pin_reset_token().
  */
 const ResetPinPage = ({ onDone }) => {
   const [pin, setPin] = useState('');
@@ -20,6 +18,9 @@ const ResetPinPage = ({ onDone }) => {
   const token = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search).get('token') || ''
     : '';
+  const accountType = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('accountType') === 'business'
+    ? 'business'
+    : 'personal';
 
   const handleBack = () => {
     if (window.location.pathname === '/reset-pin') {
@@ -32,10 +33,6 @@ const ResetPinPage = ({ onDone }) => {
     e.preventDefault();
     setError('');
 
-    if (!token) {
-      setError('This link is missing its token. Open the reset link from your email again.');
-      return;
-    }
     if (!/^\d{4,6}$/.test(pin)) {
       setError('PIN must be 4-6 digits');
       return;
@@ -48,15 +45,32 @@ const ResetPinPage = ({ onDone }) => {
     setLoading(true);
     try {
       const supabase = getSupabaseClient();
-      const { data, error: err } = await supabase.rpc('redeem_pin_reset_token', {
-        p_token: token,
-        p_new_pin_hash: hashPIN(pin)
-      });
+      if (!supabase) throw new Error('Supabase is not initialized. Please refresh and try again.');
+
+      let data;
+      let err;
+      if (token) {
+        ({ data, error: err } = await supabase.rpc('redeem_pin_reset_token', {
+          p_token: token,
+          p_new_pin_hash: hashPIN(pin)
+        }));
+      } else {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (!sessionData?.session?.user) {
+          throw new Error('This recovery link is invalid or expired. Request a new PIN reset email.');
+        }
+        ({ data, error: err } = await supabase.rpc('reset_wallet_pin_from_recovery', {
+          p_account_type: accountType,
+          p_new_pin_hash: hashPIN(pin)
+        }));
+      }
 
       if (err) throw err;
 
       const row = Array.isArray(data) ? data[0] : data;
       if (row?.success) {
+        if (typeof window !== 'undefined') sessionStorage.removeItem('ican-pin-recovery-session');
         setSuccess(true);
       } else {
         setError(row?.message || 'This reset link is invalid or has expired.');
@@ -104,15 +118,13 @@ const ResetPinPage = ({ onDone }) => {
             <KeyRound className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">Reset Your PIN</h1>
-          <p className="text-gray-400">Choose a new PIN for your wallet</p>
+          <p className="text-gray-400">Choose a new PIN for your {accountType} wallet</p>
         </div>
 
-        {(error || !token) && (
+        {error && (
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
-            <p className="text-red-400 text-sm">
-              {error || 'This link is missing its token. Open the reset link from your email again.'}
-            </p>
+            <p className="text-red-400 text-sm">{error}</p>
           </div>
         )}
 
@@ -153,7 +165,7 @@ const ResetPinPage = ({ onDone }) => {
 
           <button
             type="submit"
-            disabled={loading || !token}
+            disabled={loading}
             className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (

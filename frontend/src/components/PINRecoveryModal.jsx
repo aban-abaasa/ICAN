@@ -9,11 +9,9 @@ import { getSupabaseClient } from '../lib/supabase/client';
  * Appears when an account is locked (too many failed PIN attempts) or the
  * user has forgotten their PIN. For a personal/business account (no
  * groupId), offers two alternative paths:
- *  - "Email me a reset link" — self-service, mirrors the sign-in page's
- *    Forgot Password. Backend generates a one-time token and emails it
- *    (POST /api/email/request-pin-reset); the emailed link lands on
- *    ResetPinPage, which redeems it via the redeem_pin_reset_token() RPC
- *    (see backend/PIN_RESET_EMAIL_SELFSERVICE.sql).
+ *  - "Email me a reset link" — self-service, uses Supabase Auth's recovery
+ *    email flow. The recovery session lands on ResetPinPage, which updates
+ *    the selected account's PIN through an authenticated RPC.
  *  - "Request developer review" — the original flow: submits a request and
  *    waits for a developer to resolve it from the dev panel.
  * Group wallet PINs (groupId set) only offer the developer-review path,
@@ -152,28 +150,14 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
 
     try {
       const supabase = getSupabaseClient();
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      if (!accessToken) {
-        throw new Error('Your session expired — please sign in again.');
-      }
-
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-      const response = await fetch(`${backendUrl}/api/email/request-pin-reset`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({ accountType })
+      if (!supabase) throw new Error('Supabase is not initialized. Please refresh and try again.');
+      const redirectTo = new URL('/reset-pin', window.location.origin);
+      redirectTo.searchParams.set('accountType', accountType);
+      redirectTo.searchParams.set('flow', 'supabase');
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(userEmail, {
+        redirectTo: redirectTo.toString()
       });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.message || 'Failed to send reset link');
-      }
+      if (resetError) throw resetError;
 
       setEmailSentTo(userEmail);
       setStep('email_sent');
