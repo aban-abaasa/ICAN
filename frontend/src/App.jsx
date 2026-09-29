@@ -69,7 +69,8 @@ const App = () => {
   });
   const [isResetPinPath, setIsResetPinPath] = useState(() => {
     if (typeof window !== 'undefined') {
-      return window.location.pathname === '/reset-pin';
+      return window.location.pathname === '/reset-pin'
+        || new URLSearchParams(window.location.search).get('flow') === 'pin';
     }
     return false;
   });
@@ -190,7 +191,8 @@ const App = () => {
   useEffect(() => {
     const handlePopState = () => {
       setIsResetPasswordPath(window.location.pathname === '/reset-password');
-      setIsResetPinPath(window.location.pathname === '/reset-pin');
+      setIsResetPinPath(window.location.pathname === '/reset-pin'
+        || new URLSearchParams(window.location.search).get('flow') === 'pin');
       setIsConfirmDeleteAccountPath(window.location.pathname === '/confirm-delete-account');
       setIsPricingPath(window.location.pathname === '/pricing');
       setIsContractPath(window.location.pathname === '/contract');
@@ -276,8 +278,10 @@ const App = () => {
   };
 
   const handlePinResetDone = () => {
+    clearRecoveryMode();
     setShowLanding(false);
     setIsResetPinPath(false);
+    setIsResetPasswordPath(false);
   };
 
   const handleConfirmDeleteAccountDone = () => {
@@ -372,6 +376,18 @@ const App = () => {
     );
   }
 
+  // Supabase uses the same `type=recovery` session for PIN and password
+  // links. Route by the requested path first so /reset-pin doesn't render
+  // the password reset form when its recovery session is established.
+  if (isResetPinPath) {
+    return (
+      <ErrorBoundary>
+        <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
+        <ResetPinPage onDone={handlePinResetDone} />
+      </ErrorBoundary>
+    );
+  }
+
   if (isRecoveryMode || isResetPasswordPath) {
     return (
       <ErrorBoundary>
@@ -380,15 +396,6 @@ const App = () => {
           initialView="reset-password"
           onRecoveryHandled={handleRecoveryHandled}
         />
-      </ErrorBoundary>
-    );
-  }
-
-  if (isResetPinPath) {
-    return (
-      <ErrorBoundary>
-        <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
-        <ResetPinPage onDone={handlePinResetDone} />
       </ErrorBoundary>
     );
   }

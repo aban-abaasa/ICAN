@@ -81,6 +81,10 @@ export async function payIcanRequest({
     currency: request.currency || 'IcanEra',
     payerUserId,
     recipientUserId: request.user_id,
+    recipientBusinessProfileId: request.business_profile_id || null,
+    recipientName: request.merchant_name || 'IcanEra recipient',
+    recipientClassification: request.recipient_classification || 'personal',
+    merchantName: request.merchant_name || null,
     issuedAt: new Date().toISOString(),
     description: request.description || 'IcanEra QR payment',
   };

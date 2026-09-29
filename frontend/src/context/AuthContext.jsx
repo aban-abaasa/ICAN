@@ -237,7 +237,7 @@ export const AuthProvider = ({ children }) => {
       
       // Clear hash after Supabase has processed it
       if (window.location.hash) {
-        window.history.replaceState(null, '', window.location.pathname);
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
       }
     }).catch((err) => {
       console.error('Error getting session:', err);

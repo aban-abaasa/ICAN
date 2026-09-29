@@ -92,7 +92,7 @@ export function PWAInstallButton() {
   // Show installed state
   if (isInstalled) {
     return (
-      <div className="flex items-center gap-2 px-3 md:px-4 py-2 bg-green-500/20 text-green-300 rounded-lg border border-green-500/50 text-xs md:text-sm font-medium cursor-default">
+      <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-2 bg-green-500/20 text-green-300 rounded-lg border border-green-500/50 text-xs md:text-sm font-medium cursor-default">
         <Check size={16} className="md:w-[18px] md:h-[18px]" />
         <span className="hidden sm:inline">Installed ✓</span>
         <span className="sm:hidden">✓</span>
@@ -112,7 +112,7 @@ export function PWAInstallButton() {
       <>
         <button
           onClick={() => setShowIosInstructions(true)}
-          className="flex items-center gap-2 px-3 md:px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 text-white rounded-lg font-medium text-xs md:text-sm transition transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
+          className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 text-white rounded-lg font-medium text-xs md:text-sm transition transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
           title="Install IcanEra on your iPhone or iPad"
         >
           <Download size={16} className="md:w-[18px] md:h-[18px]" />
@@ -157,7 +157,7 @@ export function PWAInstallButton() {
     <button
       onClick={handleInstallClick}
       disabled={installing}
-      className="flex items-center gap-2 px-3 md:px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg font-medium text-xs md:text-sm transition transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
+      className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg font-medium text-xs md:text-sm transition transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
       title="Install IcanEra - One click install"
     >
       <Download size={16} className="md:w-[18px] md:h-[18px]" />

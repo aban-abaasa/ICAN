@@ -13,7 +13,7 @@ const ThemeSwitcher = () => {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="inline-flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-purple-500/20 transition-all duration-200 group"
+        className="inline-flex items-center space-x-1.5 sm:space-x-2 px-1.5 sm:px-3 py-2 rounded-lg hover:bg-purple-500/20 transition-all duration-200 group"
         title="Switch theme"
         aria-label="Theme switcher"
       >

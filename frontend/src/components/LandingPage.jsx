@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown, X, Image as ImageIcon, Globe, Lock, Send, User, Mail, ThumbsUp } from 'lucide-react';
-import DashboardPreview from './DashboardPreview';
+import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown, X, Menu, Image as ImageIcon, Globe, Lock, Send, User, Mail, ThumbsUp } from 'lucide-react';
 import ThemeSwitcher from './ThemeSwitcher';
 import { PWAInstallButton } from './PWAInstallButton';
 import CommunityStoriesCarousel from './landing/CommunityStoriesCarousel';
@@ -73,7 +72,6 @@ const LandingPage = ({ onGetStarted }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
   const [scrollPosition, setScrollPosition] = useState(0);
-  const [isHeroExpanded, setIsHeroExpanded] = useState(false);
   const [expandedFooterSection, setExpandedFooterSection] = useState(null);
   const [expandedFooterItem, setExpandedFooterItem] = useState(null);
   const [failedMainSlideImages, setFailedMainSlideImages] = useState({});
@@ -814,21 +812,12 @@ const LandingPage = ({ onGetStarted }) => {
     return `${words.slice(0, maxWords).join(' ')}...`;
   };
 
-  const rainbowTextStyle = {
-    backgroundImage: 'linear-gradient(90deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #ef4444)',
-    backgroundSize: '300% 300%',
-    WebkitBackgroundClip: 'text',
-    backgroundClip: 'text',
-    color: 'transparent',
-    animation: 'icanRainbowShift 8s linear infinite'
+  const classicAccentStyle = {
+    color: isDarkTheme ? '#fcd34d' : '#166534'
   };
 
   return (
-    <div className={`min-h-screen overflow-hidden ${
-      isDarkTheme
-        ? 'bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100'
-        : 'bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100 text-slate-900'
-    }`}>
+    <div className={`ican-landing ${isDarkTheme ? 'ican-landing-dark bg-slate-950 text-slate-100' : 'ican-landing-light bg-stone-50 text-slate-900'} min-h-screen overflow-hidden`}>
       <style>{`
         @keyframes icanRainbowShift {
           0% { background-position: 0% 50%; }
@@ -858,22 +847,68 @@ const LandingPage = ({ onGetStarted }) => {
           border-image: linear-gradient(90deg, #7c3aed, #ec4899, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #7c3aed) 1;
           animation: icanRainbowShift 7s linear infinite;
         }
+        .ican-landing section :is(div, button)[class*="rounded-2xl"][class*="border"]:not([class*="border-dashed"]),
+        .ican-landing section :is(div, button)[class*="rounded-xl"][class*="border"]:not([class*="border-dashed"]) {
+          border-radius: 14px !important;
+          border-width: 1px !important;
+          background-image: none !important;
+          box-shadow: 0 8px 24px rgba(35, 31, 24, 0.07) !important;
+        }
+        .ican-landing-light section :is(div, button)[class*="rounded-2xl"][class*="border"]:not([class*="border-dashed"]),
+        .ican-landing-light section :is(div, button)[class*="rounded-xl"][class*="border"]:not([class*="border-dashed"]) {
+          background-color: #fffdf8 !important;
+          border-color: #e7dfd2 !important;
+        }
+        .ican-landing-dark section :is(div, button)[class*="rounded-2xl"][class*="border"]:not([class*="border-dashed"]),
+        .ican-landing-dark section :is(div, button)[class*="rounded-xl"][class*="border"]:not([class*="border-dashed"]) {
+          background-color: #171d1a !important;
+          border-color: #39443d !important;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2) !important;
+        }
+        .ican-landing .ican-cove-card:not([class*="overflow-hidden"]),
+        .ican-landing div.ican-cove-panel:not([class*="blur"]) {
+          border-radius: 16px !important;
+          border-width: 1px !important;
+          background-image: none !important;
+          box-shadow: 0 8px 24px rgba(35, 31, 24, 0.07) !important;
+        }
+        .ican-landing-light .ican-cove-card:not([class*="overflow-hidden"]),
+        .ican-landing-light div.ican-cove-panel:not([class*="blur"]) {
+          background-color: #fffdf8 !important;
+          border-color: #e7dfd2 !important;
+        }
+        .ican-landing-dark .ican-cove-card:not([class*="overflow-hidden"]),
+        .ican-landing-dark div.ican-cove-panel:not([class*="blur"]) {
+          background-color: #171d1a !important;
+          border-color: #39443d !important;
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2) !important;
+        }
+        .ican-landing-light section div.ican-cove-panel[class*="bg-slate-950"],
+        .ican-landing-dark section div.ican-cove-panel[class*="bg-slate-950"] {
+          background-color: rgba(15, 23, 42, 0.92) !important;
+          border-color: rgba(255, 255, 255, 0.14) !important;
+          box-shadow: none !important;
+        }
+        .ican-landing section div.absolute[class*="blur-xl"][class*="animate-pulse"] {
+          display: none !important;
+        }
+        .ican-landing button.ican-rainbow-fill {
+          background-image: none !important;
+          background-color: #166534 !important;
+          animation: none !important;
+        }
+        .ican-landing button.ican-rainbow-border {
+          border-color: #d6cbb8 !important;
+          border-image: none !important;
+          animation: none !important;
+        }
       `}</style>
-      {/* Animated background elements */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(110deg, rgba(124,58,237,0.18), rgba(236,72,153,0.14), rgba(234,179,8,0.12), rgba(34,197,94,0.12), rgba(59,130,246,0.14), rgba(124,58,237,0.18))', backgroundSize: '260% 260%', animation: 'icanRainbowShift 22s linear infinite' }}></div>
-        <div className={`absolute top-0 left-1/4 w-96 h-96 rounded-full blur-3xl animate-blob ${isDarkTheme ? 'bg-slate-700/20' : 'bg-slate-400/15'}`}></div>
-        <div className={`absolute bottom-0 right-1/4 w-96 h-96 rounded-full blur-3xl animate-blob animation-delay-2000 ${isDarkTheme ? 'bg-blue-900/20' : 'bg-blue-300/15'}`}></div>
-        <div className={`absolute top-1/2 right-1/3 w-96 h-96 rounded-full blur-3xl animate-blob animation-delay-4000 ${isDarkTheme ? 'bg-slate-800/20' : 'bg-slate-300/10'}`}></div>
-        <div className="absolute top-24 right-20 w-72 h-72 rounded-full blur-3xl" style={{ backgroundImage: 'linear-gradient(90deg, rgba(236,72,153,0.25), rgba(59,130,246,0.25), rgba(234,179,8,0.2))', animation: 'icanRainbowFloat 10s ease-in-out infinite' }}></div>
-      </div>
-
       {/* Navigation */}
       <nav className={`fixed top-0 w-full z-50 backdrop-blur-md border-b ${isDarkTheme ? 'bg-slate-950/70 border-slate-700/40' : 'bg-white/70 border-slate-300/70'}`}>
-        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 py-4 2xl:py-5 flex justify-between items-center">
+        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto px-3 sm:px-6 lg:px-8 2xl:px-12 py-3 md:py-4 2xl:py-5 flex justify-between items-center gap-2">
           <div className="flex items-center space-x-3">
             <div
-              className="text-3xl md:text-4xl 2xl:text-5xl font-black tracking-tight"
+              className="shrink-0 text-2xl sm:text-3xl md:text-4xl 2xl:text-5xl font-black tracking-tight"
               style={{
                 color: 'var(--color-secondary)',
                 textShadow: isDarkTheme ? '0 0 14px rgba(129, 140, 248, 0.35)' : '0 1px 0 rgba(255,255,255,0.5)'
@@ -969,185 +1004,112 @@ const LandingPage = ({ onGetStarted }) => {
               Try It Live
             </button>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            {/* Top row: Theme switcher, Sign In, Create Account */}
-            <div className="flex items-center gap-2 md:gap-3">
-              <ThemeSwitcher />
-              <PWAInstallButton />
+          <div className="ml-auto min-w-0">
+            {/* Compact account actions keep the mobile header on one line. */}
+            <div className="flex items-center justify-end gap-1 sm:gap-2 md:gap-3">
+              <div className="hidden md:block"><ThemeSwitcher /></div>
+              <div className="hidden md:block shrink-0"><PWAInstallButton /></div>
               <button
                 onClick={handleSignIn}
-                className="px-3 md:px-5 py-2 rounded-full border-2 ican-rainbow-border bg-purple-900/25 hover:bg-purple-800/40 text-white font-bold transition-all duration-300 text-xs md:text-sm 2xl:text-base"
+                className={`shrink-0 whitespace-nowrap px-2.5 sm:px-3 md:px-5 py-2 rounded-md border font-semibold transition-colors text-xs md:text-sm 2xl:text-base ${isDarkTheme ? 'border-slate-600 text-slate-100 hover:bg-slate-800' : 'border-slate-300 text-slate-800 hover:bg-slate-100'}`}
               >
                 Sign In
               </button>
               <button
                 onClick={handleCreateAccount}
-                className="ican-rainbow-fill border-2 ican-rainbow-border px-3 md:px-5 py-2 rounded-full font-extrabold hover:shadow-2xl hover:shadow-purple-500/55 transition-all duration-300 transform hover:scale-[1.04] text-white text-xs md:text-sm 2xl:text-base"
+                className={`shrink-0 whitespace-nowrap px-2.5 sm:px-3 md:px-5 py-2 rounded-md font-semibold transition-colors text-xs md:text-sm 2xl:text-base ${isDarkTheme ? 'bg-amber-300 text-slate-950 hover:bg-amber-200' : 'bg-emerald-900 text-white hover:bg-emerald-800'}`}
               >
-                Create Account
+                <span className="sm:hidden">Join</span><span className="hidden sm:inline">Create Account</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsNavMoreOpen((open) => !open)}
+                aria-label={isNavMoreOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                aria-expanded={isNavMoreOpen}
+                className={`md:hidden inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border transition-colors ${isDarkTheme ? 'border-slate-700 text-slate-100 hover:bg-slate-800' : 'border-stone-300 text-slate-800 hover:bg-white'}`}
+              >
+                {isNavMoreOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
             </div>
           </div>
+          {isNavMoreOpen && (
+            <>
+              <div className="fixed inset-0 z-40 md:hidden" onClick={() => setIsNavMoreOpen(false)} />
+              <div className={`absolute right-3 top-full z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg border shadow-xl md:hidden ${isDarkTheme ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-stone-200 bg-[#fffdf8] text-slate-800'}`}>
+                <div className={`flex items-center justify-between border-b px-4 py-3 ${isDarkTheme ? 'border-slate-700' : 'border-stone-200'}`}>
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em]">Explore IcanEra</span>
+                  <div className="flex items-center gap-2">
+                    <ThemeSwitcher />
+                    <PWAInstallButton />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-1 p-2">
+                  {[
+                    { label: 'Features', section: 'platforms' },
+                    { label: 'Platforms', section: 'platforms' },
+                    { label: 'Pricing', section: null },
+                    { label: 'Testimonials', section: 'testimonials' },
+                    { label: 'Community', section: 'community-board' },
+                    { label: 'Try it live', section: 'live-explore' }
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      onClick={() => { item.section ? scrollToSection(item.section) : goToPricing(); setIsNavMoreOpen(false); }}
+                      className={`rounded px-3 py-2.5 text-left text-sm font-medium transition-colors ${isDarkTheme ? 'text-slate-200 hover:bg-slate-800' : 'text-slate-700 hover:bg-stone-100'}`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </nav>
 
       {/* Hero Section */}
-      <div className="relative pt-16 md:pt-20 2xl:pt-28 pb-12 md:pb-16 2xl:pb-24 px-4 sm:px-6 lg:px-8 2xl:px-16 overflow-visible">
-        {/* Decorative elements */}
-        <div className="absolute top-10 left-5 w-32 h-32 bg-slate-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-10 right-10 w-40 h-40 bg-blue-400/10 rounded-full blur-3xl"></div>
-        
-        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto flex flex-col gap-6 md:gap-8 lg:gap-12 2xl:gap-16 relative">
-          {/* Left Content - Collapsed to Icon */}
-          <div className="flex items-center justify-center md:justify-start animate-fadeInUp relative z-40 w-full">
-            <div className="w-full">
-              {/* Mobile: Collapsible Badge */}
-              <div className="md:hidden">
-                <button 
-                  onClick={() => setIsHeroExpanded(!isHeroExpanded)}
-                  className="inline-flex items-center space-x-3 px-6 py-3 bg-gradient-to-r from-slate-600/95 via-slate-700/95 to-blue-700/95 hover:from-slate-500 hover:via-slate-600 hover:to-blue-600 rounded-full border border-slate-300/40 backdrop-blur-sm shadow-lg hover:shadow-2xl hover:shadow-slate-500/40 transition-all duration-300 transform hover:scale-110 w-full justify-center"
-                  title="About IcanEra"
-                >
-                  <Zap className="w-5 h-5 text-white drop-shadow-lg animate-pulse flex-shrink-0" />
-                  <span className="text-sm font-bold text-white">Learn More</span>
-                  <ChevronDown className={`w-4 h-4 text-white transition-transform duration-300 ${isHeroExpanded ? 'rotate-180' : ''}`} />
-                </button>
-
-                {/* Mobile Expanded Container */}
-                {isHeroExpanded && (
-                  <div className={`mt-4 border ican-cove-card p-6 space-y-5 shadow-2xl backdrop-blur-xl animate-fadeInUp ${isDarkTheme ? 'bg-slate-900/90 border-slate-600/45 shadow-slate-900/50' : 'bg-slate-100/95 border-slate-300/70 shadow-slate-300/45'}`}>
-                    <div className={`inline-flex items-center space-x-2 border ican-cove-tab px-4 py-2 w-full ${isDarkTheme ? 'bg-slate-800/80 border-slate-600/55' : 'bg-white/95 border-slate-300/80'}`}>
-                      <Zap className="w-4 h-4 text-blue-200 flex-shrink-0" />
-                      <span className="text-sm text-slate-200 font-medium">Record • Invest • Grow • Prosper</span>
-                    </div>
-                    
-                    <h2 className="text-2xl font-extrabold text-white leading-tight">
-                      Your Complete Financial Life In One Platform
-                    </h2>
-                    
-                    <div className="text-sm text-gray-300 leading-relaxed space-y-4 text-justify">
-                      <div className="space-y-2">
-                        <p className="font-semibold text-yellow-200">🚀 One IcanEra Platform - Replace All Business Apps</p>
-                        <p className="text-xs">IcanEra unifies your entire business ecosystem. Every transaction recorded across SupermartKera retail, BodaGoEra delivery, AgriBone agriculture, and enterprise operations - all powered by IcanEra blockchain security.</p>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="font-semibold text-purple-200">💼 Enterprise CMMS - Role-Based Hierarchy & Supplier Integration</p>
-                        <p className="text-xs">Complete role-based access from admin to staff with structured approval workflows. Manage employees, assets, equipment, and salaries. Integrated supplier portal in SupermartKera for seamless ordering - receive inventory from suppliers worldwide via BodaGoEra's cross-border delivery (ships, airplanes, door-to-door service). Track everything with comprehensive business reports.</p>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="font-semibold text-amber-200">💳 IcanEra Wallet - Universal Payment & Money Management</p>
-                        <p className="text-xs">Send and receive money across borders instantly. Trade in IcanEra, top up your wallet, and pay for products in-store with cash, wallet coins, or real money. Separate accounts for TRUST groups, business, and personal finances - track every transaction with complete clarity and control. All transactions blockchain-verified to stabilize IcanEra value and beat inflation.</p>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="font-semibold text-pink-200">🏦 TRUST + Blockchain SACCO</p>
-                        <p className="text-xs">Blockchain-secured TRUST groups with agent withdrawals and deposits directly in IcanEra Wallet. Every transaction is immutably recorded for complete transparency and security.</p>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="font-semibold text-green-200">💰 PitchIn - Public Stock Market & Real-Time Share Valuation</p>
-                        <p className="text-xs">Multi-worker transaction recording across all IcanEra applications in one unified database. Track real-time business value per share with live data from SupermartKera, AgriBone, and BodaGoEra. Complete audit trails, books of accounts, and AI-powered tax calculations specific to each country.</p>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="font-semibold text-blue-200">🌍 Multi-Country Currency & AI Tax Intelligence</p>
-                        <p className="text-xs">Operate across multiple countries with automatic currency support. AI analyzes your transactions and generates country-specific tax reports, proper auditing, and professional books of accounts.</p>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="font-semibold text-cyan-200">🔐 Blockchain-Secured Messaging & Transaction Stability</p>
-                        <p className="text-xs">Every message in the application is blockchain-verified for security. Immutable communication records add value and trust to every interaction. All transactions blockchain-recorded to stabilize IcanEra value - natural market fluctuation beats inflation while protecting your purchasing power.</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2 pt-3">
-                      <Shield className="w-5 h-5 text-green-400 flex-shrink-0" />
-                      <span className="text-sm text-green-300 font-medium">Blockchain-Secured • Trusted • Transparent</span>
-                    </div>
-                    
-                    <div className="space-y-3 pt-2">
-                      <button onClick={onGetStarted} className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 rounded-full font-bold text-slate-900 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-yellow-500/50 w-full justify-center">
-                        <Zap className="w-4 h-4" />
-                        <span>Start Recording Now</span>
-                      </button>
-                      <button
-                        onClick={() => scrollToSection('platforms')}
-                        className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full font-bold text-white transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-purple-500/50 w-full justify-center"
-                      >
-                        <span>Explore All Platforms</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Desktop: Always Visible Full Container */}
-              <div className={`hidden md:block border ican-cove-card p-6 md:p-8 2xl:p-10 space-y-5 2xl:space-y-7 shadow-2xl backdrop-blur-xl w-full ${isDarkTheme ? 'bg-slate-900/90 border-slate-600/45 shadow-slate-900/50' : 'bg-slate-100/95 border-slate-300/70 shadow-slate-300/45'}`}>
-                {/* Tag */}
-                <div className={`inline-flex items-center space-x-2 border ican-cove-tab px-4 py-2 ${isDarkTheme ? 'bg-slate-800/80 border-slate-600/55' : 'bg-white/95 border-slate-300/80'}`}>
-                  <Zap className="w-4 h-4 text-blue-200 flex-shrink-0" />
-                  <span className="text-sm md:text-base 2xl:text-lg text-slate-200 font-medium">Record • Invest • Grow • Prosper</span>
-                </div>
-                
-                {/* Headline */}
-                <h2 className="text-2xl md:text-3xl lg:text-4xl 2xl:text-5xl 3xl:text-6xl font-extrabold text-white leading-tight">
-                  Your Complete Financial Life In One Platform
-                </h2>
-                
-                {/* Description */}
-                <div className="text-sm md:text-base 2xl:text-lg text-gray-300 leading-relaxed space-y-4 text-justify">
-                  <div className="space-y-3">
-                    <p className="font-semibold text-yellow-200">🚀 IcanEra - The Ultimate Business Platform</p>
-                    <p>SupermartKera, AgriBone, BodaGoEra, and all business modules unified in one powerful platform. Every transaction across retail, agriculture, delivery, and enterprise is recorded with blockchain-secured IcanEra power. One wallet, one ecosystem, infinite possibilities.</p>
-                  </div>
-                  <div className="space-y-3">
-                    <p className="font-semibold text-purple-200">💼 Enterprise-Grade CMMS with Complete Supply Chain Integration</p>
-                    <p>Comprehensive Computerized Maintenance Management System with role-based access hierarchy from admin to staff. Each level has structured functions for employee management, asset tracking, equipment monitoring, and salary processing. Finalize all approvals and payments through secure workflows. Seamlessly integrated supplier portal in SupermartKera allows you to order and receive inventory from suppliers worldwide. BodaGoEra handles cross-border delivery via ships, airplanes, and door-to-door service for complete source-to-destination logistics. Generate professional business reports, automate approval workflows, and maintain complete audit trails with superior blockchain integration.</p>
-                  </div>
-                  <div className="space-y-3">
-                    <p className="font-semibold text-amber-200">💳 IcanEra Wallet - Universal Payment System & Money Management</p>
-                    <p>Send and receive money across borders instantly with zero delays. Trade seamlessly in IcanEra, top up your wallet from multiple sources, and enjoy flexible payment options. Pay for products in SupermartKera stores using cash, wallet coins (IcanEra), or real money - all tracked automatically. Separate dedicated accounts for TRUST group savings, business operations, and personal finances ensure complete clarity. Track every transaction across all accounts with real-time updates, detailed transaction history, and comprehensive financial control. Every transaction is blockchain-verified to provide stability to IcanEra value - while the coin fluctuates naturally with market demand, the blockchain foundation consistently beats inflation and protects your wealth. Your money, your way, completely organized and inflation-resistant.</p>
-                  </div>
-                  <div className="space-y-3">
-                    <p className="font-semibold text-pink-200">🏦 Blockchain TRUST & SACCO with Agent Network</p>
-                    <p>Blockchain-secured TRUST groups offering 8-15% returns with complete transparency. Agent-enabled withdrawals and deposits directly in IcanEra Wallet. Every SACCO transaction is immutably recorded on the blockchain for unshakable trust and accountability.</p>
-                  </div>
-                  <div className="space-y-3">
-                    <p className="font-semibold text-green-200">💰 PitchIn - Public Stock Market with Real-Time Share Valuation</p>
-                    <p>Revolutionary public stock market where every transaction across SupermartKera, AgriBone, and BodaGoEra flows into one unified database. Empower different workers to record transactions with role-based access while investors see current business value per share in real-time. Complete books of accounts, proper auditing, and country-specific AI tax calculations. Perfect for businesses with multiple contributors needing transparent financial tracking and live market valuation.</p>
-                  </div>
-                  <div className="space-y-3">
-                    <p className="font-semibold text-blue-200">🌍 Multi-Country Currency & AI-Powered Tax Intelligence</p>
-                    <p>Operate seamlessly across multiple countries with automatic currency conversion and country-specific compliance. AI analyzes your transactions to generate accurate tax reports tailored to each country's regulations. Professional auditing and books of accounts built in.</p>
-                  </div>
-                  <div className="space-y-3">
-                    <p className="font-semibold text-cyan-200">🔐 Blockchain-Secured Messaging & Transaction Stability</p>
-                    <p>Every message in IcanEra is blockchain-verified and immutably recorded. Enhanced security, complete audit trails, and tamper-proof communication records add unprecedented value to your business operations and legal compliance. All transactions are blockchain-recorded to provide stability to IcanEra value. While the coin naturally fluctuates with real market demand and trading activity, the blockchain foundation ensures it consistently beats inflation, protecting and growing your purchasing power over time. True digital currency that works for you, not against you.</p>
-                  </div>
-                </div>
-                
-                {/* Trust Badge */}
-                <div className="flex items-center space-x-2 pt-3">
-                  <Shield className="w-5 h-5 text-green-400 flex-shrink-0" />
-                  <span className="text-sm text-green-300 font-medium">Blockchain-Secured • Trusted • Transparent</span>
-                </div>
-                
-                {/* CTA Buttons */}
-                <div className="space-y-3 pt-2 flex flex-col lg:flex-row gap-3">
-                  <button onClick={onGetStarted} className="inline-flex items-center space-x-2 px-8 py-3 2xl:py-4 bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 rounded-full font-bold text-slate-900 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-yellow-500/50 justify-center">
-                    <Zap className="w-5 h-5" />
-                    <span className="text-base 2xl:text-lg">Start Recording Now</span>
-                  </button>
-                  <button
-                    onClick={() => scrollToSection('platforms')}
-                    className="inline-flex items-center space-x-2 px-8 py-3 2xl:py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-full font-bold text-white transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl hover:shadow-purple-500/50 justify-center"
-                  >
-                    <span className="text-base 2xl:text-lg">Explore All Platforms</span>
-                    <ArrowRight className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
+      <section className={`relative isolate pt-24 sm:pt-28 md:pt-36 pb-10 sm:pb-14 md:pb-20 px-4 sm:px-8 lg:px-12 ${isDarkTheme ? 'bg-slate-950' : 'bg-[#f7f5ef]'}`}>
+        <div className="absolute inset-0 -z-10 opacity-[0.035]" style={{ backgroundImage: 'radial-gradient(#1e293b 0.7px, transparent 0.7px)', backgroundSize: '18px 18px' }} />
+        <div className="max-w-7xl mx-auto grid lg:grid-cols-[0.95fr_1.05fr] gap-10 lg:gap-16 items-center">
+          <div className="max-w-2xl">
+            <div className={`inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] ${isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}`}>
+              <span className="w-8 h-px bg-current" /> Money, work & community
+            </div>
+            <h1 className={`mt-5 sm:mt-6 font-serif text-4xl sm:text-5xl lg:text-6xl xl:text-7xl leading-[1.04] tracking-tight ${isDarkTheme ? 'text-stone-100' : 'text-slate-900'}`}>
+              A stronger future, <span className={isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}>built together.</span>
+            </h1>
+            <p className={`mt-4 sm:mt-6 max-w-xl text-base md:text-lg leading-7 md:leading-8 ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>
+              Manage money, grow your business and invest with your community in one place.
+            </p>
+            <div className="mt-6 sm:mt-8 flex flex-row gap-2 sm:gap-3">
+              <button onClick={handleCreateAccount} className={`inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 sm:px-6 py-3 sm:py-3.5 text-sm sm:text-base font-semibold shadow-lg transition hover:-translate-y-0.5 ${isDarkTheme ? 'bg-amber-300 text-slate-950 hover:bg-amber-200' : 'bg-emerald-900 text-white hover:bg-emerald-800'}`}>
+                Get started <ArrowRight className="w-4 h-4" />
+              </button>
+              <button onClick={() => scrollToSection('platforms')} className={`inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md border px-3 sm:px-6 py-3 sm:py-3.5 text-sm sm:text-base font-semibold transition ${isDarkTheme ? 'border-slate-600 text-slate-100 hover:bg-slate-800' : 'border-slate-300 text-slate-800 hover:bg-white'}`}>
+                Explore IcanEra <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            <div className={`mt-5 flex items-center gap-2 text-xs sm:text-sm ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>
+              <Shield className={`w-4 h-4 shrink-0 ${isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}`} />
+              Personal money, business tools and community investing
             </div>
           </div>
+          <div className="relative mx-auto w-full max-w-xl">
+            <div className={`absolute -inset-4 md:-inset-6 rounded-[2rem] rotate-2 ${isDarkTheme ? 'bg-emerald-950' : 'bg-[#e9e4d7]'}`} />
+            <div className={`relative overflow-hidden rounded-2xl border shadow-2xl ${isDarkTheme ? 'border-slate-700 bg-slate-900' : 'border-white bg-white'}`}>
+              <div className={`flex items-center justify-between px-5 py-4 border-b ${isDarkTheme ? 'border-slate-700 bg-slate-900' : 'border-slate-100 bg-white'}`}>
+                <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-700"/><span className={`font-serif text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>IcanEra</span></div>
+                <span className={`text-xs uppercase tracking-widest ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>Your financial picture</span>
+              </div>
+              <img src="/images/icanera-wallet.png" alt="IcanEra wallet overview" className="w-full aspect-[1.22] object-cover object-top" />
+              <div className={`grid grid-cols-3 divide-x border-t ${isDarkTheme ? 'divide-slate-700 border-slate-700 bg-slate-900' : 'divide-slate-100 border-slate-100 bg-white'}`}>
+                {[['01', 'Track'], ['02', 'Build'], ['03', 'Grow']].map(([number, label]) => <div key={number} className="px-4 py-4"><span className={`block text-xs ${isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}`}>{number}</span><span className={`mt-1 block text-sm font-medium ${isDarkTheme ? 'text-slate-100' : 'text-slate-800'}`}>{label}</span></div>)}
+              </div>
+            </div>
+            <div className={`absolute -bottom-5 -left-4 md:-left-8 rounded-lg border px-4 py-3 shadow-lg ${isDarkTheme ? 'border-slate-700 bg-slate-800 text-slate-100' : 'border-stone-200 bg-[#fffdf8] text-slate-800'}`}><span className="block text-xs text-slate-500">One place to move forward</span><span className="font-serif text-lg">Your goals, in motion.</span></div>
+          </div>
         </div>
-      </div>
+      </section>
 
       {/* PitchIn — the flagship investment feature, surfaced first so it's
           the very first thing a visitor sees below the hero. Marketplace,
@@ -1313,14 +1275,14 @@ const LandingPage = ({ onGetStarted }) => {
                 {/* Navigation Buttons with Golden Accents */}
                 <button
                   onClick={prevSlide}
-                  className="absolute left-2 md:left-4 top-1/2 transform -translate-y-1/2 z-20 ican-rainbow-fill rounded-full p-2.5 md:p-4 transition group shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-yellow-500/30 hover:scale-110 active:scale-95"
+                  className="absolute left-2 md:left-4 top-1/2 transform -translate-y-1/2 z-20 ican-rainbow-fill rounded-lg p-2.5 md:p-4 transition group shadow-md hover:shadow-lg hover:scale-105 active:scale-95"
                   title="Previous slide"
                 >
                   <ChevronRight className="w-4 h-4 md:w-6 md:h-6 transform rotate-180 group-hover:translate-x-1 transition" />
                 </button>
                 <button
                   onClick={nextSlide}
-                  className="absolute right-2 md:right-4 top-1/2 transform -translate-y-1/2 z-20 ican-rainbow-fill rounded-full p-2.5 md:p-4 transition group shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-yellow-500/30 hover:scale-110 active:scale-95"
+                  className="absolute right-2 md:right-4 top-1/2 transform -translate-y-1/2 z-20 ican-rainbow-fill rounded-lg p-2.5 md:p-4 transition group shadow-md hover:shadow-lg hover:scale-105 active:scale-95"
                   title="Next slide"
                 >
                   <ChevronRight className="w-4 h-4 md:w-6 md:h-6 group-hover:translate-x-1 transition" />
@@ -1834,7 +1796,7 @@ const LandingPage = ({ onGetStarted }) => {
             </div>
 
             <h2 className="text-xl md:text-3xl lg:text-5xl 2xl:text-6xl font-black mb-3 md:mb-4 lg:mb-6 leading-tight drop-shadow-[0_2px_12px_rgba(76,29,149,0.6)]">
-              <span style={rainbowTextStyle}>Ready to Transform Your Capital?</span>
+              <span style={classicAccentStyle}>Ready to Transform Your Capital?</span>
             </h2>
             <p className="text-xs md:text-sm lg:text-xl 2xl:text-2xl text-gray-300 mb-5 md:mb-8 lg:mb-10 2xl:mb-12 leading-relaxed max-w-2xl mx-auto">
               Join the revolution and take control of your financial future today — wherever in the world you're building it from.

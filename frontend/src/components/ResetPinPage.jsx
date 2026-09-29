@@ -23,7 +23,7 @@ const ResetPinPage = ({ onDone }) => {
     : 'personal';
 
   const handleBack = () => {
-    if (window.location.pathname === '/reset-pin') {
+    if (window.location.pathname === '/reset-pin' || new URLSearchParams(window.location.search).get('flow') === 'pin') {
       window.history.replaceState({}, '', '/');
     }
     onDone?.();

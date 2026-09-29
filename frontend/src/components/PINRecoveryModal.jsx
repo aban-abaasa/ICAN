@@ -9,9 +9,9 @@ import { getSupabaseClient } from '../lib/supabase/client';
  * Appears when an account is locked (too many failed PIN attempts) or the
  * user has forgotten their PIN. For a personal/business account (no
  * groupId), offers two alternative paths:
- *  - "Email me a reset link" — self-service, uses Supabase Auth's recovery
- *    email flow. The recovery session lands on ResetPinPage, which updates
- *    the selected account's PIN through an authenticated RPC.
+ *  - "Email me a reset link" — self-service, requests a PIN-specific email
+ *    from the Supabase request-pin-reset Edge Function. The recovery session
+ *    lands on ResetPinPage and updates the selected account through an RPC.
  *  - "Request developer review" — the original flow: submits a request and
  *    waits for a developer to resolve it from the dev panel.
  * Group wallet PINs (groupId set) only offer the developer-review path,
@@ -151,13 +151,15 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
     try {
       const supabase = getSupabaseClient();
       if (!supabase) throw new Error('Supabase is not initialized. Please refresh and try again.');
-      const redirectTo = new URL('/reset-pin', window.location.origin);
+
+      const redirectTo = new URL('/reset-password', window.location.origin);
       redirectTo.searchParams.set('accountType', accountType);
-      redirectTo.searchParams.set('flow', 'supabase');
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(userEmail, {
-        redirectTo: redirectTo.toString()
+      redirectTo.searchParams.set('flow', 'pin');
+      const { data, error: invokeError } = await supabase.functions.invoke('request-pin-reset', {
+        body: { accountType, redirectTo: redirectTo.toString() }
       });
-      if (resetError) throw resetError;
+      if (invokeError) throw invokeError;
+      if (!data?.success) throw new Error(data?.message || 'Failed to send PIN reset link');
 
       setEmailSentTo(userEmail);
       setStep('email_sent');

@@ -367,6 +367,23 @@ verify_jwt = false
 [functions.wallet-login]
 verify_jwt = false
 
+# These authenticate the caller themselves (auth.getUser on the bearer token)
+# and answer the CORS preflight in-function. With gateway JWT verification on,
+# the browser's preflight (which carries no Authorization header) is rejected,
+# so every call from a web app fails with a CORS error.
+[functions.flutterwave-payout]
+verify_jwt = false
+
+[functions.flutterwave-momo-send]
+verify_jwt = false
+
+[functions.flutterwave-banks]
+verify_jwt = false
+
+# Called by Flutterwave (no Supabase JWT); checks its own verif-hash header.
+[functions.flutterwave-transfer-webhook]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
