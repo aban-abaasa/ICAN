@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getSupabaseClient } from '../lib/supabase/client';
+import { getBackendUrl } from '../lib/backendUrl';
 import { offlineAuthManager } from '../lib/offlineAuthManager';
 import { syncManager } from '../lib/syncManager';
 import { uploadToR2, resolveMediaValue } from '../services/r2StorageService';
@@ -430,15 +431,17 @@ export const AuthProvider = ({ children }) => {
 
   // Reset password
   const resetPassword = async (email) => {
-    const supabase = getSupabase();
-    if (!supabase) throw new Error('Supabase not initialized');
-    
-    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+    const backendUrl = getBackendUrl();
+    const response = await fetch(`${backendUrl}/api/email/request-password-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, redirectTo: window.location.origin })
     });
-
-    if (error) throw error;
-    return data;
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || 'Failed to send password reset email.');
+    }
+    return result;
   };
 
   // Update password after recovery link session is established

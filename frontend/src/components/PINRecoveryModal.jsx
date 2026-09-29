@@ -19,7 +19,7 @@ import { getSupabaseClient } from '../lib/supabase/client';
  * Group wallet PINs (groupId set) only offer the developer-review path,
  * since a shared PIN's recovery shouldn't be a single member's call.
  */
-const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, groupName = null }) => {
+const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, groupName = null, initialAccountType = 'personal' }) => {
   const [requestType, setRequestType] = useState('pin_reset'); // 'pin_reset' | 'account_unlock'
   const [reason, setReason] = useState('');
   const [step, setStep] = useState(groupId ? 'request' : 'choose'); // 'choose', 'request', 'pending', 'resolved', 'email_request', 'email_sent'
@@ -30,7 +30,11 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [emailSentTo, setEmailSentTo] = useState(null);
-  const [accountType, setAccountType] = useState('personal'); // 'personal' | 'business' — ignored for group wallets
+  const [accountType, setAccountType] = useState(initialAccountType); // 'personal' | 'business' — ignored for group wallets
+
+  useEffect(() => {
+    if (isOpen && !groupId) setAccountType(initialAccountType);
+  }, [isOpen, groupId, initialAccountType]);
   const pollRef = useRef(null);
 
   useEffect(() => {

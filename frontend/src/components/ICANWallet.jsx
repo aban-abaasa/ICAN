@@ -239,6 +239,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // review" flow (PINRecoveryModal) once a PIN change hits the 3-attempt
   // lockout, instead of leaving the user stuck on a dead-end error.
   const [showPINRecovery, setShowPINRecovery] = useState(false);
+  const [pinRecoveryAccountType, setPinRecoveryAccountType] = useState('personal');
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [agentAccount, setAgentAccount] = useState(null);
   const [agentAccountLoading, setAgentAccountLoading] = useState(false);
@@ -5877,11 +5878,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               </button>
               <button
                 type="button"
-                onClick={() => setShowPINRecovery(true)}
+                onClick={() => { setPinRecoveryAccountType('personal'); setShowPINRecovery(true); }}
                 disabled={!currentUserId}
                 className="w-full flex items-center justify-between p-2 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="text-sm text-gray-300">🆘 Forgot PIN / Locked Out?</span>
+                <span className="text-xs text-orange-400">→</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPinRecoveryAccountType('business'); setShowPINRecovery(true); }}
+                disabled={!currentUserId}
+                className="w-full flex items-center justify-between p-2 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="text-sm text-gray-300">Reset Business Account PIN</span>
                 <span className="text-xs text-orange-400">→</span>
               </button>
             </div>
@@ -7042,6 +7052,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           onClose={() => setShowPINRecovery(false)}
           userId={currentUserId}
           userEmail={userEmail}
+          initialAccountType={pinRecoveryAccountType}
         />
       )}
 
