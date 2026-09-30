@@ -16,6 +16,32 @@ const { createClient } = require('@supabase/supabase-js');
 
 const FX_API_URL = 'https://open.er-api.com/v6/latest/USD';
 
+// Optional fresher source: a Google Sheet "Published to the web" as CSV, with
+// column A = currency code and column B = =GOOGLEFINANCE("CURRENCY:USD"&A2)
+// (units of that currency per 1 USD). GOOGLEFINANCE is the only free official
+// Google Finance access and is delayed up to ~20 min, but that is far fresher
+// than the daily open.er-api.com feed. Sheet values override the daily feed
+// per currency; anything missing/invalid falls back to it.
+const GOOGLE_SHEET_FX_CSV_URL = process.env.GOOGLE_SHEET_FX_CSV_URL;
+
+async function fetchGoogleSheetRates() {
+  if (!GOOGLE_SHEET_FX_CSV_URL) return {};
+  try {
+    const res = await fetch(GOOGLE_SHEET_FX_CSV_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rates = {};
+    for (const line of (await res.text()).split(/\r?\n/)) {
+      const [code, value] = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+      const n = Number(value);
+      if (/^[A-Z]{3}$/.test(code || '') && Number.isFinite(n) && n > 0) rates[code] = n;
+    }
+    return rates;
+  } catch (err) {
+    console.warn('[fx-rates] Google Sheet feed unavailable, using daily feed only:', err.message);
+    return {};
+  }
+}
+
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -41,7 +67,7 @@ async function fetchUsdRates() {
  */
 async function refreshLiveFxRates() {
   const supabase = getSupabase();
-  const usdRates = await fetchUsdRates();
+  const usdRates = { ...(await fetchUsdRates()), ...(await fetchGoogleSheetRates()) };
 
   const { data: currencyRows, error } = await supabase
     .from('ican_currency_rates')
