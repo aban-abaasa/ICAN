@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import ThemeSwitcher from './ThemeSwitcher';
 import icanCoinBlockchainService from '../services/icanCoinBlockchainService';
 
 // Pitchin's real, enforced per-video cap — see PitchVideoRecorder.jsx handleUploadVideo()
@@ -25,7 +26,7 @@ const TIERS = [
     cta: 'Start 30-day free trial',
     popular: false,
     features: [
-      'CMS content posting',
+      'CMMS content posting',
       '2,000 MB Pitchin video storage / business / mo',
       'Employee self-service portal',
       'Staff attendance check-in/out',
@@ -120,18 +121,18 @@ const PricingPage = ({ onBack, onGetStarted }) => {
 
   const activeTier = useMemo(() => tierFor(employees), [employees]);
 
-  const cardBg = isDarkTheme ? 'bg-slate-900/80 border-slate-600/40' : 'bg-white border-slate-300/70';
+  const cardBg = isDarkTheme ? 'bg-slate-900 border-slate-700' : 'bg-white border-stone-200';
   const mutedText = isDarkTheme ? 'text-slate-400' : 'text-slate-600';
   const headingText = isDarkTheme ? 'text-white' : 'text-slate-900';
 
   return (
     <div className={`min-h-screen ${
       isDarkTheme
-        ? 'bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100'
-        : 'bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100 text-slate-900'
+        ? 'bg-slate-950 text-slate-100'
+        : 'bg-stone-50 text-slate-900'
     }`}>
-      <nav className={`sticky top-0 w-full z-50 backdrop-blur-md border-b ${isDarkTheme ? 'bg-slate-950/70 border-slate-700/40' : 'bg-white/70 border-slate-300/70'}`}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center gap-4">
+      <nav className={`sticky top-0 w-full z-50 border-b ${isDarkTheme ? 'bg-slate-950 border-slate-800' : 'bg-white border-stone-200'}`}>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-3 sm:gap-4">
           <button
             onClick={onBack}
             className={`flex items-center gap-1.5 text-sm font-semibold transition-colors ${isDarkTheme ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
@@ -139,7 +140,7 @@ const PricingPage = ({ onBack, onGetStarted }) => {
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
           <div
-            className="text-2xl font-black tracking-tight ml-auto"
+            className="ml-auto text-xl font-black tracking-tight sm:text-2xl"
             style={{
               color: 'var(--color-secondary)',
               textShadow: isDarkTheme ? '0 0 14px rgba(129, 140, 248, 0.35)' : '0 1px 0 rgba(255,255,255,0.5)',
@@ -147,31 +148,32 @@ const PricingPage = ({ onBack, onGetStarted }) => {
           >
             IcanEra
           </div>
+          <ThemeSwitcher />
         </div>
       </nav>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center max-w-2xl mx-auto mb-12">
-          <h1 className={`text-3xl md:text-5xl font-black leading-tight ${headingText}`}>
-            Corporate plans that scale with your team
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-9 sm:py-12 md:py-16">
+        <div className="text-center max-w-3xl mx-auto mb-8 sm:mb-10">
+          <p className={`mb-3 text-xs font-semibold uppercase tracking-[0.16em] ${isDarkTheme ? 'text-emerald-300' : 'text-emerald-800'}`}>IcanEra CMMS plans</p>
+          <h1 className={`font-serif text-3xl font-semibold leading-tight tracking-tight sm:text-4xl md:text-5xl ${headingText}`}>
+            Corporate plans that grow with your team
           </h1>
-          <p className={`mt-4 text-base md:text-lg leading-relaxed ${mutedText}`}>
-            One flat monthly price per plan &mdash; not a per-seat fee. Your team size decides
-            which tier you&rsquo;re on; everyone on that tier gets full access to IcanEra&rsquo;s CMS.
+          <p className={`mt-4 text-base leading-7 sm:text-lg ${mutedText}`}>
+            One monthly price for your team&rsquo;s size, with no per-seat fee. Compare the CMMS tools and support included in each tier.
           </p>
-          <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-emerald-500">
-            30 days free, then billed automatically from your IcanEra Coin wallet
+          <p className={`mt-5 inline-flex max-w-full items-center rounded-full border px-3.5 py-2 text-center text-xs font-semibold leading-5 sm:text-sm ${isDarkTheme ? 'border-emerald-800 bg-emerald-950/50 text-emerald-200' : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}>
+            30-day free trial, then monthly billing from your IcanEra Coin wallet
           </p>
-          <p className={`mt-1 text-xs ${mutedText}`}>
-            Requires at least {STARTING_PRICE_IC} IC already in your business wallet to start &mdash; keeps your first renewal from failing on day 30
+          <p className={`mx-auto mt-2 max-w-xl text-xs leading-5 ${mutedText}`}>
+            Starting a trial requires at least {STARTING_PRICE_IC} IC in your business wallet to cover the first renewal.
           </p>
         </div>
 
         {/* Employee slider */}
-        <div className={`ican-cove-card border p-6 md:p-8 mb-12 ${cardBg}`}>
-          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-            <p className={`text-sm font-bold ${headingText}`}>How many employees will post content?</p>
-            <p className={`text-xs ${mutedText}`}>This decides your tier, not your price per person</p>
+        <div className={`ican-cove-card mb-8 rounded-xl border p-5 sm:p-6 md:p-8 ${cardBg}`}>
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-2">
+            <p className={`text-base font-semibold ${headingText}`}>How many employees are on your team?</p>
+            <p className={`text-xs ${mutedText}`}>Your headcount sets the tier, not a per-person price</p>
           </div>
           <input
             type="range"
@@ -179,17 +181,17 @@ const PricingPage = ({ onBack, onGetStarted }) => {
             max={150}
             value={employees}
             onChange={(e) => setEmployees(parseInt(e.target.value, 10))}
-            className="w-full accent-purple-500"
+            className="w-full accent-emerald-700"
             aria-label="Number of employees"
           />
           <div className={`flex justify-between mt-2 text-xs ${mutedText}`}>
             <span>1</span>
             <span>100+</span>
           </div>
-          <div className={`flex flex-wrap items-center gap-2 mt-5 pt-4 border-t ${isDarkTheme ? 'border-slate-700/50' : 'border-slate-200'}`}>
+          <div className={`mt-5 flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between ${isDarkTheme ? 'border-slate-700' : 'border-stone-200'}`}>
             <p className={`text-sm ${headingText}`}>
               A team of <strong>{employees > 100 ? '100+' : employees}</strong> employees lands in the{' '}
-              <strong className="text-purple-400">{activeTier.name}</strong> plan.
+              <strong className={isDarkTheme ? 'text-emerald-300' : 'text-emerald-800'}>{activeTier.name}</strong> plan.
             </p>
             <p className={`ml-auto text-sm font-semibold ${mutedText}`}>
               {activeTier.price != null ? `${activeTier.price.toFixed(2)} IC/mo flat` : 'Contact sales for a custom quote'}
@@ -208,20 +210,32 @@ const PricingPage = ({ onBack, onGetStarted }) => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {TIERS.map((tier) => {
             const isActive = tier.key === activeTier.key;
+            const tierStyle = {
+              team: isDarkTheme
+                ? { card: 'border-violet-900 bg-violet-950/25', ring: 'ring-violet-500', label: 'text-violet-300', button: 'bg-violet-400 text-slate-950 hover:bg-violet-300' }
+                : { card: 'border-violet-200 bg-violet-50', ring: 'ring-violet-700', label: 'text-violet-800', button: 'bg-violet-800 text-white hover:bg-violet-700' },
+              business: isDarkTheme
+                ? { card: 'border-sky-900 bg-sky-950/25', ring: 'ring-sky-500', label: 'text-sky-300', button: 'bg-sky-400 text-slate-950 hover:bg-sky-300' }
+                : { card: 'border-sky-200 bg-sky-50', ring: 'ring-sky-700', label: 'text-sky-800', button: 'bg-sky-800 text-white hover:bg-sky-700' },
+              corporate: isDarkTheme
+                ? { card: 'border-amber-900 bg-amber-950/25', ring: 'ring-amber-500', label: 'text-amber-300', button: 'bg-amber-300 text-slate-950 hover:bg-amber-200' }
+                : { card: 'border-amber-200 bg-amber-50', ring: 'ring-amber-700', label: 'text-amber-900', button: 'bg-amber-700 text-white hover:bg-amber-800' },
+              contract: isDarkTheme
+                ? { card: 'border-teal-900 bg-teal-950/25', ring: 'ring-teal-500', label: 'text-teal-300', button: 'bg-teal-400 text-slate-950 hover:bg-teal-300' }
+                : { card: 'border-teal-200 bg-teal-50', ring: 'ring-teal-700', label: 'text-teal-900', button: 'bg-teal-800 text-white hover:bg-teal-700' },
+            }[tier.key];
             return (
               <div
                 key={tier.key}
-                className={`relative flex flex-col ican-cove-panel border-2 p-6 ${cardBg} ${
-                  isActive ? 'border-purple-400/70' : isDarkTheme ? 'border-slate-600/40' : 'border-slate-300/70'
-                }`}
+                className={`relative flex flex-col rounded-xl border p-5 sm:p-6 ${tierStyle.card} ${isActive ? `ring-1 ${tierStyle.ring}` : ''}`}
               >
                 {tier.popular && (
-                  <div className="absolute -top-3 left-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[11px] font-bold uppercase tracking-wide px-3 py-1 rounded-full shadow-lg shadow-purple-500/40">
+                  <div className={`absolute -top-3 left-5 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${isDarkTheme ? 'border-slate-700 bg-slate-800 text-slate-200' : 'border-stone-200 bg-white text-slate-700'}`}>
                     Most popular
                   </div>
                 )}
                 {isActive && (
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-purple-400 mb-2">Matches your team</p>
+                  <p className={`mb-2 text-[11px] font-semibold uppercase tracking-wide ${tierStyle.label}`}>Matches your team</p>
                 )}
                 <h3 className={`text-lg font-black ${headingText}`}>{tier.name}</h3>
                 <p className={`text-xs mb-4 ${mutedText}`}>{tier.range}</p>
@@ -252,8 +266,8 @@ const PricingPage = ({ onBack, onGetStarted }) => {
                   onClick={() => onGetStarted?.(tier.key)}
                   className={
                     isActive || tier.popular
-                      ? 'inline-flex items-center justify-center px-4 py-3 rounded-full font-bold text-sm bg-gradient-to-r from-yellow-500 to-yellow-400 hover:from-yellow-400 hover:to-yellow-300 text-slate-900 shadow-lg hover:shadow-xl hover:shadow-yellow-500/50 transition-all duration-300'
-                      : `inline-flex items-center justify-center px-4 py-3 rounded-full font-bold text-sm transition-all duration-300 ${isDarkTheme ? 'bg-slate-800/60 text-slate-100 hover:bg-slate-700/60' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`
+                      ? `inline-flex items-center justify-center rounded-md px-4 py-3 text-sm font-semibold transition-colors ${tierStyle.button}`
+                      : `inline-flex items-center justify-center rounded-md border px-4 py-3 text-sm font-semibold transition-colors ${isDarkTheme ? 'border-slate-700 bg-slate-800 text-slate-100 hover:bg-slate-700' : 'border-stone-200 bg-stone-100 text-slate-800 hover:bg-stone-200'}`
                   }
                 >
                   {tier.cta}

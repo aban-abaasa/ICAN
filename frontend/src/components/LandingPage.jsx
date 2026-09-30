@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown, X, Menu, Image as ImageIcon, Globe, Lock, Send, User, Mail, ThumbsUp } from 'lucide-react';
+import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown, X, Menu, Image as ImageIcon, Globe, Lock, Send, User, Mail, ThumbsUp, Briefcase } from 'lucide-react';
 import ThemeSwitcher from './ThemeSwitcher';
 import { PWAInstallButton } from './PWAInstallButton';
 import CommunityStoriesCarousel from './landing/CommunityStoriesCarousel';
@@ -917,8 +917,8 @@ const LandingPage = ({ onGetStarted }) => {
               IcanEra
             </div>
             <div className="hidden sm:flex flex-col">
-              <p className="text-xs md:text-sm 2xl:text-base font-semibold" style={{ color: isDarkTheme ? '#cbd5e1' : '#334155' }}>Financial Ecosystem</p>
-              <p className="text-xs 2xl:text-sm" style={{ color: isDarkTheme ? '#93c5fd' : '#1d4ed8' }}>Wealth Platform</p>
+              <p className="text-xs md:text-sm 2xl:text-base font-semibold" style={{ color: isDarkTheme ? '#cbd5e1' : '#334155' }}>Global Money &amp; Business</p>
+              <p className="text-xs 2xl:text-sm" style={{ color: isDarkTheme ? '#93c5fd' : '#1d4ed8' }}>Blockchain-integrated ecosystem</p>
             </div>
           </div>
           {/* Small/medium PC widths (md-xl): squeeze the five tabs down to
@@ -1073,25 +1073,25 @@ const LandingPage = ({ onGetStarted }) => {
         <div className="max-w-7xl mx-auto grid lg:grid-cols-[0.95fr_1.05fr] gap-10 lg:gap-16 items-center">
           <div className="max-w-2xl">
             <div className={`inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] ${isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}`}>
-              <span className="w-8 h-px bg-current" /> Money, work & community
+              <span className="w-8 h-px bg-current" /> Run your business. Find your people.
             </div>
             <h1 className={`mt-5 sm:mt-6 font-serif text-4xl sm:text-5xl lg:text-6xl xl:text-7xl leading-[1.04] tracking-tight ${isDarkTheme ? 'text-stone-100' : 'text-slate-900'}`}>
-              A stronger future, <span className={isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}>built together.</span>
+              Your business, <span className={isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}>ready to grow.</span>
             </h1>
             <p className={`mt-4 sm:mt-6 max-w-xl text-base md:text-lg leading-7 md:leading-8 ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>
-              Manage money, grow your business and invest with your community in one place.
+              IcanEra is a blockchain application that supports transactions across the globe with icaneracoin. Manage business and personal finances, employment, hiring and your complete business website in one place.
             </p>
             <div className="mt-6 sm:mt-8 flex flex-row gap-2 sm:gap-3">
               <button onClick={handleCreateAccount} className={`inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 sm:px-6 py-3 sm:py-3.5 text-sm sm:text-base font-semibold shadow-lg transition hover:-translate-y-0.5 ${isDarkTheme ? 'bg-amber-300 text-slate-950 hover:bg-amber-200' : 'bg-emerald-900 text-white hover:bg-emerald-800'}`}>
                 Get started <ArrowRight className="w-4 h-4" />
               </button>
-              <button onClick={() => scrollToSection('platforms')} className={`inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md border px-3 sm:px-6 py-3 sm:py-3.5 text-sm sm:text-base font-semibold transition ${isDarkTheme ? 'border-slate-600 text-slate-100 hover:bg-slate-800' : 'border-slate-300 text-slate-800 hover:bg-white'}`}>
-                Explore IcanEra <ChevronRight className="w-4 h-4" />
+              <button onClick={() => scrollToSection('business-suite')} className={`inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md border px-3 sm:px-6 py-3 sm:py-3.5 text-sm sm:text-base font-semibold transition ${isDarkTheme ? 'border-slate-600 text-slate-100 hover:bg-slate-800' : 'border-slate-300 text-slate-800 hover:bg-white'}`}>
+                Explore business tools <ChevronRight className="w-4 h-4" />
               </button>
             </div>
             <div className={`mt-5 flex items-center gap-2 text-xs sm:text-sm ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>
               <Shield className={`w-4 h-4 shrink-0 ${isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}`} />
-              Personal money, business tools and community investing
+              Global transactions · icaneracoin · Business and employment tools
             </div>
           </div>
           <div className="relative mx-auto w-full max-w-xl">
@@ -1101,12 +1101,12 @@ const LandingPage = ({ onGetStarted }) => {
                 <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-700"/><span className={`font-serif text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>IcanEra</span></div>
                 <span className={`text-xs uppercase tracking-widest ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>Your financial picture</span>
               </div>
-              <img src="/images/icanera-wallet.png" alt="IcanEra wallet overview" className="w-full aspect-[1.22] object-cover object-top" />
+              <img src="/images/IcanEra CMMS.png" alt="IcanEra business management system" className="w-full aspect-[1.22] object-cover object-top" />
               <div className={`grid grid-cols-3 divide-x border-t ${isDarkTheme ? 'divide-slate-700 border-slate-700 bg-slate-900' : 'divide-slate-100 border-slate-100 bg-white'}`}>
-                {[['01', 'Track'], ['02', 'Build'], ['03', 'Grow']].map(([number, label]) => <div key={number} className="px-4 py-4"><span className={`block text-xs ${isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}`}>{number}</span><span className={`mt-1 block text-sm font-medium ${isDarkTheme ? 'text-slate-100' : 'text-slate-800'}`}>{label}</span></div>)}
+                {[['01', 'Manage your team'], ['02', 'Find talent'], ['03', 'Reach customers']].map(([number, label]) => <div key={number} className="px-4 py-4"><span className={`block text-xs ${isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}`}>{number}</span><span className={`mt-1 block text-sm font-medium ${isDarkTheme ? 'text-slate-100' : 'text-slate-800'}`}>{label}</span></div>)}
               </div>
             </div>
-            <div className={`absolute -bottom-5 -left-4 md:-left-8 rounded-lg border px-4 py-3 shadow-lg ${isDarkTheme ? 'border-slate-700 bg-slate-800 text-slate-100' : 'border-stone-200 bg-[#fffdf8] text-slate-800'}`}><span className="block text-xs text-slate-500">One place to move forward</span><span className="font-serif text-lg">Your goals, in motion.</span></div>
+            <div className={`absolute -bottom-5 -left-4 md:-left-8 rounded-lg border px-4 py-3 shadow-lg ${isDarkTheme ? 'border-slate-700 bg-slate-800 text-slate-100' : 'border-stone-200 bg-[#fffdf8] text-slate-800'}`}><span className="block text-xs text-slate-500">One platform for your business</span><span className="font-serif text-lg">From your team to your website.</span></div>
           </div>
         </div>
       </section>
@@ -1115,6 +1115,58 @@ const LandingPage = ({ onGetStarted }) => {
           the very first thing a visitor sees below the hero. Marketplace,
           Professionals, and Live Updates follow right after it, ahead of
           the rest of the page, instead of being buried near the bottom. */}
+      <section id="business-suite" className={`relative px-4 py-14 sm:px-8 md:py-20 lg:px-12 ${isDarkTheme ? 'bg-slate-900' : 'bg-white'}`}>
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-3xl">
+            <p className={`text-xs font-bold uppercase tracking-[0.18em] ${isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}`}>IcanEra business tools</p>
+            <h2 className={`mt-3 text-3xl font-black tracking-tight sm:text-4xl ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>Manage people, finances and your online presence.</h2>
+          </div>
+          <div className="-mx-4 mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0" aria-label="Slide through IcanEra business features">
+            {[
+              { icon: Users, title: 'Manage employment', text: 'Organize staff, roles, attendance, assigned work and compensation in your company workspace.', lightCard: 'border-emerald-200 bg-emerald-50', darkCard: 'border-emerald-900 bg-emerald-950/40', lightIcon: 'bg-emerald-100 text-emerald-800', darkIcon: 'bg-emerald-900/70 text-emerald-300' },
+              { icon: Briefcase, title: 'Source employees', text: 'Publish real job openings, receive applications and connect candidates with your hiring team.', lightCard: 'border-sky-200 bg-sky-50', darkCard: 'border-sky-900 bg-sky-950/40', lightIcon: 'bg-sky-100 text-sky-800', darkIcon: 'bg-sky-900/70 text-sky-300' },
+              { icon: Globe, title: 'Get your complete business website', text: 'Give customers one public place to discover your business, updates, careers, products and contact details.', lightCard: 'border-violet-200 bg-violet-50', darkCard: 'border-violet-900 bg-violet-950/40', lightIcon: 'bg-violet-100 text-violet-800', darkIcon: 'bg-violet-900/70 text-violet-300' },
+              { icon: TrendingUp, title: 'Track business transactions and reports', text: 'Record business income and expenses, follow transactions, and generate tax returns, balance sheets and income statements.', lightCard: 'border-amber-200 bg-amber-50', darkCard: 'border-amber-900 bg-amber-950/40', lightIcon: 'bg-amber-100 text-amber-800', darkIcon: 'bg-amber-900/70 text-amber-300' },
+              { icon: Shield, title: 'Share reports with control', text: 'Share selected reports through password protected links, with options to limit access and set an expiry.', lightCard: 'border-rose-200 bg-rose-50', darkCard: 'border-rose-900 bg-rose-950/40', lightIcon: 'bg-rose-100 text-rose-800', darkIcon: 'bg-rose-900/70 text-rose-300' },
+              { icon: User, title: 'Track personal finances and build a free resume website', text: 'Keep personal finances organized and create a public resume or portfolio page to show your experience to clients and employers.', lightCard: 'border-cyan-200 bg-cyan-50', darkCard: 'border-cyan-900 bg-cyan-950/40', lightIcon: 'bg-cyan-100 text-cyan-800', darkIcon: 'bg-cyan-900/70 text-cyan-300' },
+            ].map(({ icon: Icon, title, text, lightCard, darkCard, lightIcon, darkIcon }) => (
+              <article key={title} className={`w-[min(84vw,23rem)] shrink-0 snap-start rounded-xl border p-5 sm:p-6 ${isDarkTheme ? darkCard : lightCard}`}>
+                <span className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${isDarkTheme ? darkIcon : lightIcon}`}><Icon className="h-5 w-5" /></span>
+                <h3 className={`mt-4 text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{title}</h3>
+                <p className={`mt-2 text-sm leading-6 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>{text}</p>
+              </article>
+            ))}
+          </div>
+          <button onClick={handleCreateAccount} className={`mt-7 inline-flex items-center gap-2 rounded-md px-5 py-3 text-sm font-semibold transition ${isDarkTheme ? 'bg-amber-300 text-slate-950 hover:bg-amber-200' : 'bg-emerald-900 text-white hover:bg-emerald-800'}`}>
+            Set up your business <ArrowRight className="h-4 w-4" />
+          </button>
+          <div className="mt-10">
+            <div className="mb-4">
+              <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>Connected apps</p>
+              <h3 className={`mt-1 text-xl font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>More ways to do business with IcanEra</h3>
+            </div>
+            <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0" aria-label="IcanEra connected apps">
+              <a href="https://supermartkera.icanera.space" target="_blank" rel="noopener noreferrer" className={`group flex min-h-36 min-w-[min(84vw,22rem)] snap-start flex-1 flex-col justify-between rounded-xl border p-5 transition-colors sm:min-w-0 ${isDarkTheme ? 'border-slate-700 bg-slate-950 hover:border-emerald-700' : 'border-stone-200 bg-white hover:border-emerald-700'}`}>
+                <div>
+                  <span className={`text-xs font-medium uppercase tracking-wider ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>Shopping &amp; retail</span>
+                  <h4 className={`mt-2 text-lg font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>SupermartKera</h4>
+                  <p className={`mt-1 text-sm ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Discover stores, shop products and manage supermarket operations.</p>
+                </div>
+                <span className={`mt-4 inline-flex items-center gap-2 text-sm font-semibold ${isDarkTheme ? 'text-emerald-300' : 'text-emerald-800'}`}>Explore SupermartKera <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
+              </a>
+              <a href="https://bodagoera.icanera.space" target="_blank" rel="noopener noreferrer" className={`group flex min-h-36 min-w-[min(84vw,22rem)] snap-start flex-1 flex-col justify-between rounded-xl border p-5 transition-colors sm:min-w-0 ${isDarkTheme ? 'border-slate-700 bg-slate-950 hover:border-cyan-700' : 'border-stone-200 bg-white hover:border-cyan-700'}`}>
+                <div>
+                  <span className={`text-xs font-medium uppercase tracking-wider ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>Transport &amp; delivery</span>
+                  <h4 className={`mt-2 text-lg font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>BodaGoEra</h4>
+                  <p className={`mt-1 text-sm ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Connect with rides, riders and delivery services.</p>
+                </div>
+                <span className={`mt-4 inline-flex items-center gap-2 text-sm font-semibold ${isDarkTheme ? 'text-cyan-300' : 'text-cyan-800'}`}>Explore BodaGoEra <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <PitchinPreview onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
       <DropshipPreview />
       <ProfessionalsCarousel />
@@ -2021,7 +2073,14 @@ const LandingPage = ({ onGetStarted }) => {
                   <span>Email</span>
                 </button>
               </div>
-              <a href="#" className={`transition-all duration-300 flex items-center px-2.5 py-1.5 ican-cove-tab-sm border-2 ${isDarkTheme ? 'hover:text-white border-amber-300/55 bg-amber-900/20 hover:border-amber-200/80 hover:bg-amber-700/35' : 'text-amber-900 border-amber-400/55 bg-amber-100 hover:bg-amber-200/90 hover:border-amber-500/75'}`}>Discord</a>
+              <a href="https://wa.me/256770381864" target="_blank" rel="noopener noreferrer" className={`transition-all duration-300 flex items-center space-x-1 px-2.5 py-1.5 ican-cove-tab-sm border-2 ${isDarkTheme ? 'hover:text-white border-green-300/55 bg-green-900/20 hover:border-green-200/80 hover:bg-green-700/35' : 'text-green-900 border-green-400/55 bg-green-100 hover:bg-green-200/90 hover:border-green-500/75'}`}>
+                <span aria-hidden="true">☏</span>
+                <span>WhatsApp</span>
+              </a>
+              <a href="https://vm.tiktok.com/ZS9DdJXheFCMh-RwwOK/" target="_blank" rel="noopener noreferrer" className={`transition-all duration-300 flex items-center space-x-1 px-2.5 py-1.5 ican-cove-tab-sm border-2 ${isDarkTheme ? 'hover:text-white border-slate-300/55 bg-slate-800/60 hover:border-slate-200/80 hover:bg-slate-700/60' : 'text-slate-900 border-slate-400/55 bg-slate-100 hover:bg-slate-200/90 hover:border-slate-500/75'}`}>
+                <span aria-hidden="true">♪</span>
+                <span>TikTok</span>
+              </a>
             </div>
           </div>
         </div>
@@ -2071,4 +2130,3 @@ const LandingPage = ({ onGetStarted }) => {
 };
 
 export default LandingPage;
-
