@@ -1,0 +1,72 @@
+/* CMMS classic, open-page look (WhatsApp-style): content sits directly on the
+   page. Boxed cards, gradients, shadows and glass blur are flattened to
+   hairline dividers. Scoped to .cmms-clean-shell and skips modals/overlays
+   (anything inside a .fixed layer) so dialogs keep their panel. */
+
+.cmms-clean-shell {
+  padding-left: 0; padding-right: 0;
+  font-family: "Georgia", "Iowan Old Style", "Palatino Linotype", serif;
+  letter-spacing: .005em;
+}
+.cmms-clean-shell button, .cmms-clean-shell input, .cmms-clean-shell select,
+.cmms-clean-shell textarea, .cmms-clean-shell table {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Header: no tinted panel */
+.cmms-clean-shell .cmms-top-header {
+  background: transparent; border-radius: 0; padding: 0 0 12px;
+  border-bottom: 1px solid rgba(148,163,184,.22);
+}
+.cmms-clean-shell .cmms-title {
+  background: none; -webkit-background-clip: initial; background-clip: initial;
+  color: var(--color-text, #f1f5f9); font-weight: 600; letter-spacing: .01em;
+}
+.cmms-clean-shell .cmms-subtitle { color: rgba(148,163,184,.9); }
+
+/* Flatten containers (divs/sections only; never buttons, inputs, badges) */
+.cmms-clean-shell :is(div, section, article, aside, form):not(.fixed):not(.fixed *):is(
+  .glass-card, .dash-card,
+  [class*="rounded-lg"], [class*="rounded-xl"], [class*="rounded-2xl"], [class*="rounded-3xl"]
+):not([class*="rounded-full"]):not(.cmms-keep) {
+  background: transparent !important;
+  background-image: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-color: transparent !important;
+  border-left-width: 0; border-right-width: 0; border-top-width: 0;
+  border-bottom: 1px solid rgba(148,163,184,.16);
+  padding-left: 0 !important; padding-right: 0 !important;
+}
+/* Nested containers: no second divider stack */
+.cmms-clean-shell :is(div, section, article):not(.fixed *):is(.glass-card, [class*="rounded-xl"], [class*="rounded-2xl"], [class*="rounded-lg"]) :is(div, article):not(.fixed *):is(.glass-card, [class*="rounded-xl"], [class*="rounded-2xl"]) {
+  border-bottom-color: rgba(148,163,184,.10);
+}
+/* Last item in a stack needs no divider */
+.cmms-clean-shell :is(div, section, article):not(.fixed *):is(.glass-card, [class*="rounded-xl"], [class*="rounded-2xl"], [class*="rounded-lg"]):last-child {
+  border-bottom-color: transparent;
+}
+
+/* Stat/list rows read as WhatsApp-style rows: hairline hover, no lift */
+.cmms-clean-shell [class*="hover:scale"], .cmms-clean-shell [class*="transform"] { transform: none !important; }
+.cmms-clean-shell :is(div, article):not(.fixed *)[class*="cursor-pointer"]:hover {
+  background: rgba(148,163,184,.07) !important;
+}
+
+/* Headings: calm, classic */
+.cmms-clean-shell :is(h1, h2, h3) { font-weight: 600; letter-spacing: .01em; }
+.cmms-clean-shell :is(h1, h2, h3) [class*="bg-clip-text"], .cmms-clean-shell [class*="bg-clip-text"] {
+  background: none !important; -webkit-text-fill-color: currentColor; color: inherit;
+}
+
+/* Tables: rules only */
+.cmms-clean-shell table { border-collapse: collapse; }
+.cmms-clean-shell :is(th, td) { border-left: 0 !important; border-right: 0 !important; }
+.cmms-clean-shell thead th { font-weight: 600; text-transform: none; letter-spacing: .02em; }
+
+/* Mobile: truly edge-to-edge */
+@media (max-width: 767px) {
+  .cmms-clean-shell { padding-left: 12px; padding-right: 12px; }
+}
