@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import CmmsFold from '../CmmsFold.jsx';
 import { Award, CheckCircle, Loader, Store } from 'lucide-react';
 import cmmsRequisitionBidsService from '../../services/cmmsRequisitionBidsService';
 
@@ -188,16 +189,20 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
   const awardedOrder = awardedBid?.supplier_order_id ? orders.find((order) => order.id === awardedBid.supplier_order_id) : null;
 
   return (
-    <div onClick={stop} className="mt-3 cmms-classic-card p-3 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="cmms-classic-heading text-sm flex items-center gap-1.5"><Store className="w-4 h-4" /> Supplier bids</p>
-        <div className="flex items-center gap-2">
-          <span className={`rounded-md border px-2 py-0.5 text-xs ${status.className}`}>{status.label}</span>
-          {canSource && tender.status === 'open' && (
-            <button disabled={busy} onClick={handleCancel} className="min-h-[36px] px-2 text-xs text-rose-300 hover:text-rose-200 disabled:opacity-50">Cancel request</button>
-          )}
+    <div onClick={stop} className="mt-3">
+    <CmmsFold
+      title="Supplier bids"
+      icon={<Store className="h-4 w-4" aria-hidden="true" />}
+      accent={tender.status === 'awarded' ? 'emerald' : 'teal'}
+      hint={`${status.label}${bids.length ? ` · ${bids.length} bid${bids.length === 1 ? '' : 's'}` : ''}`}
+      hintTone={tender.status === 'awarded' ? 'ok' : undefined}
+      defaultOpen={tender.status !== 'awarded'}
+    >
+      {canSource && tender.status === 'open' && (
+        <div className="flex justify-end">
+          <button disabled={busy} onClick={handleCancel} className="min-h-[36px] px-2 text-xs text-rose-300 hover:text-rose-200 disabled:opacity-50">Cancel request</button>
         </div>
-      </div>
+      )}
 
       <p className="text-xs text-slate-400">
         {tender.deadline ? `${deadlinePassed ? 'Closed' : 'Closes'} ${new Date(tender.deadline).toLocaleDateString()}` : 'No deadline'}
@@ -309,6 +314,7 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
       )}
 
       {error && <p className="text-xs text-rose-300">{error}</p>}
+    </CmmsFold>
     </div>
   );
 };

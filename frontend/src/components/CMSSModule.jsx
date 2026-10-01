@@ -9132,11 +9132,13 @@ const CMMSModule = ({
         )}
         {activeTab === 'requisitions' && getTabs().includes('requisitions') && (
           <>
-            <CMSSupplierPurchasePanel
-              companyId={companyIdToUse}
-              canOrder={hasToolAction('requisitions', 'purchase') || hasToolAction('requisitions', 'create') || hasToolAction('inventory', 'edit')}
-            />
             <RequisitionWorkspace
+              topSlot={
+              <CMSSupplierPurchasePanel
+                companyId={companyIdToUse}
+                canOrder={hasToolAction('requisitions', 'purchase') || hasToolAction('requisitions', 'create') || hasToolAction('inventory', 'edit')}
+              />
+              }
               userRole={userRole}
               user={user}
               companyId={companyIdToUse}
@@ -9154,11 +9156,13 @@ const CMMSModule = ({
         )}
         {activeTab === 'approvals' && getTabs().includes('approvals') && (
           <>
-            <SupplierOrderPaymentApprovals
-              companyId={companyIdToUse}
-              canApprove={hasToolAction('approvals', 'approve')}
-            />
             <RequisitionApprovalsTab
+              topSlot={
+              <SupplierOrderPaymentApprovals
+                companyId={companyIdToUse}
+                canApprove={hasToolAction('approvals', 'approve')}
+              />
+              }
               userRole={userRole}
               canApprove={hasToolAction('approvals', 'approve')}
               companyId={companyIdToUse}

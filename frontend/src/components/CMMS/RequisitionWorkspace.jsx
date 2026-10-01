@@ -113,7 +113,7 @@ const ProductThumb = ({ src, alt, className = '' }) => {
 const INPUT_CLASS = 'w-full rounded-lg border border-white/15 bg-slate-950/45 px-3 py-2.5 text-base sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60';
 const ITEM_INPUT_CLASS = 'w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2.5 text-base sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60';
 
-const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData, userDepartmentId, canView = true, canCreate = false, canSource = false, canViewBids = false }) => {
+const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData, userDepartmentId, canView = true, canCreate = false, canSource = false, canViewBids = false, topSlot = null }) => {
   const [fullPage, setFullPage] = useState(false);
   const [headerInfo, setHeaderInfo] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -538,6 +538,8 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
         )}
         <div className="cmms-ornament" aria-hidden="true" />
       </div>
+
+      {topSlot}
 
       {canCreateRequisition ? (
         <CmmsFold
