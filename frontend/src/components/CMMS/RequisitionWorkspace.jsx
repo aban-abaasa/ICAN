@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ChevronDown, Clipboard, Loader, Package, Plus, Search } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ChevronDown, Clipboard, Info, Loader, Maximize2, Package, Plus, Search } from 'lucide-react';
+import CmmsFold from '../CmmsFold.jsx';
 import cmmsService from '../../lib/supabase/services/cmmsService';
 import cmmsRequisitionBidsService from '../../services/cmmsRequisitionBidsService';
 import RequisitionSupplierBids from './RequisitionSupplierBids';
@@ -113,6 +114,8 @@ const INPUT_CLASS = 'w-full rounded-lg border border-white/15 bg-slate-950/45 px
 const ITEM_INPUT_CLASS = 'w-full rounded-lg border border-white/15 bg-slate-900 px-3 py-2.5 text-base sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60';
 
 const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData, userDepartmentId, canView = true, canCreate = false, canSource = false, canViewBids = false }) => {
+  const [fullPage, setFullPage] = useState(false);
+  const [headerInfo, setHeaderInfo] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [selectedItem, setSelectedItem] = useState('');
   const [itemQuantity, setItemQuantity] = useState(1);
@@ -497,60 +500,53 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
     return { all, pending, completed, totalEstimated };
   }, [userScopedRequisitions]);
 
-  return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Department / ownership scope banner */}
-      <div className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium border ${
-        userRole === 'service-provider'
-          ? 'bg-violet-500/10 border-violet-500/30 text-violet-300'
-          : userDepartmentId
-            ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300'
-            : 'bg-slate-700/40 border-slate-600/40 text-slate-300'
-      }`}>
-        <Clipboard className="w-4 h-4 shrink-0" />
-        {userRole === 'service-provider'
-          ? 'Showing: Your submitted requisitions only'
-          : userDepartmentId
-            ? (() => {
-                const dept = cmmsData.departments?.find((d) => d.id === userDepartmentId);
-                return `Showing: ${dept?.name || 'Your Department'} requisitions only`;
-              })()
-            : 'Showing: All Departments'}
-      </div>
+  const scopeLabel = userRole === 'service-provider'
+    ? 'Showing: Your submitted requisitions only'
+    : userDepartmentId
+      ? `Showing: ${cmmsData.departments?.find((d) => d.id === userDepartmentId)?.name || 'Your Department'} requisitions only`
+      : 'Showing: All Departments';
 
-      {canViewRequisitionList && (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 sm:p-4">
-          <div className="text-[11px] sm:text-xs uppercase tracking-wide text-cyan-300">Total Requisitions</div>
-          <div className="mt-1 sm:mt-2 text-xl sm:text-2xl font-bold text-white">{metrics.all}</div>
+  return (
+    <div className={fullPage ? 'cmms-fullpage space-y-5 fixed inset-0 z-50 overflow-y-auto p-4 md:p-8' : 'space-y-5 cmms-classic-card p-4 md:p-6'}>
+      {/* Header: slim row (medallion, title, actions), live chips, (i) for the scope note */}
+      <div className="cmms-accent-gold space-y-2.5">
+        <div className="flex items-center gap-3">
+          <span className="cmms-medallion"><Clipboard className="h-4 w-4" aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="cmms-classic-heading text-lg leading-tight">Requisitions</h2>
+            <p className="truncate text-xs cmms-classic-muted">{scopeLabel.replace('Showing: ', '')}</p>
+          </div>
+          <button type="button" onClick={() => setHeaderInfo((v) => !v)} aria-expanded={headerInfo} aria-label="About this page" title="What is this page?" className="cmms-info-btn">
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+          {fullPage
+            ? <button type="button" onClick={() => setFullPage(false)} className="cmms-classic-btn-secondary inline-flex !h-auto !min-h-0 flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs"><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back</button>
+            : <button type="button" onClick={() => setFullPage(true)} className="cmms-info-btn" title="Open this tab as a full page" aria-label="Open full page"><Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /></button>}
         </div>
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 sm:p-4">
-          <div className="text-[11px] sm:text-xs uppercase tracking-wide text-amber-300">Open Queue</div>
-          <div className="mt-1 sm:mt-2 text-xl sm:text-2xl font-bold text-white">{metrics.pending}</div>
-        </div>
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 sm:p-4">
-          <div className="text-[11px] sm:text-xs uppercase tracking-wide text-emerald-300">Completed</div>
-          <div className="mt-1 sm:mt-2 text-xl sm:text-2xl font-bold text-white">{metrics.completed}</div>
-        </div>
-        <div className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 p-3 sm:p-4">
-          <div className="text-[11px] sm:text-xs uppercase tracking-wide text-fuchsia-300">Estimated Value</div>
-          <div className="mt-1 sm:mt-2 text-base sm:text-xl font-bold text-white break-words">UGX {metrics.totalEstimated.toLocaleString()}</div>
-        </div>
+        {canViewRequisitionList && (
+          <div className="flex flex-wrap gap-1.5">
+            {[`${metrics.all} total`, `${metrics.pending} open`, `${metrics.completed} completed`, `UGX ${metrics.totalEstimated.toLocaleString()} est.`].map((c, i) => (
+              <span key={c} className="cmms-classic-chip" style={{ animation: `cmms-rise .45s ease ${i * 80}ms both` }}>{c}</span>
+            ))}
+          </div>
+        )}
+        {headerInfo && (
+          <div className="cmms-info cmms-classic-muted space-y-1">
+            <p>{scopeLabel}</p>
+            <p>Raise a requisition for items to buy, track its approvals, and open approved lists to suppliers for bids.</p>
+          </div>
+        )}
+        <div className="cmms-ornament" aria-hidden="true" />
       </div>
-      )}
 
       {canCreateRequisition ? (
-        <section className="cmms-classic-card p-3 sm:p-5">
-          <div className="flex items-start justify-between gap-3 mb-4">
-            <div className="min-w-0">
-              <h3 className="cmms-classic-heading text-base sm:text-lg md:text-xl flex items-center gap-2">
-                <Plus className="w-5 h-5 shrink-0 text-cyan-300" />
-                New Maintenance Requisition
-              </h3>
-              <p className="cmms-classic-muted text-xs mt-1">
-                List the items to buy, from inventory or typed in. Once approved, you can open the list to suppliers for bids.
-              </p>
-            </div>
+        <CmmsFold
+          title="New Maintenance Requisition"
+          icon={<Plus className="h-4 w-4" aria-hidden="true" />}
+          accent="emerald"
+          info="List the items to buy, from inventory or typed in. Once approved, you can open the list to suppliers for bids."
+        >
+          <div className="flex justify-end">
             <button
               onClick={() => {
                 setForm(emptyForm);
@@ -816,7 +812,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
               </button>
             </div>
           </div>
-        </section>
+        </CmmsFold>
       ) : (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -825,12 +821,14 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
       )}
 
       {canViewRequisitionList && (
-      <section className="cmms-classic-card p-3 sm:p-5">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-          <h3 className="cmms-classic-heading text-base sm:text-lg md:text-xl flex items-center gap-2">
-            <Clipboard className="w-5 h-5 shrink-0 text-cyan-300" />
-            Requisition Register
-          </h3>
+      <CmmsFold
+        title="Requisition Register"
+        icon={<Clipboard className="h-4 w-4" aria-hidden="true" />}
+        accent="navy"
+        hint={`${filteredRequisitions.length} shown`}
+        defaultOpen
+      >
+        <div className="flex flex-col md:flex-row md:items-center md:justify-end gap-3">
           <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
@@ -993,7 +991,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
             })}
           </div>
         )}
-      </section>
+      </CmmsFold>
       )}
     </div>
   );
