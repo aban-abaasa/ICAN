@@ -323,7 +323,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Community savings that actually build wealth'
     },
     {
-      image: '/images/IcanEra sacco.png',
+      image: '/images/ICAN era sacco.png',
       title: 'Groups That Work',
       subtitle: 'TRUST Management',
       description: 'Professional SACCO management meets community trust. Transparent fund tracking, voting, and automated distributions.',
@@ -475,7 +475,7 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Group savings & growth'
     },
     {
-      image: '/images/IcanEra sacco.png',
+      image: '/images/ICAN era sacco.png',
       title: 'Trust Management',
       subtitle: 'Collaborative finance',
       description: 'Transparent group funds'

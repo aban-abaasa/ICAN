@@ -449,11 +449,14 @@ export const AuthProvider = ({ children }) => {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase not initialized');
 
-    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+    // Sent through our own Resend-backed Edge Function (Supabase's built-in
+    // mailer isn't configured and returns 500).
+    const { data, error } = await supabase.functions.invoke('request-password-reset', {
+      body: { email, redirectTo: `${window.location.origin}/reset-password` },
     });
 
     if (error) throw error;
+    if (!data?.success) throw new Error(data?.message || 'Failed to send reset email');
     return data;
   };
 

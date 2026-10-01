@@ -64,26 +64,55 @@ const statusBadge = {
 // Tailwind utilities, so that override can't touch them -- same fix
 // CMMSWrittenTestBuilder's WTB_STYLES and the public notice board's
 // NB_STYLES already use.
+//
+// The variables below default to the classic ivory/gold look (CMMS's base
+// surface, see .cmms-classic-card in index.css) and are re-pointed to a dark
+// surface only under the dark-background theme presets -- these used to be
+// hardcoded for a dark backdrop only (near-white text on a ~5%-opacity white
+// surface), which is exactly backwards now that CMMS defaults to an ivory
+// page: white text and a barely-there light-on-light surface both went
+// nearly invisible. Purple (announcement) vs emerald (job) stay the one
+// constant distinction in every mode, same as before.
 const CAP_STYLES = `
 .cap-scope {
   --cap-purple: #a855f7;
   --cap-purple-hover: #9333ea;
-  --cap-purple-text: #d8b4fe;
+  --cap-purple-text: #7c3aed;
   --cap-emerald: #10b981;
   --cap-emerald-hover: #059669;
+  --cap-emerald-text: #047857;
+  --cap-sky-text: #0369a1;
+  --cap-blue-text: #1d4ed8;
+  --cap-indigo-text: #4338ca;
+  --cap-red-text: #dc2626;
+  --cap-amber-text: #b45309;
+  --cap-text: #1e293b;
+  --cap-text-muted: #64748b;
+  --cap-border: rgba(196, 160, 82, 0.3);
+  --cap-surface: #fffdf8;
+  --cap-surface-hover: rgba(196, 160, 82, 0.12);
+  --cap-select-bg: #fffdf8;
+}
+:root[data-theme="dark"] .cap-scope,
+:root[data-theme="purple"] .cap-scope,
+:root[data-theme="green"] .cap-scope,
+:root[data-theme="ocean"] .cap-scope,
+:root[data-theme="sienna"] .cap-scope {
+  --cap-purple-text: #d8b4fe;
   --cap-emerald-text: #6ee7b7;
   --cap-sky-text: #7dd3fc;
   --cap-blue-text: #93c5fd;
   --cap-indigo-text: #a5b4fc;
   --cap-red-text: #fca5a5;
   --cap-amber-text: #fcd34d;
-  --cap-text: #f8fafc;
-  --cap-text-muted: #94a3b8;
-  --cap-border: rgba(255, 255, 255, 0.12);
-  --cap-surface: rgba(255, 255, 255, 0.05);
-  --cap-surface-hover: rgba(255, 255, 255, 0.1);
+  --cap-text: var(--color-text);
+  --cap-text-muted: var(--color-textSecondary);
+  --cap-border: var(--color-border);
+  --cap-surface: var(--color-bgSecondary);
+  --cap-surface-hover: var(--color-primaryLight);
+  --cap-select-bg: var(--color-bgSecondary);
 }
-.cap-title { color: var(--cap-text); }
+.cap-title { color: var(--cap-text); font-family: "Playfair Display", Georgia, "Times New Roman", serif; }
 .cap-text { color: var(--cap-text); }
 .cap-text-muted { color: var(--cap-text-muted); }
 .cap-icon-purple { color: var(--cap-purple); }
@@ -95,22 +124,22 @@ const CAP_STYLES = `
 .cap-tab-active { color: var(--cap-purple) !important; border-color: var(--cap-purple) !important; }
 .cap-tab { color: var(--cap-text-muted); border-color: transparent; }
 .cap-tab:hover { color: var(--cap-text); }
-.cap-card { background: linear-gradient(160deg, rgba(168, 85, 247, 0.08), rgba(255, 255, 255, 0.02)); border-color: rgba(168, 85, 247, 0.28) !important; }
-.cap-post-card { background: var(--cap-surface); border-color: var(--cap-border) !important; }
-.cap-badge-draft { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
-.cap-badge-published { background: rgba(16, 185, 129, 0.2); color: var(--cap-emerald-text); }
-.cap-badge-closed { background: rgba(245, 158, 11, 0.2); color: var(--cap-amber-text); }
-.cap-badge-archived { background: rgba(100, 116, 139, 0.22); color: #94a3b8; }
-.cap-badge-public { background: rgba(56, 189, 248, 0.18); color: var(--cap-sky-text); }
-.cap-badge-internal { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
-.cap-toolbar-btn { background: var(--cap-surface); }
+.cap-card { background: var(--cap-surface); border-color: var(--cap-border) !important; box-shadow: 0 1px 2px rgba(44, 36, 22, 0.05), 0 12px 28px -18px rgba(44, 36, 22, 0.28); }
+.cap-post-card { background: var(--cap-surface); border-color: var(--cap-border) !important; box-shadow: 0 1px 2px rgba(44, 36, 22, 0.05), 0 12px 28px -18px rgba(44, 36, 22, 0.28); }
+.cap-badge-draft { background: rgba(148, 163, 184, 0.2); color: #64748b; }
+.cap-badge-published { background: rgba(16, 185, 129, 0.16); color: var(--cap-emerald-text); }
+.cap-badge-closed { background: rgba(245, 158, 11, 0.16); color: var(--cap-amber-text); }
+.cap-badge-archived { background: rgba(100, 116, 139, 0.18); color: #64748b; }
+.cap-badge-public { background: rgba(14, 165, 233, 0.16); color: var(--cap-sky-text); }
+.cap-badge-internal { background: rgba(148, 163, 184, 0.18); color: #64748b; }
+.cap-toolbar-btn { background: var(--cap-surface); border: 1px solid var(--cap-border); box-shadow: 0 1px 2px rgba(44, 36, 22, 0.05); }
 .cap-toolbar-btn:hover { background: var(--cap-surface-hover); }
 .cap-icon-blue { color: var(--cap-blue-text); }
 .cap-icon-red { color: var(--cap-red-text); }
 .cap-icon-indigo { color: var(--cap-indigo-text); }
 .cap-icon-purple-text { color: var(--cap-purple-text); }
 .cap-icon-emerald-text { color: var(--cap-emerald-text); }
-.cap-select { background: #150f28; border-color: rgba(255, 255, 255, 0.2) !important; color: var(--cap-text); }
+.cap-select { background: var(--cap-select-bg); border-color: var(--cap-border) !important; color: var(--cap-text); }
 `;
 
 const applicationStatusOptions = [

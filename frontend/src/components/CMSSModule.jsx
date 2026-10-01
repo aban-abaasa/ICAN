@@ -8018,19 +8018,19 @@ const CMMSModule = ({
       { id: 'quality', label: 'Quality Control', icon: CheckCircle },
       { id: 'clinical', label: 'Clinical Operations', icon: Briefcase },
       { id: 'pharmacy', label: 'Pharmacy & Supplies', icon: Package },
-      { id: 'attendance', label: '✅ Staff Attendance', icon: CheckCircle },
-      { id: 'visitor-mgmt', label: '🔍 Visitor Management', icon: Users },
-      { id: 'announcements', label: '📢 Announcements & Jobs', icon: Megaphone },
-      { id: 'role-config', label: '🔐 Role Configuration', icon: Users },
-      { id: 'company', label: '🏢 Company', icon: Building },
-      { id: 'departments', label: '🏭 Departments', icon: Building },
-      { id: 'users', label: '👥 Users & Roles', icon: Users },
-      { id: 'inventory', label: '📦 Inventory', icon: Package },
-      { id: 'payroll', label: getToolScope('payroll') === 'own' ? '💰 My Salary' : '💰 Payroll', icon: DollarSign },
-      { id: 'transport', label: '🚐 Transport', icon: Car },
-      { id: 'requisitions', label: '📋 Requisitions', icon: Package },
-      { id: 'reports', label: '📊 Reports', icon: Package },
-      { id: 'tasks', label: '✅ Tasks', icon: Briefcase }
+      { id: 'attendance', label: 'Staff Attendance', icon: CheckCircle },
+      { id: 'visitor-mgmt', label: 'Visitor Management', icon: Search },
+      { id: 'announcements', label: 'Announcements & Jobs', icon: Megaphone },
+      { id: 'role-config', label: 'Role Configuration', icon: Users },
+      { id: 'company', label: 'Company', icon: Building },
+      { id: 'departments', label: 'Departments', icon: Building },
+      { id: 'users', label: 'Users & Roles', icon: Users },
+      { id: 'inventory', label: 'Inventory', icon: Package },
+      { id: 'payroll', label: getToolScope('payroll') === 'own' ? 'My Salary' : 'Payroll', icon: DollarSign },
+      { id: 'transport', label: 'Transport', icon: Car },
+      { id: 'requisitions', label: 'Requisitions', icon: Package },
+      { id: 'reports', label: 'Reports', icon: Package },
+      { id: 'tasks', label: 'Tasks', icon: Briefcase }
     ];
 
     allTabs.splice(
@@ -8040,22 +8040,6 @@ const CMMSModule = ({
     );
 
     const accessibleTabs = allTabs.filter(tab => getTabs().includes(tab.id));
-
-    const tabPalette = {
-      'role-config': { activeBg: 'linear-gradient(135deg, #9333ea, #6b21a8)', inactiveBg: 'rgba(147, 51, 234, 0.14)', border: 'rgba(216, 180, 254, 0.55)', inactiveText: '#e9d5ff' },
-      company: { activeBg: 'linear-gradient(135deg, #2563eb, #1d4ed8)', inactiveBg: 'rgba(37, 99, 235, 0.14)', border: 'rgba(96, 165, 250, 0.55)', inactiveText: '#bfdbfe' },
-      departments: { activeBg: 'linear-gradient(135deg, #0ea5e9, #0284c7)', inactiveBg: 'rgba(14, 165, 233, 0.14)', border: 'rgba(103, 232, 249, 0.55)', inactiveText: '#bae6fd' },
-      users: { activeBg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', inactiveBg: 'rgba(139, 92, 246, 0.14)', border: 'rgba(196, 181, 253, 0.55)', inactiveText: '#ddd6fe' },
-      inventory: { activeBg: 'linear-gradient(135deg, #16a34a, #15803d)', inactiveBg: 'rgba(34, 197, 94, 0.14)', border: 'rgba(134, 239, 172, 0.55)', inactiveText: '#bbf7d0' },
-      attendance: { activeBg: 'linear-gradient(135deg, #1e40af, #1e3a8a)', inactiveBg: 'rgba(30, 64, 175, 0.14)', border: 'rgba(96, 165, 250, 0.55)', inactiveText: '#bfdbfe' },
-      'visitor-mgmt': { activeBg: 'linear-gradient(135deg, #7c3aed, #6d28d9)', inactiveBg: 'rgba(124, 58, 237, 0.14)', border: 'rgba(196, 181, 253, 0.55)', inactiveText: '#ddd6fe' },
-      payroll: { activeBg: 'linear-gradient(135deg, #059669, #047857)', inactiveBg: 'rgba(16, 185, 129, 0.14)', border: 'rgba(110, 231, 183, 0.55)', inactiveText: '#a7f3d0' },
-      transport: { activeBg: 'linear-gradient(135deg, #ea580c, #c2410c)', inactiveBg: 'rgba(249, 115, 22, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fed7aa' },
-      requisitions: { activeBg: 'linear-gradient(135deg, #f59e0b, #d97706)', inactiveBg: 'rgba(245, 158, 11, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fde68a' },
-      approvals: { activeBg: 'linear-gradient(135deg, #f97316, #ea580c)', inactiveBg: 'rgba(249, 115, 22, 0.14)', border: 'rgba(253, 186, 116, 0.55)', inactiveText: '#fed7aa' },
-      reports: { activeBg: 'linear-gradient(135deg, #14b8a6, #0f766e)', inactiveBg: 'rgba(20, 184, 166, 0.14)', border: 'rgba(94, 234, 212, 0.55)', inactiveText: '#99f6e4' },
-      tasks: { activeBg: 'linear-gradient(135deg, #06b6d4, #0891b2)', inactiveBg: 'rgba(6, 182, 212, 0.14)', border: 'rgba(165, 243, 252, 0.55)', inactiveText: '#cffafe' }
-    };
 
     // Track window resize for mobile detection
     useEffect(() => {
@@ -8106,20 +8090,11 @@ const CMMSModule = ({
       return (
         <div className="absolute right-0 top-0 z-40">
           <div className="flex items-center justify-end">
-            {/* Current active tab display */}
-            <div className="hidden text-sm font-semibold" style={{ color: tabPalette[activeTab]?.inactiveText || '#bfdbfe' }}>
-              {accessibleTabs.find(t => t.id === activeTab)?.label || '🏢 Company'}
-            </div>
-
             {/* 3-Dot Menu Button */}
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                className={`p-2.5 rounded-lg transition-all flex items-center justify-center touch-target ${
-                  menuOpen
-                    ? 'bg-blue-500 bg-opacity-40 text-blue-200'
-                    : 'bg-white bg-opacity-10 text-gray-300 active:bg-opacity-20'
-                }`}
+                className="cmms-classic-btn-secondary p-2.5 flex items-center justify-center touch-target"
                 title="Menu"
               >
                 {menuOpen ? (
@@ -8131,39 +8106,28 @@ const CMMSModule = ({
 
               {/* Mobile Dropdown Menu */}
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-2 bg-slate-900/95 border border-slate-600 rounded-lg shadow-2xl z-30 min-w-64 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="px-4 py-3 border-b border-slate-700 text-slate-300 text-xs font-semibold bg-slate-900 rounded-t-lg">
-                    📋 NAVIGATION
+                <div className="cmms-classic-card absolute right-0 top-full mt-2 z-30 min-w-64 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(196, 160, 82, 0.28)' }}>
+                    <span className="cmms-classic-eyebrow">Navigation</span>
                   </div>
-                  <div className="divide-y divide-slate-700">
-                    {accessibleTabs.map(tab => (
-                      (() => {
-                        const palette = tabPalette[tab.id] || tabPalette.company;
-                        return (
-                      <button
-                        key={tab.id}
-                        onClick={() => {
-                          selectCmmsTab(tab.id);
-                          setMenuOpen(false);
-                        }}
-                        className={`
-                          w-full px-4 py-3.5 text-sm font-medium transition-all text-left flex items-center gap-3
-                          ${activeTab === tab.id ? 'text-white' : 'text-slate-200'}
-                        `}
-                        style={activeTab === tab.id
-                          ? { background: palette.activeBg, borderLeft: `3px solid ${palette.border}` }
-                          : { background: palette.inactiveBg }
-                        }
-                      >
-                        <span className="text-lg">{tab.label.split(' ')[0]}</span>
-                        <span className="flex-1">{tab.label}</span>
-                        {activeTab === tab.id && (
-                          <span className="text-white">✓</span>
-                        )}
-                      </button>
-                        );
-                      })()
-                    ))}
+                  <div className="py-1">
+                    {accessibleTabs.map(tab => {
+                      const TabIcon = tab.icon;
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => {
+                            selectCmmsTab(tab.id);
+                            setMenuOpen(false);
+                          }}
+                          className={`cmms-classic-navitem ${activeTab === tab.id ? 'is-active' : ''}`}
+                        >
+                          {TabIcon && <TabIcon className="w-4 h-4 flex-shrink-0" />}
+                          <span className="flex-1">{tab.label}</span>
+                          {activeTab === tab.id && <Check className="w-4 h-4 flex-shrink-0" />}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -8177,25 +8141,22 @@ const CMMSModule = ({
     // trailing "More" item rendered as a dropdown.
 
     const renderTabButton = (tab) => {
-      const palette = tabPalette[tab.id] || tabPalette.company;
+      const TabIcon = tab.icon;
       return (
         <button
           key={tab.id}
           onClick={() => selectCmmsTab(tab.id)}
-          className={`px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap rounded-lg border ${activeTab === tab.id ? 'text-white' : 'hover:brightness-110'}`}
-          style={activeTab === tab.id
-            ? { background: palette.activeBg, borderColor: palette.border, boxShadow: '0 8px 18px rgba(0, 0, 0, 0.2)' }
-            : { background: palette.inactiveBg, borderColor: palette.border, color: palette.inactiveText }
-          }
+          className={`cmms-classic-tab px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm gap-1.5 ${activeTab === tab.id ? 'is-active' : ''}`}
         >
+          {TabIcon && <TabIcon className="w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />}
           {tab.label}
         </button>
       );
     };
 
     return (
-      <div className="mb-6 border-b border-white border-opacity-10 -mx-4 md:-mx-6 lg:-mx-8">
-        <div className="relative flex gap-1 md:gap-2 items-center px-4 md:px-6 lg:px-8 py-2 md:py-3">
+      <div className="mb-6 -mx-4 md:-mx-6 lg:-mx-8">
+        <div className="relative flex gap-1 md:gap-2 items-center px-4 md:px-6 lg:px-8 py-2 md:py-3" style={{ borderBottom: '1px solid rgba(196, 160, 82, 0.28)' }}>
           {/* Visible tabs */}
           <div className="flex gap-1 md:gap-2 items-center min-w-0 overflow-x-auto">
             {visibleTabs.map(tab => renderTabButton(tab))}
@@ -8206,23 +8167,22 @@ const CMMSModule = ({
             <div className="relative flex-shrink-0" ref={moreRef}>
               <button
                 onClick={() => setMoreOpen(o => !o)}
-                className="px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm font-semibold transition-all whitespace-nowrap rounded-lg border flex items-center gap-1.5 hover:brightness-110"
-                style={{ background: 'rgba(255, 255, 255, 0.08)', borderColor: 'rgba(255, 255, 255, 0.25)', color: '#cbd5e1' }}
+                className="cmms-classic-tab px-2 md:px-4 py-2 md:py-3 text-xs md:text-sm gap-1.5"
                 title="More modules"
               >
                 <span>More</span>
-                {activeOverflowTab && <span className="w-1.5 h-1.5 rounded-full bg-blue-400" title={`${activeOverflowTab.label} is active`} />}
+                {activeOverflowTab && <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-primary)' }} title={`${activeOverflowTab.label} is active`} />}
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {moreOpen && (
-                <div className="absolute right-0 top-full mt-2 bg-slate-900/95 border border-slate-600 rounded-lg shadow-2xl z-30 min-w-64 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="px-4 py-3 border-b border-slate-700 text-slate-300 text-xs font-semibold bg-slate-900 rounded-t-lg">
-                    📋 MORE MODULES
+                <div className="cmms-classic-card absolute right-0 top-full mt-2 z-30 min-w-64 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(196, 160, 82, 0.28)' }}>
+                    <span className="cmms-classic-eyebrow">More modules</span>
                   </div>
-                  <div className="divide-y divide-slate-700 max-h-96 overflow-y-auto">
+                  <div className="py-1 max-h-96 overflow-y-auto">
                     {overflowTabs.map(tab => {
-                      const palette = tabPalette[tab.id] || tabPalette.company;
+                      const TabIcon = tab.icon;
                       return (
                         <button
                           key={tab.id}
@@ -8230,16 +8190,11 @@ const CMMSModule = ({
                             selectCmmsTab(tab.id);
                             setMoreOpen(false);
                           }}
-                          className={`w-full px-4 py-3 text-sm font-medium transition-all text-left flex items-center gap-3 ${
-                            activeTab === tab.id ? 'text-white' : 'text-slate-200'
-                          }`}
-                          style={activeTab === tab.id
-                            ? { background: palette.activeBg, borderLeft: `3px solid ${palette.border}` }
-                            : { background: palette.inactiveBg }
-                          }
+                          className={`cmms-classic-navitem ${activeTab === tab.id ? 'is-active' : ''}`}
                         >
+                          {TabIcon && <TabIcon className="w-4 h-4 flex-shrink-0" />}
                           <span className="flex-1">{tab.label}</span>
-                          {activeTab === tab.id && <span className="text-white">✓</span>}
+                          {activeTab === tab.id && <Check className="w-4 h-4 flex-shrink-0" />}
                         </button>
                       );
                     })}
@@ -8698,11 +8653,10 @@ const CMMSModule = ({
           box-shadow: none;
         }
 
-        /* Classic-business shell -- CMMS's fixed ivory/gold identity (see
-           .cmms-page-classic / .cmms-classic-card in index.css, ported from
-           BodaGoEra's customer dashboard). Stays put regardless of the
-           app-wide theme selected elsewhere, same as BodaGoEra's own
-           dashboard always looking like BodaGoEra. */
+        /* Classic-business shell -- the ivory/gold BodaGoEra-style identity
+           (see .cmms-page-classic / .cmms-classic-card in index.css), but
+           still color-mode-aware: dark/purple/green/ocean/sienna swap to
+           that theme's own dark surface instead of forcing ivory. */
         .cmms-clean-shell .cmms-top-header {
           border-bottom: none;
           background: #fffdf8;
@@ -8711,11 +8665,29 @@ const CMMSModule = ({
           border-radius: 16px;
           padding: 14px;
         }
+        :root[data-theme="dark"] .cmms-clean-shell .cmms-top-header,
+        :root[data-theme="purple"] .cmms-clean-shell .cmms-top-header,
+        :root[data-theme="green"] .cmms-clean-shell .cmms-top-header,
+        :root[data-theme="ocean"] .cmms-clean-shell .cmms-top-header,
+        :root[data-theme="sienna"] .cmms-clean-shell .cmms-top-header {
+          background: var(--color-bgSecondary);
+          border-color: var(--color-border);
+          box-shadow: none;
+        }
 
         .cmms-clean-shell .cmms-role-badge {
           background: #fbf3dc;
           border: 1px solid rgba(196, 160, 82, 0.5);
           color: #7a5a12;
+        }
+        :root[data-theme="dark"] .cmms-clean-shell .cmms-role-badge,
+        :root[data-theme="purple"] .cmms-clean-shell .cmms-role-badge,
+        :root[data-theme="green"] .cmms-clean-shell .cmms-role-badge,
+        :root[data-theme="ocean"] .cmms-clean-shell .cmms-role-badge,
+        :root[data-theme="sienna"] .cmms-clean-shell .cmms-role-badge {
+          background: var(--color-primaryLight);
+          border-color: var(--color-primary);
+          color: var(--color-primary);
         }
 
         .cmms-clean-shell .cmms-title {
@@ -8724,10 +8696,20 @@ const CMMSModule = ({
           font-weight: 700;
           letter-spacing: 0.01em;
         }
+        :root[data-theme="dark"] .cmms-clean-shell .cmms-title,
+        :root[data-theme="purple"] .cmms-clean-shell .cmms-title,
+        :root[data-theme="green"] .cmms-clean-shell .cmms-title,
+        :root[data-theme="ocean"] .cmms-clean-shell .cmms-title,
+        :root[data-theme="sienna"] .cmms-clean-shell .cmms-title { color: var(--color-text); }
 
         .cmms-clean-shell .cmms-subtitle {
           color: #64748b;
         }
+        :root[data-theme="dark"] .cmms-clean-shell .cmms-subtitle,
+        :root[data-theme="purple"] .cmms-clean-shell .cmms-subtitle,
+        :root[data-theme="green"] .cmms-clean-shell .cmms-subtitle,
+        :root[data-theme="ocean"] .cmms-clean-shell .cmms-subtitle,
+        :root[data-theme="sienna"] .cmms-clean-shell .cmms-subtitle { color: var(--color-textSecondary); }
 
         @media (max-width: 767px) {
           .cmms-clean-shell .cmms-top-header {

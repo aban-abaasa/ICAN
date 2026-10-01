@@ -241,17 +241,55 @@ html {
 }
 
 /* ==================== Classic business kit (CMMS) ====================
-   The real "classic" look -- ported directly from BodaGoEra's customer
-   dashboard (mybodaguy/frontend ClassicBits.tsx + index.css: ivory page,
-   gold-hairline dividers, serif display headings, gold-trimmed ivory cards).
-   This is CMMS's fixed visual identity -- like letterhead gold, it stays put
-   regardless of which app-wide theme (dark/purple/light/etc.) is selected
-   elsewhere, the same way BodaGoEra's own dashboard always looks like
-   BodaGoEra. Only the actionable bits (primary buttons) pick up
-   var(--color-primary)/var(--color-secondary), so picking Classic Gold/
-   Bronze/Violet/Sky still changes the color of the things you click. */
+   The real "classic" look -- ported from BodaGoEra's customer dashboard
+   (mybodaguy/frontend ClassicBits.tsx + index.css: ivory page, gold-hairline
+   dividers, serif display headings, gold-trimmed ivory cards).
+
+   Color modes still apply: on the light-surfaced presets (light, siennaLight,
+   and the gold/bronze/violet/sky classic presets, all ivory/parchment-toned
+   already) this renders as the full ivory/gold BodaGoEra look. On the
+   dark-surfaced presets (dark, purple, green, ocean, sienna) the surfaces
+   switch to that theme's own --color-bg/--color-bgSecondary/--color-border/
+   --color-text so each still reads as its own distinct color, the same way
+   BodaGoEra's `.dark .classic-card` swaps to a dark surface instead of
+   forcing ivory everywhere -- only the gold trim (eyebrow/label/hairline
+   color) stays constant, since that's the part of "the classic feel" that
+   isn't a light/dark concern. Primary buttons always use var(--color-primary)
+   /var(--color-secondary), so the selected theme's own hue still drives the
+   things you click. */
 .cmms-page-classic {
   background: linear-gradient(180deg, #faf8f3 0%, #f7f0e1 60%, #f3e9d2 100%);
+}
+
+/* The browser's own scrollbar is themed globally (ThemeContext's injected
+   override, keyed off the app-wide theme) to the *app* theme's dark surface
+   -- a bare `::-webkit-scrollbar` selector, so on an ivory CMMS page it
+   rendered as a stray dark bar down the right edge regardless of which
+   classic surface the content itself used. This compound selector
+   (class + pseudo-element) outranks that bare one on specificity alone, no
+   !important needed, so it wins even though the override's <style> tag is
+   injected later in the document. */
+.cmms-page-classic::-webkit-scrollbar,
+.cmms-page-classic ::-webkit-scrollbar {
+  background-color: #f3e9d2;
+}
+.cmms-page-classic::-webkit-scrollbar-thumb,
+.cmms-page-classic ::-webkit-scrollbar-thumb {
+  background-color: rgba(196, 160, 82, 0.55);
+}
+:root[data-theme="dark"] .cmms-page-classic::-webkit-scrollbar, :root[data-theme="dark"] .cmms-page-classic ::-webkit-scrollbar,
+:root[data-theme="purple"] .cmms-page-classic::-webkit-scrollbar, :root[data-theme="purple"] .cmms-page-classic ::-webkit-scrollbar,
+:root[data-theme="green"] .cmms-page-classic::-webkit-scrollbar, :root[data-theme="green"] .cmms-page-classic ::-webkit-scrollbar,
+:root[data-theme="ocean"] .cmms-page-classic::-webkit-scrollbar, :root[data-theme="ocean"] .cmms-page-classic ::-webkit-scrollbar,
+:root[data-theme="sienna"] .cmms-page-classic::-webkit-scrollbar, :root[data-theme="sienna"] .cmms-page-classic ::-webkit-scrollbar {
+  background-color: var(--color-bgSecondary);
+}
+:root[data-theme="dark"] .cmms-page-classic,
+:root[data-theme="purple"] .cmms-page-classic,
+:root[data-theme="green"] .cmms-page-classic,
+:root[data-theme="ocean"] .cmms-page-classic,
+:root[data-theme="sienna"] .cmms-page-classic {
+  background: var(--color-bg);
 }
 
 .cmms-classic-card {
@@ -261,12 +299,26 @@ html {
   border-radius: 18px;
   box-shadow: 0 1px 2px rgba(44, 36, 22, 0.05), 0 12px 28px -18px rgba(44, 36, 22, 0.28);
 }
+:root[data-theme="dark"] .cmms-classic-card,
+:root[data-theme="purple"] .cmms-classic-card,
+:root[data-theme="green"] .cmms-classic-card,
+:root[data-theme="ocean"] .cmms-classic-card,
+:root[data-theme="sienna"] .cmms-classic-card {
+  background: var(--color-bgSecondary);
+  border-color: var(--color-border);
+  box-shadow: 0 12px 28px -18px rgba(0, 0, 0, 0.6);
+}
 
 .cmms-classic-heading {
   color: #1e293b;
   font-family: "Playfair Display", Georgia, "Times New Roman", serif;
   font-weight: 700;
 }
+:root[data-theme="dark"] .cmms-classic-heading,
+:root[data-theme="purple"] .cmms-classic-heading,
+:root[data-theme="green"] .cmms-classic-heading,
+:root[data-theme="ocean"] .cmms-classic-heading,
+:root[data-theme="sienna"] .cmms-classic-heading { color: var(--color-text); }
 
 .cmms-classic-eyebrow {
   display: inline-block;
@@ -276,6 +328,11 @@ html {
   text-transform: uppercase;
   color: #a17c28;
 }
+:root[data-theme="dark"] .cmms-classic-eyebrow,
+:root[data-theme="purple"] .cmms-classic-eyebrow,
+:root[data-theme="green"] .cmms-classic-eyebrow,
+:root[data-theme="ocean"] .cmms-classic-eyebrow,
+:root[data-theme="sienna"] .cmms-classic-eyebrow { color: #e6c980; }
 
 .cmms-classic-label {
   display: block;
@@ -285,14 +342,25 @@ html {
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
+:root[data-theme="dark"] .cmms-classic-label,
+:root[data-theme="purple"] .cmms-classic-label,
+:root[data-theme="green"] .cmms-classic-label,
+:root[data-theme="ocean"] .cmms-classic-label,
+:root[data-theme="sienna"] .cmms-classic-label { color: #e6c980; }
 
 .cmms-classic-muted {
   color: #64748b;
 }
+:root[data-theme="dark"] .cmms-classic-muted,
+:root[data-theme="purple"] .cmms-classic-muted,
+:root[data-theme="green"] .cmms-classic-muted,
+:root[data-theme="ocean"] .cmms-classic-muted,
+:root[data-theme="sienna"] .cmms-classic-muted { color: var(--color-textSecondary); }
 
 /* The fading gold hairline under a section heading (BodaGoEra's
    `.landing-classic-divider`). Give it `flex-1` alongside a heading to get
-   the "serif title + trailing gold line" look. */
+   the "serif title + trailing gold line" look. Stays gold in every mode --
+   it's the one constant accent, like foil on a letterhead. */
 .cmms-classic-hairline {
   background: linear-gradient(90deg, rgba(196, 160, 82, 0.9), rgba(196, 160, 82, 0.9) 80%, transparent);
   height: 1px;
@@ -303,6 +371,11 @@ html {
   padding-top: 1rem;
   border-top: 1px solid rgba(196, 160, 82, 0.28);
 }
+:root[data-theme="dark"] .cmms-classic-divider,
+:root[data-theme="purple"] .cmms-classic-divider,
+:root[data-theme="green"] .cmms-classic-divider,
+:root[data-theme="ocean"] .cmms-classic-divider,
+:root[data-theme="sienna"] .cmms-classic-divider { border-top-color: var(--color-border); }
 
 .cmms-field-list {
   display: grid;
@@ -323,6 +396,11 @@ html {
   padding: 0.6rem 0;
   border-bottom: 1px solid rgba(196, 160, 82, 0.22);
 }
+:root[data-theme="dark"] .cmms-field-row,
+:root[data-theme="purple"] .cmms-field-row,
+:root[data-theme="green"] .cmms-field-row,
+:root[data-theme="ocean"] .cmms-field-row,
+:root[data-theme="sienna"] .cmms-field-row { border-bottom-color: var(--color-border); }
 
 .cmms-field-row dt {
   color: #8a6a1f;
@@ -331,6 +409,11 @@ html {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+:root[data-theme="dark"] .cmms-field-row dt,
+:root[data-theme="purple"] .cmms-field-row dt,
+:root[data-theme="green"] .cmms-field-row dt,
+:root[data-theme="ocean"] .cmms-field-row dt,
+:root[data-theme="sienna"] .cmms-field-row dt { color: #e6c980; }
 
 .cmms-field-row dd {
   color: #1e293b;
@@ -338,6 +421,11 @@ html {
   font-size: 0.9rem;
   margin-top: 0.2rem;
 }
+:root[data-theme="dark"] .cmms-field-row dd,
+:root[data-theme="purple"] .cmms-field-row dd,
+:root[data-theme="green"] .cmms-field-row dd,
+:root[data-theme="ocean"] .cmms-field-row dd,
+:root[data-theme="sienna"] .cmms-field-row dd { color: var(--color-text); }
 
 .cmms-classic-btn-primary {
   background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
@@ -359,12 +447,36 @@ html {
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .cmms-classic-btn-secondary:hover { background: rgba(196, 160, 82, 0.1); border-color: #c4a052; }
+:root[data-theme="dark"] .cmms-classic-btn-secondary,
+:root[data-theme="purple"] .cmms-classic-btn-secondary,
+:root[data-theme="green"] .cmms-classic-btn-secondary,
+:root[data-theme="ocean"] .cmms-classic-btn-secondary,
+:root[data-theme="sienna"] .cmms-classic-btn-secondary {
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+:root[data-theme="dark"] .cmms-classic-btn-secondary:hover,
+:root[data-theme="purple"] .cmms-classic-btn-secondary:hover,
+:root[data-theme="green"] .cmms-classic-btn-secondary:hover,
+:root[data-theme="ocean"] .cmms-classic-btn-secondary:hover,
+:root[data-theme="sienna"] .cmms-classic-btn-secondary:hover {
+  background: var(--color-primaryLight);
+  border-color: var(--color-primary);
+}
 
 .cmms-classic-callout {
   border-radius: 14px;
   padding: 1rem;
   background: #fbf3dc;
   border: 1px solid rgba(196, 160, 82, 0.5);
+}
+:root[data-theme="dark"] .cmms-classic-callout,
+:root[data-theme="purple"] .cmms-classic-callout,
+:root[data-theme="green"] .cmms-classic-callout,
+:root[data-theme="ocean"] .cmms-classic-callout,
+:root[data-theme="sienna"] .cmms-classic-callout {
+  background: var(--color-primaryLight);
+  border-color: var(--color-primary);
 }
 
 .cmms-classic-chip {
@@ -378,6 +490,86 @@ html {
   border: 1px solid rgba(196, 160, 82, 0.4);
   color: #475569;
 }
+:root[data-theme="dark"] .cmms-classic-chip,
+:root[data-theme="purple"] .cmms-classic-chip,
+:root[data-theme="green"] .cmms-classic-chip,
+:root[data-theme="ocean"] .cmms-classic-chip,
+:root[data-theme="sienna"] .cmms-classic-chip {
+  background: var(--color-bgSecondary);
+  border-color: var(--color-border);
+  color: var(--color-textSecondary);
+}
+
+/* Selectable nav/menu item -- e.g. the CMMS module switcher. Button variant
+   of a chip: full-width, left-aligned, with an active fill instead of the
+   inline pill's rounded-999 shape. */
+.cmms-classic-navitem {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+  background: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.cmms-classic-navitem:hover { background: rgba(196, 160, 82, 0.08); }
+.cmms-classic-navitem.is-active {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color: #fff;
+}
+:root[data-theme="dark"] .cmms-classic-navitem,
+:root[data-theme="purple"] .cmms-classic-navitem,
+:root[data-theme="green"] .cmms-classic-navitem,
+:root[data-theme="ocean"] .cmms-classic-navitem,
+:root[data-theme="sienna"] .cmms-classic-navitem { color: var(--color-textSecondary); }
+:root[data-theme="dark"] .cmms-classic-navitem:hover,
+:root[data-theme="purple"] .cmms-classic-navitem:hover,
+:root[data-theme="green"] .cmms-classic-navitem:hover,
+:root[data-theme="ocean"] .cmms-classic-navitem:hover,
+:root[data-theme="sienna"] .cmms-classic-navitem:hover { background: var(--color-primaryLight); }
+:root[data-theme="dark"] .cmms-classic-navitem.is-active,
+:root[data-theme="purple"] .cmms-classic-navitem.is-active,
+:root[data-theme="green"] .cmms-classic-navitem.is-active,
+:root[data-theme="ocean"] .cmms-classic-navitem.is-active,
+:root[data-theme="sienna"] .cmms-classic-navitem.is-active { color: #fff; }
+
+/* Pill tab variant -- desktop module switcher. */
+.cmms-classic-tab {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  border-radius: 10px;
+  border: 1px solid rgba(196, 160, 82, 0.35);
+  background: #fffdf8;
+  color: #475569;
+  font-weight: 600;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.cmms-classic-tab:hover { border-color: #c4a052; }
+.cmms-classic-tab.is-active {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--color-primary) 60%, transparent);
+}
+:root[data-theme="dark"] .cmms-classic-tab,
+:root[data-theme="purple"] .cmms-classic-tab,
+:root[data-theme="green"] .cmms-classic-tab,
+:root[data-theme="ocean"] .cmms-classic-tab,
+:root[data-theme="sienna"] .cmms-classic-tab {
+  background: var(--color-bgSecondary);
+  border-color: var(--color-border);
+  color: var(--color-textSecondary);
+}
+:root[data-theme="dark"] .cmms-classic-tab.is-active,
+:root[data-theme="purple"] .cmms-classic-tab.is-active,
+:root[data-theme="green"] .cmms-classic-tab.is-active,
+:root[data-theme="ocean"] .cmms-classic-tab.is-active,
+:root[data-theme="sienna"] .cmms-classic-tab.is-active { color: #fff; }
 
 /* Every CMMS form field still uses the old "white-translucent-on-dark"
    idiom (bg-white/10, border-white/20, text-white) from before the classic
@@ -870,3 +1062,27 @@ html {
 .bg-gradient-to-b[class*="from-slate"] {
   background: linear-gradient(to bottom, var(--color-bg), var(--color-bgSecondary)) !important;
 }
+/* Classic form field + tone text for the CMMS employee self-service screen.
+   Ivory field with a gold hairline in the classic theme; follows the theme
+   tokens on the dark presets. */
+.cmms-classic-field {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(196, 160, 82, 0.45);
+  background: #fff;
+  color: #1e293b;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+.cmms-classic-field:focus { outline: none; border-color: #c4a052; box-shadow: 0 0 0 3px rgba(196, 160, 82, 0.2); }
+.cmms-tone-ok { color: #047857; }
+.cmms-tone-warn { color: #b45309; }
+.cmms-tone-bad { color: #dc2626; }
+:root[data-theme="dark"] .cmms-classic-field,
+:root[data-theme="purple"] .cmms-classic-field,
+:root[data-theme="green"] .cmms-classic-field,
+:root[data-theme="ocean"] .cmms-classic-field,
+:root[data-theme="sienna"] .cmms-classic-field { background: var(--color-bg); color: var(--color-text); border-color: var(--color-border); }
+:root[data-theme="dark"] .cmms-tone-ok, :root[data-theme="purple"] .cmms-tone-ok, :root[data-theme="green"] .cmms-tone-ok, :root[data-theme="ocean"] .cmms-tone-ok, :root[data-theme="sienna"] .cmms-tone-ok { color: #6ee7b7; }
+:root[data-theme="dark"] .cmms-tone-warn, :root[data-theme="purple"] .cmms-tone-warn, :root[data-theme="green"] .cmms-tone-warn, :root[data-theme="ocean"] .cmms-tone-warn, :root[data-theme="sienna"] .cmms-tone-warn { color: #fcd34d; }
+:root[data-theme="dark"] .cmms-tone-bad, :root[data-theme="purple"] .cmms-tone-bad, :root[data-theme="green"] .cmms-tone-bad, :root[data-theme="ocean"] .cmms-tone-bad, :root[data-theme="sienna"] .cmms-tone-bad { color: #fca5a5; }

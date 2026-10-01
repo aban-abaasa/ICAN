@@ -350,10 +350,10 @@ export const getMyPayrollApprovals = async () => {
 // IcanEra business wallet — on-chain ICAN coin, same as any other payroll
 // payment), the employee separately confirms they received it, and only
 // then does it become recoverable from a draft payroll run.
-export const requestSalaryAdvance = async (cmmsCompanyId, amount, currency = null, reason = null) => {
+export const requestSalaryAdvance = async (cmmsCompanyId, amount, currency = null, reason = null, installments = 1, repaymentNote = null) => {
   const sb = db();
   if (!sb) return { success: false, error: 'Supabase is not configured.' };
-  const { data, error } = await sb.rpc('request_salary_advance', { p_cmms_company_id: cmmsCompanyId, p_amount: amount, p_currency: currency, p_reason: reason });
+  const { data, error } = await sb.rpc('request_salary_advance', { p_cmms_company_id: cmmsCompanyId, p_amount: amount, p_currency: currency, p_reason: reason, p_installments: installments, p_repayment_note: repaymentNote || null });
   return error ? { success: false, error: error.message } : { success: true, data };
 };
 

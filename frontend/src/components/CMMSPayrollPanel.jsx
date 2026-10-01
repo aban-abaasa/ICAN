@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock3, DollarSign, Loader, Trash2, UploadCloud, WalletCards } from 'lucide-react';
+import { ChevronDown, Clock3, DollarSign, Loader, Trash2, UploadCloud, WalletCards } from 'lucide-react';
 import { applyAttendanceToPayroll, applyLeavePayrollDeductions, applySalaryAdvanceRecovery, createBusinessPayrollPeriod, decideSalaryAdvance, getAttendanceCheckoutPayConfirmations, getBusinessAccessMembers, getBusinessCompensation, getBusinessPayrollEntries, getBusinessPayrollPeriods, getCompanySalaryAdvances, getPendingRewardRedemptions, getRewardsSettings, payRewardRedemption, paySalaryAdvance, recordPayrollPayment, resolveEmployeeAuthIds, saveBusinessCompensation, saveRewardsSettings, syncBusinessPayrollDraftStaff } from '../services/businessManagementService';
 import { ICAN_TO_UGX, transferFromBusinessWallet } from '../services/icanWalletService';
 import { supabase } from '../lib/supabase/client';
@@ -9,6 +9,159 @@ import { EMPLOYEE_DOCUMENT_CATEGORIES, addEmployeeDocument, getApplicationDocume
 
 const today = new Date().toISOString().slice(0, 10);
 const amount = (value, currency = 'UGX') => `${currency} ${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
+// Self-contained status-tone palette instead of plain Tailwind color
+// utilities (bg-emerald-600, text-red-300, ...) -- the app's
+// ThemeContext.jsx repaints several of those stock classes (with
+// !important) to a single mapped "primary" color based on whichever theme
+// is active, which would otherwise flatten "paid" (green), "pending"
+// (amber) and "rejected" (red) into one indistinguishable color. None of
+// the pay- classnames below are stock Tailwind utilities, so that override
+// can't reach them -- same fix CMMSAnnouncementsPanel's CAP_STYLES and
+// CMMSWrittenTestBuilder's WTB_STYLES already use. Defaults to readable
+// tones on the classic ivory surface; re-pointed for the dark-background
+// theme presets.
+const PAYROLL_STYLES = `
+.payroll-scope {
+  --pay-success-bg: rgba(16, 185, 129, 0.15);
+  --pay-success-text: #047857;
+  --pay-info-bg: rgba(14, 165, 233, 0.15);
+  --pay-info-text: #0369a1;
+  --pay-warning-bg: rgba(245, 158, 11, 0.15);
+  --pay-warning-text: #b45309;
+  --pay-danger-bg: rgba(239, 68, 68, 0.13);
+  --pay-danger-text: #dc2626;
+  --pay-neutral-bg: rgba(100, 116, 139, 0.15);
+  --pay-neutral-text: #475569;
+}
+:root[data-theme="dark"] .payroll-scope,
+:root[data-theme="purple"] .payroll-scope,
+:root[data-theme="green"] .payroll-scope,
+:root[data-theme="ocean"] .payroll-scope,
+:root[data-theme="sienna"] .payroll-scope {
+  --pay-success-bg: rgba(16, 185, 129, 0.18);
+  --pay-success-text: #6ee7b7;
+  --pay-info-bg: rgba(14, 165, 233, 0.18);
+  --pay-info-text: #7dd3fc;
+  --pay-warning-bg: rgba(245, 158, 11, 0.18);
+  --pay-warning-text: #fcd34d;
+  --pay-danger-bg: rgba(239, 68, 68, 0.18);
+  --pay-danger-text: #fca5a5;
+  --pay-neutral-bg: rgba(148, 163, 184, 0.18);
+  --pay-neutral-text: #cbd5e1;
+}
+.pay-badge { display: inline-flex; align-items: center; gap: .25rem; border-radius: 999px; padding: .25rem .6rem; font-size: .7rem; font-weight: 700; white-space: nowrap; }
+.pay-badge-success { background: var(--pay-success-bg); color: var(--pay-success-text); }
+.pay-badge-info { background: var(--pay-info-bg); color: var(--pay-info-text); }
+.pay-badge-warning { background: var(--pay-warning-bg); color: var(--pay-warning-text); }
+.pay-badge-danger { background: var(--pay-danger-bg); color: var(--pay-danger-text); }
+.pay-badge-neutral { background: var(--pay-neutral-bg); color: var(--pay-neutral-text); }
+.pay-notice { border-radius: 10px; padding: .6rem .9rem; font-size: .85rem; border: 1px solid; }
+.pay-notice-success { border-color: var(--pay-success-text); background: var(--pay-success-bg); color: var(--pay-success-text); }
+.pay-notice-danger { border-color: var(--pay-danger-text); background: var(--pay-danger-bg); color: var(--pay-danger-text); }
+.pay-btn-approve { background: #10b981; color: #fff; border-radius: 10px; font-weight: 700; }
+.pay-btn-approve:hover { background: #059669; }
+.pay-btn-approve:disabled { opacity: .5; }
+.pay-btn-reject { background: transparent; border: 1px solid #ef4444; color: #dc2626; border-radius: 10px; font-weight: 700; }
+.pay-btn-reject:hover { background: rgba(239, 68, 68, 0.08); }
+.pay-btn-reject:disabled { opacity: .5; }
+:root[data-theme="dark"] .payroll-scope .pay-btn-reject,
+:root[data-theme="purple"] .payroll-scope .pay-btn-reject,
+:root[data-theme="green"] .payroll-scope .pay-btn-reject,
+:root[data-theme="ocean"] .payroll-scope .pay-btn-reject,
+:root[data-theme="sienna"] .payroll-scope .pay-btn-reject { color: #fca5a5; border-color: #fca5a5; }
+.pay-table th { text-align: left; padding: .5rem; font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--pay-neutral-text); border-bottom: 1px solid rgba(196, 160, 82, 0.28); }
+:root[data-theme="dark"] .payroll-scope .pay-table th,
+:root[data-theme="purple"] .payroll-scope .pay-table th,
+:root[data-theme="green"] .payroll-scope .pay-table th,
+:root[data-theme="ocean"] .payroll-scope .pay-table th,
+:root[data-theme="sienna"] .payroll-scope .pay-table th { border-bottom-color: var(--color-border); }
+.pay-table td { padding: .5rem; border-bottom: 1px solid rgba(196, 160, 82, 0.16); }
+:root[data-theme="dark"] .payroll-scope .pay-table td,
+:root[data-theme="purple"] .payroll-scope .pay-table td,
+:root[data-theme="green"] .payroll-scope .pay-table td,
+:root[data-theme="ocean"] .payroll-scope .pay-table td,
+:root[data-theme="sienna"] .payroll-scope .pay-table td { border-bottom-color: var(--color-border); }
+.pay-field { margin-top: .25rem; width: 100%; }
+.pay-row { border-radius: 10px; border: 1px solid rgba(196, 160, 82, 0.26); padding: .75rem; }
+:root[data-theme="dark"] .payroll-scope .pay-row,
+:root[data-theme="purple"] .payroll-scope .pay-row,
+:root[data-theme="green"] .payroll-scope .pay-row,
+:root[data-theme="ocean"] .payroll-scope .pay-row,
+:root[data-theme="sienna"] .payroll-scope .pay-row { border-color: var(--color-border); }
+`;
+
+const BADGE_TONE_CLASS = { success: 'pay-badge-success', info: 'pay-badge-info', warning: 'pay-badge-warning', danger: 'pay-badge-danger', neutral: 'pay-badge-neutral' };
+function StatusBadge({ tone = 'neutral', title, children }) {
+  return <span className={`pay-badge ${BADGE_TONE_CLASS[tone] || BADGE_TONE_CLASS.neutral}`} title={title}>{children}</span>;
+}
+
+function Banner({ error, notice }) {
+  if (!error && !notice) return null;
+  return error
+    ? <p className="pay-notice pay-notice-danger" role="alert">{error}</p>
+    : <p className="pay-notice pay-notice-success" role="status">{notice}</p>;
+}
+
+// Accordion wrapper used throughout this page so a long stack of setup
+// forms and review tables reads as a set of clearly labeled, individually
+// collapsible sections instead of one long undifferentiated scroll --
+// especially on a phone, where every one of these forms used to render
+// fully expanded whether or not it was the thing someone opened Payroll to
+// do today.
+function CollapsibleSection({ title, subtitle, icon, badge, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const bodyId = useRef(`pay-section-${Math.random().toString(36).slice(2)}`).current;
+  return (
+    <section className="cmms-classic-divider">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-controls={bodyId}
+        className="flex w-full items-center justify-between gap-3 text-left"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {icon}
+          <span className="min-w-0">
+            <span className="cmms-classic-heading block">{title}</span>
+            {subtitle && <span className="cmms-classic-muted block text-xs mt-0.5">{subtitle}</span>}
+          </span>
+        </span>
+        <span className="flex flex-shrink-0 items-center gap-2">
+          {badge}
+          <ChevronDown className={`h-4 w-4 cmms-classic-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </span>
+      </button>
+      {open && <div id={bodyId} className="mt-4">{children}</div>}
+    </section>
+  );
+}
+
+const PAYROLL_TABS = [
+  { id: 'payroll', label: 'Payroll runs' },
+  { id: 'staff', label: 'Staff on payroll' },
+  { id: 'my-salary', label: 'My Salary' },
+  { id: 'files', label: 'Employee files', requiresFiles: true },
+];
+function PayrollTabs({ current, onChange, canViewFiles, staffCount }) {
+  return (
+    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Payroll sections">
+      {PAYROLL_TABS.filter(tab => !tab.requiresFiles || canViewFiles).map(tab => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={current === tab.id}
+          onClick={() => onChange(tab.id)}
+          className={`cmms-classic-tab px-3 py-2 text-sm ${current === tab.id ? 'is-active' : ''}`}
+        >
+          {tab.label}{tab.id === 'staff' && staffCount != null ? ` (${staffCount})` : ''}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function CMMSPayrollPanel({ companyProfile, users = [], currentUser, userRole, isCreator, canCreate = false, canEdit = false, canApprove = false, canView = false, attendancePayrollOnly = false }) {
   const businessProfileId = companyProfile?.pichin_business_profile_id;
@@ -176,65 +329,451 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], currentUs
   const payAdvance = async e => { e.preventDefault(); if (!canApprove) return say('Your role cannot pay salary advances.', true); const advance = advances.find(x => x.id === advancePayment.advance); if (!advance) return say('Choose an approved advance to pay.', true); setBusy(true); try { let transactionId = null; if (advancePayment.method === 'ican') { if (advance.currency !== 'UGX') throw new Error('IcanEra wallet payroll currently supports UGX only. Record another currency as cash.'); if (!advancePayment.pin) throw new Error('Enter the business-wallet PIN.'); const transfer = await transferFromBusinessWallet({ businessProfileId, recipientUserId: advance.employee_user_id, amount: Number(advance.amount) / ICAN_TO_UGX, note: `Salary advance`, referenceId: advance.id, pin: advancePayment.pin }); transactionId = transfer.transaction_id || transfer.id || null; } const result = await paySalaryAdvance({ advanceId: advance.id, paymentMethod: advancePayment.method, walletTransactionId: transactionId }); if (!result.success) throw new Error(result.error); say(advancePayment.method === 'ican' ? 'Advance sent through the IcanEra business wallet. The employee still needs to confirm receipt.' : 'Cash advance recorded as paid. The employee still needs to confirm receipt.'); setAdvancePayment({ advance: '', method: 'cash', pin: '' }); await load(); } catch (err) { say(err.message || 'Payment failed.', true); } setBusy(false); };
   const recoverAdvances = async () => { if (!canApprove) return say('Your role cannot recover salary advances.', true); if (!periodId) return say('Select a payroll period.', true); setBusy(true); const result = await applySalaryAdvanceRecovery(periodId); result.success ? say(result.data.length ? `Salary advance recovery applied for ${result.data.length} employee(s).` : 'No confirmed salary advances to recover in this run.') : say(result.error, true); if (result.success) { await loadEntries(periodId); await load(); } setBusy(false); };
   const applyLeave = async () => { if (!canEdit) return say('Your role cannot calculate or edit payroll.', true); if (!periodId) return say('Select a payroll period.', true); setBusy(true); const result = await applyLeavePayrollDeductions(periodId); result.success ? say(result.data.length ? `Unpaid-leave deductions applied for ${result.data.length} employee(s).` : 'No approved unpaid leave to deduct in this run.') : say(result.error, true); if (result.success) await loadEntries(periodId); setBusy(false); };
+
   if (!businessProfileId) return <div className="cmms-classic-callout p-6 text-sm">Link this CMMS company to its Pichin business profile before using payroll.</div>;
-  if (payrollTab === 'my-salary') return <div className="space-y-5 cmms-classic-card p-4 md:p-6">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><DollarSign className="h-6 w-6 text-emerald-400" /><div><h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2><p className="text-sm text-slate-400">Your own salary and payroll records</p></div></div><div className="flex gap-2"><button type="button" onClick={() => setPayrollTab('payroll')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-medium">Payroll runs</button><button type="button" onClick={() => setPayrollTab('staff')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-medium">Staff on payroll</button>{canViewFiles && <button type="button" onClick={() => setPayrollTab('files')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-medium">Employee files</button>}</div></div>
-    <CMMSEmployeeSelfService companyProfile={companyProfile} mode="payroll" />
-  </div>;
-  if (payrollTab === 'staff') return <div className="space-y-5 cmms-classic-card p-4 md:p-6">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><DollarSign className="h-6 w-6 text-emerald-400" /><div><h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2><p className="text-sm text-slate-400">Saved staff pay allocations for {companyProfile.company_name}</p></div></div><div className="flex gap-2"><button type="button" onClick={() => setPayrollTab('payroll')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-medium">Payroll runs</button><button type="button" onClick={() => setPayrollTab('my-salary')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-medium">My Salary</button>{canViewFiles && <button type="button" onClick={() => setPayrollTab('files')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-medium">Employee files</button>}</div></div>
-    {error && <p className="rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{error}</p>}
-    {notice && <p className="rounded-lg border border-emerald-800/50 bg-emerald-900/20 p-2 text-sm text-emerald-300">{notice}</p>}
-    <section className="cmms-classic-divider"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h3 className="cmms-classic-heading">Staff on payroll</h3><p className="mt-1 text-xs text-slate-400">Every saved on-pay staff allocation is included in the current draft, except daily-paid staff, who are settled one day at a time at check-out. Progress shows where each staff member is in that payroll.</p></div><span className="rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-300">{staffOnPayroll.length} saved</span></div>{staffOnPayroll.length === 0 ? <p className="rounded-lg border border-dashed border-slate-700 p-5 text-sm text-slate-400">No staff pay allocations saved yet. Add a salary profile from Payroll runs.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-800 text-xs uppercase text-slate-500"><tr><th className="p-2">Staff</th><th className="p-2">Role</th><th className="p-2">Pay period</th><th className="p-2">Allocated pay</th><th className="p-2">Employment</th><th className="p-2">Payroll progress</th><th className="p-2"></th></tr></thead><tbody>{staffOnPayroll.map(profile => <tr key={profile.id} className="border-b border-slate-800/70"><td className="p-2 font-medium text-slate-100">{profile.employee.name}</td><td className="p-2 text-slate-400">{profile.employee.role || 'Employee'}</td><td className="p-2 capitalize text-slate-300">{String(profile.pay_frequency || profile.pay_type || 'monthly').replace('_', ' ')}</td><td className="p-2 font-semibold text-emerald-300">{amount(profile.base_salary, profile.currency)}</td><td className="p-2"><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-300">{profile.payroll_status === 'on_pay' ? 'On pay' : profile.payroll_status === 'on_hold' ? 'On hold' : 'Ended'}</span></td><td className="p-2">{profile.dailySummary ? <span className={`rounded-full px-2 py-1 text-xs font-medium ${profile.dailySummary.confirmedDays === 0 ? 'bg-slate-500/10 text-slate-300' : profile.dailySummary.unpaidDays > 0 ? 'bg-amber-500/10 text-amber-300' : 'bg-emerald-500/10 text-emerald-300'}`} title={profile.dailySummary.lastConfirmedAt ? `Last confirmed at check-out: ${new Date(profile.dailySummary.lastConfirmedAt).toLocaleString()}` : 'No check-out settlement recorded yet this month'}>{profile.dailySummary.confirmedDays === 0 ? 'No check-out settled yet this month' : `${profile.dailySummary.paidDays}/${profile.dailySummary.confirmedDays} day(s) paid at check-out`}</span> : <span className={`rounded-full px-2 py-1 text-xs font-medium ${profile.payroll_progress === 'paid' ? 'bg-emerald-500/10 text-emerald-300' : profile.payroll_progress === 'approved' ? 'bg-sky-500/10 text-sky-300' : 'bg-amber-500/10 text-amber-300'}`}>{profile.payroll_progress ? profile.payroll_progress.replace('_', ' ') : 'Saved / awaiting draft'}</span>}</td><td className="p-2 text-right">{canEdit && profile.employee_user_id && <button type="button" onClick={() => { pickEmployeeForSalary(profile.employee_user_id); setPayrollTab('payroll'); }} className="rounded-lg border border-slate-600 px-2 py-1 text-xs font-medium text-slate-200 hover:bg-slate-800">Edit</button>}</td></tr>)}</tbody></table></div>}</section>
-  </div>;
+
+  const payrollStatusTone = status => status === 'on_pay' ? 'success' : status === 'on_hold' ? 'warning' : 'neutral';
+  const payrollStatusLabel = status => status === 'on_pay' ? 'On pay' : status === 'on_hold' ? 'On hold' : 'Ended';
+  const progressTone = progress => progress === 'paid' ? 'success' : progress === 'approved' ? 'info' : 'warning';
+  const advanceTone = status => status === 'rejected' ? 'danger' : status === 'paid' || status === 'confirmed' ? 'success' : status === 'approved' ? 'info' : 'warning';
+
+  if (payrollTab === 'my-salary') return (
+    <div className="payroll-scope space-y-5 cmms-classic-card p-4 md:p-6">
+      <style>{PAYROLL_STYLES}</style>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <DollarSign className="h-6 w-6" style={{ color: 'var(--color-primary)' }} aria-hidden="true" />
+          <div><h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2><p className="cmms-classic-muted text-sm">Your own salary and payroll records</p></div>
+        </div>
+        <PayrollTabs current={payrollTab} onChange={setPayrollTab} canViewFiles={canViewFiles} staffCount={null} />
+      </div>
+      <CMMSEmployeeSelfService companyProfile={companyProfile} mode="payroll" />
+    </div>
+  );
+
+  if (payrollTab === 'staff') return (
+    <div className="payroll-scope space-y-5 cmms-classic-card p-4 md:p-6">
+      <style>{PAYROLL_STYLES}</style>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <DollarSign className="h-6 w-6" style={{ color: 'var(--color-primary)' }} aria-hidden="true" />
+          <div><h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2><p className="cmms-classic-muted text-sm">Saved staff pay allocations for {companyProfile.company_name}</p></div>
+        </div>
+        <PayrollTabs current={payrollTab} onChange={setPayrollTab} canViewFiles={canViewFiles} staffCount={staffOnPayroll.length} />
+      </div>
+      <Banner error={error} notice={notice} />
+      <section className="cmms-classic-divider">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div><h3 className="cmms-classic-heading">Staff on payroll</h3><p className="cmms-classic-muted mt-1 text-xs">Every saved on-pay staff allocation is included in the current draft, except daily-paid staff, who are settled one day at a time at check-out. Progress shows where each staff member is in that payroll.</p></div>
+          <StatusBadge tone="success">{staffOnPayroll.length} saved</StatusBadge>
+        </div>
+        {staffOnPayroll.length === 0 ? <p className="cmms-classic-muted text-sm">No staff pay allocations saved yet. Add a salary profile from Payroll runs.</p> : (
+          <div className="overflow-x-auto">
+            <table className="pay-table w-full text-left text-sm">
+              <thead><tr><th>Staff</th><th>Role</th><th>Pay period</th><th>Allocated pay</th><th>Employment</th><th>Payroll progress</th><th aria-label="Actions"></th></tr></thead>
+              <tbody>
+                {staffOnPayroll.map(profile => (
+                  <tr key={profile.id}>
+                    <td className="cmms-classic-heading font-medium">{profile.employee.name}</td>
+                    <td className="cmms-classic-muted">{profile.employee.role || 'Employee'}</td>
+                    <td className="cmms-classic-muted capitalize">{String(profile.pay_frequency || profile.pay_type || 'monthly').replace('_', ' ')}</td>
+                    <td className="font-semibold" style={{ color: 'var(--pay-success-text)' }}>{amount(profile.base_salary, profile.currency)}</td>
+                    <td><StatusBadge tone={payrollStatusTone(profile.payroll_status)}>{payrollStatusLabel(profile.payroll_status)}</StatusBadge></td>
+                    <td>{profile.dailySummary
+                      ? <StatusBadge tone={profile.dailySummary.confirmedDays === 0 ? 'neutral' : profile.dailySummary.unpaidDays > 0 ? 'warning' : 'success'} title={profile.dailySummary.lastConfirmedAt ? `Last confirmed at check-out: ${new Date(profile.dailySummary.lastConfirmedAt).toLocaleString()}` : 'No check-out settlement recorded yet this month'}>
+                          {profile.dailySummary.confirmedDays === 0 ? 'No check-out settled yet this month' : `${profile.dailySummary.paidDays}/${profile.dailySummary.confirmedDays} day(s) paid at check-out`}
+                        </StatusBadge>
+                      : <StatusBadge tone={progressTone(profile.payroll_progress)}>{profile.payroll_progress ? profile.payroll_progress.replace('_', ' ') : 'Saved / awaiting draft'}</StatusBadge>}
+                    </td>
+                    <td className="text-right">{canEdit && profile.employee_user_id && (
+                      <button type="button" onClick={() => { pickEmployeeForSalary(profile.employee_user_id); setPayrollTab('payroll'); }} className="cmms-classic-btn-secondary px-2 py-1 text-xs" aria-label={`Edit ${profile.employee.name}'s salary`}>Edit</button>
+                    )}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+
   if (payrollTab === 'files') {
     const filteredFiles = fileFilterEmployee ? employeeFiles.filter(f => f.employee_user_id === fileFilterEmployee) : employeeFiles;
-    return <div className="space-y-5 cmms-classic-card p-4 md:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><UploadCloud className="h-6 w-6 text-emerald-400" /><div><h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2><p className="text-sm text-slate-400">Employee credential files for {companyProfile.company_name}</p></div></div><div className="flex gap-2"><button type="button" onClick={() => setPayrollTab('payroll')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-medium">Payroll runs</button><button type="button" onClick={() => setPayrollTab('staff')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-medium">Staff on payroll</button><button type="button" onClick={() => setPayrollTab('my-salary')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-medium">My Salary</button></div></div>
-      {error && <p className="rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{error}</p>}
-      {notice && <p className="rounded-lg border border-emerald-800/50 bg-emerald-900/20 p-2 text-sm text-emerald-300">{notice}</p>}
-      {!canViewFiles ? <p className="rounded-lg border border-dashed border-slate-700 p-5 text-sm text-slate-400">Your role cannot view company-wide employee files. Use "My Salary" to manage your own documents.</p> : <>
-        {canManageFiles && <form onSubmit={uploadEmployeeFile} className="grid gap-3 cmms-classic-divider md:grid-cols-2">
-          <h3 className="cmms-classic-heading md:col-span-2">Add a document for an employee</h3>
-          <label className="text-sm text-slate-300 md:col-span-2">Employee<select required value={fileForm.employee} onChange={e => setFileForm(v => ({ ...v, employee: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="">Select employee</option>{employees.map(x => <option key={x.authUserId} value={x.authUserId}>{x.name} — {x.role}</option>)}</select></label>
-          {fileForm.employee && applicationDocs.filter(doc => !employeeFiles.some(f => f.employee_user_id === fileForm.employee && f.source_job_application_id === doc.job_application_id)).length > 0 && (
-            <div className="md:col-span-2 space-y-2 cmms-classic-callout p-3">
-              <p className="text-xs text-sky-300">Already on file from this employee's job application — no need to upload again:</p>
-              {applicationDocs.filter(doc => !employeeFiles.some(f => f.employee_user_id === fileForm.employee && f.source_job_application_id === doc.job_application_id)).map(doc => (
-                <div key={doc.job_application_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <span className="text-slate-200">CV / Resume ({doc.reference_code})</span>
-                  <button type="button" disabled={busy} onClick={() => importApplicationDoc(doc.job_application_id)} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Use this document</button>
+    return (
+      <div className="payroll-scope space-y-5 cmms-classic-card p-4 md:p-6">
+        <style>{PAYROLL_STYLES}</style>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <UploadCloud className="h-6 w-6" style={{ color: 'var(--color-primary)' }} aria-hidden="true" />
+            <div><h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2><p className="cmms-classic-muted text-sm">Employee credential files for {companyProfile.company_name}</p></div>
+          </div>
+          <PayrollTabs current={payrollTab} onChange={setPayrollTab} canViewFiles={canViewFiles} staffCount={staffOnPayroll.length} />
+        </div>
+        <Banner error={error} notice={notice} />
+        {!canViewFiles ? (
+          <p className="cmms-classic-muted text-sm">Your role cannot view company-wide employee files. Use "My Salary" to manage your own documents.</p>
+        ) : (
+          <>
+            {canManageFiles && (
+              <form onSubmit={uploadEmployeeFile} className="grid gap-3 cmms-classic-divider md:grid-cols-2">
+                <h3 className="cmms-classic-heading md:col-span-2">Add a document for an employee</h3>
+                <label className="text-sm cmms-classic-muted md:col-span-2">Employee
+                  <select required value={fileForm.employee} onChange={e => setFileForm(v => ({ ...v, employee: e.target.value }))} className="pay-field">
+                    <option value="">Select employee</option>
+                    {employees.map(x => <option key={x.authUserId} value={x.authUserId}>{x.name} — {x.role}</option>)}
+                  </select>
+                </label>
+                {fileForm.employee && applicationDocs.filter(doc => !employeeFiles.some(f => f.employee_user_id === fileForm.employee && f.source_job_application_id === doc.job_application_id)).length > 0 && (
+                  <div className="md:col-span-2 space-y-2 cmms-classic-callout p-3">
+                    <p className="text-xs" style={{ color: 'var(--pay-info-text)' }}>Already on file from this employee's job application — no need to upload again:</p>
+                    {applicationDocs.filter(doc => !employeeFiles.some(f => f.employee_user_id === fileForm.employee && f.source_job_application_id === doc.job_application_id)).map(doc => (
+                      <div key={doc.job_application_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span className="cmms-classic-muted">CV / Resume ({doc.reference_code})</span>
+                        <button type="button" disabled={busy} onClick={() => importApplicationDoc(doc.job_application_id)} className="cmms-classic-btn-primary px-3 py-1.5 text-xs">Use this document</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <label className="text-sm cmms-classic-muted">Category
+                  <select value={fileForm.category} onChange={e => setFileForm(v => ({ ...v, category: e.target.value }))} className="pay-field">
+                    {EMPLOYEE_DOCUMENT_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                </label>
+                <label className="text-sm cmms-classic-muted">Label
+                  <input required value={fileForm.label} onChange={e => setFileForm(v => ({ ...v, label: e.target.value }))} placeholder="e.g. National ID copy" className="pay-field" type="text" />
+                </label>
+                <label className="text-sm cmms-classic-muted md:col-span-2">File
+                  <input required type="file" onChange={e => setFileForm(v => ({ ...v, file: e.target.files?.[0] || null }))} className="pay-field text-xs" aria-label="Choose a file to upload" />
+                </label>
+                <button disabled={busy} className="cmms-classic-btn-primary px-4 py-2 md:col-span-2">{busy ? 'Adding…' : 'Add document'}</button>
+              </form>
+            )}
+            <section className="cmms-classic-divider">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="cmms-classic-heading">All employee documents</h3>
+                <label className="text-sm cmms-classic-muted">
+                  <span className="sr-only">Filter by employee</span>
+                  <select value={fileFilterEmployee} onChange={e => setFileFilterEmployee(e.target.value)} className="pay-field !mt-0" aria-label="Filter documents by employee">
+                    <option value="">All employees</option>
+                    {employees.map(x => <option key={x.authUserId} value={x.authUserId}>{x.name}</option>)}
+                  </select>
+                </label>
+              </div>
+              {filteredFiles.length === 0 ? <p className="cmms-classic-muted text-sm">No documents on file yet.</p> : (
+                <div className="overflow-x-auto">
+                  <table className="pay-table w-full text-left text-sm">
+                    <thead><tr><th>Employee</th><th>Category</th><th>Label</th><th>Uploaded</th><th>Verified</th><th aria-label="Actions"></th></tr></thead>
+                    <tbody>
+                      {filteredFiles.map(doc => (
+                        <tr key={doc.id}>
+                          <td className="cmms-classic-heading font-medium">{doc.employee_name}</td>
+                          <td className="cmms-classic-muted">{EMPLOYEE_DOCUMENT_CATEGORIES.find(c => c.id === doc.category)?.label || doc.category}</td>
+                          <td className="cmms-classic-muted">{doc.file_url ? <a href={doc.file_url} target="_blank" rel="noreferrer" style={{ color: 'var(--pay-info-text)' }}>{doc.label}</a> : doc.label}</td>
+                          <td className="cmms-classic-muted">{new Date(doc.created_at).toLocaleDateString()}</td>
+                          <td>{canManageFiles ? (
+                            <label className="flex items-center gap-2 text-xs cmms-classic-muted">
+                              <input type="checkbox" checked={doc.verified} onChange={e => toggleFileVerified(doc.id, e.target.checked)} /> Verified
+                            </label>
+                          ) : <StatusBadge tone={doc.verified ? 'success' : 'neutral'}>{doc.verified ? 'Verified' : 'Unverified'}</StatusBadge>}</td>
+                          <td className="text-right">{canManageFiles && (
+                            <button type="button" onClick={() => removeEmployeeFile(doc.id)} style={{ color: 'var(--pay-danger-text)' }} aria-label={`Remove ${doc.label}`} title="Remove"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                          )}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
+              )}
+            </section>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // Default view: "Payroll runs" -- attendance-adjusted salaries and payment.
+  return (
+    <div className="payroll-scope space-y-5 cmms-classic-card p-4 md:p-6">
+      <style>{PAYROLL_STYLES}</style>
+      <div className="flex items-center gap-3">
+        <DollarSign className="h-6 w-6" style={{ color: 'var(--color-primary)' }} aria-hidden="true" />
+        <div>
+          <h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2>
+          <p className="cmms-classic-muted text-sm">Attendance-adjusted salaries and payment for {companyProfile.company_name}</p>
+        </div>
+      </div>
+      <p className="cmms-classic-muted text-sm">Save a staff member's pay allocation, then create a draft period. Every saved active salary profile is included in IcanEra payroll.</p>
+
+      <PayrollTabs current={payrollTab} onChange={setPayrollTab} canViewFiles={canViewFiles} staffCount={staffOnPayroll.length} />
+
+      <Banner error={error} notice={notice} />
+      {busy && <p className="flex items-center gap-2 text-sm cmms-classic-muted" role="status"><Loader size={16} className="animate-spin" aria-hidden="true" /> Updating payroll…</p>}
+
+      <CollapsibleSection
+        title="Attendance deductions and work time"
+        subtitle="Normal work hours used to calculate late-arrival and early-departure deductions. Must be enabled before calculating attendance in a payroll run."
+        icon={<Clock3 size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
+        defaultOpen={false}
+      >
+        <form onSubmit={saveAttendanceSettings} className="grid gap-3 md:grid-cols-3">
+          <label className="flex items-center gap-2 text-sm cmms-classic-muted md:col-span-3">
+            <input type="checkbox" checked={attendanceSettings.enabled} onChange={e => setAttendanceSettings(v => ({ ...v, enabled: e.target.checked }))} /> Enable attendance deductions
+          </label>
+          <label className="text-sm cmms-classic-muted">Time zone
+            <TimeZoneSelect value={attendanceSettings.timezone} onChange={(timezone) => setAttendanceSettings(v => ({ ...v, timezone }))} className="pay-field" />
+          </label>
+          <label className="text-sm cmms-classic-muted">Grace minutes
+            <input required min="0" max="240" type="number" value={attendanceSettings.grace_minutes} onChange={e => setAttendanceSettings(v => ({ ...v, grace_minutes: e.target.value }))} className="pay-field" />
+          </label>
+          <label className="text-sm cmms-classic-muted">Work start
+            <input required type="time" value={attendanceSettings.scheduled_start} onChange={e => setAttendanceSettings(v => ({ ...v, scheduled_start: e.target.value }))} className="pay-field" />
+          </label>
+          <label className="text-sm cmms-classic-muted">Work end
+            <input required type="time" value={attendanceSettings.scheduled_end} onChange={e => setAttendanceSettings(v => ({ ...v, scheduled_end: e.target.value }))} className="pay-field" />
+          </label>
+          <label className="text-sm cmms-classic-muted">Monthly work days
+            <input required min="1" step="0.5" type="number" value={attendanceSettings.monthly_work_days} onChange={e => setAttendanceSettings(v => ({ ...v, monthly_work_days: e.target.value }))} className="pay-field" />
+          </label>
+          <label className="flex items-center gap-2 text-sm cmms-classic-muted">
+            <input type="checkbox" checked={attendanceSettings.deduct_late_arrivals} onChange={e => setAttendanceSettings(v => ({ ...v, deduct_late_arrivals: e.target.checked }))} /> Deduct late arrivals
+          </label>
+          <label className="flex items-center gap-2 text-sm cmms-classic-muted">
+            <input type="checkbox" checked={attendanceSettings.deduct_early_departures} onChange={e => setAttendanceSettings(v => ({ ...v, deduct_early_departures: e.target.checked }))} /> Deduct early departures
+          </label>
+          <button disabled={busy} className="cmms-classic-btn-primary px-4 py-2 md:col-span-3">Save work schedule</button>
+        </form>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Salary profile"
+        subtitle="Save or update a staff member's pay allocation."
+        icon={<DollarSign size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
+        defaultOpen={false}
+        badge={editingProfile ? <StatusBadge tone="info">Editing</StatusBadge> : null}
+      >
+        <form onSubmit={saveSalary} className="grid gap-3 md:grid-cols-2">
+          <label className="text-sm cmms-classic-muted md:col-span-2">Employee
+            <select required value={salary.employee} onChange={e => pickEmployeeForSalary(e.target.value)} className="pay-field">
+              <option value="">Select employee</option>
+              {employees.map(x => <option key={x.authUserId} value={x.authUserId}>{x.name} — {x.role}{latestPayByEmployee.has(x.authUserId) ? ' (on payroll)' : ''}</option>)}
+            </select>
+          </label>
+          <label className="text-sm cmms-classic-muted">Pay type
+            <select value={salary.pay_type} onChange={e => setSalary(v => ({ ...v, pay_type: e.target.value }))} className="pay-field">
+              <option value="monthly">Salary</option><option value="hourly">Hourly worker</option><option value="per_ride">Per ride</option><option value="hybrid">Hybrid</option>
+            </select>
+          </label>
+          <label className="text-sm cmms-classic-muted">Pay period
+            <select value={salary.pay_frequency} onChange={e => setSalary(v => ({ ...v, pay_frequency: e.target.value, pay_type: e.target.value === 'hourly' ? 'hourly' : v.pay_type === 'hourly' ? 'monthly' : v.pay_type }))} className="pay-field">
+              <option value="hourly">Hourly</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="contract">Fixed contract</option>
+            </select>
+          </label>
+          <label className="text-sm cmms-classic-muted">Rate / base pay
+            <input required type="number" min="0.01" step="0.01" value={salary.base_salary} onChange={e => setSalary(v => ({ ...v, base_salary: e.target.value }))} className="pay-field" />
+          </label>
+          <label className="text-sm cmms-classic-muted">Currency
+            <input value={salary.currency} onChange={e => setSalary(v => ({ ...v, currency: e.target.value.toUpperCase() }))} className="pay-field" type="text" />
+          </label>
+          {salary.pay_frequency === 'contract' && <>
+            <label className="text-sm cmms-classic-muted">Contract starts
+              <input required type="date" value={salary.contract_start} onChange={e => setSalary(v => ({ ...v, contract_start: e.target.value }))} className="pay-field" />
+            </label>
+            <label className="text-sm cmms-classic-muted">Contract ends
+              <input required type="date" value={salary.contract_end} onChange={e => setSalary(v => ({ ...v, contract_end: e.target.value }))} className="pay-field" />
+            </label>
+            <label className="text-sm cmms-classic-muted md:col-span-2">Total contract value
+              <input required type="number" min="0.01" step="0.01" value={salary.contract_total} onChange={e => setSalary(v => ({ ...v, contract_total: e.target.value }))} className="pay-field" />
+            </label>
+          </>}
+          <label className="text-sm cmms-classic-muted">Status
+            <select value={salary.payroll_status} onChange={e => setSalary(v => ({ ...v, payroll_status: e.target.value }))} className="pay-field">
+              <option value="on_pay">On pay</option><option value="on_hold">On hold</option>
+            </select>
+          </label>
+          <button disabled={busy} className="cmms-classic-btn-primary px-4 py-2 md:col-span-2">{editingProfile ? 'Update salary' : 'Save salary'}</button>
+        </form>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="New attendance payroll run"
+        subtitle="Create a draft period from saved salary profiles, then calculate deductions."
+        icon={<Clock3 size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
+        defaultOpen={false}
+      >
+        <form onSubmit={createRun} className="grid gap-3 md:grid-cols-2">
+          <label className="text-sm cmms-classic-muted">Start
+            <input required type="date" value={dates.start} onChange={e => setDates(v => ({ ...v, start: e.target.value }))} className="pay-field" />
+          </label>
+          <label className="text-sm cmms-classic-muted">End
+            <input required type="date" value={dates.end} onChange={e => setDates(v => ({ ...v, end: e.target.value }))} className="pay-field" />
+          </label>
+          <button disabled={busy || !compensation.length} className="cmms-classic-btn-primary px-4 py-2">Create draft</button>
+          <button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={calculate} className="cmms-classic-btn-secondary px-4 py-2">Calculate attendance</button>
+          <button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={recoverAdvances} className="cmms-classic-btn-secondary px-4 py-2">Recover advances</button>
+          <button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={applyLeave} className="cmms-classic-btn-secondary px-4 py-2">Apply leave deductions</button>
+          <p className="cmms-classic-muted text-xs md:col-span-2">The calculation uses the company's existing attendance-payroll settings and remains reviewable in the draft. Recover advances deducts any confirmed, unpaid salary advance balance for staff in this run. Apply leave deductions prorates a deduction for approved unpaid leave overlapping this period — approved paid leave never needs a deduction here, and a daily-paid employee's approved paid leave already gets its own draft entry the moment HR approves it.</p>
+        </form>
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Review and pay"
+        icon={<WalletCards size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
+        defaultOpen={true}
+      >
+        <label className="text-sm cmms-classic-muted">
+          <span className="sr-only">Select payroll period</span>
+          <select value={periodId} onChange={e => loadEntries(e.target.value)} className="pay-field !mt-0 max-w-sm" aria-label="Select payroll period">
+            <option value="">Select period</option>
+            {periods.map(p => <option key={p.id} value={p.id}>{p.period_start} to {p.period_end} — {p.status}</option>)}
+          </select>
+        </label>
+        {periodId && <>
+          <div className="mt-3 overflow-x-auto">
+            <table className="pay-table w-full text-left text-sm">
+              <thead><tr><th>Employee</th><th>Base</th><th>Attendance deduction</th><th>Net salary</th><th>Status</th></tr></thead>
+              <tbody>
+                {entries.map(entry => {
+                  const employee = employees.find(x => x.authUserId === entry.employee_user_id); const currency = entry.metadata?.currency || 'UGX';
+                  return (
+                    <tr key={entry.id}>
+                      <td className="cmms-classic-muted">{employee?.name || entry.employee_user_id}</td>
+                      <td>{amount(entry.base_amount, currency)}</td>
+                      <td style={{ color: 'var(--pay-warning-text)' }}>-{amount(entry.metadata?.attendance_deduction, currency)}</td>
+                      <td className="font-semibold" style={{ color: 'var(--pay-success-text)' }}>{amount(entry.net_amount, currency)}</td>
+                      <td><StatusBadge tone={progressTone(entry.status)}>{entry.status}</StatusBadge></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <form onSubmit={pay} className="mt-4 grid gap-3 cmms-classic-divider md:grid-cols-4">
+            <label className="text-sm cmms-classic-muted md:col-span-2">Employee to pay
+              <select required value={payment.entry} onChange={e => setPayment(v => ({ ...v, entry: e.target.value }))} className="pay-field">
+                <option value="">Select staff and view payment status</option>
+                {entries.map(x => <option key={x.id} value={x.id} disabled={x.status === 'paid'}>{employees.find(e => e.authUserId === x.employee_user_id)?.name || x.employee_user_id} — {amount(x.net_amount, x.metadata?.currency)} — {x.status === 'paid' ? 'Paid' : x.status === 'approved' ? 'Ready to pay' : x.status === 'draft' ? 'Draft / unpaid' : x.status}</option>)}
+              </select>
+            </label>
+            <p className="self-end pb-2 text-xs cmms-classic-muted">All staff in this payroll period are listed. Paid staff are shown but cannot be selected again.</p>
+            <label className="text-sm cmms-classic-muted">Method
+              <select value={payment.method} onChange={e => setPayment(v => ({ ...v, method: e.target.value }))} className="pay-field">
+                <option value="cash">Cash</option><option value="ican">IcanEra wallet</option>
+              </select>
+            </label>
+            {payment.method === 'ican' && <label className="text-sm cmms-classic-muted">Wallet PIN
+              <input required type="password" value={payment.pin} onChange={e => setPayment(v => ({ ...v, pin: e.target.value }))} className="pay-field" />
+            </label>}
+            <button disabled={busy || !entries.some(x => x.status !== 'paid')} className="cmms-classic-btn-primary flex items-center justify-center gap-2 px-4 py-2"><WalletCards size={16} aria-hidden="true" />{payment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button>
+          </form>
+        </>}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Reward redemptions"
+        subtitle="Points earned for attendance, reports, messages and completed tasks (Attendance → Rewards) queue up here once redeemed, ready to pay the same way as any other payroll payment."
+        icon={<WalletCards size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
+        defaultOpen={rewardRedemptions.length > 0}
+        badge={<StatusBadge tone="info">{rewardRedemptions.length} pending</StatusBadge>}
+      >
+        {rewardsSettings && (
+          <form onSubmit={saveRewardRate} className="mb-4 flex flex-wrap items-end gap-3 cmms-classic-callout p-3">
+            <label className="text-sm cmms-classic-muted">IcanEra coins per point
+              <input type="number" min="0" step="0.00000001" value={rewardsSettings.ican_coins_per_point} onChange={e => setRewardsSettings(v => ({ ...v, ican_coins_per_point: e.target.value }))} className="pay-field w-40" />
+            </label>
+            <button disabled={rewardRateSaving} className="cmms-classic-btn-primary px-4 py-2 text-sm">{rewardRateSaving ? 'Saving…' : 'Save rate'}</button>
+            <p className="text-xs cmms-classic-muted">Sets how many icaneracoins each point is worth when redeemed. Other point values live in Attendance → Rewards.</p>
+          </form>
+        )}
+        {rewardRedemptions.length === 0 ? <p className="cmms-classic-muted text-sm">Nothing queued for reward payout right now.</p> : <>
+          <div className="overflow-x-auto">
+            <table className="pay-table w-full text-left text-sm">
+              <thead><tr><th>Staff</th><th>Points</th><th>Amount</th><th>Queued</th></tr></thead>
+              <tbody>
+                {rewardRedemptions.map(row => (
+                  <tr key={row.id}>
+                    <td className="cmms-classic-muted">{row.user_name}</td>
+                    <td>{row.points_redeemed}</td>
+                    <td className="font-semibold" style={{ color: 'var(--pay-success-text)' }}>{Number(row.ican_amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN</td>
+                    <td className="cmms-classic-muted capitalize">{row.triggered_by}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <form onSubmit={payReward} className="mt-4 grid gap-3 cmms-classic-divider md:grid-cols-4">
+            <label className="text-sm cmms-classic-muted md:col-span-2">Redemption to pay
+              <select required value={rewardPayment.redemption} onChange={e => setRewardPayment(v => ({ ...v, redemption: e.target.value }))} className="pay-field">
+                <option value="">Select a queued redemption</option>
+                {rewardRedemptions.map(x => <option key={x.id} value={x.id}>{x.user_name} — {Number(x.ican_amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN ({x.points_redeemed} pts)</option>)}
+              </select>
+            </label>
+            <label className="text-sm cmms-classic-muted">Method
+              <select value={rewardPayment.method} onChange={e => setRewardPayment(v => ({ ...v, method: e.target.value }))} className="pay-field">
+                <option value="cash">Cash</option><option value="ican">IcanEra wallet</option>
+              </select>
+            </label>
+            {rewardPayment.method === 'ican' && <label className="text-sm cmms-classic-muted">Wallet PIN
+              <input required type="password" value={rewardPayment.pin} onChange={e => setRewardPayment(v => ({ ...v, pin: e.target.value }))} className="pay-field" />
+            </label>}
+            <button disabled={busy || !rewardPayment.redemption} className="cmms-classic-btn-primary flex items-center justify-center gap-2 px-4 py-2"><WalletCards size={16} aria-hidden="true" />{rewardPayment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button>
+          </form>
+        </>}
+      </CollapsibleSection>
+
+      {canApprove && (
+        <CollapsibleSection
+          title="Salary advance requests"
+          subtitle="Employees request these from their own My Salary tab. Approve, then pay by cash or the IcanEra wallet (on-chain icaneracoin) — the employee still has to confirm receipt before it is deducted from a future payroll run."
+          icon={<DollarSign size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
+          defaultOpen={advances.some(a => a.status === 'pending')}
+          badge={<StatusBadge tone="warning">{advances.filter(a => a.status === 'pending').length} pending</StatusBadge>}
+        >
+          {advances.filter(a => ['pending', 'approved', 'paid', 'confirmed'].includes(a.status)).length === 0 ? (
+            <p className="cmms-classic-muted text-sm">No open salary advance requests.</p>
+          ) : (
+            <div className="space-y-2">
+              {advances.filter(a => ['pending', 'approved', 'paid', 'confirmed'].includes(a.status)).map(a => {
+                const employee = employees.find(x => x.authUserId === a.employee_user_id);
+                return (
+                  <div key={a.id} className="pay-row flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <div>
+                      <p className="cmms-classic-heading font-medium">{employee?.name || a.employee_user_id}</p>
+                      <p className="cmms-classic-muted text-xs">{amount(a.amount, a.currency)}{a.reason ? ` — ${a.reason}` : ''}{(a.repayment_installments || 1) > 1 ? ` · Repay in ${a.repayment_installments} parts of ${amount(Math.ceil(Number(a.amount) / a.repayment_installments * 100) / 100, a.currency)}` : ' · Repay all from next pay'}{a.repayment_note ? ` · “${a.repayment_note}”` : ''}{a.status === 'confirmed' ? ` · ${amount(a.recovered_amount, a.currency)} recovered so far` : ''}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge tone={advanceTone(a.status)}>{a.status}</StatusBadge>
+                      {a.status === 'pending' && <>
+                        <button type="button" disabled={busy} onClick={() => decideAdvance(a.id, 'approved')} className="pay-btn-approve px-2 py-1 text-xs" aria-label={`Approve ${employee?.name || 'this'} advance`}>Approve</button>
+                        <button type="button" disabled={busy} onClick={() => decideAdvance(a.id, 'rejected')} className="pay-btn-reject px-2 py-1 text-xs" aria-label={`Reject ${employee?.name || 'this'} advance`}>Reject</button>
+                      </>}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
-          <label className="text-sm text-slate-300">Category<select value={fileForm.category} onChange={e => setFileForm(v => ({ ...v, category: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white">{EMPLOYEE_DOCUMENT_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
-          <label className="text-sm text-slate-300">Label<input required value={fileForm.label} onChange={e => setFileForm(v => ({ ...v, label: e.target.value }))} placeholder="e.g. National ID copy" className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>
-          <label className="text-sm text-slate-300 md:col-span-2">File<input required type="file" onChange={e => setFileForm(v => ({ ...v, file: e.target.files?.[0] || null }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-xs file:text-white" /></label>
-          <button disabled={busy} className="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50 md:col-span-2">{busy ? 'Adding…' : 'Add document'}</button>
-        </form>}
-        <section className="cmms-classic-divider">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="cmms-classic-heading">All employee documents</h3><select value={fileFilterEmployee} onChange={e => setFileFilterEmployee(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">All employees</option>{employees.map(x => <option key={x.authUserId} value={x.authUserId}>{x.name}</option>)}</select></div>
-          {filteredFiles.length === 0 ? <p className="rounded-lg border border-dashed border-slate-700 p-5 text-sm text-slate-400">No documents on file yet.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-800 text-xs uppercase text-slate-500"><tr><th className="p-2">Employee</th><th className="p-2">Category</th><th className="p-2">Label</th><th className="p-2">Uploaded</th><th className="p-2">Verified</th><th className="p-2"></th></tr></thead><tbody>{filteredFiles.map(doc => <tr key={doc.id} className="border-b border-slate-800/70"><td className="p-2 font-medium text-slate-100">{doc.employee_name}</td><td className="p-2 text-slate-400">{EMPLOYEE_DOCUMENT_CATEGORIES.find(c => c.id === doc.category)?.label || doc.category}</td><td className="p-2 text-slate-300">{doc.file_url ? <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-blue-300 hover:text-blue-200">{doc.label}</a> : doc.label}</td><td className="p-2 text-slate-400">{new Date(doc.created_at).toLocaleDateString()}</td><td className="p-2">{canManageFiles ? <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={doc.verified} onChange={e => toggleFileVerified(doc.id, e.target.checked)} /> Verified</label> : <span className={`rounded-full px-2 py-1 text-xs font-medium ${doc.verified ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-700/40 text-slate-400'}`}>{doc.verified ? 'Verified' : 'Unverified'}</span>}</td><td className="p-2 text-right">{canManageFiles && <button type="button" onClick={() => removeEmployeeFile(doc.id)} className="text-red-400 hover:text-red-300" title="Remove"><Trash2 className="h-4 w-4" /></button>}</td></tr>)}</tbody></table></div>}
-        </section>
-      </>}
-    </div>;
-  }
-  return <div className="space-y-5 cmms-classic-card p-4 md:p-6">
-    <div className="flex items-center gap-3"><DollarSign className="h-6 w-6 text-emerald-400" /><div><h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2><p className="text-sm text-slate-400">Attendance-adjusted salaries and payment for {companyProfile.company_name}</p></div></div>
-    <p className="text-sm text-slate-400">Save a staff member’s pay allocation, then create a draft period. Every saved active salary profile is included in IcanEra payroll.</p>
-    <div className="flex gap-2 border-b border-slate-800 pb-3"><button type="button" className="cmms-classic-btn-primary px-3 py-2 text-sm font-semibold">Payroll runs</button><button type="button" onClick={() => setPayrollTab('staff')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-semibold">Staff on payroll ({staffOnPayroll.length})</button><button type="button" onClick={() => setPayrollTab('my-salary')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-semibold">My Salary</button>{canViewFiles && <button type="button" onClick={() => setPayrollTab('files')} className="cmms-classic-btn-secondary px-3 py-2 text-sm font-semibold">Employee files</button>}</div>
-    {error && <p className="rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{error}</p>}{notice && <p className="rounded-lg border border-emerald-800/50 bg-emerald-900/20 p-2 text-sm text-emerald-300">{notice}</p>}
-    {busy && <p className="flex items-center gap-2 text-sm text-slate-400"><Loader size={16} className="animate-spin" /> Updating payroll...</p>}
-    <form onSubmit={saveAttendanceSettings} className="grid gap-3 cmms-classic-callout p-4 md:grid-cols-3"><div className="md:col-span-3"><h3 className="cmms-classic-heading flex items-center gap-2"><Clock3 size={17} className="text-indigo-300" />Attendance deductions and work time</h3><p className="mt-1 text-xs text-slate-400">Set the normal work hours used to calculate late arrival and early-departure deductions. This must be enabled before calculating attendance in a payroll run.</p></div><label className="flex items-center gap-2 text-sm text-slate-200"><input type="checkbox" checked={attendanceSettings.enabled} onChange={e => setAttendanceSettings(v => ({ ...v, enabled: e.target.checked }))} /> Enable attendance deductions</label><label className="text-sm text-slate-300">Time zone<TimeZoneSelect value={attendanceSettings.timezone} onChange={(timezone) => setAttendanceSettings(v => ({ ...v, timezone }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="text-sm text-slate-300">Grace minutes<input required min="0" max="240" type="number" value={attendanceSettings.grace_minutes} onChange={e => setAttendanceSettings(v => ({ ...v, grace_minutes: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="text-sm text-slate-300">Work start<input required type="time" value={attendanceSettings.scheduled_start} onChange={e => setAttendanceSettings(v => ({ ...v, scheduled_start: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="text-sm text-slate-300">Work end<input required type="time" value={attendanceSettings.scheduled_end} onChange={e => setAttendanceSettings(v => ({ ...v, scheduled_end: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="text-sm text-slate-300">Monthly work days<input required min="1" step="0.5" type="number" value={attendanceSettings.monthly_work_days} onChange={e => setAttendanceSettings(v => ({ ...v, monthly_work_days: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="flex items-center gap-2 text-sm text-slate-200"><input type="checkbox" checked={attendanceSettings.deduct_late_arrivals} onChange={e => setAttendanceSettings(v => ({ ...v, deduct_late_arrivals: e.target.checked }))} /> Deduct late arrivals</label><label className="flex items-center gap-2 text-sm text-slate-200"><input type="checkbox" checked={attendanceSettings.deduct_early_departures} onChange={e => setAttendanceSettings(v => ({ ...v, deduct_early_departures: e.target.checked }))} /> Deduct early departures</label><button disabled={busy} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-50">Save work schedule</button></form>
-    <div className="grid gap-4 lg:grid-cols-2"><form onSubmit={saveSalary} className="grid gap-3 cmms-classic-divider md:grid-cols-2"><h3 className="cmms-classic-heading md:col-span-2">Salary profile{editingProfile && <span className="ml-2 rounded-full bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-300 align-middle">Editing current allocation</span>}</h3><label className="text-sm text-slate-300 md:col-span-2">Employee<select required value={salary.employee} onChange={e => pickEmployeeForSalary(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="">Select employee</option>{employees.map(x => <option key={x.authUserId} value={x.authUserId}>{x.name} — {x.role}{latestPayByEmployee.has(x.authUserId) ? ' (on payroll)' : ''}</option>)}</select></label><label className="text-sm text-slate-300">Pay type<select value={salary.pay_type} onChange={e => setSalary(v => ({ ...v, pay_type: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="monthly">Salary</option><option value="hourly">Hourly worker</option><option value="per_ride">Per ride</option><option value="hybrid">Hybrid</option></select></label><label className="text-sm text-slate-300">Pay period<select value={salary.pay_frequency} onChange={e => setSalary(v => ({ ...v, pay_frequency: e.target.value, pay_type: e.target.value === 'hourly' ? 'hourly' : v.pay_type === 'hourly' ? 'monthly' : v.pay_type }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="hourly">Hourly</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="contract">Fixed contract</option></select></label><label className="text-sm text-slate-300">Rate / base pay<input required type="number" min="0.01" step="0.01" value={salary.base_salary} onChange={e => setSalary(v => ({ ...v, base_salary: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="text-sm text-slate-300">Currency<input value={salary.currency} onChange={e => setSalary(v => ({ ...v, currency: e.target.value.toUpperCase() }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>{salary.pay_frequency === 'contract' && <><label className="text-sm text-slate-300">Contract starts<input required type="date" value={salary.contract_start} onChange={e => setSalary(v => ({ ...v, contract_start: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="text-sm text-slate-300">Contract ends<input required type="date" value={salary.contract_end} onChange={e => setSalary(v => ({ ...v, contract_end: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="text-sm text-slate-300 md:col-span-2">Total contract value<input required type="number" min="0.01" step="0.01" value={salary.contract_total} onChange={e => setSalary(v => ({ ...v, contract_total: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label></>}<label className="text-sm text-slate-300">Status<select value={salary.payroll_status} onChange={e => setSalary(v => ({ ...v, payroll_status: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="on_pay">On pay</option><option value="on_hold">On hold</option></select></label><button disabled={busy} className="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50 md:col-span-2">{editingProfile ? 'Update salary' : 'Save salary'}</button></form>
-      <form onSubmit={createRun} className="grid gap-3 cmms-classic-divider md:grid-cols-2"><h3 className="cmms-classic-heading flex items-center gap-2 md:col-span-2"><Clock3 size={17} className="text-emerald-400" />New attendance payroll run</h3><label className="text-sm text-slate-300">Start<input required type="date" value={dates.start} onChange={e => setDates(v => ({ ...v, start: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><label className="text-sm text-slate-300">End<input required type="date" value={dates.end} onChange={e => setDates(v => ({ ...v, end: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><button disabled={busy || !compensation.length} className="rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white disabled:opacity-50">Create draft</button><button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={calculate} className="rounded-lg border border-amber-600/60 px-4 py-2 font-semibold text-amber-200 disabled:opacity-50">Calculate attendance</button><button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={recoverAdvances} className="rounded-lg border border-indigo-600/60 px-4 py-2 font-semibold text-indigo-200 disabled:opacity-50">Recover advances</button><button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={applyLeave} className="rounded-lg border border-rose-600/60 px-4 py-2 font-semibold text-rose-200 disabled:opacity-50">Apply leave deductions</button><p className="text-xs text-slate-500 md:col-span-2">The calculation uses the company’s existing attendance-payroll settings and remains reviewable in the draft. Recover advances deducts any confirmed, unpaid salary advance balance for staff in this run. Apply leave deductions prorates a deduction for approved unpaid leave overlapping this period — approved paid leave never needs a deduction here, and a daily-paid employee's approved paid leave already gets its own draft entry the moment HR approves it.</p></form></div>
-    <section className="cmms-classic-divider"><div className="mb-3 flex flex-wrap justify-between gap-2"><h3 className="cmms-classic-heading">Review and pay</h3><select value={periodId} onChange={e => loadEntries(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white"><option value="">Select period</option>{periods.map(p => <option key={p.id} value={p.id}>{p.period_start} to {p.period_end} — {p.status}</option>)}</select></div>{periodId && <><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-800 text-xs uppercase text-slate-500"><tr><th className="p-2">Employee</th><th className="p-2">Base</th><th className="p-2">Attendance deduction</th><th className="p-2">Net salary</th><th className="p-2">Status</th></tr></thead><tbody>{entries.map(entry => { const employee = employees.find(x => x.authUserId === entry.employee_user_id); const currency = entry.metadata?.currency || 'UGX'; return <tr key={entry.id} className="border-b border-slate-800/70"><td className="p-2 text-slate-200">{employee?.name || entry.employee_user_id}</td><td className="p-2">{amount(entry.base_amount, currency)}</td><td className="p-2 text-amber-300">-{amount(entry.metadata?.attendance_deduction, currency)}</td><td className="p-2 font-semibold text-emerald-300">{amount(entry.net_amount, currency)}</td><td className="p-2 capitalize text-slate-300">{entry.status}</td></tr>; })}</tbody></table></div><form onSubmit={pay} className="mt-4 grid gap-3 border-t border-slate-800 pt-4 md:grid-cols-4"><label className="text-sm text-slate-300 md:col-span-2">Employee to pay<select required value={payment.entry} onChange={e => setPayment(v => ({ ...v, entry: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="">Select staff and view payment status</option>{entries.map(x => <option key={x.id} value={x.id} disabled={x.status === 'paid'}>{employees.find(e => e.authUserId === x.employee_user_id)?.name || x.employee_user_id} — {amount(x.net_amount, x.metadata?.currency)} — {x.status === 'paid' ? 'Paid' : x.status === 'approved' ? 'Ready to pay' : x.status === 'draft' ? 'Draft / unpaid' : x.status}</option>)}</select></label><p className="self-end pb-2 text-xs text-slate-400">All staff in this payroll period are listed. Paid staff are shown but cannot be selected again.</p><label className="text-sm text-slate-300">Method<select value={payment.method} onChange={e => setPayment(v => ({ ...v, method: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="cash">Cash</option><option value="ican">IcanEra wallet</option></select></label>{payment.method === 'ican' && <label className="text-sm text-slate-300">Wallet PIN<input required type="password" value={payment.pin} onChange={e => setPayment(v => ({ ...v, pin: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>}<button disabled={busy || !entries.some(x => x.status !== 'paid')} className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50"><WalletCards size={16} />{payment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button></form></>}</section>
-    <section className="cmms-classic-divider"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="cmms-classic-heading">Reward redemptions</h3><p className="mt-1 text-xs text-slate-400">Points earned for attendance, reports, messages and completed tasks (Attendance → Rewards) queue up here once redeemed, ready to pay the same way as any other payroll payment.</p></div><span className="rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-300">{rewardRedemptions.length} pending</span></div>{rewardsSettings && <form onSubmit={saveRewardRate} className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3"><label className="text-sm text-slate-300">IcanEra coins per point<input type="number" min="0" step="0.00000001" value={rewardsSettings.ican_coins_per_point} onChange={e => setRewardsSettings(v => ({ ...v, ican_coins_per_point: e.target.value }))} className="mt-1 w-40 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label><button disabled={rewardRateSaving} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{rewardRateSaving ? 'Saving…' : 'Save rate'}</button><p className="text-xs text-slate-500">Sets how many icaneracoins each point is worth when redeemed. Other point values live in Attendance → Rewards.</p></form>}{rewardRedemptions.length === 0 ? <p className="rounded-lg border border-dashed border-slate-700 p-5 text-sm text-slate-400">Nothing queued for reward payout right now.</p> : <><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-800 text-xs uppercase text-slate-500"><tr><th className="p-2">Staff</th><th className="p-2">Points</th><th className="p-2">Amount</th><th className="p-2">Queued</th></tr></thead><tbody>{rewardRedemptions.map(row => <tr key={row.id} className="border-b border-slate-800/70"><td className="p-2 text-slate-200">{row.user_name}</td><td className="p-2">{row.points_redeemed}</td><td className="p-2 font-semibold text-emerald-300">{Number(row.ican_amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN</td><td className="p-2 capitalize text-slate-400">{row.triggered_by}</td></tr>)}</tbody></table></div><form onSubmit={payReward} className="mt-4 grid gap-3 border-t border-slate-800 pt-4 md:grid-cols-4"><label className="text-sm text-slate-300 md:col-span-2">Redemption to pay<select required value={rewardPayment.redemption} onChange={e => setRewardPayment(v => ({ ...v, redemption: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="">Select a queued redemption</option>{rewardRedemptions.map(x => <option key={x.id} value={x.id}>{x.user_name} — {Number(x.ican_amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN ({x.points_redeemed} pts)</option>)}</select></label><label className="text-sm text-slate-300">Method<select value={rewardPayment.method} onChange={e => setRewardPayment(v => ({ ...v, method: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="cash">Cash</option><option value="ican">IcanEra wallet</option></select></label>{rewardPayment.method === 'ican' && <label className="text-sm text-slate-300">Wallet PIN<input required type="password" value={rewardPayment.pin} onChange={e => setRewardPayment(v => ({ ...v, pin: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>}<button disabled={busy || !rewardPayment.redemption} className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50"><WalletCards size={16} />{rewardPayment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button></form></>}</section>
-    {canApprove && <section className="cmms-classic-divider">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="cmms-classic-heading">Salary advance requests</h3><p className="mt-1 text-xs text-slate-400">Employees request these from their own My Salary tab. Approve, then pay by cash or the IcanEra wallet (on-chain icaneracoin) — the employee still has to confirm receipt before it is deducted from a future payroll run.</p></div><span className="rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-300">{advances.filter(a => a.status === 'pending').length} pending</span></div>
-      {advances.filter(a => ['pending', 'approved', 'paid', 'confirmed'].includes(a.status)).length === 0 ? <p className="rounded-lg border border-dashed border-slate-700 p-5 text-sm text-slate-400">No open salary advance requests.</p> : <div className="space-y-2">{advances.filter(a => ['pending', 'approved', 'paid', 'confirmed'].includes(a.status)).map(a => { const employee = employees.find(x => x.authUserId === a.employee_user_id); return <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-sm"><div><p className="font-medium text-slate-100">{employee?.name || a.employee_user_id}</p><p className="text-xs text-slate-400">{amount(a.amount, a.currency)}{a.reason ? ` — ${a.reason}` : ''}{a.status === 'confirmed' ? ` · ${amount(a.recovered_amount, a.currency)} recovered so far` : ''}</p></div><div className="flex items-center gap-2"><span className="rounded-full bg-slate-800 px-2 py-1 text-xs capitalize text-slate-300">{a.status}</span>{a.status === 'pending' && <><button type="button" disabled={busy} onClick={() => decideAdvance(a.id, 'approved')} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">Approve</button><button type="button" disabled={busy} onClick={() => decideAdvance(a.id, 'rejected')} className="rounded-lg border border-red-600/60 px-2 py-1 text-xs font-semibold text-red-200 disabled:opacity-50">Reject</button></>}</div></div>; })}</div>}
-      {advances.some(a => a.status === 'approved') && <form onSubmit={payAdvance} className="mt-4 grid gap-3 border-t border-slate-800 pt-4 md:grid-cols-4"><label className="text-sm text-slate-300 md:col-span-2">Advance to pay<select required value={advancePayment.advance} onChange={e => setAdvancePayment(v => ({ ...v, advance: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="">Select an approved advance</option>{advances.filter(a => a.status === 'approved').map(a => <option key={a.id} value={a.id}>{employees.find(x => x.authUserId === a.employee_user_id)?.name || a.employee_user_id} — {amount(a.amount, a.currency)}</option>)}</select></label><label className="text-sm text-slate-300">Method<select value={advancePayment.method} onChange={e => setAdvancePayment(v => ({ ...v, method: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white"><option value="cash">Cash</option><option value="ican">IcanEra wallet</option></select></label>{advancePayment.method === 'ican' && <label className="text-sm text-slate-300">Wallet PIN<input required type="password" value={advancePayment.pin} onChange={e => setAdvancePayment(v => ({ ...v, pin: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-white" /></label>}<button disabled={busy || !advancePayment.advance} className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50"><WalletCards size={16} />{advancePayment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button></form>}
-    </section>}
-  </div>;
+          {advances.some(a => a.status === 'approved') && (
+            <form onSubmit={payAdvance} className="mt-4 grid gap-3 cmms-classic-divider md:grid-cols-4">
+              <label className="text-sm cmms-classic-muted md:col-span-2">Advance to pay
+                <select required value={advancePayment.advance} onChange={e => setAdvancePayment(v => ({ ...v, advance: e.target.value }))} className="pay-field">
+                  <option value="">Select an approved advance</option>
+                  {advances.filter(a => a.status === 'approved').map(a => <option key={a.id} value={a.id}>{employees.find(x => x.authUserId === a.employee_user_id)?.name || a.employee_user_id} — {amount(a.amount, a.currency)}</option>)}
+                </select>
+              </label>
+              <label className="text-sm cmms-classic-muted">Method
+                <select value={advancePayment.method} onChange={e => setAdvancePayment(v => ({ ...v, method: e.target.value }))} className="pay-field">
+                  <option value="cash">Cash</option><option value="ican">IcanEra wallet</option>
+                </select>
+              </label>
+              {advancePayment.method === 'ican' && <label className="text-sm cmms-classic-muted">Wallet PIN
+                <input required type="password" value={advancePayment.pin} onChange={e => setAdvancePayment(v => ({ ...v, pin: e.target.value }))} className="pay-field" />
+              </label>}
+              <button disabled={busy || !advancePayment.advance} className="cmms-classic-btn-primary flex items-center justify-center gap-2 px-4 py-2"><WalletCards size={16} aria-hidden="true" />{advancePayment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button>
+            </form>
+          )}
+        </CollapsibleSection>
+      )}
+    </div>
+  );
 }

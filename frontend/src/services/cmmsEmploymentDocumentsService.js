@@ -111,15 +111,30 @@ export const getDocumentsForCompany = async (companyId) => {
 // Employee-facing (sign with wallet PIN) & public verification
 // ============================================================
 
-/** The signed-in employee's own documents -- RLS
- * (cmms_employment_documents_employee_select) already restricts this to
- * rows linked to their own cmms_users/cmms_job_applications record, so no
- * extra filter is needed beyond the company. */
+/** The signed-in person's OWN documents only. RLS lets managers
+ * (cmms_employment_documents_staff_all) read the whole company, so without an
+ * explicit owner filter an admin's "My employment documents" would list
+ * everyone's letters. Admins review others' documents in the Employment
+ * Documents admin panel instead. */
 export const getMyEmploymentDocuments = async (companyId) => {
+  const { data: authData } = await supabase.auth.getUser();
+  const uid = authData?.user?.id;
+  if (!uid) return { success: false, error: 'Sign in to view your documents.', data: [] };
+  const [usersRes, appsRes] = await Promise.all([
+    supabase.from('cmms_users').select('id').eq('cmms_company_id', companyId).eq('ican_user_id', uid),
+    supabase.from('cmms_job_applications').select('id').eq('ican_user_id', uid)
+  ]);
+  const userIds = (usersRes.data || []).map((u) => u.id);
+  const appIds = (appsRes.data || []).map((a) => a.id);
+  const owner = [];
+  if (userIds.length) owner.push(`cmms_user_id.in.(${userIds.join(',')})`);
+  if (appIds.length) owner.push(`job_application_id.in.(${appIds.join(',')})`);
+  if (!owner.length) return { success: true, data: [] };
   const { data, error } = await supabase
     .from('cmms_employment_documents')
     .select('*')
     .eq('cmms_company_id', companyId)
+    .or(owner.join(','))
     .order('created_at', { ascending: false });
   if (error) return { success: false, error: error.message, data: [] };
   const resolved = await Promise.all((data || []).map(async (d) => ({ ...d, document_url: await resolveMediaValue(d.document_url) })));

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { CalendarDays, HeartPulse, Loader, Send, ShieldCheck, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { CalendarDays, ChevronDown, HeartPulse, Loader, Send, ShieldCheck, X } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import {
   WELFARE_CATEGORIES, cancelLeaveRequest, cancelWelfareRequest, getLeaveTypes,
@@ -7,23 +7,94 @@ import {
   requestLeave, submitWelfareRequest
 } from '../services/cmmsWelfareService';
 
-const STATUS_STYLES = {
-  pending: 'bg-amber-500/15 text-amber-300', submitted: 'bg-amber-500/15 text-amber-300',
-  approved: 'bg-emerald-500/15 text-emerald-300', resolved: 'bg-emerald-500/15 text-emerald-300',
-  confirmed: 'bg-emerald-500/15 text-emerald-300',
-  rejected: 'bg-red-500/15 text-red-300', declined: 'bg-red-500/15 text-red-300', terminated: 'bg-red-500/15 text-red-300',
-  cancelled: 'bg-slate-600/30 text-slate-300',
-  in_review: 'bg-blue-500/15 text-blue-300', on_probation: 'bg-blue-500/15 text-blue-300', extended: 'bg-amber-500/15 text-amber-300'
+// Self-contained status-tone palette instead of plain Tailwind color
+// utilities -- the app's ThemeContext.jsx repaints several of those stock
+// classes (with !important) to a single mapped "primary" color based on
+// whichever theme is active, which would otherwise flatten "approved"
+// (green), "pending" (amber) and "rejected" (red) into one indistinguishable
+// color. None of the welfare- classnames below are stock Tailwind
+// utilities, so that override can't reach them -- same fix
+// CMMSAnnouncementsPanel's CAP_STYLES and CMMSPayrollPanel's PAYROLL_STYLES
+// already use. Defaults to readable tones on the classic ivory surface;
+// re-pointed for the dark-background theme presets.
+const WELFARE_STYLES = `
+.welfare-scope {
+  --wf-success-bg: rgba(16, 185, 129, 0.15); --wf-success-text: #047857;
+  --wf-info-bg: rgba(14, 165, 233, 0.15); --wf-info-text: #0369a1;
+  --wf-warning-bg: rgba(245, 158, 11, 0.15); --wf-warning-text: #b45309;
+  --wf-danger-bg: rgba(239, 68, 68, 0.13); --wf-danger-text: #dc2626;
+  --wf-neutral-bg: rgba(100, 116, 139, 0.15); --wf-neutral-text: #475569;
+}
+:root[data-theme="dark"] .welfare-scope, :root[data-theme="purple"] .welfare-scope,
+:root[data-theme="green"] .welfare-scope, :root[data-theme="ocean"] .welfare-scope,
+:root[data-theme="sienna"] .welfare-scope {
+  --wf-success-bg: rgba(16, 185, 129, 0.18); --wf-success-text: #6ee7b7;
+  --wf-info-bg: rgba(14, 165, 233, 0.18); --wf-info-text: #7dd3fc;
+  --wf-warning-bg: rgba(245, 158, 11, 0.18); --wf-warning-text: #fcd34d;
+  --wf-danger-bg: rgba(239, 68, 68, 0.18); --wf-danger-text: #fca5a5;
+  --wf-neutral-bg: rgba(148, 163, 184, 0.18); --wf-neutral-text: #cbd5e1;
+}
+.wf-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: .25rem .65rem; font-size: .7rem; font-weight: 700; text-transform: capitalize; white-space: nowrap; }
+.wf-badge-success { background: var(--wf-success-bg); color: var(--wf-success-text); }
+.wf-badge-info { background: var(--wf-info-bg); color: var(--wf-info-text); }
+.wf-badge-warning { background: var(--wf-warning-bg); color: var(--wf-warning-text); }
+.wf-badge-danger { background: var(--wf-danger-bg); color: var(--wf-danger-text); }
+.wf-badge-neutral { background: var(--wf-neutral-bg); color: var(--wf-neutral-text); }
+.wf-tile { border-radius: 10px; border: 1px solid rgba(196, 160, 82, 0.26); padding: .75rem; }
+:root[data-theme="dark"] .welfare-scope .wf-tile, :root[data-theme="purple"] .welfare-scope .wf-tile,
+:root[data-theme="green"] .welfare-scope .wf-tile, :root[data-theme="ocean"] .welfare-scope .wf-tile,
+:root[data-theme="sienna"] .welfare-scope .wf-tile { border-color: var(--color-border); }
+.wf-field { margin-top: .25rem; width: 100%; }
+`;
+
+const STATUS_TONE = {
+  pending: 'warning', submitted: 'warning', approved: 'success', resolved: 'success', confirmed: 'success',
+  rejected: 'danger', declined: 'danger', terminated: 'danger',
+  cancelled: 'neutral', in_review: 'info', on_probation: 'info', extended: 'warning'
 };
-const StatusBadge = ({ status }) => <span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${STATUS_STYLES[status] || 'bg-slate-600/30 text-slate-300'}`}>{(status || '').replace(/_/g, ' ')}</span>;
+const StatusBadge = ({ status }) => <span className={`wf-badge wf-badge-${STATUS_TONE[status] || 'neutral'}`}>{(status || '').replace(/_/g, ' ')}</span>;
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+
+// Collapsed by default -- opens only when tapped -- so "My welfare" reads as
+// three labeled headers on a phone instead of every leave-type row, every
+// past request, and two open forms all stacked and visible at once. Same
+// accordion pattern as CMMSPayrollPanel's CollapsibleSection.
+function CollapsibleSection({ title, subtitle, icon, badge, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const bodyId = useRef(`welfare-section-${Math.random().toString(36).slice(2)}`).current;
+  return (
+    <section className="cmms-classic-divider">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-controls={bodyId}
+        className="flex w-full items-center justify-between gap-3 text-left !bg-transparent"
+        style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {icon}
+          <span className="min-w-0">
+            <span className="cmms-classic-heading block">{title}</span>
+            {subtitle && <span className="cmms-classic-muted block text-xs mt-0.5">{subtitle}</span>}
+          </span>
+        </span>
+        <span className="flex flex-shrink-0 items-center gap-2">
+          {badge}
+          <ChevronDown className={`h-4 w-4 cmms-classic-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </span>
+      </button>
+      {open && <div id={bodyId} className="mt-4">{children}</div>}
+    </section>
+  );
+}
 
 // Employee-facing HR self-service: leave balances & requests, probation
 // status (read-only — HR decides outcomes from the admin welfare screen),
 // and a general request form for anything else HR handles for staff
 // wellbeing. See backend/CMMS_EMPLOYEE_WELFARE_SYSTEM.sql.
-export default function CMMSEmployeeWelfare({ companyProfile }) {
+export default function CMMSEmployeeWelfare({ companyProfile, bare = false }) {
   const companyId = companyProfile?.id;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -107,132 +178,142 @@ export default function CMMSEmployeeWelfare({ companyProfile }) {
     setBusy(false);
   };
 
-  if (loading) return <div className="flex items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6 text-sm text-slate-300"><Loader className="h-4 w-4 animate-spin" /> Loading your welfare records…</div>;
+  if (loading) return (
+    <div className="welfare-scope flex items-center gap-2 cmms-classic-card p-6 text-sm cmms-classic-muted">
+      <style>{WELFARE_STYLES}</style>
+      <Loader className="h-4 w-4 animate-spin" aria-hidden="true" /> Loading your welfare records…
+    </div>
+  );
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6">
-        <div className="flex items-center gap-3">
-          <HeartPulse className="h-6 w-6 text-rose-400" />
+    <div className="welfare-scope space-y-1">
+      <style>{WELFARE_STYLES}</style>
+      <div className={bare ? '' : 'cmms-classic-divider'}>
+        {!bare && <div className="flex items-center gap-3">
+          <HeartPulse className="h-6 w-6" style={{ color: 'var(--color-primary)' }} aria-hidden="true" />
           <div>
-            <h2 className="text-xl font-bold text-white">My welfare</h2>
-            <p className="text-sm text-slate-400">Leave, probation status, and HR requests — only your own records.</p>
+            <h2 className="cmms-classic-heading text-xl">My welfare</h2>
+            <p className="cmms-classic-muted text-sm">Leave, probation status, and HR requests — only your own records.</p>
           </div>
-        </div>
-        {notice && <p className="mt-3 rounded-lg border border-emerald-800/50 bg-emerald-900/20 p-2 text-sm text-emerald-300">{notice}</p>}
-        {error && <p className="mt-3 rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{error}</p>}
+        </div>}
+        {notice && <p className="mt-1 wf-badge wf-badge-success !rounded-lg !px-3 !py-2 !text-sm !normal-case" role="status">{notice}</p>}
+        {error && <p className="mt-3 wf-badge wf-badge-danger !rounded-lg !px-3 !py-2 !text-sm !normal-case" role="alert">{error}</p>}
       </div>
 
       {probation && (
-        <section className="rounded-2xl border border-blue-800/40 bg-blue-950/10 p-4 md:p-6">
-          <div className="flex items-center gap-2 text-white"><ShieldCheck className="h-5 w-5 text-blue-300" /><h3 className="font-semibold">Probation status</h3></div>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+        <CollapsibleSection
+          title="Probation status"
+          icon={<ShieldCheck className="h-5 w-5" style={{ color: 'var(--wf-info-text)' }} aria-hidden="true" />}
+          badge={<StatusBadge status={probation.status} />}
+          defaultOpen={false}
+        >
+          <div className="flex flex-wrap items-center gap-3 text-sm">
             <StatusBadge status={probation.status} />
-            <span className="text-slate-300">Started {fmtDate(probation.start_date)} · {probation.status === 'terminated' ? 'ended' : 'review by'} {fmtDate(probation.probation_end_date)}</span>
+            <span className="cmms-classic-muted">Started {fmtDate(probation.start_date)} · {probation.status === 'terminated' ? 'ended' : 'review by'} {fmtDate(probation.probation_end_date)}</span>
           </div>
-          {probation.outcome_note && <p className="mt-2 text-xs text-slate-400">HR note: {probation.outcome_note}</p>}
-        </section>
+          {probation.outcome_note && <p className="mt-2 cmms-classic-muted text-xs">HR note: {probation.outcome_note}</p>}
+        </CollapsibleSection>
       )}
 
-      <section className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="flex items-center gap-2 font-semibold text-white"><CalendarDays className="h-4 w-4" /> Leave balances ({new Date().getFullYear()})</h3>
-          <button type="button" onClick={() => setShowLeaveForm((v) => !v)} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-500">
-            {showLeaveForm ? 'Close' : '+ Request leave'}
-          </button>
-        </div>
+      <CollapsibleSection
+        title={`Leave balances (${new Date().getFullYear()})`}
+        icon={<CalendarDays className="h-4 w-4" style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
+        defaultOpen={false}
+      >
+        <button type="button" onClick={() => setShowLeaveForm((v) => !v)} className="cmms-classic-btn-primary px-3 py-1.5 text-xs mb-3" aria-expanded={showLeaveForm}>
+          {showLeaveForm ? 'Close' : '+ Request leave'}
+        </button>
 
         {balances.length > 0 && (
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <dl className="cmms-field-list mt-3">
             {balances.map((b) => (
-              <div key={b.leave_type_id} className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
-                <p className="text-xs uppercase text-slate-400">{b.name}</p>
-                <p className="mt-1 text-lg font-bold text-white">{Number(b.remaining_days).toLocaleString()} <span className="text-xs font-normal text-slate-500">of {b.entitled_days > 0 ? Number(b.entitled_days).toLocaleString() : '∞'} days</span></p>
-                {!b.is_paid && <p className="text-xs text-amber-400">Unpaid</p>}
+              <div key={b.leave_type_id} className="cmms-field-row">
+                <dt>{b.name}</dt>
+                <dd>{Number(b.remaining_days).toLocaleString()} <span className="cmms-classic-muted font-normal">of {b.entitled_days > 0 ? Number(b.entitled_days).toLocaleString() : '∞'} days</span>{!b.is_paid && <span className="ml-2 text-xs" style={{ color: 'var(--wf-warning-text)' }}>Unpaid</span>}</dd>
               </div>
             ))}
-          </div>
+          </dl>
         )}
 
         {showLeaveForm && (
-          <form onSubmit={submitLeave} className="mt-4 space-y-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-            <select required value={leaveForm.leave_type_id} onChange={(e) => setLeaveForm((v) => ({ ...v, leave_type_id: e.target.value }))} className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white">
+          <form onSubmit={submitLeave} className="mt-4 space-y-2 cmms-classic-divider">
+            <select required value={leaveForm.leave_type_id} onChange={(e) => setLeaveForm((v) => ({ ...v, leave_type_id: e.target.value }))} className="wf-field">
               <option value="">Select leave type…</option>
               {leaveTypes.map((t) => <option key={t.id} value={t.id}>{t.name}{t.requires_document ? ' (supporting document recommended)' : ''}</option>)}
             </select>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-xs text-slate-400">Start date
-                <input required type="date" value={leaveForm.start_date} onChange={(e) => setLeaveForm((v) => ({ ...v, start_date: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
+              <label className="cmms-classic-muted text-xs">Start date
+                <input required type="date" value={leaveForm.start_date} onChange={(e) => setLeaveForm((v) => ({ ...v, start_date: e.target.value }))} className="wf-field" />
               </label>
-              <label className="text-xs text-slate-400">End date
-                <input required type="date" min={leaveForm.start_date || undefined} value={leaveForm.end_date} onChange={(e) => setLeaveForm((v) => ({ ...v, end_date: e.target.value }))} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
+              <label className="cmms-classic-muted text-xs">End date
+                <input required type="date" min={leaveForm.start_date || undefined} value={leaveForm.end_date} onChange={(e) => setLeaveForm((v) => ({ ...v, end_date: e.target.value }))} className="wf-field" />
               </label>
             </div>
-            <textarea value={leaveForm.reason} onChange={(e) => setLeaveForm((v) => ({ ...v, reason: e.target.value }))} placeholder="Reason (optional)" rows={2} className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
-            <input value={leaveForm.document_url} onChange={(e) => setLeaveForm((v) => ({ ...v, document_url: e.target.value }))} placeholder="Supporting document link (optional)" className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
-            <button disabled={busy} className="flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Send className="h-4 w-4" /> {busy ? 'Submitting…' : 'Submit request'}</button>
+            <textarea value={leaveForm.reason} onChange={(e) => setLeaveForm((v) => ({ ...v, reason: e.target.value }))} placeholder="Reason (optional)" rows={2} className="wf-field" />
+            <input value={leaveForm.document_url} onChange={(e) => setLeaveForm((v) => ({ ...v, document_url: e.target.value }))} placeholder="Supporting document link (optional)" className="wf-field" type="text" />
+            <button disabled={busy} className="cmms-classic-btn-primary flex items-center gap-2 px-3 py-2 text-sm"><Send className="h-4 w-4" aria-hidden="true" /> {busy ? 'Submitting…' : 'Submit request'}</button>
           </form>
         )}
 
         <div className="mt-4 space-y-2">
-          {leaveRequests.length === 0 ? <p className="text-sm text-slate-400">No leave requests yet.</p> : leaveRequests.map((r) => (
-            <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
+          {leaveRequests.length === 0 ? <p className="cmms-classic-muted text-sm">No leave requests yet.</p> : leaveRequests.map((r) => (
+            <div key={r.id} className="wf-tile flex flex-wrap items-center justify-between gap-2 text-sm">
               <div>
-                <p className="font-semibold text-white">{fmtDate(r.start_date)} – {fmtDate(r.end_date)} <span className="text-xs font-normal text-slate-500">({r.total_days} day{r.total_days === 1 ? '' : 's'})</span></p>
-                {r.reason && <p className="mt-0.5 text-xs text-slate-400">{r.reason}</p>}
-                {r.decision_note && <p className="mt-0.5 text-xs text-slate-500">HR note: {r.decision_note}</p>}
+                <p className="cmms-classic-heading font-semibold">{fmtDate(r.start_date)} – {fmtDate(r.end_date)} <span className="cmms-classic-muted text-xs font-normal">({r.total_days} day{r.total_days === 1 ? '' : 's'})</span></p>
+                {r.reason && <p className="cmms-classic-muted mt-0.5 text-xs">{r.reason}</p>}
+                {r.decision_note && <p className="cmms-classic-muted mt-0.5 text-xs">HR note: {r.decision_note}</p>}
               </div>
               <div className="flex items-center gap-2">
                 <StatusBadge status={r.status} />
                 {(r.status === 'pending' || (r.status === 'approved' && new Date(r.start_date) > new Date())) && (
-                  <button type="button" disabled={busy} onClick={() => withdrawLeave(r.id)} className="rounded-lg border border-slate-600 p-1.5 text-slate-300 hover:bg-slate-800 disabled:opacity-50" title="Cancel"><X className="h-3.5 w-3.5" /></button>
+                  <button type="button" disabled={busy} onClick={() => withdrawLeave(r.id)} className="cmms-classic-btn-secondary p-1.5" aria-label="Cancel leave request" title="Cancel"><X className="h-3.5 w-3.5" aria-hidden="true" /></button>
                 )}
               </div>
             </div>
           ))}
         </div>
-      </section>
+      </CollapsibleSection>
 
-      <section className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-semibold text-white">HR &amp; wellbeing requests</h3>
-          <button type="button" onClick={() => setShowWelfareForm((v) => !v)} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-500">
-            {showWelfareForm ? 'Close' : '+ New request'}
-          </button>
-        </div>
-        <p className="mt-1 text-xs text-slate-500">Grievances, wellness &amp; counseling support, flexible work, training sponsorship, medical or bereavement assistance — anything else HR can help with.</p>
+      <CollapsibleSection
+        title="HR & wellbeing requests"
+        subtitle="Grievances, wellness & counseling support, flexible work, training sponsorship, medical or bereavement assistance."
+        defaultOpen={false}
+      >
+        <button type="button" onClick={() => setShowWelfareForm((v) => !v)} className="cmms-classic-btn-primary px-3 py-1.5 text-xs mb-3" aria-expanded={showWelfareForm}>
+          {showWelfareForm ? 'Close' : '+ New request'}
+        </button>
 
         {showWelfareForm && (
-          <form onSubmit={submitWelfare} className="mt-4 space-y-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-            <select value={welfareForm.category} onChange={(e) => setWelfareForm((v) => ({ ...v, category: e.target.value }))} className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white">
+          <form onSubmit={submitWelfare} className="mt-4 space-y-2 cmms-classic-divider">
+            <select value={welfareForm.category} onChange={(e) => setWelfareForm((v) => ({ ...v, category: e.target.value }))} className="wf-field">
               {WELFARE_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
             </select>
-            <input required value={welfareForm.subject} onChange={(e) => setWelfareForm((v) => ({ ...v, subject: e.target.value }))} placeholder="Subject" className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
-            <textarea required value={welfareForm.description} onChange={(e) => setWelfareForm((v) => ({ ...v, description: e.target.value }))} placeholder="Describe your request…" rows={3} className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
-            <label className="flex items-center gap-2 text-xs text-slate-400">
+            <input required value={welfareForm.subject} onChange={(e) => setWelfareForm((v) => ({ ...v, subject: e.target.value }))} placeholder="Subject" className="wf-field" type="text" />
+            <textarea required value={welfareForm.description} onChange={(e) => setWelfareForm((v) => ({ ...v, description: e.target.value }))} placeholder="Describe your request…" rows={3} className="wf-field" />
+            <label className="flex items-center gap-2 cmms-classic-muted text-xs">
               <input type="checkbox" checked={welfareForm.is_confidential} onChange={(e) => setWelfareForm((v) => ({ ...v, is_confidential: e.target.checked }))} />
               Keep this confidential (visible to HR only)
             </label>
-            <button disabled={busy} className="flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Send className="h-4 w-4" /> {busy ? 'Sending…' : 'Send to HR'}</button>
+            <button disabled={busy} className="cmms-classic-btn-primary flex items-center gap-2 px-3 py-2 text-sm"><Send className="h-4 w-4" aria-hidden="true" /> {busy ? 'Sending…' : 'Send to HR'}</button>
           </form>
         )}
 
         <div className="mt-4 space-y-2">
-          {welfareRequests.length === 0 ? <p className="text-sm text-slate-400">No requests yet.</p> : welfareRequests.map((r) => (
-            <div key={r.id} className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
+          {welfareRequests.length === 0 ? <p className="cmms-classic-muted text-sm">No requests yet.</p> : welfareRequests.map((r) => (
+            <div key={r.id} className="wf-tile text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-semibold text-white">{r.subject} <span className="text-xs font-normal capitalize text-slate-500">· {WELFARE_CATEGORIES.find((c) => c.id === r.category)?.label || r.category}</span></p>
+                <p className="cmms-classic-heading font-semibold">{r.subject} <span className="cmms-classic-muted text-xs font-normal capitalize">· {WELFARE_CATEGORIES.find((c) => c.id === r.category)?.label || r.category}</span></p>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={r.status} />
-                  {r.status === 'submitted' && <button type="button" disabled={busy} onClick={() => withdrawWelfare(r.id)} className="rounded-lg border border-slate-600 p-1.5 text-slate-300 hover:bg-slate-800 disabled:opacity-50" title="Withdraw"><X className="h-3.5 w-3.5" /></button>}
+                  {r.status === 'submitted' && <button type="button" disabled={busy} onClick={() => withdrawWelfare(r.id)} className="cmms-classic-btn-secondary p-1.5" aria-label="Withdraw request" title="Withdraw"><X className="h-3.5 w-3.5" aria-hidden="true" /></button>}
                 </div>
               </div>
-              <p className="mt-1 text-xs text-slate-400">{r.description}</p>
-              {r.response && <p className="mt-1 text-xs text-emerald-300">HR response: {r.response}</p>}
+              <p className="cmms-classic-muted mt-1 text-xs">{r.description}</p>
+              {r.response && <p className="mt-1 text-xs" style={{ color: 'var(--wf-success-text)' }}>HR response: {r.response}</p>}
             </div>
           ))}
         </div>
-      </section>
+      </CollapsibleSection>
     </div>
   );
 }

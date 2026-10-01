@@ -8763,18 +8763,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* CMMS Panel - Full Web CMSS UI */}
       {showCmmsPanel && (
         <div
-          className={`fixed inset-x-0 z-30 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
+          className={`cmms-page-classic fixed inset-x-0 z-30 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
           style={{
             top: isWebDashboard ? dashboardHeaderHeight : 0,
-            bottom: isWebDashboard ? '0' : overlayPanelBottomInset,
-            background: 'var(--color-bg)'
+            bottom: isWebDashboard ? '0' : overlayPanelBottomInset
           }}
         >
-          {/* No side padding here -- CMSSModule owns its own full-bleed layout
-              on mobile (p-0) and switches to a contained, padded shell at the
-              md breakpoint, so wrapping it in padding here would just box in
-              every CMMS page on phones. */}
-          <div className="pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          {/* The ivory/gold classic background lives on THIS wrapper, not on
+              CMSSModule's own root -- this is the element `fixed` with a real
+              top/bottom, so it reliably spans the full panel height. Putting
+              it only on CMSSModule's root (sized by its content, inside a
+              plain auto-height div) left a gap where this wrapper's own
+              background showed through as a dark edge once content was
+              shorter than the panel. No side padding here either -- CMSSModule
+              owns its own full-bleed layout on mobile (p-0) and switches to a
+              contained, padded shell at the md breakpoint, so wrapping it in
+              padding here would just box in every CMMS page on phones. */}
+          <div className="min-h-full pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <CMMSModule
               user={userProfile}
               navRef={cmssNavRef}
