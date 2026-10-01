@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import CmmsPageShell from './CmmsPageShell.jsx';
 import {
   Megaphone, Briefcase, Plus, Edit2, Trash2, X, Save, Image as ImageIcon,
@@ -1154,8 +1155,10 @@ const CMMSAnnouncementsPanel = ({
         />
       )}
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 overflow-y-auto overscroll-contain">
+      {showForm && createPortal(
+        // Portalled to <body> so it is a true full page: no ancestor (the
+        // page shell, its animation or scroll box) can clip or offset it.
+        <div className="cap-scope cmms-fullpage fixed inset-0 z-[100] overflow-y-auto overscroll-contain">
           {/* pb-16 (plus the safe-area inset) keeps the Publish/Cancel row
               clear of the mobile home-indicator/browser-chrome instead of
               sitting flush against it once this long form (job postings add
@@ -1164,13 +1167,18 @@ const CMMSAnnouncementsPanel = ({
             className="min-h-screen flex items-start justify-center p-4 pb-16"
             style={{ paddingBottom: 'max(4rem, calc(env(safe-area-inset-bottom) + 2rem))' }}
           >
-            <div className="cmms-classic-card w-full max-w-2xl p-6 my-8">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="cmms-classic-heading text-lg">
-                  {draft.id ? 'Edit' : 'New'} {draft.postType === 'job' ? 'job posting' : 'announcement'}
-                </h3>
-                <button onClick={resetForm} className="cmms-classic-muted hover:opacity-70"><X className="w-5 h-5" /></button>
+            <div className="cmms-accent-gold w-full max-w-3xl mx-auto py-2">
+              <div className="mb-3 flex items-center gap-3">
+                <span className="cmms-medallion">{draft.postType === 'job' ? <Briefcase className="h-4 w-4" aria-hidden="true" /> : <Megaphone className="h-4 w-4" aria-hidden="true" />}</span>
+                <div className="min-w-0 flex-1">
+                  <h3 className="cmms-classic-heading text-lg leading-tight">
+                    {draft.id ? 'Edit' : 'New'} {draft.postType === 'job' ? 'job posting' : 'announcement'}
+                  </h3>
+                  <p className="truncate text-xs cmms-classic-muted">{draft.postType === 'job' ? 'Appears on your public job board' : 'Share news with staff or the public'}</p>
+                </div>
+                <button type="button" onClick={resetForm} className="cmms-classic-btn-secondary inline-flex !h-auto !min-h-0 flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs"><X className="h-3.5 w-3.5" aria-hidden="true" /> Close</button>
               </div>
+              <div className="cmms-ornament mb-4" aria-hidden="true" />
 
               <div className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-3">
@@ -1267,7 +1275,8 @@ const CMMSAnnouncementsPanel = ({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {testBuilderJob && (
@@ -1582,8 +1591,8 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
         );
       })}
 
-      {boardroomAccess && (
-        <div className="fixed inset-0 z-[90] bg-black">
+      {boardroomAccess && createPortal(
+        <div className="fixed inset-0 z-[110] bg-black">
           <LiveBoardroom
             groupId={boardroomAccess.room_id}
             groupName={`Interview — ${boardroomAccess.candidate_name}`}
@@ -1593,7 +1602,8 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
             onClose={() => setBoardroomAccess(null)}
             autoStart
           />
-        </div>
+        </div>,
+        document.body
       )}
 
       {showTestPicker && (

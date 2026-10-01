@@ -22,9 +22,9 @@ export default function CmmsPageShell({ title, subtitle, icon, chips = [], info,
   return (
     <div className={fullPage ? 'cmms-fullpage space-y-5 fixed inset-0 z-50 overflow-y-auto p-4 md:p-8' : 'space-y-5 cmms-classic-card p-4 md:p-6'}>
       <div className="cmms-accent-gold space-y-2.5">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <span className="cmms-medallion">{icon}</span>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-32">
             <h2 className="cmms-classic-heading text-lg leading-tight">{title}</h2>
             {subtitle && <p className="truncate text-xs cmms-classic-muted">{subtitle}</p>}
           </div>
