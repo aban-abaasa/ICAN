@@ -64,11 +64,19 @@ const ResetPinPage = ({ onDone }) => {
         if (!sessionData?.session?.user) {
           throw new Error('This recovery link is invalid or expired. Request a new PIN reset email.');
         }
-        ({ data, error: err } = await supabase.rpc('reset_wallet_pin_from_recovery', {
-          p_account_type: accountType,
-          p_new_pin_hash: hashPIN(pin),
-          ...(accountId ? { p_account_id: accountId } : {})
-        }));
+        if (accountType === 'business' && accountId) {
+          // iCanEra business wallet: the PIN is per business profile and
+          // stored bcrypt-hashed server-side, so the raw PIN goes over TLS.
+          ({ data, error: err } = await supabase.rpc('reset_business_wallet_pin_from_recovery', {
+            p_business_profile_id: accountId,
+            p_new_pin: pin
+          }));
+        } else {
+          ({ data, error: err } = await supabase.rpc('reset_wallet_pin_from_recovery', {
+            p_account_type: accountType,
+            p_new_pin_hash: hashPIN(pin)
+          }));
+        }
       }
 
       if (err) throw err;
