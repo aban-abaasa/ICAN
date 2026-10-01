@@ -62,12 +62,32 @@ serve(async (req) => {
 
     const request = await req.json().catch(() => ({}));
     const accountType = request?.accountType === "business" ? "business" : "personal";
-    const { data: account, error: accountError } = await admin
+    const requestedAccountId = accountType === "business" && typeof request?.accountId === "string"
+      ? request.accountId
+      : null;
+    // A user can own several business wallets, so don't use maybeSingle()
+    // (it errors on multiple rows). Also match business wallets through the
+    // business profiles the user owns.
+    let accountQuery = admin
       .from("user_accounts")
       .select("id, account_holder_name")
-      .eq("user_id", user.id)
       .eq("account_type", accountType)
-      .maybeSingle();
+      .limit(1);
+    if (requestedAccountId) accountQuery = accountQuery.eq("id", requestedAccountId);
+    if (accountType === "business") {
+      const { data: ownedProfiles } = await admin
+        .from("business_profiles")
+        .select("id")
+        .eq("user_id", user.id);
+      const ownedIds = (ownedProfiles || []).map((p: { id: string }) => p.id);
+      accountQuery = ownedIds.length
+        ? accountQuery.or(`user_id.eq.${user.id},business_id.in.(${ownedIds.join(",")})`)
+        : accountQuery.eq("user_id", user.id);
+    } else {
+      accountQuery = accountQuery.eq("user_id", user.id);
+    }
+    const { data: accountRows, error: accountError } = await accountQuery;
+    const account = accountRows?.[0] ?? null;
 
     if (accountError) {
       console.error("PIN reset account lookup failed:", accountError);
@@ -81,6 +101,7 @@ serve(async (req) => {
     let redirectTo = new URL("/reset-password", siteUrl);
     redirectTo.searchParams.set("accountType", accountType);
     redirectTo.searchParams.set("flow", "pin");
+    if (requestedAccountId) redirectTo.searchParams.set("accountId", account.id);
     try {
       const requested = new URL(String(request?.redirectTo || ""));
       if (
@@ -90,6 +111,7 @@ serve(async (req) => {
       ) {
         redirectTo = requested;
         redirectTo.searchParams.set("accountType", accountType);
+        if (requestedAccountId) redirectTo.searchParams.set("accountId", account.id);
       }
     } catch {
       // Fall back to the canonical app URL if the client omitted a valid target.
