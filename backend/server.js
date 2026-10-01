@@ -249,16 +249,23 @@ cron.schedule('0 3 * * *', () => {
 
 // ==========================================
 // Live FX Rate Refresh
-// Runs once at startup, then hourly (optionally fed by GOOGLEFINANCE via
+// Runs once at startup, then every minute (optionally fed by GOOGLEFINANCE via
 // GOOGLE_SHEET_FX_CSV_URL) — keeps ican_currency_rates.
 // rate_to_ugx current for every currency so the USD-anchored price engine's
 // FX shield (and each currency's own appreciation vs its launch rate) tracks
 // real exchange-rate movement instead of the one-time seed values.
 // ==========================================
-refreshLiveFxRates().catch(err => console.error('[fx-rates] Initial refresh failed:', err.message));
-cron.schedule('5 * * * *', () => {
-  refreshLiveFxRates().catch(err => console.error('[fx-rates] Scheduled refresh failed:', err.message));
-});
+let fxRefreshRunning = false;
+const runFxRefresh = (label) => {
+  if (fxRefreshRunning) return; // never overlap runs
+  fxRefreshRunning = true;
+  refreshLiveFxRates()
+    .catch(err => console.error(`[fx-rates] ${label} refresh failed:`, err.message))
+    .finally(() => { fxRefreshRunning = false; });
+};
+runFxRefresh('Initial');
+cron.schedule('* * * * *', () => runFxRefresh('Scheduled'));
+
 
 // ==========================================
 // CMMS Payday AI Advisory Worker

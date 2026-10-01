@@ -72,7 +72,7 @@ async function refreshLiveFxRates() {
 
   const { data: currencyRows, error } = await supabase
     .from('ican_currency_rates')
-    .select('currency_code');
+    .select('currency_code, rate_to_ugx');
   if (error) throw error;
 
   let updated = 0;
@@ -84,6 +84,9 @@ async function refreshLiveFxRates() {
     if (!unitsPerUsd || unitsPerUsd <= 0) { skipped++; continue; }
 
     const rateToUgx = usdRates.UGX / unitsPerUsd;
+    // Per-minute cadence: don't rewrite rows whose rate hasn't moved.
+    const current = Number(row.rate_to_ugx);
+    if (current > 0 && Math.abs(rateToUgx - current) / current < 1e-9) { skipped++; continue; }
 
     const { error: updateError } = await supabase
       .from('ican_currency_rates')
@@ -98,7 +101,7 @@ async function refreshLiveFxRates() {
     updated++;
   }
 
-  console.log(`[fx-rates] Refreshed ${updated} currencies from live FX feed, ${skipped} left unchanged (no match).`);
+  console.log(`[fx-rates] Refreshed ${updated} currencies from live FX feed, ${skipped} unchanged.`);
   return { updated, skipped, total: currencyRows?.length || 0 };
 }
 
