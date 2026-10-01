@@ -258,8 +258,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
   const [flowPanels, setFlowPanels] = useState({
     shareOverview: true,
     walletSummary: true,
-    walletCoins: true,
-    paymentSource: true,
+    walletCoins: false,
+    paymentSource: false,
     walletBreakdown: false,
     walletShareholders: false,
     paymentSummary: true,
@@ -2816,15 +2816,14 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 <p className="text-slate-400">Review all documents submitted by {pitch?.creator_name || 'the seller'}</p>
               </div>
 
-              {/* Investor Access Confirmed */}
-              <div className="bg-green-500/10 border border-green-500/50 rounded-lg p-4 flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-green-300 font-semibold text-sm mb-1">Investor Access Enabled</p>
-                  <p className="text-green-200/80 text-xs">
-                    You are an authenticated investor. All seller documents are accessible and visible only to authorized investors like you.
-                  </p>
-                </div>
+              {/* Investor access: one quiet chip instead of a full callout box */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inv-chip inv-chip-ok" title="You are an authenticated investor. Seller documents are visible only to authorized investors like you.">
+                  <CheckCircle className="w-3.5 h-3.5" /> Investor access enabled
+                </span>
+                {sellerDocuments && (
+                  <span className="inv-chip">{completedDocumentCount}/{documentSections.length} fields ready</span>
+                )}
               </div>
 
               {documentsLoading ? (
@@ -2834,30 +2833,19 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </div>
               ) : sellerDocuments ? (
                 <div className="space-y-4">
-                  <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-semibold text-white">Overall Progress</h4>
-                      <span className="text-lg font-bold text-purple-400">
-                        {completedDocumentCount}/{documentSections.length} fields
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-700 rounded-full h-2">
-                      <div
-                        className="bg-gradient-to-r from-pink-500 to-purple-500 h-2 rounded-full transition-all"
-                        style={{ width: `${(completedDocumentCount / documentSections.length) * 100}%` }}
-                      />
-                    </div>
+                  <div className="inv-progress" role="progressbar" aria-valuemin={0} aria-valuemax={documentSections.length} aria-valuenow={completedDocumentCount} aria-label="Seller document progress">
+                    <div style={{ width: `${(completedDocumentCount / documentSections.length) * 100}%` }} />
                   </div>
 
                   <div className="space-y-3">
                     {documentSections.map((section) => {
                       const isExpanded = Boolean(expandedDocumentCards[section.key]);
                       return (
-                        <div key={section.key} className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                        <div key={section.key} className="inv-fold">
                           <button
                             type="button"
                             onClick={() => toggleDocumentCard(section.key)}
-                            className="w-full p-4 text-left flex items-start gap-3 hover:bg-slate-700/30 transition"
+                            className="w-full px-1 py-3 text-left flex items-start gap-3 hover:bg-slate-700/20 transition"
                           >
                             <span className="inline-flex items-center justify-center min-w-[2.25rem] h-9 px-2 rounded-md border border-slate-600 bg-slate-900/70 text-xs font-semibold text-slate-200">
                               {section.icon}
@@ -2881,7 +2869,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                           </button>
 
                           {isExpanded && (
-                            <div className="px-4 pb-4 space-y-3">
+                            <div className="inv-unfold px-1 pb-4 space-y-3">
                               {renderDocumentContent(section.key)}
                               <button
                                 type="button"
@@ -2954,11 +2942,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
             <div className="space-y-5 pb-[calc(7rem+env(safe-area-inset-bottom))]">
               <h3 className="text-xl font-bold text-white">Review Original Pitch Agreement</h3>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleAgreementPanel('snapshot')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Agreement Snapshot</span>
                   {agreementPanels.snapshot ? (
@@ -2969,8 +2957,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </button>
 
                 {agreementPanels.snapshot && (
-                  <div className="px-4 pb-4">
-                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                  <div className="inv-unfold px-1 pb-4">
+                    <ul className="divide-y divide-slate-700/40">
                       {[
                         ['Pitch Title', pitch?.title || 'N/A'],
                         ['Creator', businessProfile?.owner_name || businessProfile?.business_co_owners?.[0]?.owner_name || pitch?.creator_name || 'Unknown'],
@@ -3007,11 +2995,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleAgreementPanel('terms')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Investment Terms & Conditions</span>
                   {agreementPanels.terms ? (
@@ -3022,8 +3010,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </button>
 
                 {agreementPanels.terms && (
-                  <div className="px-4 pb-4">
-                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                  <div className="inv-unfold px-1 pb-4">
+                    <ul className="divide-y divide-slate-700/40">
                       {[
                         ['Investment Type', investmentType === 'buy' ? 'Equity Purchase' : investmentType === 'partner' ? 'Partnership Agreement' : investmentType === 'guarantor' ? 'Guarantor Agreement' : 'Financial Support'],
                         ['Business', sellerBusinessProfile?.business_name || pitch?.title || 'the business'],
@@ -3092,11 +3080,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
             <div className="space-y-5 pb-[calc(7rem+env(safe-area-inset-bottom))]">
               <h3 className="text-xl font-bold text-white">Share Allocation</h3>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('shareOverview')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Pitch Overview</span>
                   {flowPanels.shareOverview ? (
@@ -3107,8 +3095,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </button>
 
                 {flowPanels.shareOverview && (
-                  <div className="px-4 pb-4">
-                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                  <div className="inv-unfold px-1 pb-4">
+                    <ul className="divide-y divide-slate-700/40">
                       {[
                         ['Pitch', pitch?.title || 'N/A'],
                         ['Live Business Value', liveOffer?.businessValueUgx != null
@@ -3278,11 +3266,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 IcanEra Wallet - Investment Summary
               </h3>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('walletSummary')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Investment Snapshot</span>
                   {flowPanels.walletSummary ? (
@@ -3293,8 +3281,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </button>
 
                 {flowPanels.walletSummary && (
-                  <div className="px-4 pb-4">
-                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                  <div className="inv-unfold px-1 pb-4">
+                    <ul className="divide-y divide-slate-700/40">
                       {[
                         ['Pitch Title', pitch?.title || 'Unknown Pitch'],
                         ['Business', sellerBusinessProfile?.business_name || businessProfile?.business_name || 'Unknown Business'],
@@ -3318,11 +3306,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('walletCoins')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Your IcanEra Wallet</span>
                   {flowPanels.walletCoins ? (
@@ -3364,11 +3352,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('paymentSource')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Pay From</span>
                   {flowPanels.paymentSource ? (
@@ -3438,11 +3426,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('walletBreakdown')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Investment Breakdown</span>
                   {flowPanels.walletBreakdown ? (
@@ -3453,8 +3441,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </button>
 
                 {flowPanels.walletBreakdown && (
-                  <div className="px-4 pb-4">
-                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                  <div className="inv-unfold px-1 pb-4">
+                    <ul className="divide-y divide-slate-700/40">
                       {[
                         ['Investment Amount (IcanEra)', `${investmentInIcanCoins.toFixed(2)} coins`],
                         ['Equivalent Value', `${allowedCurrency} ${totalInvestment.toFixed(2)}`],
@@ -3476,11 +3464,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('walletShareholders')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Business Shareholders ({getActualShareholders().length})</span>
                   {flowPanels.walletShareholders ? (
@@ -3491,9 +3479,9 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </button>
 
                 {flowPanels.walletShareholders && (
-                  <div className="px-4 pb-4">
+                  <div className="inv-unfold px-1 pb-4">
                     {getActualShareholders().length > 0 ? (
-                      <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden max-h-56 overflow-y-auto">
+                      <ul className="divide-y divide-slate-700/40 max-h-56 overflow-y-auto">
                         {getActualShareholders().map((shareholder, idx) => (
                           <li key={shareholder.id || idx} className="px-3.5 py-3 flex items-center justify-between gap-3">
                             <div className="min-w-0">
@@ -3822,11 +3810,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 Secure Payment - Wallet PIN Verification
               </h3>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('paymentSummary')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Payment Summary</span>
                   {flowPanels.paymentSummary ? (
@@ -3837,8 +3825,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </button>
 
                 {flowPanels.paymentSummary && (
-                  <div className="px-4 pb-4">
-                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                  <div className="inv-unfold px-1 pb-4">
+                    <ul className="divide-y divide-slate-700/40">
                       {[
                         ['Amount to Escrow', `${allowedCurrency} ${totalInvestment.toFixed(2)}`],
                         ['IcanEra Required', `${investmentInIcanCoins.toFixed(2)} coins`],
@@ -4034,11 +4022,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 Awaiting Shareholder Signatures (24-Hour Deadline)
               </h3>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('pendingStatus')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Escrow Status</span>
                   {flowPanels.pendingStatus ? (
@@ -4090,11 +4078,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('pendingNotifications')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">
                     Shareholder Notifications ({Object.keys(shareholderNotifications || {}).length})
@@ -4107,9 +4095,9 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </button>
 
                 {flowPanels.pendingNotifications && (
-                  <div className="px-4 pb-4">
+                  <div className="inv-unfold px-1 pb-4">
                     {shareholderNotifications && Object.keys(shareholderNotifications).length > 0 ? (
-                      <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden max-h-60 overflow-y-auto">
+                      <ul className="divide-y divide-slate-700/40 max-h-60 overflow-y-auto">
                         {Object.entries(shareholderNotifications).map(([id, notifData]) => {
                           const hasSigned = signatures.some((s) => String(s.id) === String(id));
                           return (
@@ -4137,11 +4125,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('pendingTimeline')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Signature Timeline</span>
                   {flowPanels.pendingTimeline ? (
@@ -4152,8 +4140,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </button>
 
                 {flowPanels.pendingTimeline && (
-                  <div className="px-4 pb-4">
-                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden max-h-64 overflow-y-auto">
+                  <div className="inv-unfold px-1 pb-4">
+                    <ul className="divide-y divide-slate-700/40 max-h-64 overflow-y-auto">
                       {timelineShareholders.map((shareholder, idx) => {
                         const signature = signatures.find((s) => String(s.id) === String(shareholder.id));
                         const displayName = shareholder.name || shareholder.owner_name || `Shareholder ${idx + 1}`;
@@ -4526,11 +4514,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </p>
               </div>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('finalSummary')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Final Investment Summary</span>
                   {flowPanels.finalSummary ? (
@@ -4541,8 +4529,8 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </button>
 
                 {flowPanels.finalSummary && (
-                  <div className="px-4 pb-4">
-                    <ul className="rounded-lg border border-slate-700/70 bg-slate-900/40 divide-y divide-slate-700/60 overflow-hidden">
+                  <div className="inv-unfold px-1 pb-4">
+                    <ul className="divide-y divide-slate-700/40">
                       {[
                         ['Pitch', pitch?.title || 'N/A'],
                         ['Business', sellerBusinessProfile?.business_name || pitch?.title || 'the business'],
@@ -4563,11 +4551,11 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 )}
               </div>
 
-              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 overflow-hidden">
+              <div className="inv-fold">
                 <button
                   type="button"
                   onClick={() => toggleFlowPanel('finalCertificate')}
-                  className="w-full px-4 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/40 transition"
+                  className="w-full px-1 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-slate-800/30 transition"
                 >
                   <span className="font-semibold text-white">Agreement Certificate</span>
                   {flowPanels.finalCertificate ? (
@@ -4578,7 +4566,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
                 </button>
 
                 {flowPanels.finalCertificate && (
-                  <div className="px-4 pb-4">
+                  <div className="inv-unfold px-1 pb-4">
                     {qrCodeUrl ? (
                       <div ref={printRef} className="bg-white p-5 rounded-lg space-y-5">
                         <div className="text-center border-b border-gray-300 pb-3">

@@ -226,6 +226,12 @@ const CMMSInvestorPitchPanel = ({ businessProfileId, cmmsCompanyId = null }) => 
     const shares = parseFloat(d.shares) || 0;
     const sharePrice = parseFloat(d.sharePrice) || 0;
     const total = parseFloat(d.totalAmount) || shares * sharePrice;
+    // pitches.target_funding is DECIMAL(15,2) -- fail with a clear message
+    // instead of the database's "numeric field overflow".
+    if (total >= 1e13) {
+      alert('The total amount is too large. Please reduce the shares or share price.');
+      return;
+    }
     const planContent = { ...plan, has_mou: true };
     if (shares) planContent.shares = shares;
     if (sharePrice) planContent.share_price = sharePrice;
@@ -241,7 +247,9 @@ const CMMSInvestorPitchPanel = ({ businessProfileId, cmmsCompanyId = null }) => 
         ? await editManagedPitchPlan(editingPitch.id, {
             description,
             target_funding: total,
-            equity_offering: shares,
+            // equity_offering is a percentage (DECIMAL(5,2)); the share
+            // count lives in plan_content, so leave the percentage untouched.
+            equity_offering: null,
             plan_content: planContent,
           })
         : await createManagedPitch({
@@ -251,7 +259,7 @@ const CMMSInvestorPitchPanel = ({ businessProfileId, cmmsCompanyId = null }) => 
             category: profile.business_type || 'Technology',
             pitch_type: 'Equity',
             target_funding: total,
-            equity_offering: shares,
+            equity_offering: 0, // percentage column; share count is in plan_content
             has_ip: false,
             plan_content: planContent,
           });

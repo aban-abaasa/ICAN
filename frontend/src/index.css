@@ -1408,3 +1408,17 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .cmms-clean-shell.cmms-page-classic * { animation: none !important; transition: none !important; }
 }
+
+
+/* Investment flow: flat, collapsible sections instead of stacked boxes */
+.inv-fold { position: relative; padding-left: 0.85rem; border-bottom: 1px solid rgba(148, 163, 184, 0.14); animation: invRise 0.4s ease both; }
+.inv-fold::before { content: ''; position: absolute; left: 0; top: 0.9rem; width: 3px; height: 1.1rem; border-radius: 3px; background: linear-gradient(180deg, #ec4899, #a855f7); opacity: 0.85; }
+.inv-fold:last-child { border-bottom: 0; }
+.inv-unfold { animation: invUnfold 0.3s ease both; transform-origin: top; }
+.inv-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; color: #cbd5e1; background: rgba(148, 163, 184, 0.12); animation: invRise 0.45s ease both; }
+.inv-chip-ok { color: #6ee7b7; background: rgba(16, 185, 129, 0.14); }
+.inv-progress { height: 3px; border-radius: 3px; background: rgba(148, 163, 184, 0.18); overflow: hidden; }
+.inv-progress > div { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #ec4899, #a855f7); transition: width 0.6s cubic-bezier(0.2, 0.7, 0.2, 1); }
+@keyframes invRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes invUnfold { from { opacity: 0; transform: scaleY(0.96) translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .inv-fold, .inv-unfold, .inv-chip, .inv-progress > div { animation: none !important; transition: none !important; } }
