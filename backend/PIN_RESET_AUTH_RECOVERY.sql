@@ -36,8 +36,18 @@ BEGIN
       pin_locked_until = NULL,
       failed_pin_attempts = 0,
       updated_at = now()
-  WHERE user_id = v_user_id
-    AND account_type = p_account_type;
+  WHERE account_type = p_account_type
+    AND (
+      user_id = v_user_id
+      -- Business wallets are tied to a business profile; the signed-in user
+      -- may own the profile even if the account row's user_id differs.
+      OR (
+        p_account_type = 'business'
+        AND business_id IN (
+          SELECT bp.id FROM public.business_profiles bp WHERE bp.user_id = v_user_id
+        )
+      )
+    );
 
   IF NOT FOUND THEN
     RETURN QUERY SELECT false, ('No ' || p_account_type || ' account found for this user.')::text;

@@ -62,12 +62,28 @@ serve(async (req) => {
 
     const request = await req.json().catch(() => ({}));
     const accountType = request?.accountType === "business" ? "business" : "personal";
-    const { data: account, error: accountError } = await admin
+    // A user can own several business wallets, so don't use maybeSingle()
+    // (it errors on multiple rows). Also match business wallets through the
+    // business profiles the user owns.
+    let accountQuery = admin
       .from("user_accounts")
       .select("id, account_holder_name")
-      .eq("user_id", user.id)
       .eq("account_type", accountType)
-      .maybeSingle();
+      .limit(1);
+    if (accountType === "business") {
+      const { data: ownedProfiles } = await admin
+        .from("business_profiles")
+        .select("id")
+        .eq("user_id", user.id);
+      const ownedIds = (ownedProfiles || []).map((p: { id: string }) => p.id);
+      accountQuery = ownedIds.length
+        ? accountQuery.or(`user_id.eq.${user.id},business_id.in.(${ownedIds.join(",")})`)
+        : accountQuery.eq("user_id", user.id);
+    } else {
+      accountQuery = accountQuery.eq("user_id", user.id);
+    }
+    const { data: accountRows, error: accountError } = await accountQuery;
+    const account = accountRows?.[0] ?? null;
 
     if (accountError) {
       console.error("PIN reset account lookup failed:", accountError);
