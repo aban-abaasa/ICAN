@@ -155,12 +155,21 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
       const redirectTo = new URL('/reset-password', window.location.origin);
       redirectTo.searchParams.set('accountType', accountType);
       redirectTo.searchParams.set('flow', 'pin');
-      // Same mailer as "Forgot password": Supabase's own Auth recovery email.
-      // The link lands on /reset-password?flow=pin, which opens ResetPinPage.
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(userEmail, {
-        redirectTo: redirectTo.toString(),
+      // Preferred: the request-pin-reset Edge Function sends a dedicated
+      // "Reset your wallet PIN" email through Resend. If it fails (e.g. the
+      // RESEND_API_KEY secret is missing -> 500), fall back to Supabase's own
+      // Auth recovery email so the user can still reset. Either link lands on
+      // /reset-password?flow=pin, which opens ResetPinPage.
+      const { data, error: invokeError } = await supabase.functions.invoke('request-pin-reset', {
+        body: { accountType, redirectTo: redirectTo.toString() }
       });
-      if (resetError) throw resetError;
+      if (invokeError || !data?.success) {
+        console.warn('request-pin-reset failed, falling back to Auth mailer:', invokeError || data?.message);
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(userEmail, {
+          redirectTo: redirectTo.toString(),
+        });
+        if (resetError) throw resetError;
+      }
 
       setEmailSentTo(userEmail);
       setStep('email_sent');
