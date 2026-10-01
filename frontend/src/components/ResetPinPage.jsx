@@ -22,6 +22,10 @@ const ResetPinPage = ({ onDone }) => {
     ? 'business'
     : 'personal';
 
+  const accountId = typeof window !== 'undefined' && accountType === 'business'
+    ? new URLSearchParams(window.location.search).get('accountId') || null
+    : null;
+
   const handleBack = () => {
     if (window.location.pathname === '/reset-pin' || new URLSearchParams(window.location.search).get('flow') === 'pin') {
       window.history.replaceState({}, '', '/');
@@ -62,7 +66,8 @@ const ResetPinPage = ({ onDone }) => {
         }
         ({ data, error: err } = await supabase.rpc('reset_wallet_pin_from_recovery', {
           p_account_type: accountType,
-          p_new_pin_hash: hashPIN(pin)
+          p_new_pin_hash: hashPIN(pin),
+          ...(accountId ? { p_account_id: accountId } : {})
         }));
       }
 

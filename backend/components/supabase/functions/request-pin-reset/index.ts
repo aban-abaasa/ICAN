@@ -62,6 +62,9 @@ serve(async (req) => {
 
     const request = await req.json().catch(() => ({}));
     const accountType = request?.accountType === "business" ? "business" : "personal";
+    const requestedAccountId = accountType === "business" && typeof request?.accountId === "string"
+      ? request.accountId
+      : null;
     // A user can own several business wallets, so don't use maybeSingle()
     // (it errors on multiple rows). Also match business wallets through the
     // business profiles the user owns.
@@ -70,6 +73,7 @@ serve(async (req) => {
       .select("id, account_holder_name")
       .eq("account_type", accountType)
       .limit(1);
+    if (requestedAccountId) accountQuery = accountQuery.eq("id", requestedAccountId);
     if (accountType === "business") {
       const { data: ownedProfiles } = await admin
         .from("business_profiles")
@@ -97,6 +101,7 @@ serve(async (req) => {
     let redirectTo = new URL("/reset-password", siteUrl);
     redirectTo.searchParams.set("accountType", accountType);
     redirectTo.searchParams.set("flow", "pin");
+    if (requestedAccountId) redirectTo.searchParams.set("accountId", account.id);
     try {
       const requested = new URL(String(request?.redirectTo || ""));
       if (
@@ -106,6 +111,7 @@ serve(async (req) => {
       ) {
         redirectTo = requested;
         redirectTo.searchParams.set("accountType", accountType);
+        if (requestedAccountId) redirectTo.searchParams.set("accountId", account.id);
       }
     } catch {
       // Fall back to the canonical app URL if the client omitted a valid target.

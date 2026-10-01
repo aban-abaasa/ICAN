@@ -33,7 +33,65 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
   useEffect(() => {
     if (isOpen && !groupId) setAccountType(initialAccountType);
   }, [isOpen, groupId, initialAccountType]);
+  const [businessAccounts, setBusinessAccounts] = useState([]); // [{ id, name, accountNumber }]
+  const [businessAccountId, setBusinessAccountId] = useState('');
+  const [businessLoading, setBusinessLoading] = useState(false);
   const pollRef = useRef(null);
+
+  const selectedBusiness = businessAccounts.find((b) => b.id === businessAccountId) || null;
+
+  // Load the business wallets this user can reset: ones owned through a
+  // business profile, plus any attached directly to the user.
+  useEffect(() => {
+    if (!isOpen || groupId || accountType !== 'business' || !userId) return undefined;
+    let cancelled = false;
+    (async () => {
+      setBusinessLoading(true);
+      try {
+        const supabase = getSupabaseClient();
+        const [profilesRes, directRes] = await Promise.all([
+          supabase
+            .from('business_profiles')
+            .select('id, business_name, user_accounts(id, account_number, account_holder_name, account_type)')
+            .eq('user_id', userId),
+          supabase
+            .from('user_accounts')
+            .select('id, account_number, account_holder_name')
+            .eq('user_id', userId)
+            .eq('account_type', 'business')
+        ]);
+        const byId = new Map();
+        (profilesRes.data || []).forEach((profile) => {
+          (profile.user_accounts || [])
+            .filter((a) => a.account_type === 'business')
+            .forEach((a) => byId.set(a.id, {
+              id: a.id,
+              name: profile.business_name || a.account_holder_name || 'Business',
+              accountNumber: a.account_number
+            }));
+        });
+        (directRes.data || []).forEach((a) => {
+          if (!byId.has(a.id)) {
+            byId.set(a.id, { id: a.id, name: a.account_holder_name || 'Business', accountNumber: a.account_number });
+          }
+        });
+        if (cancelled) return;
+        const list = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+        setBusinessAccounts(list);
+        // Only one business → nothing to choose; otherwise force an explicit pick.
+        setBusinessAccountId((current) => (list.some((b) => b.id === current) ? current : (list.length === 1 ? list[0].id : '')));
+      } catch (err) {
+        console.warn('Could not load business accounts for PIN recovery:', err);
+      } finally {
+        if (!cancelled) setBusinessLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen, groupId, accountType, userId]);
+
+  const needsBusinessPick = !groupId && accountType === 'business' && !businessLoading
+    && businessAccounts.length > 0 && !businessAccountId;
+  const noBusinessFound = !groupId && accountType === 'business' && !businessLoading && businessAccounts.length === 0;
 
   useEffect(() => {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -117,7 +175,9 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
       const supabase = getSupabaseClient();
       const fullReason = groupId
         ? `Group wallet "${groupName || groupId}" — ${reason || 'no additional details'}`
-        : (reason || null);
+        : (accountType === 'business' && selectedBusiness
+          ? `Business "${selectedBusiness.name}" (${selectedBusiness.accountNumber || selectedBusiness.id})${reason ? ` — ${reason}` : ''}`
+          : (reason || null));
 
       const { data, error: err } = await supabase.rpc('request_account_unlock', {
         p_user_id: userId,
@@ -155,13 +215,18 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
       const redirectTo = new URL('/reset-password', window.location.origin);
       redirectTo.searchParams.set('accountType', accountType);
       redirectTo.searchParams.set('flow', 'pin');
+      if (accountType === 'business' && businessAccountId) redirectTo.searchParams.set('accountId', businessAccountId);
       // Preferred: the request-pin-reset Edge Function sends a dedicated
       // "Reset your wallet PIN" email through Resend. If it fails (e.g. the
       // RESEND_API_KEY secret is missing -> 500), fall back to Supabase's own
       // Auth recovery email so the user can still reset. Either link lands on
       // /reset-password?flow=pin, which opens ResetPinPage.
       const { data, error: invokeError } = await supabase.functions.invoke('request-pin-reset', {
-        body: { accountType, redirectTo: redirectTo.toString() }
+        body: {
+          accountType,
+          ...(accountType === 'business' && businessAccountId ? { accountId: businessAccountId } : {}),
+          redirectTo: redirectTo.toString()
+        }
       });
       if (invokeError || !data?.success) {
         console.warn('request-pin-reset failed, falling back to Auth mailer:', invokeError || data?.message);
@@ -228,6 +293,37 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
               </div>
             </div>
 
+            {accountType === 'business' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Which business?</label>
+                {businessLoading ? (
+                  <p className="text-sm text-gray-500">Loading your businesses...</p>
+                ) : noBusinessFound ? (
+                  <p className="text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    No business wallet account found. Create a wallet for your business first, then reset its PIN here.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {businessAccounts.map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => { setBusinessAccountId(b.id); setError(null); }}
+                        className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
+                          businessAccountId === b.id
+                            ? 'bg-blue-50 border-blue-600 ring-1 ring-blue-600'
+                            : 'bg-white border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <p className="text-sm font-medium text-gray-900">{b.name}</p>
+                        {b.accountNumber && <p className="text-xs text-gray-500">Account {b.accountNumber}</p>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <p className="text-sm text-gray-600">How would you like to recover access?</p>
 
             {error && (
@@ -239,7 +335,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
 
             <button
               onClick={handleRequestEmailReset}
-              disabled={loading}
+              disabled={loading || businessLoading || needsBusinessPick || noBusinessFound}
               className="w-full text-left bg-blue-50 hover:bg-blue-100 disabled:opacity-50 border border-blue-200 rounded-lg p-4 flex gap-3 transition-colors"
             >
               <Mail className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
@@ -255,7 +351,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
 
             <button
               onClick={() => { setError(null); setStep('request'); }}
-              disabled={loading}
+              disabled={loading || businessLoading || needsBusinessPick || noBusinessFound}
               className="w-full text-left bg-gray-50 hover:bg-gray-100 disabled:opacity-50 border border-gray-200 rounded-lg p-4 flex gap-3 transition-colors"
             >
               <Clock className="text-gray-600 flex-shrink-0 mt-0.5" size={20} />
@@ -313,7 +409,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
                   ← Back to recovery options
                 </button>
                 <span className="text-xs text-gray-500">
-                  {accountType === 'business' ? 'Business account' : 'Personal (IcanEra) account'}
+                  {accountType === 'business' ? (selectedBusiness ? `Business: ${selectedBusiness.name}` : 'Business account') : 'Personal (IcanEra) account'}
                 </span>
               </div>
             )}
