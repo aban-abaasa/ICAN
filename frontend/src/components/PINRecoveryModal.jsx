@@ -155,11 +155,12 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
       const redirectTo = new URL('/reset-password', window.location.origin);
       redirectTo.searchParams.set('accountType', accountType);
       redirectTo.searchParams.set('flow', 'pin');
-      const { data, error: invokeError } = await supabase.functions.invoke('request-pin-reset', {
-        body: { accountType, redirectTo: redirectTo.toString() }
+      // Same mailer as "Forgot password": Supabase's own Auth recovery email.
+      // The link lands on /reset-password?flow=pin, which opens ResetPinPage.
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(userEmail, {
+        redirectTo: redirectTo.toString(),
       });
-      if (invokeError) throw invokeError;
-      if (!data?.success) throw new Error(data?.message || 'Failed to send PIN reset link');
+      if (resetError) throw resetError;
 
       setEmailSentTo(userEmail);
       setStep('email_sent');

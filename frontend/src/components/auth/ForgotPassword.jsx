@@ -26,7 +26,8 @@ const ForgotPassword = ({ onBack }) => {
     setError('');
 
     try {
-      await resetPassword(email);
+      const { error: resetError } = await resetPassword(email);
+      if (resetError) throw resetError;
       setSuccess(true);
     } catch (err) {
       setError(err.message || 'Failed to send reset email. Please try again.');
