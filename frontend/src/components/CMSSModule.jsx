@@ -11,6 +11,7 @@
 //   └── Service Providers (can select multiple service types)
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import CmmsPageShell from './CmmsPageShell.jsx';
 import './cmms-classic.css';
 import {
   Building,
@@ -41,6 +42,9 @@ import {
   MapPin,
   Globe,
   LogOut,
+  Pencil,
+  FileText,
+  Download,
   RotateCcw
 } from 'lucide-react';
 
@@ -2563,90 +2567,46 @@ const CMMSModule = ({
       rejected: 'bg-red-500/20 text-red-300 border-red-500/50'
     };
 
+    const taskTabs = [
+      { id: 'tasks', label: 'Tasks', accent: 'emerald' },
+      { id: 'messages', label: 'Messages', accent: 'navy' },
+      ...((canAssignJobs || canPublishServiceProviderContracts) ? [{ id: 'assign', label: 'Assign', accent: 'gold' }] : []),
+      ...(canAssignJobs ? [{ id: 'progress', label: 'Progress', accent: 'plum' }] : [])
+    ];
+    const openTaskTab = (id) => { setTasksTab(id); if (id === 'progress') loadAssignedByMeTasks(); };
+
     return (
-      <div className="w-full">
-        {/* ========== MOBILE TAB NAVIGATION ========== */}
-        <div className={`mb-4 md:mb-6 grid grid-cols-2 ${canAssignJobs ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-2 md:gap-3`}>
-          {/* Tab 1: Your Assigned Tasks */}
-          <button
-            onClick={() => setTasksTab('tasks')}
-            className={`w-full px-3 md:px-4 py-2 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all border-2 flex items-center justify-center gap-2 ${
-              tasksTab === 'tasks'
-                ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg'
-                : 'bg-slate-700 text-gray-300 border-slate-600 hover:bg-slate-600'
-            }`}
-          >
-            <Briefcase className="w-4 h-4 md:w-5 md:h-5" />
-            <span className="hidden sm:inline">Tasks</span>
-          </button>
-
-          {/* Tab 2: Messages */}
-          <button
-            onClick={() => setTasksTab('messages')}
-            className={`w-full px-3 md:px-4 py-2 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all border-2 flex items-center justify-center gap-2 ${
-              tasksTab === 'messages'
-                ? 'bg-blue-600 text-white border-blue-500 shadow-lg'
-                : 'bg-slate-700 text-gray-300 border-slate-600 hover:bg-slate-600'
-            }`}
-          >
-            <span className="text-sm md:text-base">💬</span>
-            <span className="hidden sm:inline">Messages</span>
-          </button>
-
-          {/* Tab 3: Assign Job (only for admins/coordinators/supervisors, or anyone granted publish_contract) */}
-          {(canAssignJobs || canPublishServiceProviderContracts) && (
-            <button
-              onClick={() => setTasksTab('assign')}
-              className={`w-full px-3 md:px-4 py-2 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all border-2 flex items-center justify-center gap-2 ${
-                tasksTab === 'assign'
-                  ? 'bg-orange-600 text-white border-orange-500 shadow-lg'
-                  : 'bg-slate-700 text-gray-300 border-slate-600 hover:bg-slate-600'
-              }`}
-            >
-              <span className="text-sm md:text-base">🎯</span>
-              <span className="hidden sm:inline">Assign</span>
-            </button>
-          )}
-
-          {/* Tab 4: Track Progress of tasks I assigned (only for admins/coordinators/supervisors) */}
-          {canAssignJobs && (
-            <button
-              onClick={() => { setTasksTab('progress'); loadAssignedByMeTasks(); }}
-              className={`w-full px-3 md:px-4 py-2 md:py-3 rounded-lg font-semibold text-xs md:text-sm transition-all border-2 flex items-center justify-center gap-2 ${
-                tasksTab === 'progress'
-                  ? 'bg-purple-600 text-white border-purple-500 shadow-lg'
-                  : 'bg-slate-700 text-gray-300 border-slate-600 hover:bg-slate-600'
-              }`}
-            >
-              <span className="text-sm md:text-base">📈</span>
-              <span className="hidden sm:inline">Progress</span>
-            </button>
-          )}
-        </div>
-
+      <CmmsPageShell
+        title="Tasks"
+        subtitle={`${userTasks.length} assigned to you`}
+        icon={<Briefcase className="h-4 w-4" aria-hidden="true" />}
+        chips={[
+          `${userTasks.filter(t => t.assignment_status === 'pending').length} pending`,
+          `${userTasks.filter(t => t.assignment_status === 'in_progress').length} in progress`,
+          `${userTasks.filter(t => t.assignment_status === 'completed').length} completed`
+        ]}
+        info="Track the maintenance jobs assigned to you, message your team, and (with the right role) assign jobs and follow their progress."
+        tabs={taskTabs}
+        tab={tasksTab}
+        onTab={openTaskTab}
+      >
         {/* ========== TAB CONTENT ========== */}
         {/* TAB 1: YOUR ASSIGNED TASKS */}
         {tasksTab === 'tasks' && (
           <div className="space-y-4">
-            <div className="cmms-classic-card p-4 md:p-6">
-              <div className="flex items-center justify-between gap-3 mb-4">
-                <h3 className="cmms-classic-heading text-lg md:text-xl flex items-center gap-2">
-                  <Briefcase className="w-5 h-5 md:w-6 md:h-6" style={{ color: 'var(--color-primary)' }} />
-                  Your Assigned Tasks
-                </h3>
-                <button
-                  onClick={loadUserTasks}
-                  disabled={isLoadingTasks}
-                  className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-xs text-white"
-                >
-                  {isLoadingTasks ? 'Refreshing...' : 'Refresh'}
-                </button>
-              </div>
-
-              <p className="text-gray-300 text-xs md:text-sm mb-4">
-                Track and manage all maintenance jobs assigned to you.
-              </p>
-
+            <div className="flex items-center justify-between gap-3">
+              <p className="cmms-classic-muted text-xs md:text-sm">Track and manage all maintenance jobs assigned to you.</p>
+              <button
+                onClick={loadUserTasks}
+                disabled={isLoadingTasks}
+                className="cmms-info-btn disabled:opacity-50"
+                title="Refresh tasks"
+                aria-label="Refresh tasks"
+              >
+                <span className={isLoadingTasks ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
+              </button>
+            </div>
+            <div>
               {/* Filter Buttons */}
               <div className="flex gap-2 flex-wrap">
                 {[
@@ -3141,7 +3101,7 @@ const CMMSModule = ({
             </div>
           </div>
         )}
-      </div>
+      </CmmsPageShell>
     );
   };
 
@@ -4276,7 +4236,28 @@ const CMMSModule = ({
     };
 
     return (
-      <div className="space-y-4 md:space-y-6">
+      <CmmsPageShell
+        title="Reports"
+        subtitle={`${companyReports.length} written report${companyReports.length === 1 ? '' : 's'}`}
+        icon={<Clipboard className="h-4 w-4" aria-hidden="true" />}
+        chips={[
+          `${filteredCompanyReports.length} in view`,
+          canViewAnalytics && `${inventoryReport.lowStockAlerts} low-stock alert${inventoryReport.lowStockAlerts === 1 ? '' : 's'}`
+        ]}
+        info="Every company member can write reports here so operations, incidents, and maintenance updates are captured in one shared place. Report visibility is role-based."
+        actions={
+          <button
+            type="button"
+            onClick={() => refreshCompanyReports({ force: true })}
+            disabled={isRefreshingReports || !companyIdToUse || !canViewCompanyReports}
+            className="cmms-info-btn disabled:opacity-50"
+            title="Refresh reports"
+            aria-label="Refresh reports"
+          >
+            <span className={isRefreshingReports ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
+          </button>
+        }
+      >
         {lightboxPhotoUrl && (
           <div
             className="fixed inset-0 z-50 bg-black bg-opacity-80 flex items-center justify-center p-4"
@@ -4298,25 +4279,13 @@ const CMMSModule = ({
           </div>
         )}
 
-        <div className="cmms-classic-card p-4 md:p-6">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="cmms-classic-heading text-lg md:text-xl flex items-center gap-2">
-              <Clipboard className="w-5 h-5 md:w-6 md:h-6" style={{ color: 'var(--color-primary)' }} />
-              Company Report Board
-            </h3>
-            <button
-              onClick={() => refreshCompanyReports({ force: true })}
-              disabled={isRefreshingReports || !companyIdToUse || !canViewCompanyReports}
-              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-xs text-white"
-            >
-              {isRefreshingReports ? 'Refreshing...' : 'Refresh'}
-            </button>
-          </div>
-
-          <p className="text-gray-300 text-xs md:text-sm mb-4">
-            Every company member can write reports here so operations, incidents, and maintenance updates are captured in one shared place. Report visibility is role-based.
-          </p>
-
+        <CmmsFold
+          title="Write a report"
+          icon={<Pencil className="h-4 w-4" aria-hidden="true" />}
+          accent="emerald"
+          hint={canCreateReports ? undefined : 'View only'}
+        >
+          <div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
             <input
               type="text"
@@ -4416,12 +4385,18 @@ const CMMSModule = ({
               {isUploadingReportPhoto ? 'Uploading photo...' : isSubmittingCompanyReport ? 'Submitting...' : 'Submit Report'}
             </button>
           </div>
-        </div>
+          </div>
+        </CmmsFold>
 
         {canViewCompanyReports ? (
-          <div className="cmms-classic-card p-4 md:p-6">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <h3 className="cmms-classic-heading text-base md:text-lg">Recent Company Reports</h3>
+          <CmmsFold
+            title="Report board"
+            icon={<Clipboard className="h-4 w-4" aria-hidden="true" />}
+            accent="navy"
+            hint={`${filteredCompanyReports.length} report${filteredCompanyReports.length === 1 ? '' : 's'}`}
+            defaultOpen
+          >
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <div className="flex gap-1 rounded-lg bg-slate-800/60 p-1">
                 <button
                   type="button"
@@ -4695,9 +4670,9 @@ const CMMSModule = ({
                 })}
               </div>
             )}
-          </div>
+          </CmmsFold>
         ) : (
-          <div className="cmms-classic-card p-4 md:p-6" style={{ borderLeft: '4px solid #3b82f6' }}>
+          <div className="cmms-classic-callout p-4" style={{ borderLeft: '4px solid #3b82f6' }}>
             <h3 className="cmms-classic-heading text-base md:text-lg mb-2">🔒 Personal Reports Only</h3>
             <p className="text-blue-300 text-sm">Your role-based access is limited to your own submitted reports. Supervisors and admins can view more reports based on their department or company-wide access.</p>
           </div>
@@ -4713,11 +4688,12 @@ const CMMSModule = ({
         {canViewAnalytics && canExportReports && (
           <>
         {/* Inventory Report */}
-        <div className="cmms-classic-card p-4 md:p-6">
-          <h3 className="cmms-classic-heading text-lg md:text-xl mb-4 flex items-center gap-2">
-            <Package className="w-5 h-5 md:w-6 md:h-6" style={{ color: 'var(--color-primary)' }} />
-            {inventoryReport.title}
-          </h3>
+        <CmmsFold
+          title={inventoryReport.title}
+          icon={<Package className="h-4 w-4" aria-hidden="true" />}
+          accent="gold"
+          hint={`${inventoryReport.totalItems} items`}
+        >
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
             <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
               <div className="text-gray-400 text-xs md:text-sm">Total Items</div>
@@ -4736,14 +4712,15 @@ const CMMSModule = ({
               <div className="text-xl md:text-2xl font-bold text-purple-300 mt-2">UGX {(inventoryReport.averageCost / 1000).toFixed(0)}K</div>
             </div>
           </div>
-        </div>
+        </CmmsFold>
 
         {/* Requisition Report */}
-        <div className="cmms-classic-card p-4 md:p-6">
-          <h3 className="cmms-classic-heading text-lg md:text-xl mb-4 flex items-center gap-2">
-            <Wrench className="w-5 h-5 md:w-6 md:h-6" style={{ color: 'var(--color-primary)' }} />
-            {requisitionReport.title}
-          </h3>
+        <CmmsFold
+          title={requisitionReport.title}
+          icon={<FileText className="h-4 w-4" aria-hidden="true" />}
+          accent="plum"
+          hint={`${requisitionReport.pending} pending`}
+        >
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 md:gap-4">
             <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
               <div className="text-gray-400 text-xs md:text-sm">Total</div>
@@ -4766,11 +4743,14 @@ const CMMSModule = ({
               <div className="text-xl md:text-2xl font-bold text-green-300 mt-2">UGX {(requisitionReport.totalEstimatedCost / 1000000).toFixed(1)}M</div>
             </div>
           </div>
-        </div>
+        </CmmsFold>
 
         {/* Export Reports */}
-        <div className="cmms-classic-card p-4 md:p-6">
-          <h3 className="cmms-classic-heading text-base md:text-lg mb-4">Export Reports</h3>
+        <CmmsFold
+          title="Export reports"
+          icon={<Download className="h-4 w-4" aria-hidden="true" />}
+          accent="teal"
+        >
 
           <div className="mb-3">
             <label className="block text-[11px] md:text-xs text-gray-400 mb-1">
@@ -4842,7 +4822,7 @@ const CMMSModule = ({
           <p className="text-gray-400 text-[11px] md:text-xs mt-2">
             Written reports are collected by department and employee — use the department picker above, or the filters in the Company Report Board further up the page, to narrow this export to one department or one person. Consolidated Report merges everything in scope into a single executive-style document with a summary and priority highlights up top.
           </p>
-        </div>
+        </CmmsFold>
           </>
         )}
 
@@ -4856,7 +4836,7 @@ const CMMSModule = ({
             onClose={() => setShowExportShareModal(false)}
           />
         )}
-      </div>
+      </CmmsPageShell>
     );
   };
 
@@ -7264,17 +7244,34 @@ const CMMSModule = ({
     const escrowPreview = Math.round(totalInventoryValue * (escrowPercent / 100));
 
     return (
-      <div className="space-y-4 md:space-y-6">
-        {/* Permission Badge */}
-        {!canEditInventory && (
-          <div className="cmms-classic-card p-3 md:p-4" style={{ borderLeft: '4px solid #3b82f6' }}>
-            <p className="text-blue-300 text-xs md:text-sm">👁️ <span className="font-semibold">View-Only Mode</span> - You can see inventory but cannot make changes. Only Storeman and Admin can edit.</p>
-          </div>
-        )}
-
+      <CmmsPageShell
+        title="Inventory"
+        subtitle={canEditInventory ? `${cmmsData.inventory.length} items in stock records` : 'View-only access'}
+        icon={<Package className="h-4 w-4" aria-hidden="true" />}
+        chips={[
+          `${cmmsData.inventory.length} items`,
+          `UGX ${(totalInventoryValue / 1000000).toFixed(1)}M value`,
+          `${lowStockItems.length} low stock`,
+          custodyLog.length > 0 && `${custodyLog.length} signed out`
+        ]}
+        info={canEditInventory
+          ? 'Smart defaults keep stores funded to prevent the maintenance cliff. Every take/return of an item is a signed record.'
+          : 'You can see inventory but cannot make changes. Every take/return of an item is a signed record.'}
+        actions={
+          <button type="button" onClick={loadCustodyLog} disabled={isLoadingCustody} className="cmms-info-btn disabled:opacity-50" title="Refresh signed-out items" aria-label="Refresh signed-out items">
+            <span className={isLoadingCustody ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
+          </button>
+        }
+      >
         {/* Add Inventory Item */}
         {canEditInventory && (
-          <div className="cmms-classic-card p-5 md:p-6 space-y-4">
+          <CmmsFold
+            title="Add inventory item"
+            icon={<Plus className="h-4 w-4" aria-hidden="true" />}
+            accent="emerald"
+            hint={`Escrow ${escrowPercent}%`}
+            info="Smart defaults keep stores funded to prevent the maintenance cliff."
+          >
             {/* Error Message */}
             {addItemError && (
               <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
@@ -7282,14 +7279,7 @@ const CMMSModule = ({
               </div>
             )}
 
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 md:w-6 md:h-6" style={{ color: 'var(--color-primary)' }} />
-                <div>
-                  <h3 className="cmms-classic-heading text-lg md:text-xl">Add Inventory Item</h3>
-                  <p className="cmms-classic-muted text-xs">Smart defaults keep stores funded to prevent the maintenance cliff.</p>
-                </div>
-              </div>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-end gap-3">
               <div className="px-3 py-2 rounded-lg bg-emerald-600/20 border border-emerald-400/40 text-emerald-100 text-sm">
                 Escrow set‑aside ({escrowPercent}%): <span className="font-semibold">UGX {escrowPreview.toLocaleString()}</span>
               </div>
@@ -7453,28 +7443,17 @@ const CMMSModule = ({
                 </>
               )}
             </button>
-          </div>
+          </CmmsFold>
         )}
 
-        {/* Inventory Stats */}
-        <div className="grid md:grid-cols-3 gap-4">
-          <div className="cmms-classic-card p-4">
-            <div className="cmms-classic-muted text-sm">Total Items</div>
-            <div className="text-3xl font-bold text-blue-300">{cmmsData.inventory.length}</div>
-          </div>
-          <div className="cmms-classic-card p-4">
-            <div className="cmms-classic-muted text-sm">Inventory Value</div>
-            <div className="text-3xl font-bold text-green-300">UGX {(totalInventoryValue / 1000000).toFixed(1)}M</div>
-          </div>
-          <div className="cmms-classic-card p-4">
-            <div className="cmms-classic-muted text-sm">Low Stock Alerts</div>
-            <div className="text-3xl font-bold text-orange-300">{lowStockItems.length}</div>
-          </div>
-        </div>
-
         {/* Inventory List - Collapsible Items */}
-        <div className="cmms-classic-card p-6">
-          <h3 className="cmms-classic-heading text-xl mb-4">Inventory Items ({cmmsData.inventory.length})</h3>
+        <CmmsFold
+          title="Inventory items"
+          icon={<Package className="h-4 w-4" aria-hidden="true" />}
+          accent="navy"
+          hint={`${cmmsData.inventory.length} item${cmmsData.inventory.length === 1 ? '' : 's'}`}
+          defaultOpen
+        >
           <div className="space-y-2 max-h-full overflow-y-auto">
             {cmmsData.inventory.map(item => {
               const isExpanded = expandedItems[item.id];
@@ -7818,26 +7797,17 @@ const CMMSModule = ({
               </div>
             )}
           </div>
-        </div>
+        </CmmsFold>
 
         {/* Item Custody Log — proof of who currently has which item */}
-        <div className="cmms-classic-card p-6">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="cmms-classic-heading text-xl flex items-center gap-2">
-              <LogOut className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-              Signed-Out Items ({custodyLog.length})
-            </h3>
-            <button
-              onClick={loadCustodyLog}
-              disabled={isLoadingCustody}
-              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-xs text-white"
-            >
-              {isLoadingCustody ? 'Refreshing...' : 'Refresh'}
-            </button>
-          </div>
-          <p className="text-gray-300 text-xs md:text-sm mb-4">
-            Every take/return is a signed record — proof of who has each item and when it's due back.
-          </p>
+        <CmmsFold
+          title="Signed-out items"
+          icon={<LogOut className="h-4 w-4" aria-hidden="true" />}
+          accent="burgundy"
+          hint={custodyLog.length ? `${custodyLog.length} out` : 'None out'}
+          hintTone={custodyLog.length ? 'warn' : 'ok'}
+          info="Every take/return is a signed record — proof of who has each item and when it's due back."
+        >
           <div className="space-y-2">
             {custodyLog.map(record => (
               <div key={record.id} className="rounded-lg border border-white border-opacity-20 bg-white bg-opacity-5 p-3">
@@ -7874,7 +7844,7 @@ const CMMSModule = ({
               </div>
             )}
           </div>
-        </div>
+        </CmmsFold>
 
         {/* Sign-Out Modal */}
         {checkoutItem && (
@@ -7977,7 +7947,7 @@ const CMMSModule = ({
             </div>
           </div>
         )}
-      </div>
+      </CmmsPageShell>
     );
   };
 
