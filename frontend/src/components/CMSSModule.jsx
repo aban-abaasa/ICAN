@@ -4374,19 +4374,19 @@ const CMMSModule = ({
             hint={`${filteredCompanyReports.length} report${filteredCompanyReports.length === 1 ? '' : 's'}`}
             defaultOpen
           >
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <div className="flex gap-1 rounded-lg bg-slate-800/60 p-1">
+            <div className="flex flex-wrap items-center justify-start gap-2">
+              <div className="flex gap-4 border-b border-slate-600/40">
                 <button
                   type="button"
                   onClick={() => setReportsBoardView('board')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${reportsBoardView === 'board' ? 'bg-emerald-600 text-white' : 'text-gray-300 hover:bg-white/10'}`}
+                  className={`-mb-px whitespace-nowrap border-b-2 px-1 pb-1.5 text-xs font-semibold transition-colors ${reportsBoardView === 'board' ? 'border-emerald-400 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
                 >
                   Report Board
                 </button>
                 <button
                   type="button"
                   onClick={() => setReportsBoardView('consolidated')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${reportsBoardView === 'consolidated' ? 'bg-emerald-600 text-white' : 'text-gray-300 hover:bg-white/10'}`}
+                  className={`-mb-px whitespace-nowrap border-b-2 px-1 pb-1.5 text-xs font-semibold transition-colors ${reportsBoardView === 'consolidated' ? 'border-emerald-400 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
                   title="Every report in the current scope woven into one document — executive summary, priority highlights, then the full breakdown"
                 >
                   📋 Consolidated Report
@@ -4394,31 +4394,19 @@ const CMMSModule = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-              <div className="bg-white bg-opacity-5 p-3 rounded-lg">
-                <div className="text-xs text-gray-400">Total Reports</div>
-                <div className="text-xl font-bold text-blue-300">{filteredCompanyReports.length}</div>
-              </div>
-              <div className="bg-white bg-opacity-5 p-3 rounded-lg">
-                <div className="text-xs text-gray-400">Open</div>
-                <div className="text-xl font-bold text-yellow-300">{openReportsCount}</div>
-              </div>
-              <div className="bg-white bg-opacity-5 p-3 rounded-lg">
-                <div className="text-xs text-gray-400">High/Critical</div>
-                <div className="text-xl font-bold text-red-300">{highSeverityCount}</div>
-              </div>
-              <div className="bg-white bg-opacity-5 p-3 rounded-lg">
-                <div className="text-xs text-gray-400">Resolved</div>
-                <div className="text-xl font-bold text-green-300">{filteredCompanyReports.filter((r) => (r.status || '').toLowerCase() === 'resolved').length}</div>
-              </div>
+            <div className="inv-strip">
+              <div><b className="text-blue-300">{filteredCompanyReports.length}</b><span>Total</span></div>
+              <div><b className="text-yellow-300">{openReportsCount}</b><span>Open</span></div>
+              <div><b className="text-red-300">{highSeverityCount}</b><span>High</span></div>
+              <div><b className="text-green-300">{filteredCompanyReports.filter((r) => (r.status || '').toLowerCase() === 'resolved').length}</b><span>Resolved</span></div>
             </div>
 
             {companyReports.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+              <div className="grid grid-cols-2 gap-2">
                 <select
                   value={reportDepartmentFilter}
                   onChange={(e) => { setReportDepartmentFilter(e.target.value); setReportReporterFilter('all'); }}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-xs md:text-sm"
+                  className="w-full min-w-0 truncate px-2 py-1 rounded-md bg-slate-800/70 border border-slate-600/60 text-white text-xs"
                 >
                   <option value="all">Organize by: All Departments</option>
                   {(cmmsData.departments || []).map((dept) => (
@@ -4429,7 +4417,7 @@ const CMMSModule = ({
                 <select
                   value={reportReporterFilter}
                   onChange={(e) => setReportReporterFilter(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-xs md:text-sm"
+                  className="w-full min-w-0 truncate px-2 py-1 rounded-md bg-slate-800/70 border border-slate-600/60 text-white text-xs"
                 >
                   <option value="all">Employee: All in scope</option>
                   {reporterOptions.map((opt) => (
@@ -4440,22 +4428,22 @@ const CMMSModule = ({
             )}
 
             {canExportReports && companyReports.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-4">
+              <div className="flex flex-wrap gap-1.5">
                 {reportsBoardView === 'consolidated' ? (
                   <>
-                    <button type="button" onClick={() => downloadConsolidatedReportPdf(filteredCompanyReports, reportScopeLabel)} className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-500">
+                    <button type="button" onClick={() => downloadConsolidatedReportPdf(filteredCompanyReports, reportScopeLabel)} className="rounded-md bg-cyan-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-cyan-500">
                       Download PDF — {reportScopeLabel} ({filteredCompanyReports.length})
                     </button>
-                    <button type="button" onClick={() => printConsolidatedReport(filteredCompanyReports, reportScopeLabel)} className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20">
+                    <button type="button" onClick={() => printConsolidatedReport(filteredCompanyReports, reportScopeLabel)} className="rounded-md border border-cyan-400/40 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-cyan-200 hover:bg-cyan-500/20">
                       🖨️ Print — {reportScopeLabel}
                     </button>
                   </>
                 ) : (
                   <>
-                    <button type="button" onClick={() => downloadGroupedReportsPdf(filteredCompanyReports, reportScopeLabel)} className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-500">
+                    <button type="button" onClick={() => downloadGroupedReportsPdf(filteredCompanyReports, reportScopeLabel)} className="rounded-md bg-cyan-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-cyan-500">
                       Export PDF — {reportScopeLabel} ({filteredCompanyReports.length})
                     </button>
-                    <button type="button" onClick={() => printGroupedReports(filteredCompanyReports, reportScopeLabel)} className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20">
+                    <button type="button" onClick={() => printGroupedReports(filteredCompanyReports, reportScopeLabel)} className="rounded-md border border-cyan-400/40 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-cyan-200 hover:bg-cyan-500/20">
                       Print — {reportScopeLabel}
                     </button>
                   </>
@@ -4464,7 +4452,7 @@ const CMMSModule = ({
                   <button
                     type="button"
                     onClick={() => setShowExportShareModal(true)}
-                    className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20 flex items-center gap-1.5"
+                    className="rounded-md border border-emerald-400/40 bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-200 hover:bg-emerald-500/20 flex items-center gap-1.5"
                   >
                     <Link2 size={13} />
                     Share — {reportScopeLabel}
@@ -4486,15 +4474,15 @@ const CMMSModule = ({
                 const severityBadgeStyles = { critical: 'bg-red-500/20 text-red-300 border-red-500/40', high: 'bg-orange-500/20 text-orange-300 border-orange-500/40' };
                 return (
                   <div className="max-h-[32rem] overflow-y-auto pr-1 space-y-5">
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-3 md:p-4">
+                    <div className="inv-row">
                       <h4 className="text-white font-semibold text-sm mb-2">Executive Summary</h4>
                       <div className="grid grid-cols-3 md:grid-cols-5 gap-2 mb-2">
-                        <div className="bg-black/20 rounded-lg p-2 text-center">
+                        <div className="inv-stat text-center">
                           <div className="text-lg font-bold text-white">{summary.total}</div>
                           <div className="text-[10px] uppercase text-gray-400">Total</div>
                         </div>
                         {Object.entries(statLabels).map(([key, label]) => (
-                          <div key={key} className="bg-black/20 rounded-lg p-2 text-center">
+                          <div key={key} className="inv-stat text-center">
                             <div className="text-lg font-bold text-white">{summary.byStatus[key]}</div>
                             <div className="text-[10px] uppercase text-gray-400">{label}</div>
                           </div>
@@ -4502,7 +4490,7 @@ const CMMSModule = ({
                       </div>
                       <div className="grid grid-cols-4 gap-2">
                         {Object.entries(severityLabels).map(([key, label]) => (
-                          <div key={key} className="bg-black/20 rounded-lg p-2 text-center">
+                          <div key={key} className="inv-stat text-center">
                             <div className={`text-lg font-bold ${severityStatStyles[key]}`}>{summary.bySeverity[key]}</div>
                             <div className="text-[10px] uppercase text-gray-400">{label}</div>
                           </div>
@@ -4511,7 +4499,7 @@ const CMMSModule = ({
                     </div>
 
                     {summary.highlights.length > 0 && (
-                      <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 md:p-4">
+                      <div className="inv-row inv-row-low">
                         <h4 className="text-white font-semibold text-sm mb-2">⚠ Priority Highlights <span className="text-xs font-normal text-gray-400">({summary.highlights.length} needing attention)</span></h4>
                         <div className="space-y-1.5">
                           {summary.highlights.map((r) => (
@@ -4531,8 +4519,8 @@ const CMMSModule = ({
                       <h4 className="text-white font-semibold text-sm mb-2">Full Report — by Department &amp; Employee</h4>
                       <div className="space-y-2">
                         {reportGroups.map((dept) => (
-                          <div key={dept.deptId} className="border border-white/10 rounded-lg overflow-hidden">
-                            <div className="bg-white/10 px-3 py-2">
+                          <div key={dept.deptId} className="inv-row">
+                            <div className="py-1.5">
                               <span className="text-white font-semibold text-sm">{dept.deptName}</span>
                               <span className="text-xs text-gray-400 ml-2">({dept.reporters.reduce((n, r) => n + r.reports.length, 0)})</span>
                             </div>
@@ -4561,9 +4549,9 @@ const CMMSModule = ({
                   const showDeptHeader = reportGroups.length > 1 || dept.deptId !== 'unassigned';
 
                   return (
-                    <div key={dept.deptId} className="border border-white/10 rounded-lg overflow-hidden">
+                    <div key={dept.deptId} className="inv-row">
                       {showDeptHeader && (
-                        <div className="flex items-center justify-between gap-2 bg-white/10 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2 py-1.5">
                           <button
                             type="button"
                             onClick={() => toggleDeptCollapsed(dept.deptId)}
@@ -4600,8 +4588,8 @@ const CMMSModule = ({
                           {dept.reporters.map((rep) => {
                             const reporterCollapsed = collapsedReporterKeys.has(rep.reporterKey);
                             return (
-                              <div key={rep.reporterKey} className="border border-white/10 rounded-lg overflow-hidden">
-                                <div className="flex items-center justify-between gap-2 bg-white/5 px-3 py-2">
+                              <div key={rep.reporterKey} className="inv-row">
+                                <div className="flex items-center justify-between gap-2 py-1.5">
                                   <button
                                     type="button"
                                     onClick={() => toggleReporterCollapsed(rep.reporterKey)}
@@ -4673,19 +4661,19 @@ const CMMSModule = ({
           hint={`${inventoryReport.totalItems} items`}
         >
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
-            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+            <div className="inv-stat">
               <div className="text-gray-400 text-xs md:text-sm">Total Items</div>
               <div className="text-2xl md:text-3xl font-bold text-blue-300 mt-2">{inventoryReport.totalItems}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+            <div className="inv-stat">
               <div className="text-gray-400 text-xs md:text-sm">Low Stock Alerts</div>
               <div className="text-2xl md:text-3xl font-bold text-orange-300 mt-2">{inventoryReport.lowStockAlerts}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+            <div className="inv-stat">
               <div className="text-gray-400 text-xs md:text-sm">Total Inventory Value</div>
               <div className="text-xl md:text-2xl font-bold text-green-300 mt-2">UGX {(inventoryReport.totalValue / 1000000).toFixed(1)}M</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+            <div className="inv-stat">
               <div className="text-gray-400 text-xs md:text-sm">Average Item Cost</div>
               <div className="text-xl md:text-2xl font-bold text-purple-300 mt-2">UGX {(inventoryReport.averageCost / 1000).toFixed(0)}K</div>
             </div>
@@ -4700,23 +4688,23 @@ const CMMSModule = ({
           hint={`${requisitionReport.pending} pending`}
         >
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 md:gap-4">
-            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+            <div className="inv-stat">
               <div className="text-gray-400 text-xs md:text-sm">Total</div>
               <div className="text-2xl md:text-3xl font-bold text-blue-300 mt-2">{requisitionReport.totalRequisitions}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+            <div className="inv-stat">
               <div className="text-gray-400 text-xs md:text-sm">Pending</div>
               <div className="text-2xl md:text-3xl font-bold text-yellow-300 mt-2">{requisitionReport.pending}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+            <div className="inv-stat">
               <div className="text-gray-400 text-xs md:text-sm">Approved</div>
               <div className="text-2xl md:text-3xl font-bold text-green-300 mt-2">{requisitionReport.approved}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+            <div className="inv-stat">
               <div className="text-gray-400 text-xs md:text-sm">Completed</div>
               <div className="text-2xl md:text-3xl font-bold text-green-400 mt-2">{requisitionReport.completed}</div>
             </div>
-            <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded-lg">
+            <div className="inv-stat">
               <div className="text-gray-400 text-xs md:text-sm">Total Est. Cost</div>
               <div className="text-xl md:text-2xl font-bold text-green-300 mt-2">UGX {(requisitionReport.totalEstimatedCost / 1000000).toFixed(1)}M</div>
             </div>
@@ -4732,12 +4720,12 @@ const CMMSModule = ({
 
           <div className="mb-3">
             <label className="block text-[11px] md:text-xs text-gray-400 mb-1">
-              Admin: choose a department to scope "Written Reports" export/print below (always available — pick "All Departments" to cover the whole company)
+              Scope for written and consolidated exports
             </label>
             <select
               value={reportDepartmentFilter}
               onChange={(e) => { setReportDepartmentFilter(e.target.value); setReportReporterFilter('all'); }}
-              className="w-full md:w-72 px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-xs md:text-sm"
+              className="w-full md:w-72 px-2 py-1 rounded-md bg-slate-800/70 border border-slate-600/60 text-white text-xs"
             >
               <option value="all">All Departments</option>
               {(cmmsData.departments || []).map((dept) => (
@@ -4747,55 +4735,22 @@ const CMMSModule = ({
             </select>
           </div>
 
-          <div className="flex gap-2 md:gap-3 flex-wrap">
-            <button onClick={downloadInventoryPdf} className="px-3 md:px-4 py-2 bg-blue-500 bg-opacity-30 text-blue-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
-              📄 Download Inventory Report (PDF)
-            </button>
-            <button onClick={downloadRequisitionPdf} className="px-3 md:px-4 py-2 bg-purple-500 bg-opacity-30 text-purple-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
-              📄 Download Requisition Report (PDF)
-            </button>
-            <button onClick={exportToExcel} className="px-3 md:px-4 py-2 bg-green-500 bg-opacity-30 text-green-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
-              📊 Export to Excel
-            </button>
-            <button
-              onClick={() => downloadGroupedReportsPdf(filteredCompanyReports, reportScopeLabel)}
-              disabled={filteredCompanyReports.length === 0}
-              className="px-3 md:px-4 py-2 bg-cyan-500 bg-opacity-30 text-cyan-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm disabled:opacity-40"
-            >
-              📝 Download Written Reports (PDF) — {reportScopeLabel}
-            </button>
-            <button
-              onClick={() => printGroupedReports(filteredCompanyReports, reportScopeLabel)}
-              disabled={filteredCompanyReports.length === 0}
-              className="px-3 md:px-4 py-2 bg-amber-500 bg-opacity-30 text-amber-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm disabled:opacity-40"
-            >
-              🖨️ Print Written Reports — {reportScopeLabel}
-            </button>
+          <div className="inv-acts">
+            <p className="inv-acts-head">Company reports</p>
+            <button type="button" onClick={downloadInventoryPdf} className="inv-act"><span className="inv-act-ico">📄</span><span className="inv-act-label">Inventory report</span><span className="inv-act-tag">PDF</span></button>
+            <button type="button" onClick={downloadRequisitionPdf} className="inv-act"><span className="inv-act-ico">📄</span><span className="inv-act-label">Requisition report</span><span className="inv-act-tag">PDF</span></button>
+            <button type="button" onClick={exportToExcel} className="inv-act"><span className="inv-act-ico">📊</span><span className="inv-act-label">Everything in one workbook</span><span className="inv-act-tag">Excel</span></button>
+
+            <p className="inv-acts-head">Written reports <em>{reportScopeLabel}</em></p>
+            <button type="button" onClick={() => downloadGroupedReportsPdf(filteredCompanyReports, reportScopeLabel)} disabled={filteredCompanyReports.length === 0} className="inv-act"><span className="inv-act-ico">📝</span><span className="inv-act-label">By department and employee</span><span className="inv-act-tag">PDF</span></button>
+            <button type="button" onClick={() => printGroupedReports(filteredCompanyReports, reportScopeLabel)} disabled={filteredCompanyReports.length === 0} className="inv-act"><span className="inv-act-ico">🖨️</span><span className="inv-act-label">Print written reports</span><span className="inv-act-tag">Print</span></button>
             {userRole === 'admin' && (
-              <button
-                onClick={() => setShowExportShareModal(true)}
-                disabled={filteredCompanyReports.length === 0}
-                className="px-3 md:px-4 py-2 bg-emerald-500 bg-opacity-30 text-emerald-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm disabled:opacity-40 flex items-center gap-2"
-              >
-                <Link2 size={14} />
-                Share Written Reports — {reportScopeLabel}
-              </button>
+              <button type="button" onClick={() => setShowExportShareModal(true)} disabled={filteredCompanyReports.length === 0} className="inv-act"><span className="inv-act-ico"><Link2 size={14} /></span><span className="inv-act-label">Share a read-only link</span><span className="inv-act-tag">Share</span></button>
             )}
-            <button
-              onClick={() => downloadConsolidatedReportPdf(filteredCompanyReports, reportScopeLabel)}
-              disabled={filteredCompanyReports.length === 0}
-              className="px-3 md:px-4 py-2 bg-pink-500 bg-opacity-30 text-pink-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm disabled:opacity-40"
-              title="Every report in this scope woven into one document — executive summary, priority highlights, then the full department/employee breakdown"
-            >
-              📋 Download Consolidated Report (PDF) — {reportScopeLabel}
-            </button>
-            <button
-              onClick={() => printConsolidatedReport(filteredCompanyReports, reportScopeLabel)}
-              disabled={filteredCompanyReports.length === 0}
-              className="px-3 md:px-4 py-2 bg-pink-500 bg-opacity-20 border border-pink-400/40 text-pink-200 rounded-lg hover:bg-opacity-40 transition-all font-semibold text-xs md:text-sm disabled:opacity-40"
-            >
-              🖨️ Print Consolidated Report — {reportScopeLabel}
-            </button>
+
+            <p className="inv-acts-head">Consolidated report <em>{reportScopeLabel}</em></p>
+            <button type="button" onClick={() => downloadConsolidatedReportPdf(filteredCompanyReports, reportScopeLabel)} disabled={filteredCompanyReports.length === 0} className="inv-act" title="Every report in this scope woven into one document — executive summary, priority highlights, then the full department/employee breakdown"><span className="inv-act-ico">📋</span><span className="inv-act-label">Executive summary and full breakdown</span><span className="inv-act-tag">PDF</span></button>
+            <button type="button" onClick={() => printConsolidatedReport(filteredCompanyReports, reportScopeLabel)} disabled={filteredCompanyReports.length === 0} className="inv-act"><span className="inv-act-ico">🖨️</span><span className="inv-act-label">Print consolidated report</span><span className="inv-act-tag">Print</span></button>
           </div>
           <p className="text-gray-400 text-[11px] md:text-xs mt-2">
             Written reports are collected by department and employee — use the department picker above, or the filters in the Company Report Board further up the page, to narrow this export to one department or one person. Consolidated Report merges everything in scope into a single executive-style document with a summary and priority highlights up top.
