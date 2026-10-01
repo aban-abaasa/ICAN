@@ -58,12 +58,12 @@ const RequisitionList = ({
   const actionableRequisitions = getApproachableRequisitions();
 
   return (
-    <div className="glass-card p-6">
+    <div className="cmms-classic-card p-4 md:p-6">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-xl font-bold text-white flex items-center gap-3">
+        <h3 className="cmms-classic-heading text-xl flex items-center gap-3">
           <Clipboard className="w-6 h-6 text-cyan-400" />
           Maintenance Requisitions
-          <span className="ml-2 px-3 py-1 bg-cyan-500 bg-opacity-30 rounded-full text-sm text-cyan-300">
+          <span className="cmms-classic-chip">
             {requisitions.length}
           </span>
           {actionableRequisitions.length > 0 && (
@@ -75,7 +75,7 @@ const RequisitionList = ({
         <button
           onClick={onRefresh}
           disabled={isLoading}
-          className="px-3 py-2 text-xs bg-cyan-500/20 border border-cyan-400 text-cyan-300 rounded-lg hover:bg-cyan-500/40 transition-all disabled:opacity-50 flex items-center gap-2"
+          className="cmms-classic-btn-secondary px-3 py-2 text-xs flex items-center gap-2"
         >
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           Refresh
@@ -141,14 +141,15 @@ const RequisitionList = ({
         className={`border rounded-lg p-4 transition-all cursor-pointer ${
           isActionable
             ? 'bg-orange-500/10 border-orange-400 hover:bg-orange-500/20'
-            : 'border-white/20 bg-white/5 hover:bg-white/10'
+            : 'hover:bg-white/5'
         } ${isExpanded ? 'ring-2 ring-blue-400' : ''}`}
+        style={isActionable ? undefined : { borderColor: 'var(--color-border)' }}
       >
         {/* Header - Always visible */}
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center flex-wrap gap-2 min-w-0">
-            <h4 className="text-white font-bold text-lg truncate">{req.title}</h4>
-            <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded flex-shrink-0">
+            <h4 className="cmms-classic-heading text-lg truncate">{req.title}</h4>
+            <span className="cmms-classic-chip flex-shrink-0">
               {req.requisitionNumber || `REQ-${req.id.slice(0, 8)}`}
             </span>
             <div className={`text-xs font-bold text-${sConfig.color}-300 flex-shrink-0`}>{sConfig.icon} {sConfig.label}</div>
@@ -159,34 +160,32 @@ const RequisitionList = ({
         {/* Expanded Details */}
         {isExpanded && (
         <div className="mt-4">
-        <p className="text-gray-400 text-sm mb-3">{req.description}</p>
+        <p className="cmms-classic-muted text-sm mb-3">{req.description}</p>
 
         {/* Details Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 pb-4 border-b border-white/10">
-          <div className="bg-white/5 p-2 rounded">
-            <div className="text-xs text-gray-400">Priority</div>
-            <div className="text-white font-semibold text-sm">{pConfig.icon} {pConfig.label}</div>
+        <dl className="cmms-field-list mb-2">
+          <div className="cmms-field-row">
+            <dt>Priority</dt>
+            <dd>{pConfig.icon} {pConfig.label}</dd>
           </div>
-          <div className="bg-white/5 p-2 rounded">
-            <div className="text-xs text-gray-400">Estimated Cost</div>
-            <div className="text-white font-semibold text-sm">UGX {req.estimatedCost?.toLocaleString() || '0'}</div>
+          <div className="cmms-field-row">
+            <dt>Estimated Cost</dt>
+            <dd>UGX {req.estimatedCost?.toLocaleString() || '0'}</dd>
           </div>
-          <div className="bg-white/5 p-2 rounded">
-            <div className="text-xs text-gray-400">Requested By</div>
-            <div className="text-white font-semibold text-sm">{req.createdByName || 'Unknown'}</div>
+          <div className="cmms-field-row">
+            <dt>Requested By</dt>
+            <dd>{req.createdByName || 'Unknown'}</dd>
           </div>
-          <div className="bg-white/5 p-2 rounded">
-            <div className="text-xs text-gray-400">Date Created</div>
-            <div className="text-white font-semibold text-sm">
-              {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : 'N/A'}
-            </div>
+          <div className="cmms-field-row">
+            <dt>Date Created</dt>
+            <dd>{req.createdAt ? new Date(req.createdAt).toLocaleDateString() : 'N/A'}</dd>
           </div>
-        </div>
+        </dl>
 
         {/* Items List */}
         {req.items && req.items.length > 0 && (
-          <div className="mb-4 pb-4 border-b border-white/10">
-            <div className="text-xs text-gray-400 mb-2">📦 Items to Service/Purchase:</div>
+          <div className="cmms-classic-divider">
+            <div className="cmms-classic-label mb-2">Items to Service/Purchase</div>
             <div className="space-y-1">
               {req.items.map((item) => (
                 <div key={item.id} className="text-xs text-gray-300 pl-2">
@@ -198,8 +197,8 @@ const RequisitionList = ({
         )}
 
         {/* Approval Status */}
-        <div className="mb-4 pb-4 border-b border-white/10">
-          <div className="text-xs text-gray-400 mb-2">Approval Chain:</div>
+        <div className="cmms-classic-divider">
+          <div className="cmms-classic-label mb-2">Approval Chain</div>
           <div className="flex items-center gap-2 flex-wrap text-xs">
             <div className={`px-3 py-1 rounded bg-${req.approvals?.supervisor ? 'green' : 'gray'}-500 bg-opacity-30 text-${req.approvals?.supervisor ? 'green' : 'gray'}-300`}>
               👔 Dept Head {req.approvals?.supervisor ? '✓' : '⏳'}
@@ -224,7 +223,7 @@ const RequisitionList = ({
 
         {/* Action Buttons (Expanded View) */}
         {
-          <div className="border-t border-white/10 pt-4 mt-4 space-y-2">
+          <div className="cmms-classic-divider space-y-2">
             {/* Admin Approval Button */}
             {userRole === 'admin' && (req.status === 'pending_confirmations' || req.status === 'pending_department_head') && (
               <div className="flex gap-2">
@@ -257,7 +256,7 @@ const RequisitionList = ({
                     e.stopPropagation();
                     onConfirmRequisition?.(req.id, 'confirmed');
                   }}
-                  className="flex-1 px-3 py-2 bg-blue-500/20 border border-blue-400 text-blue-300 rounded-lg text-sm font-semibold hover:bg-blue-500/40 transition-all"
+                  className="cmms-classic-btn-primary flex-1 px-3 py-2 text-sm"
                 >
                   ✓ Confirm
                 </button>
@@ -266,7 +265,7 @@ const RequisitionList = ({
 
             {/* Financial Officer View Only */}
             {userRole === 'financial_officer' && (
-              <div className="text-xs text-blue-300 bg-blue-500/10 border border-blue-400/30 p-2 rounded">
+              <div className="cmms-classic-muted text-xs p-2">
                 👁️ View-only - Financial review in progress
               </div>
             )}

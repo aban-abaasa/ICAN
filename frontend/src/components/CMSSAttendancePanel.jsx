@@ -693,7 +693,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
         {canManage && (
           <button
             onClick={generateQRCode}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg flex items-center gap-2"
+            className="px-4 py-2 cmms-classic-btn-primary rounded-lg flex items-center gap-2"
           >
             <QrCode className="h-4 w-4" />
             Generate QR Code
@@ -707,8 +707,8 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           onClick={() => setActiveTab('summary')}
           className={`px-4 py-2 font-semibold ${
             activeTab === 'summary'
-              ? 'border-b-2 border-indigo-500 text-indigo-400'
-              : 'text-slate-400 hover:text-slate-300'
+              ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
+              : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
           }`}
         >
           Check-In Summary
@@ -717,8 +717,8 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           onClick={() => setActiveTab('records')}
           className={`px-4 py-2 font-semibold ${
             activeTab === 'records'
-              ? 'border-b-2 border-indigo-500 text-indigo-400'
-              : 'text-slate-400 hover:text-slate-300'
+              ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
+              : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
           }`}
         >
           Detailed Log
@@ -728,8 +728,8 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
             onClick={() => setActiveTab('manual')}
             className={`px-4 py-2 font-semibold ${
               activeTab === 'manual'
-                ? 'border-b-2 border-indigo-500 text-indigo-400'
-                : 'text-slate-400 hover:text-slate-300'
+                ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
+                : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
             }`}
           >
             Manual Check-In/Out
@@ -740,8 +740,8 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
             onClick={() => setActiveTab('qr-codes')}
             className={`px-4 py-2 font-semibold ${
               activeTab === 'qr-codes'
-                ? 'border-b-2 border-indigo-500 text-indigo-400'
-                : 'text-slate-400 hover:text-slate-300'
+                ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
+                : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
             }`}
           >
             QR Codes
@@ -751,8 +751,8 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           onClick={() => setActiveTab('rewards')}
           className={`px-4 py-2 font-semibold ${
             activeTab === 'rewards'
-              ? 'border-b-2 border-indigo-500 text-indigo-400'
-              : 'text-slate-400 hover:text-slate-300'
+              ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
+              : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
           }`}
         >
           Rewards
@@ -761,8 +761,8 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           onClick={() => setActiveTab('welfare')}
           className={`px-4 py-2 font-semibold ${
             activeTab === 'welfare'
-              ? 'border-b-2 border-indigo-500 text-indigo-400'
-              : 'text-slate-400 hover:text-slate-300'
+              ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
+              : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
           }`}
         >
           Leave &amp; Welfare
@@ -772,8 +772,8 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
             onClick={() => setActiveTab('items')}
             className={`px-4 py-2 font-semibold ${
               activeTab === 'items'
-                ? 'border-b-2 border-indigo-500 text-indigo-400'
-                : 'text-slate-400 hover:text-slate-300'
+                ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
+                : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
             }`}
           >
             Items Taken/Returned
@@ -800,14 +800,14 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               />
               <span className="text-sm text-slate-400">to</span>
               <input type="date" value={endDate} min={startDate || undefined} max={today} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg" aria-label="Summary end date" />
-              <button onClick={() => setDatePreset(1)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">Today</button>
-              <button onClick={() => setDatePreset(7)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">7 days</button>
-              <button onClick={() => setDatePreset(30)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">30 days</button>
-              <button onClick={setAllTimeRange} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">All time</button>
+              <button onClick={() => setDatePreset(1)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">Today</button>
+              <button onClick={() => setDatePreset(7)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">7 days</button>
+              <button onClick={() => setDatePreset(30)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">30 days</button>
+              <button onClick={setAllTimeRange} className="px-3 py-2 text-xs cmms-classic-btn-secondary">All time</button>
             </div>
             {canExport && (
               <div className="flex flex-wrap gap-2">
-                <button onClick={exportSummaryExcel} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center gap-2">
+                <button onClick={exportSummaryExcel} className="px-4 py-2 cmms-classic-btn-secondary flex items-center gap-2">
                   <Download className="h-4 w-4" /> Excel
                 </button>
                 <button onClick={exportSummaryPdf} className="px-4 py-2 bg-rose-700 hover:bg-rose-600 rounded-lg flex items-center gap-2">
@@ -846,7 +846,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
                       <td className="px-4 py-2 font-semibold">{entry.user_name || 'Unknown'}</td>
                       <td className="px-4 py-2 text-slate-400">{entry.user_email}</td>
                       <td className="px-4 py-2 text-center">
-                        <span className="rounded-full bg-indigo-500/15 px-3 py-1 text-indigo-300 font-semibold">{entry.check_in_count}</span>
+                        <span className="cmms-classic-chip !text-sm !normal-case">{entry.check_in_count}</span>
                       </td>
                       <td className="px-4 py-2 text-center text-slate-300">
                         {entry.days_present}
@@ -882,7 +882,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           )}
 
           {canManualCheckInOut && (
-          <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg space-y-3">
+          <div className="cmms-classic-card p-4 space-y-3">
             <h3 className="text-lg font-bold flex items-center gap-2"><LogIn className="h-5 w-5 text-indigo-400" />Manually check in a staff member</h3>
             <div className="grid gap-3 md:grid-cols-3">
               <select value={manualStaffId} onChange={(e) => setManualStaffId(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm">
@@ -899,7 +899,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               <button
                 onClick={handleManualCheckIn}
                 disabled={manualLoading || !manualStaffId || !manualLocation.trim()}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg flex items-center justify-center gap-2"
+                className="px-4 py-2 cmms-classic-btn-primary disabled:opacity-50 rounded-lg flex items-center justify-center gap-2"
               >
                 {manualLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                 Check In
@@ -909,7 +909,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           )}
 
           {canManualCheckInOut && (
-          <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg space-y-3">
+          <div className="cmms-classic-card p-4 space-y-3">
             <h3 className="text-lg font-bold flex items-center gap-2"><LogOut className="h-5 w-5 text-amber-400" />Currently checked in</h3>
             {activeCheckIns.length === 0 ? (
               <p className="text-sm text-slate-400">No staff are currently checked in.</p>
@@ -938,7 +938,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           )}
 
           {canAddDays && (
-          <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg space-y-3">
+          <div className="cmms-classic-card p-4 space-y-3">
             <div>
               <h3 className="text-lg font-bold flex items-center gap-2"><Calendar className="h-5 w-5 text-emerald-400" />Add attendance days</h3>
               <p className="text-xs text-slate-400 mt-1">Credit extra days present (e.g. approved field work, an outage that stopped QR check-in). This can only add days — it can never reduce a staff member's recorded attendance.</p>
@@ -1000,10 +1000,10 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
       {activeTab === 'records' && (
         <div className="space-y-4">
           {!canViewAll && rewardBalances[0] && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-indigo-800/40 bg-indigo-950/20 p-3 text-sm">
-              <span className="text-indigo-300">My reward points:</span>
-              <span className="rounded-full bg-indigo-500/15 px-3 py-1 font-semibold text-indigo-200">{rewardBalances[0].balance_points} balance</span>
-              <span className="text-slate-400">{rewardBalances[0].lifetime_earned_points} earned all-time{rewardBalances[0].pending_redemption_points > 0 ? ` · ${rewardBalances[0].pending_redemption_points} pending payout` : ''}</span>
+            <div className="cmms-classic-callout flex flex-wrap items-center gap-3 !p-3 text-sm">
+              <span className="cmms-classic-heading">My reward points:</span>
+              <span className="cmms-classic-chip !text-sm !normal-case">{rewardBalances[0].balance_points} balance</span>
+              <span className="cmms-classic-muted">{rewardBalances[0].lifetime_earned_points} earned all-time{rewardBalances[0].pending_redemption_points > 0 ? ` · ${rewardBalances[0].pending_redemption_points} pending payout` : ''}</span>
             </div>
           )}
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -1019,15 +1019,15 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               />
               <span className="text-sm text-slate-400">to</span>
               <input type="date" value={endDate} min={startDate || undefined} max={today} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg" aria-label="Attendance end date" />
-              <button onClick={() => setDatePreset(1)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">Today</button>
-              <button onClick={() => setDatePreset(7)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">7 days</button>
-              <button onClick={() => setDatePreset(30)} className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg">30 days</button>
+              <button onClick={() => setDatePreset(1)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">Today</button>
+              <button onClick={() => setDatePreset(7)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">7 days</button>
+              <button onClick={() => setDatePreset(30)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">30 days</button>
             </div>
             {canExport && (
             <div className="flex flex-wrap gap-2">
             <button
               onClick={exportAttendanceExcel}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center gap-2"
+              className="px-4 py-2 cmms-classic-btn-secondary flex items-center gap-2"
             >
               <Download className="h-4 w-4" />
               Excel
@@ -1061,7 +1061,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               {visibleAttendanceRecords.map((record) => (
                 <div
                   key={record.id}
-                  className="p-4 bg-slate-800 border border-slate-700 rounded-lg hover:border-slate-600 transition"
+                  className="cmms-classic-card p-4 transition hover:shadow-md"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
@@ -1127,7 +1127,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               <p>No QR codes generated yet</p>
               <button
                 onClick={generateQRCode}
-                className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+                className="mt-4 px-4 py-2 cmms-classic-btn-primary rounded-lg"
               >
                 Generate Your First QR Code
               </button>
@@ -1161,7 +1161,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
                             navigator.clipboard.writeText(qrUrl);
                             alert('QR URL copied to clipboard!');
                           }}
-                          className="flex items-center gap-2 px-3 py-1 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg"
+                          className="flex items-center gap-2 px-3 py-1 text-xs cmms-classic-btn-secondary"
                           title="Copy URL"
                         >
                           <Copy className="h-3 w-3" />
@@ -1206,7 +1206,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
                         <div className="flex gap-2">
                           <button
                             onClick={() => downloadQRCode(qr.token, qr.location_name)}
-                            className="flex items-center gap-2 px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+                            className="flex items-center gap-2 px-3 py-2 text-sm cmms-classic-btn-primary rounded-lg"
                             title="Download QR Code"
                           >
                             <Download className="h-4 w-4" />
@@ -1259,7 +1259,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           {rewardsLoading && <p className="text-sm text-slate-400">Loading rewards…</p>}
 
           {isFullAdmin && rewardsForm && (
-            <form onSubmit={saveRewards} className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-3">
+            <form onSubmit={saveRewards} className="grid gap-3 cmms-classic-card p-4 md:grid-cols-3">
               <h3 className="font-semibold text-white md:col-span-3">Rewards settings</h3>
               <label className="flex items-center gap-2 text-sm text-slate-200 md:col-span-3">
                 <input type="checkbox" checked={Boolean(rewardsForm.enabled)} onChange={(e) => setRewardsForm((v) => ({ ...v, enabled: e.target.checked }))} />
@@ -1312,7 +1312,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           )}
 
           {isFullAdmin && (
-            <section className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+            <section className="cmms-classic-card p-4">
               <h3 className="mb-3 font-semibold text-white">Pending redemptions</h3>
               {pendingRedemptions.length === 0 ? (
                 <p className="text-sm text-slate-400">Nothing queued for payout right now.</p>
@@ -1362,7 +1362,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
             </section>
           )}
 
-          <section className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+          <section className="cmms-classic-card p-4">
             <h3 className="mb-3 font-semibold text-white">{isFullAdmin ? 'Staff point balances' : 'Your points'}</h3>
             {rewardBalances.length === 0 ? (
               <p className="text-sm text-slate-400">No reward points earned yet.</p>
@@ -1382,7 +1382,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
                     {rewardBalances.map((row) => (
                       <tr key={row.cmms_user_id} className="hover:bg-slate-800/60">
                         <td className="px-4 py-2 font-semibold">{row.user_name}</td>
-                        <td className="px-4 py-2 text-center"><span className="rounded-full bg-indigo-500/15 px-3 py-1 text-indigo-300 font-semibold">{row.balance_points}</span></td>
+                        <td className="px-4 py-2 text-center"><span className="cmms-classic-chip !text-sm !normal-case">{row.balance_points}</span></td>
                         <td className="px-4 py-2 text-center text-slate-400">{row.pending_redemption_points}</td>
                         <td className="px-4 py-2 text-center text-slate-400">{row.lifetime_earned_points}</td>
                         {isFullAdmin && (
@@ -1406,7 +1406,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           </section>
 
           {!isFullAdmin && (
-            <section className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+            <section className="cmms-classic-card p-4">
               <h3 className="mb-3 font-semibold text-white">History</h3>
               {rewardHistory.length === 0 ? (
                 <p className="text-sm text-slate-400">No points earned yet.</p>
@@ -1573,7 +1573,7 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
                   key={id}
                   onClick={() => setWelfareView(id)}
                   className={`rounded-full px-4 py-1.5 text-sm font-semibold ${
-                    welfareView === id ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    welfareView === id ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-bgSecondary)] text-[var(--color-textSecondary)] hover:text-[var(--color-text)] border border-[var(--color-border)]'
                   }`}
                 >
                   {label}

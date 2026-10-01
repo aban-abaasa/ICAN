@@ -83,10 +83,10 @@ const RequisitionConfirmations = ({
 
   if (loadingWorkflow) {
     return (
-      <div className="glass-card p-6 bg-blue-500/10 border border-blue-500/30">
+      <div className="cmms-classic-card p-6">
         <div className="text-center py-8">
           <div className="animate-spin rounded-full h-10 w-10 border border-blue-400 border-t-transparent mx-auto mb-3"></div>
-          <p className="text-gray-400 text-sm">Loading approval workflow...</p>
+          <p className="cmms-classic-muted text-sm">Loading approval workflow...</p>
         </div>
       </div>
     );
@@ -94,8 +94,8 @@ const RequisitionConfirmations = ({
 
   if (!workflow) {
     return (
-      <div className="glass-card p-6 bg-red-500/10 border border-red-500/30">
-        <p className="text-red-300 text-sm">Error loading workflow information</p>
+      <div className="cmms-classic-card p-6">
+        <p className="text-red-400 text-sm">Error loading workflow information</p>
       </div>
     );
   }
@@ -114,8 +114,8 @@ const RequisitionConfirmations = ({
   );
 
   return (
-    <div className="glass-card p-6 bg-gradient-to-br from-blue-500/5 to-purple-500/5 border border-blue-500/20">
-      <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+    <div className="cmms-classic-card p-6">
+      <h3 className="cmms-classic-heading text-xl mb-4 flex items-center gap-2">
         <CheckCircle2 className="w-6 h-6 text-blue-400" />
         Requisition Approval Workflow
       </h3>
@@ -129,11 +129,8 @@ const RequisitionConfirmations = ({
           return (
             <div
               key={step.step}
-              className={`border rounded-lg p-4 transition-all ${
-                step.required
-                  ? 'bg-orange-500/10 border-orange-400'
-                  : 'bg-white/5 border-white/20'
-              }`}
+              className={`border rounded-lg p-4 ${step.required ? 'bg-orange-500/10 border-orange-400' : ''}`}
+              style={step.required ? undefined : { borderColor: 'var(--color-border)' }}
             >
               {/* Step Header */}
               <div className="flex items-start justify-between mb-3">
@@ -148,8 +145,8 @@ const RequisitionConfirmations = ({
                       {step.type === 'financial_review' ? '👁️' : ''}
                     </span>
                     <div>
-                      <h4 className="text-white font-bold">{step.role}</h4>
-                      <p className="text-xs text-gray-400">{step.description}</p>
+                      <h4 className="cmms-classic-heading">{step.role}</h4>
+                      <p className="cmms-classic-muted text-xs">{step.description}</p>
                     </div>
                   </div>
                   {step.required && (
@@ -177,17 +174,17 @@ const RequisitionConfirmations = ({
                     </div>
                   )}
                   {step.type === 'coordinator_confirmation' && (
-                    <div className="text-xs font-bold px-2 py-1 rounded bg-blue-500/30 text-blue-300">
+                    <div className="cmms-classic-chip">
                       {step.count || 0} confirmations
                     </div>
                   )}
                   {step.type === 'supervisor_confirmation' && (
-                    <div className="text-xs font-bold px-2 py-1 rounded bg-purple-500/30 text-purple-300">
+                    <div className="cmms-classic-chip">
                       {step.count || 0} confirmations
                     </div>
                   )}
                   {step.type === 'financial_review' && (
-                    <div className="text-xs font-bold px-2 py-1 rounded bg-gray-500/30 text-gray-300">
+                    <div className="cmms-classic-chip">
                       View Only
                     </div>
                   )}
@@ -209,17 +206,17 @@ const RequisitionConfirmations = ({
                         {conf.confirmation_status === 'pending' && (
                           <AlertCircle className="w-4 h-4 text-yellow-400" />
                         )}
-                        <span className="text-white font-semibold">{conf.confirmed_by_name}</span>
-                        <span className="text-xs text-gray-400">({conf.confirmed_by_role})</span>
+                        <span className="cmms-classic-heading">{conf.confirmed_by_name}</span>
+                        <span className="cmms-classic-muted text-xs">({conf.confirmed_by_role})</span>
                       </div>
-                      <div className="text-xs text-gray-400 ml-6">
+                      <div className="cmms-classic-muted text-xs ml-6">
                         {conf.confirmation_status === 'confirmed' && '✓ Confirmed'}
                         {conf.confirmation_status === 'rejected' && '✗ Rejected'}
                         {conf.confirmation_status === 'pending' && '⏳ Pending'}
                         {conf.confirmed_at && ` on ${new Date(conf.confirmed_at).toLocaleDateString()}`}
                       </div>
                       {conf.confirmation_notes && (
-                        <div className="text-xs text-gray-300 italic ml-6 mt-1">
+                        <div className="cmms-classic-muted text-xs italic ml-6 mt-1">
                           "{conf.confirmation_notes}"
                         </div>
                       )}
@@ -232,8 +229,8 @@ const RequisitionConfirmations = ({
               {!['financial_review', ...stepConfirmations.filter(c => c.confirmed_by_name === currentUserRole).map(c => c.type)].includes(step.type) &&
                 canConfirm &&
                 (step.type === 'coordinator_confirmation' || step.type === 'supervisor_confirmation') && (
-                  <div className="mt-4 pt-4 border-t border-white/10">
-                    <p className="text-xs text-gray-400 mb-3">
+                  <div className="cmms-classic-divider !mt-4 !pt-4">
+                    <p className="cmms-classic-muted text-xs mb-3">
                       {currentUserRole === 'coordinator' && step.type === 'coordinator_confirmation'
                         ? '✓ You can submit a confirmation'
                         : currentUserRole === 'supervisor' && step.type === 'supervisor_confirmation'
@@ -304,12 +301,12 @@ const RequisitionConfirmations = ({
       </div>
 
       {/* Workflow Summary */}
-      <div className="p-4 bg-white/5 border border-white/10 rounded-lg">
-        <h4 className="text-sm font-bold text-gray-300 mb-2">📊 Workflow Summary</h4>
-        <div className="space-y-1 text-xs text-gray-400">
+      <div className="cmms-classic-divider">
+        <h4 className="cmms-classic-label mb-2">Workflow Summary</h4>
+        <div className="space-y-1 text-xs cmms-classic-muted">
           <p>
             Overall Status:{' '}
-            <span className="text-white font-bold uppercase">{workflow.overall_status}</span>
+            <span className="cmms-classic-heading uppercase">{workflow.overall_status}</span>
           </p>
           <p>
             Admin Approval:{' '}

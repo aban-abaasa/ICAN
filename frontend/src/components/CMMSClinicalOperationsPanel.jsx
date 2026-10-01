@@ -23,15 +23,16 @@ export default function CMMSClinicalOperationsPanel({ businessProfileId, busines
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 border-b border-white/10">
+      <div className="flex gap-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             type="button"
             onClick={() => setTab(id)}
             className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition ${
-              tab === id ? 'border-cyan-400 text-white' : 'border-transparent text-slate-400 hover:text-slate-200'
+              tab === id ? 'text-[var(--color-primary)]' : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
+            style={tab === id ? { borderColor: 'var(--color-primary)' } : undefined}
           >
             <Icon className="h-4 w-4" /> {label}
           </button>

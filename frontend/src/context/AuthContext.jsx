@@ -6,12 +6,30 @@ import { uploadToR2, resolveMediaValue } from '../services/r2StorageService';
 
 const AuthContext = createContext({});
 
+// Read the recovery-link markers synchronously at module load — supabase-js
+// strips the #type=recovery hash while processing the link, so by the time
+// getSession() resolves it is already gone and the app would land signed-in.
+const openedFromRecoveryLink = (() => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const hash = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+    const query = new URLSearchParams(window.location.search || '');
+    return hash.get('type') === 'recovery'
+      || query.get('type') === 'recovery'
+      || window.location.pathname === '/reset-password'
+      || window.location.pathname === '/reset-pin'
+      || query.get('flow') === 'pin';
+  } catch (_) {
+    return false;
+  }
+})();
+
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(openedFromRecoveryLink);
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
   const [syncStatus, setSyncStatus] = useState({ status: 'idle', message: '' });
@@ -225,10 +243,8 @@ export const AuthProvider = ({ children }) => {
 
     // Get initial session - Supabase will automatically process OAuth tokens from URL
     supabase.auth.getSession().then(({ data: { session } }) => {
-      const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
-      const isRecoveryFromUrl = hashParams.get('type') === 'recovery' || window.location.pathname === '/reset-password';
-
-      setIsRecoveryMode(isRecoveryFromUrl);
+      // Never downgrade: PASSWORD_RECOVERY may already have fired.
+      if (openedFromRecoveryLink) setIsRecoveryMode(true);
       setUser(session?.user ?? null);
       if (session?.user) {
         loadProfile(session.user.id);

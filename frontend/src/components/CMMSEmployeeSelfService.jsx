@@ -201,7 +201,7 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
     setAdvanceBusy(false);
   };
 
-  if (loading) return <div className="flex items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-6 text-sm text-slate-300"><Loader className="h-4 w-4 animate-spin" /> Loading your records…</div>;
+  if (loading) return <div className="flex items-center gap-2 cmms-classic-card p-6 text-sm cmms-classic-muted"><Loader className="h-4 w-4 animate-spin" /> Loading your records…</div>;
   if (error) return <div className="rounded-2xl border border-red-700/40 bg-red-900/15 p-6 text-sm text-red-200">{error}</div>;
 
   // "Paid" entries already cover both salaried payroll runs and daily-paid
@@ -227,62 +227,62 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
     // approved, cancelled, rejected) hasn't been charged against the plan yet.
     const chargedStatuses = ['completed', 'dispatched'];
     return (
-      <div className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6">
+      <div className="space-y-4 cmms-classic-card p-4 md:p-6">
         <div className="flex items-center gap-3">
           <Bus className="h-6 w-6 text-orange-400" />
           <div>
-            <h2 className="text-xl font-bold text-white">My transport plan</h2>
-            <p className="text-sm text-slate-400">Only transport requests made by your account are shown.</p>
+            <h2 className="cmms-classic-heading text-xl">My transport plan</h2>
+            <p className="text-sm cmms-classic-muted">Only transport requests made by your account are shown.</p>
           </div>
         </div>
         {transportPlan?.has_plan ? (
-          <div className="rounded-xl border border-orange-800/40 bg-orange-950/10 p-4">
+          <div className="cmms-classic-callout">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-white">{transportPlan.contract_name}</p>
-              <span className="rounded-full bg-orange-500/15 px-3 py-1 text-xs capitalize text-orange-300">{transportPlan.billing_cycle} plan</span>
+              <p className="text-sm font-semibold cmms-classic-heading">{transportPlan.contract_name}</p>
+              <span className="cmms-classic-chip capitalize">{transportPlan.billing_cycle} plan</span>
             </div>
-            <p className="mt-1 text-xs text-slate-400">Allowed vehicles: {(transportPlan.allowed_vehicle_types || []).join(', ') || 'any'}</p>
+            <p className="mt-1 text-xs cmms-classic-muted">Allowed vehicles: {(transportPlan.allowed_vehicle_types || []).join(', ') || 'any'}</p>
             {limit > 0 && (
               <>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
-                    <p className="text-xs uppercase text-slate-400">Used this month</p>
-                    <p className="mt-1 text-lg font-bold text-white">{money(spend, transportPlan.currency)}</p>
+                <dl className="cmms-field-list mt-2">
+                  <div className="cmms-field-row">
+                    <dt>Used this month</dt>
+                    <dd>{money(spend, transportPlan.currency)}</dd>
                   </div>
-                  <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/10 p-3">
-                    <p className="text-xs uppercase text-emerald-300">Remaining</p>
-                    <p className="mt-1 text-lg font-bold text-white">{money(remaining, transportPlan.currency)}</p>
+                  <div className="cmms-field-row">
+                    <dt>Remaining</dt>
+                    <dd className="text-emerald-400">{money(remaining, transportPlan.currency)}</dd>
                   </div>
-                  <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
-                    <p className="text-xs uppercase text-slate-400">Plan limit</p>
-                    <p className="mt-1 text-lg font-bold text-white">{money(limit, transportPlan.currency)}</p>
+                  <div className="cmms-field-row">
+                    <dt>Plan limit</dt>
+                    <dd>{money(limit, transportPlan.currency)}</dd>
                   </div>
-                </div>
-                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                </dl>
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-black/10">
                   <div className="h-full rounded-full bg-orange-500" style={{ width: `${Math.min(transportPlan.percent_used || 0, 100)}%` }} />
                 </div>
               </>
             )}
-            <p className="mt-2 text-xs text-slate-500">{transportPlan.rides_this_month} ride(s) across {transportPlan.days_covered_this_month} day(s) this month</p>
+            <p className="mt-2 text-xs cmms-classic-muted">{transportPlan.rides_this_month} ride(s) across {transportPlan.days_covered_this_month} day(s) this month</p>
           </div>
         ) : (
-          <p className="text-sm text-slate-400">Your company has no active transport plan yet.</p>
+          <p className="text-sm cmms-classic-muted">Your company has no active transport plan yet.</p>
         )}
-        <section>
-          <h3 className="mb-2 font-semibold text-white">My journeys</h3>
-          {rides.length === 0 ? <p className="text-sm text-slate-400">No personal transport records yet.</p> : (
-            <div className="space-y-2">
+        <section className="cmms-classic-divider">
+          <h3 className="mb-2 cmms-classic-heading text-sm">My journeys</h3>
+          {rides.length === 0 ? <p className="text-sm cmms-classic-muted">No personal transport records yet.</p> : (
+            <div>
               {rides.map(ride => {
                 const cost = ride.estimated_total || 0;
                 const charged = chargedStatuses.includes(ride.status);
                 return (
-                  <div key={ride.id} className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
+                  <div key={ride.id} className="border-b last:border-b-0 py-2.5 text-sm" style={{ borderColor: 'var(--color-border)' }}>
                     <div className="flex justify-between gap-3">
-                      <span className="font-semibold text-white capitalize">{ride.status}</span>
-                      <span className="text-slate-400">{new Date(ride.created_at).toLocaleDateString()}</span>
+                      <span className="font-semibold cmms-classic-heading capitalize">{ride.status}</span>
+                      <span className="cmms-classic-muted">{new Date(ride.created_at).toLocaleDateString()}</span>
                     </div>
-                    <p className="mt-1 text-slate-300">{ride.pickup_location} → {ride.dropoff_location}</p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 cmms-classic-muted">{ride.pickup_location} → {ride.dropoff_location}</p>
+                    <p className="mt-1 text-xs cmms-classic-muted opacity-75">
                       {ride.ride_count} ride(s) · {ride.requested_vehicle_type || 'Any vehicle'}
                       {cost > 0 ? ` · ${money(cost, transportPlan?.currency)} ${charged ? '(paid from plan)' : '(pending)'}` : ''}
                     </p>
@@ -296,48 +296,48 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
     );
   }
 
-  return <div className="space-y-4 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 md:p-6"><div className="flex items-center gap-3"><DollarSign className="h-6 w-6 text-emerald-400" /><div><h2 className="text-xl font-bold text-white">My salary and attendance</h2><p className="text-sm text-slate-400">Only your salary, payroll entries, and attendance are shown.</p></div></div>{compensation && <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/20 p-4"><p className="text-xs uppercase text-emerald-300">Current salary</p><p className="mt-1 text-2xl font-bold text-white">{money(compensation.base_salary, compensation.currency)}</p><p className="text-xs text-slate-400 capitalize">{compensation.pay_frequency || 'monthly'} · {compensation.payroll_status || 'on pay'}</p></div>}{(entries.length > 0 || unpaidDayCount > 0) && <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg border border-emerald-800/40 bg-emerald-950/10 p-3"><p className="text-xs uppercase text-emerald-300">Paid so far</p><p className="mt-1 text-xl font-bold text-white">{money(paidTotal, currency)}</p></div><div className="rounded-lg border border-amber-800/40 bg-amber-950/10 p-3"><p className="text-xs uppercase text-amber-300">Waiting to be paid</p><p className="mt-1 text-xl font-bold text-white">{money(waitingTotal, currency)}</p>{unpaidDayCount > 0 && <p className="mt-1 text-xs text-slate-500">+ {unpaidDayCount} day(s) checked out, pay not yet confirmed</p>}</div></div>}<section><h3 className="mb-2 flex items-center gap-2 font-semibold text-white"><CalendarDays className="h-4 w-4" /> My attendance</h3>
-      {monthlyAttendance ? <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3"><p className="text-xs uppercase text-slate-400">Days present this month</p><p className="mt-1 text-xl font-bold text-white">{monthlyAttendance.days_present}</p></div><div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3"><p className="text-xs uppercase text-slate-400">Check-ins this month</p><p className="mt-1 text-xl font-bold text-white">{monthlyAttendance.check_in_count}</p>{monthlyAttendance.currently_checked_in && <p className="mt-1 text-xs text-emerald-400">Currently checked in</p>}</div></div> : <p className="text-sm text-slate-400">No attendance recorded this month yet.</p>}
-      {attendance.length > 0 && <div className="mt-3 space-y-1 max-h-56 overflow-y-auto">{attendance.map((rec, i) => <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs text-slate-400"><span className="font-medium text-slate-200">{new Date(rec.check_in_time).toLocaleDateString()}</span><span>In {new Date(rec.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}{rec.check_out_time ? ` · Out ${new Date(rec.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ' · Still checked in'}</span><span className="capitalize">{rec.status}</span></div>)}</div>}
-      {(rewardPoints || myRating) && <div className="mt-3 grid gap-3 sm:grid-cols-3">{rewardPoints && <div className="rounded-lg border border-indigo-800/40 bg-indigo-950/20 p-3"><p className="text-xs uppercase text-indigo-300">Reward points</p><p className="mt-1 text-xl font-bold text-white">{rewardPoints.balance_points}</p><p className="text-xs text-slate-500">{rewardPoints.lifetime_earned_points} earned all-time{rewardPoints.pending_redemption_points > 0 ? ` · ${rewardPoints.pending_redemption_points} pending payout` : ''}</p></div>}{myRating?.average_rating != null && <div className="rounded-lg border border-amber-800/40 bg-amber-950/10 p-3"><p className="text-xs uppercase text-amber-300">Visitor rating</p><p className="mt-1 flex items-center gap-1 text-xl font-bold text-white">{myRating.average_rating} <Star className="h-4 w-4 fill-amber-400 text-amber-400" /></p><p className="text-xs text-slate-500">from {myRating.rating_count} visitor rating(s)</p></div>}</div>}
+  return <div className="space-y-4 cmms-classic-card p-4 md:p-6"><div className="flex items-center gap-3"><DollarSign className="h-6 w-6 text-emerald-400" /><div><h2 className="cmms-classic-heading text-xl">My salary and attendance</h2><p className="text-sm cmms-classic-muted">Only your salary, payroll entries, and attendance are shown.</p></div></div>{compensation && <div className="cmms-classic-callout"><p className="cmms-classic-label">Current salary</p><p className="mt-1 text-2xl font-bold cmms-classic-heading">{money(compensation.base_salary, compensation.currency)}</p><p className="text-xs cmms-classic-muted capitalize">{compensation.pay_frequency || 'monthly'} · {compensation.payroll_status || 'on pay'}</p></div>}{(entries.length > 0 || unpaidDayCount > 0) && <dl className="cmms-field-list"><div className="cmms-field-row"><dt>Paid so far</dt><dd className="text-emerald-400">{money(paidTotal, currency)}</dd></div><div className="cmms-field-row"><dt>Waiting to be paid</dt><dd className="text-amber-400">{money(waitingTotal, currency)}{unpaidDayCount > 0 && <span className="block text-xs cmms-classic-muted font-normal normal-case">+ {unpaidDayCount} day(s) checked out, pay not yet confirmed</span>}</dd></div></dl>}<section className="cmms-classic-divider"><h3 className="mb-2 flex items-center gap-2 cmms-classic-heading text-sm"><CalendarDays className="h-4 w-4" /> My attendance</h3>
+      {monthlyAttendance ? <dl className="cmms-field-list"><div className="cmms-field-row"><dt>Days present this month</dt><dd>{monthlyAttendance.days_present}</dd></div><div className="cmms-field-row"><dt>Check-ins this month</dt><dd>{monthlyAttendance.check_in_count}{monthlyAttendance.currently_checked_in && <span className="block text-xs text-emerald-400 font-normal normal-case">Currently checked in</span>}</dd></div></dl> : <p className="text-sm cmms-classic-muted">No attendance recorded this month yet.</p>}
+      {attendance.length > 0 && <div className="mt-3 max-h-56 overflow-y-auto">{attendance.map((rec, i) => <div key={i} className="flex items-center justify-between gap-3 border-b last:border-b-0 px-1 py-2 text-xs cmms-classic-muted" style={{ borderColor: 'var(--color-border)' }}><span className="font-medium cmms-classic-heading text-xs">{new Date(rec.check_in_time).toLocaleDateString()}</span><span>In {new Date(rec.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}{rec.check_out_time ? ` · Out ${new Date(rec.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ' · Still checked in'}</span><span className="capitalize">{rec.status}</span></div>)}</div>}
+      {(rewardPoints || myRating) && <dl className="cmms-field-list mt-3">{rewardPoints && <div className="cmms-field-row"><dt>Reward points</dt><dd>{rewardPoints.balance_points}<span className="block text-xs cmms-classic-muted font-normal normal-case">{rewardPoints.lifetime_earned_points} earned all-time{rewardPoints.pending_redemption_points > 0 ? ` · ${rewardPoints.pending_redemption_points} pending payout` : ''}</span></dd></div>}{myRating?.average_rating != null && <div className="cmms-field-row"><dt>Visitor rating</dt><dd className="flex items-center gap-1">{myRating.average_rating} <Star className="h-4 w-4 fill-amber-400 text-amber-400" /><span className="block text-xs cmms-classic-muted font-normal normal-case">from {myRating.rating_count} visitor rating(s)</span></dd></div>}</dl>}
     </section>
-    <section><h3 className="mb-2 font-semibold text-white">My payroll entries</h3>{entries.length === 0 ? <p className="text-sm text-slate-400">No payroll entries yet.</p> : <div className="space-y-2">{entries.map(entry => <div key={entry.id} className="flex justify-between rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm"><span className="capitalize text-slate-300">{entry.status || 'draft'}</span><span className="font-semibold text-emerald-300">{money(entry.net_amount ?? entry.base_amount, entry.metadata?.currency)}</span></div>)}</div>}</section>
-    <section>
-      <h3 className="mb-2 flex items-center gap-2 font-semibold text-white"><Wallet className="h-4 w-4" /> IcanEra wallet activity</h3>
-      <p className="mb-2 text-xs text-slate-500">On-chain ICAN transactions between this company's business wallet and your personal wallet — the record behind a "paid" salary or advance.</p>
-      {walletTransactions.length === 0 ? <p className="text-sm text-slate-400">No wallet transactions from this company yet.</p> : <div className="space-y-1 max-h-56 overflow-y-auto">{walletTransactions.map(tx => <div key={tx.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs"><div><span className={`font-semibold ${tx.direction === 'received' ? 'text-emerald-300' : 'text-amber-300'}`}>{tx.direction === 'received' ? 'Received' : 'Sent'} {Number(tx.ican_amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN</span>{tx.note && <p className="mt-0.5 text-slate-500">{tx.note}</p>}</div><div className="text-right text-slate-400"><p>{money(tx.local_amount, tx.local_currency)}</p><p>{new Date(tx.created_at).toLocaleDateString()}</p></div></div>)}</div>}
+    <section className="cmms-classic-divider"><h3 className="mb-2 cmms-classic-heading text-sm">My payroll entries</h3>{entries.length === 0 ? <p className="text-sm cmms-classic-muted">No payroll entries yet.</p> : <div>{entries.map(entry => <div key={entry.id} className="flex justify-between border-b last:border-b-0 py-2 text-sm" style={{ borderColor: 'var(--color-border)' }}><span className="capitalize cmms-classic-muted">{entry.status || 'draft'}</span><span className="font-semibold text-emerald-400">{money(entry.net_amount ?? entry.base_amount, entry.metadata?.currency)}</span></div>)}</div>}</section>
+    <section className="cmms-classic-divider">
+      <h3 className="mb-2 flex items-center gap-2 cmms-classic-heading text-sm"><Wallet className="h-4 w-4" /> IcanEra wallet activity</h3>
+      <p className="mb-2 text-xs cmms-classic-muted">On-chain ICAN transactions between this company's business wallet and your personal wallet — the record behind a "paid" salary or advance.</p>
+      {walletTransactions.length === 0 ? <p className="text-sm cmms-classic-muted">No wallet transactions from this company yet.</p> : <div className="max-h-56 overflow-y-auto">{walletTransactions.map(tx => <div key={tx.id} className="flex items-center justify-between gap-3 border-b last:border-b-0 px-1 py-2 text-xs" style={{ borderColor: 'var(--color-border)' }}><div><span className={`font-semibold ${tx.direction === 'received' ? 'text-emerald-400' : 'text-amber-400'}`}>{tx.direction === 'received' ? 'Received' : 'Sent'} {Number(tx.ican_amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN</span>{tx.note && <p className="mt-0.5 cmms-classic-muted">{tx.note}</p>}</div><div className="text-right cmms-classic-muted"><p>{money(tx.local_amount, tx.local_currency)}</p><p>{new Date(tx.created_at).toLocaleDateString()}</p></div></div>)}</div>}
     </section>
-    <section>
-      <h3 className="mb-2 flex items-center gap-2 font-semibold text-white"><Wallet className="h-4 w-4" /> Salary advance</h3>
+    <section className="cmms-classic-divider">
+      <h3 className="mb-2 flex items-center gap-2 cmms-classic-heading text-sm"><Wallet className="h-4 w-4" /> Salary advance</h3>
       {advanceError && <p className="mb-2 rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{advanceError}</p>}
       {advanceNotice && <p className="mb-2 rounded-lg border border-emerald-800/50 bg-emerald-900/20 p-2 text-sm text-emerald-300">{advanceNotice}</p>}
-      {liveAdvance ? <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
-        <div className="flex items-center justify-between"><span className="font-semibold text-white">{money(liveAdvance.amount, liveAdvance.currency)}</span><span className="rounded-full bg-slate-800 px-2 py-1 text-xs capitalize text-slate-300">{liveAdvance.status}</span></div>
-        {liveAdvance.reason && <p className="text-xs text-slate-400">{liveAdvance.reason}</p>}
-        {liveAdvance.status === 'pending' && <button type="button" disabled={advanceBusy} onClick={() => cancelMyAdvance(liveAdvance.id)} className="rounded-lg border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50">Cancel request</button>}
-        {liveAdvance.status === 'approved' && <p className="text-xs text-amber-300">Approved — waiting to be paid.</p>}
-        {liveAdvance.status === 'paid' && <><p className="text-xs text-amber-300">Marked paid ({liveAdvance.payment_method === 'ican' ? 'IcanEra wallet' : 'cash'}). Confirm below once you have actually received it — this is required before it can be deducted from your pay.</p><button type="button" disabled={advanceBusy} onClick={() => confirmAdvanceReceipt(liveAdvance.id)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">I received this</button></>}
-        {liveAdvance.status === 'confirmed' && <p className="text-xs text-slate-400">{money(liveAdvance.recovered_amount, liveAdvance.currency)} of {money(liveAdvance.amount, liveAdvance.currency)} recovered from your pay so far.</p>}
+      {liveAdvance ? <div className="space-y-2 text-sm">
+        <div className="flex items-center justify-between"><span className="font-semibold cmms-classic-heading">{money(liveAdvance.amount, liveAdvance.currency)}</span><span className="cmms-classic-chip capitalize">{liveAdvance.status}</span></div>
+        {liveAdvance.reason && <p className="text-xs cmms-classic-muted">{liveAdvance.reason}</p>}
+        {liveAdvance.status === 'pending' && <button type="button" disabled={advanceBusy} onClick={() => cancelMyAdvance(liveAdvance.id)} className="cmms-classic-btn-secondary px-3 py-1.5 text-xs">Cancel request</button>}
+        {liveAdvance.status === 'approved' && <p className="text-xs text-amber-400">Approved — waiting to be paid.</p>}
+        {liveAdvance.status === 'paid' && <><p className="text-xs text-amber-400">Marked paid ({liveAdvance.payment_method === 'ican' ? 'IcanEra wallet' : 'cash'}). Confirm below once you have actually received it — this is required before it can be deducted from your pay.</p><button type="button" disabled={advanceBusy} onClick={() => confirmAdvanceReceipt(liveAdvance.id)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">I received this</button></>}
+        {liveAdvance.status === 'confirmed' && <p className="text-xs cmms-classic-muted">{money(liveAdvance.recovered_amount, liveAdvance.currency)} of {money(liveAdvance.amount, liveAdvance.currency)} recovered from your pay so far.</p>}
       </div> : <form onSubmit={submitAdvanceRequest} className="grid gap-2 sm:grid-cols-3">
         <input required type="number" min="0.01" step="0.01" value={advanceForm.amount} onChange={e => setAdvanceForm(v => ({ ...v, amount: e.target.value }))} placeholder={`Amount (${currency || 'UGX'})`} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
         <input value={advanceForm.reason} onChange={e => setAdvanceForm(v => ({ ...v, reason: e.target.value }))} placeholder="Reason (optional)" className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white" />
-        <button disabled={advanceBusy} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{advanceBusy ? 'Requesting…' : 'Request advance'}</button>
+        <button disabled={advanceBusy} className="cmms-classic-btn-primary px-3 py-2 text-sm">{advanceBusy ? 'Requesting…' : 'Request advance'}</button>
       </form>}
     </section>
     <CMMSEmployeeWelfare companyProfile={companyProfile} />
     <CMMSItemCustodyPanel companyProfile={companyProfile} embedded />
-    <section>
-      <h3 className="mb-2 flex items-center gap-2 font-semibold text-white"><UploadCloud className="h-4 w-4" /> My documents</h3>
-      <p className="mb-2 text-xs text-slate-500">Add your National ID, certificates, CV, bank details, tax PIN/NSSF certificates, or anything else HR needs on file for your payroll record. Only you and payroll staff can see these.</p>
+    <section className="cmms-classic-divider">
+      <h3 className="mb-2 flex items-center gap-2 cmms-classic-heading text-sm"><UploadCloud className="h-4 w-4" /> My documents</h3>
+      <p className="mb-2 text-xs cmms-classic-muted">Add your National ID, certificates, CV, bank details, tax PIN/NSSF certificates, or anything else HR needs on file for your payroll record. Only you and payroll staff can see these.</p>
       {fileError && <p className="mb-2 rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{fileError}</p>}
       {fileNotice && <p className="mb-2 rounded-lg border border-emerald-800/50 bg-emerald-900/20 p-2 text-sm text-emerald-300">{fileNotice}</p>}
       {applicationDocs.filter((doc) => !myFiles.some((f) => f.source_job_application_id === doc.job_application_id)).length > 0 && (
-        <div className="mb-3 space-y-2 rounded-lg border border-sky-800/40 bg-sky-950/10 p-3">
-          <p className="text-xs text-sky-300">Already on file from your job application — no need to upload again:</p>
+        <div className="mb-3 space-y-2 cmms-classic-callout">
+          <p className="text-xs cmms-classic-muted">Already on file from your job application — no need to upload again:</p>
           {applicationDocs.filter((doc) => !myFiles.some((f) => f.source_job_application_id === doc.job_application_id)).map((doc) => (
             <div key={doc.job_application_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span className="text-slate-200">CV / Resume ({doc.reference_code})</span>
-              <button type="button" disabled={fileBusy} onClick={() => importMyApplicationDoc(doc.job_application_id)} className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Use this document</button>
+              <span className="cmms-classic-heading">CV / Resume ({doc.reference_code})</span>
+              <button type="button" disabled={fileBusy} onClick={() => importMyApplicationDoc(doc.job_application_id)} className="cmms-classic-btn-primary px-3 py-1.5 text-xs">Use this document</button>
             </div>
           ))}
         </div>
@@ -348,18 +348,18 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
         </select>
         <input required value={fileForm.label} onChange={(e) => setFileForm((v) => ({ ...v, label: e.target.value }))} placeholder="Label, e.g. Bachelor's degree" className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white sm:col-span-2" />
         <input required type="file" onChange={(e) => setFileForm((v) => ({ ...v, file: e.target.files?.[0] || null }))} className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-slate-700 file:px-2 file:py-1 file:text-xs file:text-white" />
-        <button disabled={fileBusy} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:col-span-4">{fileBusy ? 'Uploading…' : 'Add document'}</button>
+        <button disabled={fileBusy} className="cmms-classic-btn-primary px-3 py-2 text-sm sm:col-span-4">{fileBusy ? 'Uploading…' : 'Add document'}</button>
       </form>
       {myFiles.length > 0 && (
-        <div className="mt-3 space-y-2">
+        <div className="mt-3">
           {myFiles.map((doc) => (
-            <div key={doc.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
+            <div key={doc.id} className="flex flex-wrap items-center justify-between gap-2 border-b last:border-b-0 py-2.5 text-sm" style={{ borderColor: 'var(--color-border)' }}>
               <div>
-                <p className="font-semibold text-white">{doc.label}</p>
-                <p className="text-xs text-slate-400">{EMPLOYEE_DOCUMENT_CATEGORIES.find((c) => c.id === doc.category)?.label || doc.category}{doc.verified ? ' · Verified by HR' : ''}</p>
+                <p className="font-semibold cmms-classic-heading">{doc.label}</p>
+                <p className="text-xs cmms-classic-muted">{EMPLOYEE_DOCUMENT_CATEGORIES.find((c) => c.id === doc.category)?.label || doc.category}{doc.verified ? ' · Verified by HR' : ''}</p>
               </div>
               <div className="flex items-center gap-3">
-                {doc.file_url && <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-xs text-blue-300 hover:text-blue-200">View</a>}
+                {doc.file_url && <a href={doc.file_url} target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:text-blue-300">View</a>}
                 <button type="button" disabled={fileBusy} onClick={() => removeMyFile(doc.id)} className="text-red-400 hover:text-red-300 disabled:opacity-50" title="Remove"><Trash2 className="h-4 w-4" /></button>
               </div>
             </div>
@@ -368,17 +368,17 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
       )}
     </section>
     {documents.length > 0 && (
-      <section>
-        <h3 className="mb-2 flex items-center gap-2 font-semibold text-white"><FileText className="h-4 w-4" /> My employment documents</h3>
-        <div className="space-y-2">
+      <section className="cmms-classic-divider">
+        <h3 className="mb-2 flex items-center gap-2 cmms-classic-heading text-sm"><FileText className="h-4 w-4" /> My employment documents</h3>
+        <div>
           {documents.map((doc) => (
-            <div key={doc.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
+            <div key={doc.id} className="flex flex-wrap items-center justify-between gap-2 border-b last:border-b-0 py-2.5 text-sm" style={{ borderColor: 'var(--color-border)' }}>
               <div>
-                <p className="font-semibold text-white">{doc.title}</p>
-                <p className="text-xs capitalize text-slate-400">{doc.status} · {doc.document_type === 'employment_contract' ? 'Contract' : 'Appointment letter'}</p>
+                <p className="font-semibold cmms-classic-heading">{doc.title}</p>
+                <p className="text-xs capitalize cmms-classic-muted">{doc.status} · {doc.document_type === 'employment_contract' ? 'Contract' : 'Appointment letter'}</p>
               </div>
               <div className="flex items-center gap-3">
-                {doc.document_url && <a href={doc.document_url} target="_blank" rel="noreferrer" className="text-xs text-blue-300 hover:text-blue-200">View PDF</a>}
+                {doc.document_url && <a href={doc.document_url} target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:text-blue-300">View PDF</a>}
                 {doc.status === 'issued' && <button onClick={() => setSigningDocument(doc)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">Review & sign</button>}
                 {doc.status === 'signed' && <span className="text-xs text-emerald-400">Signed {doc.signed_at ? new Date(doc.signed_at).toLocaleDateString() : ''}</span>}
               </div>

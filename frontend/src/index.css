@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 @import './styles/mobile.css';
 
 @tailwind base;
@@ -136,6 +136,70 @@
   --tw-gradient-to: #faf3ea;
 }
 
+:root[data-theme="gold"] {
+  --color-bg: #fdfbf3;
+  --color-bgSecondary: #f8f0d9;
+  --color-text: #2b2110;
+  --color-textSecondary: #6b5a2e;
+  --color-border: #e6d5a8;
+  --color-primary: #a6790a;
+  --color-primaryLight: #f8f0d9;
+  --color-secondary: #8a6d1f;
+  --color-accent: #c9a227;
+
+  --tw-gradient-from: #f8f0d9;
+  --tw-gradient-via: #a6790a;
+  --tw-gradient-to: #fdfbf3;
+}
+
+:root[data-theme="bronze"] {
+  --color-bg: #fbf6f0;
+  --color-bgSecondary: #f0e0cd;
+  --color-text: #3b2a1e;
+  --color-textSecondary: #7a5a3f;
+  --color-border: #ddbfa0;
+  --color-primary: #a0522d;
+  --color-primaryLight: #f0e0cd;
+  --color-secondary: #c97b3d;
+  --color-accent: #a65b2e;
+
+  --tw-gradient-from: #f0e0cd;
+  --tw-gradient-via: #a0522d;
+  --tw-gradient-to: #fbf6f0;
+}
+
+:root[data-theme="violet"] {
+  --color-bg: #faf8fc;
+  --color-bgSecondary: #f0e9f7;
+  --color-text: #2e1a47;
+  --color-textSecondary: #5e4b7a;
+  --color-border: #d9c7ec;
+  --color-primary: #6b3fa0;
+  --color-primaryLight: #f0e9f7;
+  --color-secondary: #8e5bc0;
+  --color-accent: #7c3fae;
+
+  --tw-gradient-from: #f0e9f7;
+  --tw-gradient-via: #6b3fa0;
+  --tw-gradient-to: #faf8fc;
+}
+
+:root[data-theme="sky"] {
+  --color-bg: #f5fbff;
+  --color-bgSecondary: #e3f2fb;
+  --color-text: #0c2d44;
+  --color-textSecondary: #3b5a73;
+  --color-border: #bfe0f2;
+  --color-primary: #0369a1;
+  --color-primaryLight: #e3f2fb;
+  --color-secondary: #0ea5e9;
+  --color-accent: #0284c7;
+
+  --tw-gradient-from: #e3f2fb;
+  --tw-gradient-via: #0369a1;
+  --tw-gradient-to: #f5fbff;
+}
+
 :root[data-theme="dark"] {
   --color-bg: #090d1a;
   --color-bgSecondary: #111827;
@@ -174,6 +238,195 @@ html {
   border: 1px solid var(--color-border);
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* ==================== Classic business kit (CMMS) ====================
+   The real "classic" look -- ported directly from BodaGoEra's customer
+   dashboard (mybodaguy/frontend ClassicBits.tsx + index.css: ivory page,
+   gold-hairline dividers, serif display headings, gold-trimmed ivory cards).
+   This is CMMS's fixed visual identity -- like letterhead gold, it stays put
+   regardless of which app-wide theme (dark/purple/light/etc.) is selected
+   elsewhere, the same way BodaGoEra's own dashboard always looks like
+   BodaGoEra. Only the actionable bits (primary buttons) pick up
+   var(--color-primary)/var(--color-secondary), so picking Classic Gold/
+   Bronze/Violet/Sky still changes the color of the things you click. */
+.cmms-page-classic {
+  background: linear-gradient(180deg, #faf8f3 0%, #f7f0e1 60%, #f3e9d2 100%);
+}
+
+.cmms-classic-card {
+  position: relative;
+  background: #fffdf8;
+  border: 1px solid rgba(196, 160, 82, 0.28);
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(44, 36, 22, 0.05), 0 12px 28px -18px rgba(44, 36, 22, 0.28);
+}
+
+.cmms-classic-heading {
+  color: #1e293b;
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-weight: 700;
+}
+
+.cmms-classic-eyebrow {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #a17c28;
+}
+
+.cmms-classic-label {
+  display: block;
+  color: #8a6a1f;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.cmms-classic-muted {
+  color: #64748b;
+}
+
+/* The fading gold hairline under a section heading (BodaGoEra's
+   `.landing-classic-divider`). Give it `flex-1` alongside a heading to get
+   the "serif title + trailing gold line" look. */
+.cmms-classic-hairline {
+  background: linear-gradient(90deg, rgba(196, 160, 82, 0.9), rgba(196, 160, 82, 0.9) 80%, transparent);
+  height: 1px;
+}
+
+.cmms-classic-divider {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(196, 160, 82, 0.28);
+}
+
+.cmms-field-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+@media (min-width: 768px) {
+  .cmms-field-list {
+    grid-template-columns: repeat(2, 1fr);
+    column-gap: 1.5rem;
+  }
+}
+
+.cmms-field-row {
+  display: flex;
+  flex-direction: column;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid rgba(196, 160, 82, 0.22);
+}
+
+.cmms-field-row dt {
+  color: #8a6a1f;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cmms-field-row dd {
+  color: #1e293b;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-top: 0.2rem;
+}
+
+.cmms-classic-btn-primary {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color: #fff;
+  border-radius: 14px;
+  font-weight: 700;
+  box-shadow: 0 10px 22px -14px color-mix(in srgb, var(--color-primary) 70%, transparent), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+.cmms-classic-btn-primary:hover { filter: brightness(1.06); }
+.cmms-classic-btn-primary:disabled { opacity: 0.5; box-shadow: none; }
+
+.cmms-classic-btn-secondary {
+  background: transparent;
+  border: 1px solid rgba(196, 160, 82, 0.5);
+  color: #7a5a12;
+  border-radius: 14px;
+  font-weight: 700;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.cmms-classic-btn-secondary:hover { background: rgba(196, 160, 82, 0.1); border-color: #c4a052; }
+
+.cmms-classic-callout {
+  border-radius: 14px;
+  padding: 1rem;
+  background: #fbf3dc;
+  border: 1px solid rgba(196, 160, 82, 0.5);
+}
+
+.cmms-classic-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: #fff;
+  border: 1px solid rgba(196, 160, 82, 0.4);
+  color: #475569;
+}
+
+/* Every CMMS form field still uses the old "white-translucent-on-dark"
+   idiom (bg-white/10, border-white/20, text-white) from before the classic
+   redesign -- that reads as invisible-white-on-ivory now that the page
+   itself is ivory. Rather than re-touch every input across ~25 files,
+   retheme them here the same way ThemeContext's own dynamic override does
+   (selector-based, not per-file): a class+type selector beats that
+   override's bare `input{...!important}` rule on specificity alone, no
+   !important needed, so this wins regardless of which active app theme
+   injected its override last. */
+.cmms-page-classic input[type="text"],
+.cmms-page-classic input[type="email"],
+.cmms-page-classic input[type="tel"],
+.cmms-page-classic input[type="number"],
+.cmms-page-classic input[type="password"],
+.cmms-page-classic input[type="search"],
+.cmms-page-classic input[type="url"],
+.cmms-page-classic input[type="date"],
+.cmms-page-classic textarea,
+.cmms-page-classic select {
+  background-color: #fffdf8;
+  background-image: none;
+  border: 1px solid rgba(196, 160, 82, 0.5);
+  border-radius: 10px;
+  color: #1e293b;
+}
+.cmms-page-classic input[type="text"]::placeholder,
+.cmms-page-classic input[type="email"]::placeholder,
+.cmms-page-classic input[type="tel"]::placeholder,
+.cmms-page-classic input[type="number"]::placeholder,
+.cmms-page-classic input[type="password"]::placeholder,
+.cmms-page-classic input[type="search"]::placeholder,
+.cmms-page-classic input[type="url"]::placeholder,
+.cmms-page-classic textarea::placeholder {
+  color: #94a3b8;
+}
+.cmms-page-classic input[type="text"]:focus,
+.cmms-page-classic input[type="email"]:focus,
+.cmms-page-classic input[type="tel"]:focus,
+.cmms-page-classic input[type="number"]:focus,
+.cmms-page-classic input[type="password"]:focus,
+.cmms-page-classic input[type="search"]:focus,
+.cmms-page-classic input[type="url"]:focus,
+.cmms-page-classic input[type="date"]:focus,
+.cmms-page-classic textarea:focus,
+.cmms-page-classic select:focus {
+  outline: none;
+  border-color: #c4a052;
+  box-shadow: 0 0 0 3px rgba(196, 160, 82, 0.25);
 }
 
 /* ==================== Colorful Dashboard Cards ====================

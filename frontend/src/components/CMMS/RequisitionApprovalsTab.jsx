@@ -336,14 +336,14 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-blue-50 via-indigo-50 to-emerald-50 p-5">
+      <section className="cmms-classic-card p-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <h3 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2">
+            <h3 className="cmms-classic-heading text-lg md:text-xl flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-emerald-600" />
               Approval Queue
             </h3>
-            <p className="text-xs text-slate-600 mt-1">
+            <p className="cmms-classic-muted text-xs mt-1">
               Dedicated approvals workflow (including service-provider role access).
             </p>
           </div>
@@ -354,7 +354,7 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
               loadMyCashProofs();
             }}
             disabled={isLoading}
-            className="px-3 py-2 rounded-lg border border-emerald-300 bg-emerald-100 text-sm font-semibold text-emerald-700 hover:bg-emerald-200 disabled:opacity-60"
+            className="cmms-classic-btn-secondary px-3 py-2 text-sm disabled:opacity-60"
           >
             Refresh Queue
           </button>
@@ -388,8 +388,8 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
         </div>
 
         {isFinanceOfficer && (
-          <div className="mt-4 rounded-xl border border-cyan-200 bg-cyan-50 p-3">
-            <p className="text-xs text-cyan-800 uppercase tracking-wide mb-2">Cashout Method Tabs (Finance)</p>
+          <div className="cmms-classic-divider">
+            <p className="cmms-classic-label mb-2">Cashout Method Tabs (Finance)</p>
             <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1 gap-1">
               <button
                 type="button"
@@ -423,8 +423,8 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
         )}
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-blue-50 p-5">
-        <h4 className="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-3">
+      <section className="cmms-classic-card p-5">
+        <h4 className="cmms-classic-heading text-lg flex items-center gap-2 mb-3">
           <Clipboard className="w-5 h-5 text-blue-600" />
           Pending Decisions
         </h4>
@@ -432,10 +432,10 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
         {isLoading ? (
           <div className="py-10 text-center">
             <Loader className="w-8 h-8 text-blue-600 mx-auto animate-spin" />
-            <p className="text-sm text-slate-600 mt-3">Loading approval queue...</p>
+            <p className="cmms-classic-muted text-sm mt-3">Loading approval queue...</p>
           </div>
         ) : queue.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-slate-600">
+          <div className="cmms-classic-muted rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center">
             No pending approval decisions.
           </div>
         ) : (
@@ -448,7 +448,7 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
               return (
                 <article
                   key={req.id}
-                  className="rounded-xl border border-slate-200 bg-white p-4"
+                  className="cmms-classic-card p-4"
                 >
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                     <div>
@@ -474,11 +474,15 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
                   </div>
 
                   {Array.isArray(req.items) && req.items.length > 0 && (
-                    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-600 mb-2">Line Items</p>
+                    <div className="cmms-classic-divider">
+                      <p className="cmms-classic-label mb-2">Line Items</p>
                       <div className="space-y-2">
                         {req.items.map((item, index) => (
-                          <div key={item.id || `${req.id}-approval-item-${index}`} className="rounded-md border border-slate-200 bg-white p-2">
+                          <div
+                            key={item.id || `${req.id}-approval-item-${index}`}
+                            className="rounded-md p-2"
+                            style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+                          >
                             <p className="text-sm text-slate-800 truncate">{item.equipment}</p>
                             <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-2">
                               <div>
@@ -560,7 +564,8 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
             {approvedForPayout.map((req) => (
               <article
                 key={`payout-${req.id}`}
-                className="rounded-lg border border-slate-200 bg-white p-3"
+                className="rounded-lg p-3"
+                style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
               >
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                   <div>
@@ -605,8 +610,8 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
       )}
 
       {pendingProofs.length > 0 && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h4 className="text-base font-semibold text-slate-800 mb-3">Pending Payout Confirmations</h4>
+        <section className="cmms-classic-card p-5">
+          <h4 className="cmms-classic-heading text-base mb-3">Pending Payout Confirmations</h4>
 
           {isLoadingCashProofs ? (
             <div className="py-8 text-center">
@@ -639,14 +644,18 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
       )}
 
       {processed.length > 0 && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h4 className="text-base font-semibold text-slate-800 mb-3">Recently Processed</h4>
+        <section className="cmms-classic-card p-5">
+          <h4 className="cmms-classic-heading text-base mb-3">Recently Processed</h4>
           <div className="space-y-1">
             {processed.slice(0, 8).map((req) => {
               const status = STATUS_META[req.status] || STATUS_META.approved;
               const relatedProof = proofByRequisitionId[req.id];
               return (
-                <article key={req.id} className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                <article
+                  key={req.id}
+                  className="rounded-md px-2.5 py-2"
+                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+                >
                   <button
                     type="button"
                     onClick={() => setExpandedProcessedId((prev) => (prev === req.id ? null : req.id))}
@@ -659,7 +668,7 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
                   </button>
 
                   {expandedProcessedId === req.id && (
-                    <div className="mt-2 pl-3 border-l border-slate-300 space-y-1">
+                    <div className="mt-2 pl-3 space-y-1" style={{ borderLeft: '1px solid var(--color-border)' }}>
                       <p className="text-xs text-slate-700">Amount: {formatUgx(req.estimatedCost)}</p>
                       <p className="text-xs text-slate-700">
                         Method: {req.financePaymentMethod === 'cash'

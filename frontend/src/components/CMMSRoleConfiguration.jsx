@@ -208,14 +208,14 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
     if (deleteError) setError(deleteError.message); else await loadRoles();
   };
 
-  if (!isAdmin) return <div className="glass-card p-6 text-orange-200">Only the company administrator can configure CMMS roles and tools.</div>;
+  if (!isAdmin) return <div className="cmms-classic-card p-6 text-orange-300">Only the company administrator can configure CMMS roles and tools.</div>;
 
   return (
     <div className="space-y-6">
-      <div className="glass-card p-4 sm:p-5 border border-purple-400/30">
+      <div className="cmms-classic-card p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
-          <div className="min-w-0"><h2 className="text-lg sm:text-xl font-bold text-white">Role and tool configuration</h2><p className="text-sm text-gray-400">Create any role your company needs and choose exactly which CMMS tools it can access.</p></div>
-          {editingId && <button type="button" onClick={reset} className="p-1.5 -m-1.5 text-gray-300 active:text-white shrink-0"><X className="w-5 h-5" /></button>}
+          <div className="min-w-0"><h2 className="cmms-classic-heading text-lg sm:text-xl">Role and tool configuration</h2><p className="cmms-classic-muted text-sm">Create any role your company needs and choose exactly which CMMS tools it can access.</p></div>
+          {editingId && <button type="button" onClick={reset} className="p-1.5 -m-1.5 cmms-classic-muted hover:opacity-70 shrink-0"><X className="w-5 h-5" /></button>}
         </div>
         <form onSubmit={saveRole} className="space-y-4 mt-5">
           <div className="grid sm:grid-cols-2 gap-3">
@@ -233,12 +233,12 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
             <textarea value={draft.description || ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Describe what this role is responsible for" rows={2} className="w-full px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
           </label>
           <div>
-            <p className="text-white font-semibold mb-2">Tools this role may access</p>
+            <p className="cmms-classic-heading text-sm mb-2">Tools this role may access</p>
             <div className="grid sm:grid-cols-2 gap-3">
               {CMMS_TOOL_OPTIONS.map((tool) => {
                 const enabled = Boolean(selectedTools[tool.id]);
-                return <div key={tool.id} className={`rounded-lg border p-3 ${enabled ? 'bg-green-500/10 border-green-400/50' : 'bg-white/5 border-white/10'}`}>
-                  <button type="button" onClick={() => toggleTool(tool)} className={`w-full flex items-center gap-2 text-left font-semibold py-1.5 -m-1.5 px-1.5 rounded ${enabled ? 'text-green-200' : 'text-gray-300 active:bg-white/5'}`}>
+                return <div key={tool.id} className={`rounded-lg border p-3 ${enabled ? 'bg-green-500/10 border-green-400/50' : ''}`} style={!enabled ? { borderColor: 'var(--color-border)' } : undefined}>
+                  <button type="button" onClick={() => toggleTool(tool)} className={`w-full flex items-center gap-2 text-left font-semibold py-1.5 -m-1.5 px-1.5 rounded ${enabled ? 'text-green-200' : 'cmms-classic-muted active:bg-white/5'}`}>
                     <Check className={`shrink-0 w-5 h-5 ${enabled ? 'opacity-100' : 'opacity-20'}`} />
                     <span className="flex-1 min-w-0 break-words">{tool.label}</span>
                   </button>
@@ -256,7 +256,7 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
                       </button>;
                     })}
                     {tool.scopes && <div className="basis-full mt-2">
-                      <span className="block text-xs text-gray-400 mb-1">Data scope <span className="text-gray-500">(own, department, cross-department, or company-wide)</span></span>
+                      <span className="block text-xs cmms-classic-muted mb-1">Data scope <span className="opacity-75">(own, department, cross-department, or company-wide)</span></span>
                       <select value={getScope(tool)} onChange={(event) => setScope(tool, event.target.value)} className="w-full rounded bg-slate-900 border border-white/20 px-3 py-2 text-white text-sm">
                         <option value="own">Own records only</option>
                         <option value="department">Department only</option>
@@ -269,9 +269,9 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
               })}
             </div>
           </div>
-          <div className="border-t border-white/10 pt-4">
-            <p className="text-white font-semibold mb-1">Position details <span className="text-xs font-normal text-gray-500">(optional)</span></p>
-            <p className="text-xs text-gray-400 mb-3">Fill this in once and a job posting created "from this role" auto-fills these fields instead of retyping them — see Announcements &amp; job postings.</p>
+          <div className="cmms-classic-divider">
+            <p className="cmms-classic-heading text-sm mb-1">Position details <span className="text-xs font-normal cmms-classic-muted">(optional)</span></p>
+            <p className="text-xs cmms-classic-muted mb-3">Fill this in once and a job posting created "from this role" auto-fills these fields instead of retyping them — see Announcements &amp; job postings.</p>
             <div className="grid sm:grid-cols-2 gap-3">
               <input value={draft.job_title || ''} onChange={(e) => setDraft({ ...draft, job_title: e.target.value })} placeholder="Job title (e.g. Warehouse Supervisor)" className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
               <input value={draft.department || ''} onChange={(e) => setDraft({ ...draft, department: e.target.value })} placeholder="Department" className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
@@ -287,11 +287,11 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
             </div>
           </div>
           {error && <p className="text-red-300 text-sm">{error}</p>}
-          <button disabled={saving} className="w-full sm:w-auto px-4 py-3 sm:py-2 rounded bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white font-semibold flex items-center justify-center gap-2"><Save className="w-4 h-4" />{saving ? 'Saving…' : editingId ? 'Update role' : 'Create role'}</button>
+          <button disabled={saving} className="cmms-classic-btn-primary w-full sm:w-auto px-4 py-3 sm:py-2 flex items-center justify-center gap-2"><Save className="w-4 h-4" />{saving ? 'Saving…' : editingId ? 'Update role' : 'Create role'}</button>
         </form>
       </div>
-      <div className="glass-card p-4 sm:p-5"><h3 className="text-lg font-bold text-white mb-4">Company roles ({roles.length})</h3>{loading ? <p className="text-gray-400">Loading roles…</p> : <div className="space-y-2">{roles.map((role) => <div key={role.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-white/5 border border-white/10"><div className="min-w-0 flex-1"><p className="text-white font-semibold break-words">{role.display_name || role.role_name}</p><p className="text-xs text-gray-400 break-words">{role.description || 'No description'} · {Object.values(role.tool_access || {}).filter(Boolean).length} tools</p></div><div className="flex gap-1 shrink-0">{!role.is_system_role && role.cmms_company_id === companyId && <><button onClick={() => { setDraft({ ...role, tool_access: role.tool_access || {} }); setEditingId(role.id); }} className="p-2.5 text-blue-300 active:text-white active:bg-white/10 rounded-lg" title="Edit role"><Edit2 className="w-5 h-5" /></button><button onClick={() => deleteRole(role)} className="p-2.5 text-red-300 active:text-white active:bg-white/10 rounded-lg" title="Deactivate role"><Trash2 className="w-5 h-5" /></button></>}</div></div>)}</div>}</div>
-      <div className="text-xs text-gray-400 flex items-center gap-2"><Plus className="w-4 h-4" />Roles are company-specific. Existing fixed roles can be deactivated and replaced with your company’s own names and tool combinations.</div>
+      <div className="cmms-classic-card p-4 sm:p-5"><h3 className="cmms-classic-heading text-lg mb-4">Company roles ({roles.length})</h3>{loading ? <p className="cmms-classic-muted">Loading roles…</p> : <div>{roles.map((role) => <div key={role.id} className="flex flex-wrap items-center justify-between gap-3 py-3 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}><div className="min-w-0 flex-1"><p className="cmms-classic-heading text-sm break-words">{role.display_name || role.role_name}</p><p className="text-xs cmms-classic-muted break-words">{role.description || 'No description'} · {Object.values(role.tool_access || {}).filter(Boolean).length} tools</p></div><div className="flex gap-1 shrink-0">{!role.is_system_role && role.cmms_company_id === companyId && <><button onClick={() => { setDraft({ ...role, tool_access: role.tool_access || {} }); setEditingId(role.id); }} className="p-2.5 text-blue-300 active:text-white active:bg-white/10 rounded-lg" title="Edit role"><Edit2 className="w-5 h-5" /></button><button onClick={() => deleteRole(role)} className="p-2.5 text-red-300 active:text-white active:bg-white/10 rounded-lg" title="Deactivate role"><Trash2 className="w-5 h-5" /></button></>}</div></div>)}</div>}</div>
+      <div className="text-xs cmms-classic-muted flex items-center gap-2"><Plus className="w-4 h-4" />Roles are company-specific. Existing fixed roles can be deactivated and replaced with your company’s own names and tool combinations.</div>
     </div>
   );
 };

@@ -411,13 +411,13 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
   return (
     <div className="space-y-6">
       {/* Visitor Management Sub-Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-white/20 pb-4">
+      <div className="flex flex-wrap gap-2 pb-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <button
           onClick={() => setActiveSubTab('visitor-checkin')}
-          className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+          className={`px-4 py-2 text-sm ${
             activeSubTab === 'visitor-checkin'
-              ? 'bg-blue-600 text-white'
-              : 'bg-white/10 text-gray-300 hover:bg-white/20'
+              ? 'cmms-classic-btn-primary'
+              : 'cmms-classic-btn-secondary'
           }`}
         >
           <Users className="inline w-4 h-4 mr-2" />
@@ -426,10 +426,10 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
         {canViewVisitorRecords && (
           <button
             onClick={() => setActiveSubTab('visitor-records')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+            className={`px-4 py-2 text-sm ${
               activeSubTab === 'visitor-records'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                ? 'cmms-classic-btn-primary'
+                : 'cmms-classic-btn-secondary'
             }`}
           >
             <Users className="inline w-4 h-4 mr-2" />
@@ -439,10 +439,10 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
         {canViewVisitorRecords && (
           <button
             onClick={() => setActiveSubTab('visitor-edit')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+            className={`px-4 py-2 text-sm ${
               activeSubTab === 'visitor-edit'
-                ? 'bg-amber-600 text-white'
-                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                ? 'cmms-classic-btn-primary'
+                : 'cmms-classic-btn-secondary'
             }`}
           >
             <AlertTriangle className="inline w-4 h-4 mr-2" />
@@ -452,10 +452,10 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
         {canViewVisitorRecords && (
           <button
             onClick={() => setActiveSubTab('visitor-ratings')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+            className={`px-4 py-2 text-sm ${
               activeSubTab === 'visitor-ratings'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                ? 'cmms-classic-btn-primary'
+                : 'cmms-classic-btn-secondary'
             }`}
           >
             <Star className="inline w-4 h-4 mr-2" />
@@ -481,8 +481,8 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
 
       {/* Visitor Check-In Form */}
       {activeSubTab === 'visitor-checkin' && (
-        <div className="glass-card p-6 space-y-4">
-          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <div className="cmms-classic-card p-4 md:p-6 space-y-4">
+          <h3 className="cmms-classic-heading text-lg flex items-center gap-2">
             <Users className="w-5 h-5 text-blue-400" />
             Register New Visitor
           </h3>
@@ -619,7 +619,7 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               onClick={generateVisitorQr}
-              className="flex-1 px-4 py-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all"
+              className="cmms-classic-btn-secondary flex-1 px-4 py-3 flex items-center justify-center gap-2"
             >
               <QrCode className="w-4 h-4" />
               Generate Visitor QR
@@ -627,7 +627,7 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
             <button
               onClick={handleVisitorCheckIn}
               disabled={loading || !visitorName.trim() || !checkInLocation.trim()}
-              className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all"
+              className="cmms-classic-btn-primary flex-1 px-4 py-3 flex items-center justify-center gap-2"
             >
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
               {loading ? 'Registering...' : 'Register Visitor'}
@@ -635,14 +635,14 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
           </div>
 
           {visitorQrCode && (
-            <div className="rounded-xl bg-white/10 p-5 text-center">
-              <p className="mb-3 font-semibold text-white">Visitor check-in QR</p>
+            <div className="cmms-classic-divider text-center">
+              <p className="cmms-classic-heading mb-3 font-semibold">Visitor check-in QR</p>
               <div className="inline-block rounded-lg bg-white p-3">
                 <QRCodeSVG value={visitorQrCode} size={180} />
               </div>
-              <p className="mt-3 break-all text-xs text-gray-400">{visitorQrCode}</p>
-              <button onClick={downloadVisitorQrPdf} className="mx-auto mt-4 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-700"><Download className="h-4 w-4" />Download PDF</button>
-              <p className="mt-2 text-xs text-emerald-300">Scan this at the entrance to prefill the location and host fields.</p>
+              <p className="cmms-classic-muted mt-3 break-all text-xs">{visitorQrCode}</p>
+              <button onClick={downloadVisitorQrPdf} className="cmms-classic-btn-primary mx-auto mt-4 inline-flex items-center gap-2 px-4 py-2"><Download className="h-4 w-4" />Download PDF</button>
+              <p className="mt-2 text-xs text-emerald-400">Scan this at the entrance to prefill the location and host fields.</p>
             </div>
           )}
 
@@ -661,8 +661,8 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
 
       {/* Visitor Records */}
       {activeSubTab === 'visitor-records' && (
-        <div className="glass-card p-6 space-y-4">
-          <h3 className="text-lg font-bold text-white">Visitor Records</h3>
+        <div className="cmms-classic-card p-4 md:p-6 space-y-4">
+          <h3 className="cmms-classic-heading text-lg">Visitor Records</h3>
 
           <div className="flex flex-wrap gap-4">
             <div>
@@ -690,30 +690,30 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
             <div className="flex items-end">
               <button
                 onClick={loadVisitorRecords}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold flex items-center gap-2"
+                className="cmms-classic-btn-secondary px-4 py-2 text-sm flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
                 Refresh
               </button>
             </div>
             <div className="flex items-end gap-2">
-              <button onClick={() => exportVisitors('excel')} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold flex items-center gap-2"><Download className="w-4 h-4" /> Excel</button>
-              <button onClick={() => exportVisitors('pdf')} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-semibold flex items-center gap-2"><Download className="w-4 h-4" /> PDF</button>
+              <button onClick={() => exportVisitors('excel')} className="cmms-classic-btn-secondary px-4 py-2 text-sm flex items-center gap-2"><Download className="w-4 h-4" /> Excel</button>
+              <button onClick={() => exportVisitors('pdf')} className="cmms-classic-btn-secondary px-4 py-2 text-sm flex items-center gap-2"><Download className="w-4 h-4" /> PDF</button>
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="cmms-classic-divider space-y-2">
             {visitorRecords.map(record => {
               const isExpanded = expandedVisitorIds.has(record.id);
               return (
-                <div key={record.id} className="rounded-lg border border-white/10 bg-white/5 overflow-hidden">
+                <div key={record.id} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
                   <button
                     type="button"
                     onClick={() => toggleVisitorExpanded(record.id)}
-                    className="w-full flex flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-all"
+                    className="w-full flex flex-wrap items-center gap-3 px-4 py-3 text-left"
                   >
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />}
-                    <span className="font-semibold text-white">{record.visitor_name}</span>
+                    <span className="cmms-classic-heading">{record.visitor_name}</span>
                     <span className={`px-2 py-1 rounded text-xs font-semibold ${
                       record.status === 'flagged_for_review'
                         ? 'bg-red-500/30 text-red-200'
@@ -746,40 +746,40 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
                   </button>
 
                   {isExpanded && (
-                    <div className="px-4 pb-4 pt-1 grid sm:grid-cols-2 lg:grid-cols-3 gap-3 border-t border-white/10 bg-black/10">
-                      <div>
-                        <p className="text-gray-400 text-xs mt-3">Email</p>
-                        <p className="text-gray-200 text-sm">{record.visitor_email || '-'}</p>
+                    <dl className="cmms-field-list px-4 pb-3 pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                      <div className="cmms-field-row">
+                        <dt>Email</dt>
+                        <dd>{record.visitor_email || '-'}</dd>
                       </div>
-                      <div>
-                        <p className="text-gray-400 text-xs mt-3">Phone</p>
-                        <p className="text-gray-200 text-sm">{record.visitor_phone || '-'}</p>
+                      <div className="cmms-field-row">
+                        <dt>Phone</dt>
+                        <dd>{record.visitor_phone || '-'}</dd>
                       </div>
-                      <div>
-                        <p className="text-gray-400 text-xs mt-3">Vehicle Number</p>
-                        <p className="text-gray-200 text-sm">{record.vehicle_number || '-'}</p>
+                      <div className="cmms-field-row">
+                        <dt>Vehicle Number</dt>
+                        <dd>{record.vehicle_number || '-'}</dd>
                       </div>
-                      <div>
-                        <p className="text-gray-400 text-xs mt-3">Host</p>
-                        <p className="text-gray-200 text-sm">{record.host_name || record.host_email || '-'}</p>
+                      <div className="cmms-field-row">
+                        <dt>Host</dt>
+                        <dd>{record.host_name || record.host_email || '-'}</dd>
                       </div>
-                      <div>
-                        <p className="text-gray-400 text-xs mt-3">Purpose</p>
-                        <p className="text-gray-200 text-sm">{record.purpose || '-'}</p>
+                      <div className="cmms-field-row">
+                        <dt>Purpose</dt>
+                        <dd>{record.purpose || '-'}</dd>
                       </div>
-                      <div>
-                        <p className="text-gray-400 text-xs mt-3">Location</p>
-                        <p className="text-gray-200 text-sm">{record.check_in_location || '-'}</p>
+                      <div className="cmms-field-row">
+                        <dt>Location</dt>
+                        <dd>{record.check_in_location || '-'}</dd>
                       </div>
-                      <div>
-                        <p className="text-gray-400 text-xs mt-3">Check-In</p>
-                        <p className="text-gray-200 text-sm">{new Date(record.check_in_time).toLocaleString()}</p>
+                      <div className="cmms-field-row">
+                        <dt>Check-In</dt>
+                        <dd>{new Date(record.check_in_time).toLocaleString()}</dd>
                       </div>
-                      <div>
-                        <p className="text-gray-400 text-xs mt-3">Check-Out</p>
-                        <p className="text-gray-200 text-sm">{record.check_out_time ? new Date(record.check_out_time).toLocaleString() : 'Not checked out'}</p>
+                      <div className="cmms-field-row">
+                        <dt>Check-Out</dt>
+                        <dd>{record.check_out_time ? new Date(record.check_out_time).toLocaleString() : 'Not checked out'}</dd>
                       </div>
-                    </div>
+                    </dl>
                   )}
                 </div>
               );
@@ -793,37 +793,35 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
 
       {/* Admin: Review Suspicious Visitors */}
       {activeSubTab === 'visitor-edit' && (userRole === 'admin' || isCreator) && (
-        <div className="glass-card p-6 space-y-4">
-          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <div className="cmms-classic-card p-4 md:p-6 space-y-4">
+          <h3 className="cmms-classic-heading text-lg flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-400" />
             Review Suspicious Visitor Records
           </h3>
 
           <div className="space-y-4">
             {visitorRecords.length === 0 ? (
-              <div className="text-center py-6 text-gray-400">No suspicious visitor records found</div>
+              <div className="cmms-classic-muted text-center py-6">No suspicious visitor records found</div>
             ) : (
               visitorRecords.map(record => (
-                <div key={record.id} className="bg-slate-800/60 border border-white/20 p-4 rounded-lg">
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-gray-400 text-sm">Visitor Name</p>
-                      <p className="text-white font-semibold">{record.visitor_name}</p>
+                <div key={record.id} className="cmms-classic-divider">
+                  <dl className="cmms-field-list">
+                    <div className="cmms-field-row">
+                      <dt>Visitor Name</dt>
+                      <dd>{record.visitor_name}</dd>
                     </div>
-                    <div>
-                      <p className="text-gray-400 text-sm">Email</p>
-                      <p className="text-white font-semibold">{record.visitor_email || '-'}</p>
+                    <div className="cmms-field-row">
+                      <dt>Email</dt>
+                      <dd>{record.visitor_email || '-'}</dd>
                     </div>
-                    <div>
-                      <p className="text-gray-400 text-sm">Check-In Time</p>
-                      <p className="text-white font-semibold">
-                        {new Date(record.check_in_time).toLocaleString()}
-                      </p>
+                    <div className="cmms-field-row">
+                      <dt>Check-In Time</dt>
+                      <dd>{new Date(record.check_in_time).toLocaleString()}</dd>
                     </div>
-                  </div>
+                  </dl>
 
-                  <div className="mt-4 pt-4 border-t border-white/10">
-                    <label className="block text-sm text-gray-300 mb-2">Admin Notes</label>
+                  <div className="mt-4">
+                    <label className="block text-sm cmms-classic-muted mb-2">Admin Notes</label>
                     <textarea
                       value={adminNotes}
                       onChange={(e) => setAdminNotes(e.target.value)}
@@ -834,7 +832,7 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
                   </div>
 
                   <div className="mt-4">
-                    <label className="block text-sm text-gray-300 mb-2">Flag Reason</label>
+                    <label className="block text-sm cmms-classic-muted mb-2">Flag Reason</label>
                     <input
                       type="text"
                       value={flagReason}
@@ -870,10 +868,10 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
           {ratingsError && <div className="rounded-lg border border-red-500/50 bg-red-500/20 p-4 text-red-200">{ratingsError}</div>}
           {ratingsLoading && <p className="text-sm text-gray-400">Loading ratings…</p>}
 
-          <div className="glass-card p-6">
-            <h3 className="mb-3 text-lg font-bold text-white">Staff ratings</h3>
+          <div className="cmms-classic-card p-4 md:p-6">
+            <h3 className="cmms-classic-heading mb-3 text-lg">Staff ratings</h3>
             {staffRatings.filter((r) => r.rating_count > 0).length === 0 ? (
-              <p className="text-sm text-gray-400">No visitor ratings for staff yet.</p>
+              <p className="cmms-classic-muted text-sm">No visitor ratings for staff yet.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -894,10 +892,10 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
             )}
           </div>
 
-          <div className="glass-card p-6">
-            <h3 className="mb-3 text-lg font-bold text-white">Department ratings</h3>
+          <div className="cmms-classic-card p-4 md:p-6">
+            <h3 className="cmms-classic-heading mb-3 text-lg">Department ratings</h3>
             {departmentRatings.filter((r) => r.rating_count > 0).length === 0 ? (
-              <p className="text-sm text-gray-400">No visitor ratings for departments yet.</p>
+              <p className="cmms-classic-muted text-sm">No visitor ratings for departments yet.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">

@@ -282,30 +282,30 @@ export default function CMMSFeesPanel({ companyId, businessProfileId, cmmsUsers 
     return (
       <div className="space-y-5">
         <div>
-          <h2 className="text-2xl font-bold text-white">My School Fees</h2>
+          <h2 className="cmms-classic-heading text-2xl">My School Fees</h2>
           <p className="text-sm text-slate-400">Review only the fee obligations assigned to your student account and pay with your IcanEra wallet.</p>
         </div>
 
         {error && <p className="rounded-lg bg-red-900/30 p-3 text-sm text-red-300">{error}</p>}
         {notice && <p className="rounded-lg bg-emerald-900/30 p-3 text-sm text-emerald-200">{notice}</p>}
 
-        <form onSubmit={saveIdentity} className="grid gap-3 rounded-xl border border-sky-400/20 bg-sky-500/10 p-4 md:grid-cols-[1fr_auto]">
+        <form onSubmit={saveIdentity} className="cmms-classic-callout grid gap-3 !p-4 md:grid-cols-[1fr_auto]">
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-sky-200">Your real student name</label>
-            <input required value={identityName} onChange={event => setIdentityName(event.target.value)} placeholder="Enter your full name" className="mt-2 w-full rounded-lg bg-slate-950 px-3 py-2 text-white" />
-            <p className="mt-1 text-xs text-slate-400">This name is shown to the school administrator and updates your assigned fee records.</p>
+            <label className="cmms-classic-label">Your real student name</label>
+            <input required value={identityName} onChange={event => setIdentityName(event.target.value)} placeholder="Enter your full name" className="mt-2 w-full rounded-lg bg-slate-900 px-3 py-2 text-white" />
+            <p className="mt-1 text-xs cmms-classic-muted">This name is shown to the school administrator and updates your assigned fee records.</p>
           </div>
-          <button className="self-end rounded-lg bg-sky-600 px-4 py-2 font-semibold text-white hover:bg-sky-500">Save my name</button>
+          <button className="self-end cmms-classic-btn-primary px-4 py-2">Save my name</button>
         </form>
 
-        <form onSubmit={paySchoolDirectly} className="grid gap-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-4 md:grid-cols-[1fr_2fr_auto]">
+        <form onSubmit={paySchoolDirectly} className="cmms-classic-callout grid gap-3 !p-4 md:grid-cols-[1fr_2fr_auto]">
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-emerald-200">Amount (UGX)</label>
-            <input required type="number" min="1" step="0.01" value={directPaymentAmount} onChange={event => setDirectPaymentAmount(event.target.value)} placeholder="e.g. 50000" className="mt-2 w-full rounded-lg bg-slate-950 px-3 py-2 text-white" />
+            <label className="cmms-classic-label">Amount (UGX)</label>
+            <input required type="number" min="1" step="0.01" value={directPaymentAmount} onChange={event => setDirectPaymentAmount(event.target.value)} placeholder="e.g. 50000" className="mt-2 w-full rounded-lg bg-slate-900 px-3 py-2 text-white" />
           </div>
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-emerald-200">Payment note</label>
-            <input value={directPaymentNote} onChange={event => setDirectPaymentNote(event.target.value)} placeholder="School fees payment" className="mt-2 w-full rounded-lg bg-slate-950 px-3 py-2 text-white" />
+            <label className="cmms-classic-label">Payment note</label>
+            <input value={directPaymentNote} onChange={event => setDirectPaymentNote(event.target.value)} placeholder="School fees payment" className="mt-2 w-full rounded-lg bg-slate-900 px-3 py-2 text-white" />
           </div>
           <button className="self-end rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white hover:bg-emerald-500">Pay School</button>
         </form>
@@ -317,25 +317,25 @@ export default function CMMSFeesPanel({ companyId, businessProfileId, cmmsUsers 
             {fees.map(fee => {
               const payable = fee.status === 'unpaid' || fee.status === 'partial';
               return (
-                <article key={fee.id} className="rounded-xl border border-white/10 bg-white/5 p-4 text-white">
+                <article key={fee.id} className="cmms-classic-card p-4">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="font-semibold">{fee.class_name} · {fee.term}</p>
-                      <p className="mt-1 text-sm text-slate-400">Due: {fee.due_date ? new Date(`${fee.due_date}T00:00:00`).toLocaleDateString() : 'Not specified'}</p>
+                      <p className="mt-1 text-sm cmms-classic-muted">Due: {fee.due_date ? new Date(`${fee.due_date}T00:00:00`).toLocaleDateString() : 'Not specified'}</p>
                       <p className="mt-2 text-lg font-bold text-emerald-300">UGX {Number(fee.amount).toLocaleString()}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${payable ? 'bg-amber-400/15 text-amber-200' : 'bg-emerald-400/15 text-emerald-200'}`}>{fee.status}</span>
-                      <button type="button" onClick={() => { setEditingFeeId(fee.id); setFeeDetails({ student_name: fee.student_name || '', class_name: fee.class_name || '', term: fee.term || '' }); }} className="rounded-lg border border-white/20 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-white/10">Edit details</button>
+                      <button type="button" onClick={() => { setEditingFeeId(fee.id); setFeeDetails({ student_name: fee.student_name || '', class_name: fee.class_name || '', term: fee.term || '' }); }} className="cmms-classic-btn-secondary px-3 py-2 text-sm">Edit details</button>
                       {payable && <button type="button" onClick={() => payFee(fee)} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500">Pay with IcanEra</button>}
                     </div>
                   </div>
                   {editingFeeId === fee.id && (
-                    <form onSubmit={saveFeeDetails} className="mt-4 grid gap-3 border-t border-white/10 pt-4 md:grid-cols-4">
-                      <input required value={feeDetails.student_name} onChange={event => setFeeDetails({ ...feeDetails, student_name: event.target.value })} placeholder="Student name" className="rounded-lg bg-slate-950 px-3 py-2 text-white" />
-                      <input required value={feeDetails.class_name} onChange={event => setFeeDetails({ ...feeDetails, class_name: event.target.value })} placeholder="Class name" className="rounded-lg bg-slate-950 px-3 py-2 text-white" />
-                      <input required value={feeDetails.term} onChange={event => setFeeDetails({ ...feeDetails, term: event.target.value })} placeholder="Term" className="rounded-lg bg-slate-950 px-3 py-2 text-white" />
-                      <button className="rounded-lg bg-violet-600 px-3 py-2 font-semibold text-white">Save details</button>
+                    <form onSubmit={saveFeeDetails} className="cmms-classic-divider grid gap-3 md:grid-cols-4">
+                      <input required value={feeDetails.student_name} onChange={event => setFeeDetails({ ...feeDetails, student_name: event.target.value })} placeholder="Student name" className="rounded-lg bg-slate-900 px-3 py-2 text-white" />
+                      <input required value={feeDetails.class_name} onChange={event => setFeeDetails({ ...feeDetails, class_name: event.target.value })} placeholder="Class name" className="rounded-lg bg-slate-900 px-3 py-2 text-white" />
+                      <input required value={feeDetails.term} onChange={event => setFeeDetails({ ...feeDetails, term: event.target.value })} placeholder="Term" className="rounded-lg bg-slate-900 px-3 py-2 text-white" />
+                      <button className="cmms-classic-btn-primary px-3 py-2">Save details</button>
                     </form>
                   )}
                 </article>
@@ -343,7 +343,7 @@ export default function CMMSFeesPanel({ companyId, businessProfileId, cmmsUsers 
             })}
           </div>
         ) : (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-5 text-sm text-slate-400">No school-fee obligations have been assigned to your account.</div>
+          <div className="cmms-classic-card p-5 text-sm cmms-classic-muted">No school-fee obligations have been assigned to your account.</div>
         )}
       </div>
     );
@@ -352,22 +352,22 @@ export default function CMMSFeesPanel({ companyId, businessProfileId, cmmsUsers 
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-2xl font-bold text-white">School Fees</h2>
+        <h2 className="cmms-classic-heading text-2xl">School Fees</h2>
         <p className="text-sm text-slate-400">Students are automatically loaded from users assigned the Student role.</p>
       </div>
 
       {currentStudent && (
-        <form onSubmit={saveIdentity} className="grid gap-3 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-4 md:grid-cols-[1fr_auto]">
+        <form onSubmit={saveIdentity} className="cmms-classic-callout grid gap-3 !p-4 md:grid-cols-[1fr_auto]">
           <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-emerald-200">Official student name</label>
-            <input required value={identityName} onChange={event => setIdentityName(event.target.value)} placeholder="Your real name" className="mt-2 w-full rounded-lg bg-slate-950 px-3 py-2 text-white" />
+            <label className="cmms-classic-label">Official student name</label>
+            <input required value={identityName} onChange={event => setIdentityName(event.target.value)} placeholder="Your real name" className="mt-2 w-full rounded-lg bg-slate-900 px-3 py-2 text-white" />
           </div>
-          <button className="self-end rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white">Update name</button>
+          <button className="self-end cmms-classic-btn-primary px-4 py-2">Update name</button>
         </form>
       )}
 
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Assigned students</p>
+      <div className="cmms-classic-card p-4">
+        <p className="cmms-classic-label mb-3">Assigned students</p>
         {students.length ? (
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {students.map(student => (
@@ -375,19 +375,19 @@ export default function CMMSFeesPanel({ companyId, businessProfileId, cmmsUsers 
                 key={`${student.auth_user_id}-${student.department_id || 'none'}`}
                 type="button"
                 onClick={() => setSelectedStudentId(student.auth_user_id)}
-                className={`rounded-lg border px-3 py-3 text-left transition ${selectedStudentId === student.auth_user_id ? 'border-violet-400 bg-violet-500/20 text-white' : 'border-white/10 bg-slate-950/70 text-slate-300 hover:border-white/30'}`}
+                className={`rounded-lg border px-3 py-3 text-left transition ${selectedStudentId === student.auth_user_id ? 'border-[var(--color-primary)] bg-[var(--color-primaryLight)] text-[var(--color-text)]' : 'border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-textSecondary)] hover:border-[var(--color-primary)]'}`}
               >
                 <span className="block font-semibold">{student.display_name}</span>
-                <span className="block text-xs text-slate-500">{student.user?.email || student.auth_user_id}</span>
+                <span className="block text-xs cmms-classic-muted">{student.user?.email || student.auth_user_id}</span>
               </button>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-slate-500">No students assigned yet.</p>
+          <p className="text-sm cmms-classic-muted">No students assigned yet.</p>
         )}
       </div>
 
-      <form onSubmit={save} className="grid gap-3 rounded-xl border border-white/10 bg-white/5 p-4 md:grid-cols-5">
+      <form onSubmit={save} className="cmms-classic-card grid gap-3 !p-4 md:grid-cols-5">
         <div className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-slate-300">
           <span className="block text-xs text-slate-500">Fee for</span>
           <span className="font-semibold text-white">{selectedStudent?.display_name || 'No assigned student'}</span>
@@ -397,7 +397,7 @@ export default function CMMSFeesPanel({ companyId, businessProfileId, cmmsUsers 
         ))}
         <input required type="number" min="0" value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value })} placeholder="amount" className="rounded-lg bg-slate-900 px-3 py-2 text-white" />
         <input type="date" value={form.due_date} onChange={event => setForm({ ...form, due_date: event.target.value })} className="rounded-lg bg-slate-900 px-3 py-2 text-white" />
-        <button disabled={!selectedStudent} className="rounded-lg bg-violet-600 px-3 py-2 font-semibold text-white disabled:opacity-50 md:col-span-5">Add fee obligation</button>
+        <button disabled={!selectedStudent} className="cmms-classic-btn-primary px-3 py-2 disabled:opacity-50 md:col-span-5">Add fee obligation</button>
       </form>
 
       {error && <p className="rounded-lg bg-red-900/30 p-3 text-sm text-red-300">{error}</p>}
@@ -406,9 +406,9 @@ export default function CMMSFeesPanel({ companyId, businessProfileId, cmmsUsers 
       {loading ? (
         <p className="text-slate-400">Loading fees...</p>
       ) : (
-        <div className="rounded-xl border border-white/10 p-4 text-white">
+        <div className="cmms-classic-card p-4">
           {fees.length ? fees.map(fee => (
-            <div key={fee.id} className="flex justify-between border-b border-white/10 py-3">
+            <div key={fee.id} className="flex justify-between border-b border-[var(--color-border)] py-3 last:border-0">
               <span>{fee.student_name} · {fee.class_name} · {fee.term}</span>
               <span>UGX {Number(fee.amount).toLocaleString()} · {fee.status}</span>
             </div>

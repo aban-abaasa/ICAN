@@ -140,16 +140,16 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
     }
     if (!canSource) return null;
     return (
-      <div onClick={stop} className="mt-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
+      <div onClick={stop} className="mt-3 cmms-classic-card p-3">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-cyan-100 flex items-center gap-1.5"><Store className="w-4 h-4" /> Get supplier bids</p>
-            <p className="text-xs text-slate-300 mt-1">
+            <p className="cmms-classic-heading text-sm flex items-center gap-1.5"><Store className="w-4 h-4" /> Get supplier bids</p>
+            <p className="cmms-classic-muted text-xs mt-1">
               Publish the items above as a bid opportunity. Suppliers see the items and quantities (not your estimate) and quote a price per item. You compare the bids and award one.
             </p>
           </div>
           {!showForm && (
-            <button onClick={() => setShowForm(true)} className="shrink-0 min-h-[44px] sm:min-h-0 rounded-lg bg-cyan-600 hover:bg-cyan-500 px-3 py-2 text-sm sm:text-xs font-semibold text-white">
+            <button onClick={() => setShowForm(true)} className="cmms-classic-btn-primary shrink-0 min-h-[44px] sm:min-h-0 px-3 py-2 text-sm sm:text-xs">
               Request supplier bids
             </button>
           )}
@@ -170,7 +170,7 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
             </div>
             <div className="sm:col-span-2 flex justify-end gap-2">
               <button onClick={() => { setShowForm(false); setError(''); }} className="min-h-[44px] sm:min-h-0 px-3 py-2 text-sm sm:text-xs text-slate-300 hover:text-white">Cancel</button>
-              <button disabled={busy || !form.deadline} onClick={handlePublish} className="min-h-[44px] sm:min-h-0 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 px-4 py-2 text-sm sm:text-xs font-semibold text-white">
+              <button disabled={busy || !form.deadline} onClick={handlePublish} className="cmms-classic-btn-primary min-h-[44px] sm:min-h-0 px-4 py-2 text-sm sm:text-xs">
                 {busy ? 'Publishing…' : 'Publish for bids'}
               </button>
             </div>
@@ -188,9 +188,9 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
   const awardedOrder = awardedBid?.supplier_order_id ? orders.find((order) => order.id === awardedBid.supplier_order_id) : null;
 
   return (
-    <div onClick={stop} className="mt-3 rounded-xl border border-cyan-500/30 bg-slate-950/40 p-3 space-y-3">
+    <div onClick={stop} className="mt-3 cmms-classic-card p-3 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-cyan-100 flex items-center gap-1.5"><Store className="w-4 h-4" /> Supplier bids</p>
+        <p className="cmms-classic-heading text-sm flex items-center gap-1.5"><Store className="w-4 h-4" /> Supplier bids</p>
         <div className="flex items-center gap-2">
           <span className={`rounded-md border px-2 py-0.5 text-xs ${status.className}`}>{status.label}</span>
           {canSource && tender.status === 'open' && (
@@ -206,8 +206,8 @@ const RequisitionSupplierBids = ({ requisition, tender, companyId, canSource, ca
       </p>
 
       {items.length > 0 && (
-        <div className="rounded-lg border border-white/10 bg-slate-900/50 p-2">
-          <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-1">Items requested</p>
+        <div className="cmms-classic-divider !mt-0 !pt-2">
+          <p className="cmms-classic-label mb-1">Items requested</p>
           <ul className="text-xs text-slate-200 space-y-0.5">
             {items.map((item) => (
               <li key={item.id}>{Number(item.quantity)} {item.unit} × {item.item_name}</li>

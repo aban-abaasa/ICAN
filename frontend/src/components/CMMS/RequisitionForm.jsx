@@ -108,17 +108,17 @@ const RequisitionForm = ({
   };
 
   return (
-    <div className="glass-card p-6 bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200">
-      <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+    <div className="cmms-classic-card p-4 md:p-6">
+      <h3 className="cmms-classic-heading text-xl mb-2 flex items-center gap-2">
         <Plus className="w-6 h-6 text-blue-600" />
         Create Maintenance Requisition
       </h3>
-      <p className="text-slate-600 text-sm mb-4">Submit a new maintenance request for approval</p>
+      <p className="cmms-classic-muted text-sm mb-4">Submit a new maintenance request for approval</p>
 
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         {/* Title */}
         <div>
-          <label className="text-xs font-semibold text-slate-700 uppercase">Requisition Title *</label>
+          <label className="cmms-classic-label">Requisition Title *</label>
           <input
             type="text"
             placeholder="e.g., Emergency AC Repair, Pump Replacement"
@@ -130,7 +130,7 @@ const RequisitionForm = ({
 
         {/* Priority */}
         <div>
-          <label className="text-xs font-semibold text-slate-700 uppercase">Priority Level</label>
+          <label className="cmms-classic-label">Priority Level</label>
           <select
             value={newRequisition.priority}
             onChange={(e) => setNewRequisition({...newRequisition, priority: e.target.value})}
@@ -145,7 +145,7 @@ const RequisitionForm = ({
 
         {/* Description */}
         <div className="md:col-span-2">
-          <label className="text-xs font-semibold text-slate-700 uppercase">Work Description *</label>
+          <label className="cmms-classic-label">Work Description *</label>
           <textarea
             placeholder="Detailed description of work needed, equipment affected, expected outcome..."
             value={newRequisition.description}
@@ -156,11 +156,11 @@ const RequisitionForm = ({
 
         {/* Items Section */}
         <div className="md:col-span-2">
-          <label className="text-xs font-semibold text-slate-700 uppercase mb-3 block">🔧 Equipment/Items to Service or Purchase</label>
+          <label className="cmms-classic-label mb-3 block">🔧 Equipment/Items to Service or Purchase</label>
 
           <div className="grid md:grid-cols-4 gap-2 mb-3">
             <div>
-              <label className="text-xs text-slate-600 block mb-1">Equipment/Item *</label>
+              <label className="cmms-classic-muted text-xs block mb-1">Equipment/Item *</label>
               <input
                 type="text"
                 placeholder="e.g., AC Compressor, Oil, Bearings"
@@ -170,7 +170,7 @@ const RequisitionForm = ({
               />
             </div>
             <div>
-              <label className="text-xs text-slate-600 block mb-1">Qty *</label>
+              <label className="cmms-classic-muted text-xs block mb-1">Qty *</label>
               <input
                 type="number"
                 placeholder="1"
@@ -181,7 +181,7 @@ const RequisitionForm = ({
               />
             </div>
             <div>
-              <label className="text-xs text-slate-600 block mb-1">Cost/Unit (UGX) *</label>
+              <label className="cmms-classic-muted text-xs block mb-1">Cost/Unit (UGX) *</label>
               <input
                 type="number"
                 placeholder="0"
@@ -203,14 +203,14 @@ const RequisitionForm = ({
 
           {/* Items List */}
           {newRequisition.items.length > 0 && (
-            <div className="mb-3 p-3 bg-slate-50 border border-slate-300 rounded-lg">
-              <h4 className="text-xs font-semibold text-slate-700 uppercase mb-2">📋 Items to Service/Purchase ({newRequisition.items.length}):</h4>
+            <div className="cmms-classic-divider !mt-0">
+              <h4 className="cmms-classic-label mb-2">Items to Service/Purchase ({newRequisition.items.length})</h4>
               <div className="space-y-2">
                 {newRequisition.items.map((item) => (
-                  <div key={item.id} className="flex justify-between items-center p-2 bg-white rounded border border-slate-300">
+                  <div key={item.id} className="flex justify-between items-center p-2 rounded" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
                     <div className="flex-1">
-                      <span className="text-slate-800 font-medium">{item.equipment}</span>
-                      <span className="text-slate-600 text-xs ml-2">× {item.quantity} @ UGX {item.costPerUnit.toLocaleString()} each</span>
+                      <span className="cmms-classic-heading font-medium">{item.equipment}</span>
+                      <span className="cmms-classic-muted text-xs ml-2">× {item.quantity} @ UGX {item.costPerUnit.toLocaleString()} each</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-amber-600 font-bold">UGX {item.totalCost.toLocaleString()}</span>
@@ -230,7 +230,7 @@ const RequisitionForm = ({
 
         {/* Estimated Cost */}
         <div>
-          <label className="text-xs font-semibold text-slate-700 uppercase">Estimated Cost (UGX) - Auto Calculated</label>
+          <label className="cmms-classic-label">Estimated Cost (UGX) - Auto Calculated</label>
           <div className="mt-1">
             <input
               type="number"
@@ -240,7 +240,7 @@ const RequisitionForm = ({
               className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg text-amber-700 placeholder-slate-400 transition-all cursor-not-allowed"
             />
             {newRequisition.estimatedCost > 0 && (
-              <div className="mt-2 p-3 bg-amber-50 border border-amber-300 rounded text-amber-700 text-sm font-semibold">
+              <div className="cmms-classic-callout mt-2 p-3 text-sm font-semibold">
                 💰 Total: UGX {newRequisition.estimatedCost.toLocaleString()}
               </div>
             )}
@@ -249,7 +249,7 @@ const RequisitionForm = ({
 
         {/* Required By Date */}
         <div>
-          <label className="text-xs font-semibold text-slate-700 uppercase">Required By Date</label>
+          <label className="cmms-classic-label">Required By Date</label>
           <input
             type="date"
             value={newRequisition.requiredByDate}
@@ -260,27 +260,27 @@ const RequisitionForm = ({
       </div>
 
       {/* Cost Summary */}
-      <div className="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-lg">
+      <div className="cmms-classic-callout mb-4 p-4">
         <div className="flex justify-between items-center mb-2">
-          <span className="text-slate-700 font-semibold">📋 Requisition Summary:</span>
-          <span className="text-xs text-slate-600">Before you submit</span>
+          <span className="cmms-classic-heading font-semibold">Requisition Summary</span>
+          <span className="cmms-classic-muted text-xs">Before you submit</span>
         </div>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-slate-600">Title:</span>
-            <span className="text-slate-800 font-semibold">{newRequisition.title || '(Not set)'}</span>
+            <span className="cmms-classic-muted">Title:</span>
+            <span className="cmms-classic-heading font-semibold">{newRequisition.title || '(Not set)'}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-600">Priority:</span>
-            <span className="text-slate-800 font-semibold capitalize">{newRequisition.priority}</span>
+            <span className="cmms-classic-muted">Priority:</span>
+            <span className="cmms-classic-heading font-semibold capitalize">{newRequisition.priority}</span>
           </div>
 
           {newRequisition.items.length > 0 && (
-            <div className="border-t border-amber-300 pt-2 mt-2">
-              <span className="text-slate-700 font-semibold block mb-1">📦 Items: ({newRequisition.items.length})</span>
+            <div className="cmms-classic-divider !mt-2 !pt-2">
+              <span className="cmms-classic-heading font-semibold block mb-1">Items: ({newRequisition.items.length})</span>
               <div className="space-y-1 ml-2">
                 {newRequisition.items.map((item) => (
-                  <div key={item.id} className="text-slate-700 text-xs">
+                  <div key={item.id} className="cmms-classic-muted text-xs">
                     • {item.equipment} × {item.quantity} = UGX {item.totalCost.toLocaleString()}
                   </div>
                 ))}
@@ -288,9 +288,9 @@ const RequisitionForm = ({
             </div>
           )}
 
-          <div className="flex justify-between pt-2 border-t border-amber-300">
-            <span className="text-amber-700 font-bold">💰 Total Cost Requested:</span>
-            <span className="text-amber-700 font-bold text-lg">UGX {newRequisition.estimatedCost.toLocaleString()}</span>
+          <div className="flex justify-between cmms-classic-divider !mt-2 !pt-2">
+            <span className="text-amber-500 font-bold">💰 Total Cost Requested:</span>
+            <span className="text-amber-500 font-bold text-lg">UGX {newRequisition.estimatedCost.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -299,7 +299,7 @@ const RequisitionForm = ({
       <button
         onClick={handleSubmit}
         disabled={isSubmitting}
-        className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-bold hover:from-blue-600 hover:to-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="cmms-classic-btn-primary w-full px-4 py-3 font-bold flex items-center justify-center gap-2"
       >
         {isSubmitting ? '⏳ Submitting...' : '📝 Submit Requisition for Approval'}
       </button>

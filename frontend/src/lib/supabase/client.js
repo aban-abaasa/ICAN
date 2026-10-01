@@ -13,8 +13,12 @@ const initializeSupabase = () => {
   if (isInitializing) return null;
   isInitializing = true;
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const runtimeConfig = typeof window !== 'undefined'
+    ? (window.__APP_RUNTIME_CONFIG__ || {})
+    : {};
+  const hasRuntimeSupabaseConfig = Boolean(runtimeConfig.supabaseUrl || runtimeConfig.supabaseAnonKey);
+  const supabaseUrl = hasRuntimeSupabaseConfig ? runtimeConfig.supabaseUrl : import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = hasRuntimeSupabaseConfig ? runtimeConfig.supabaseAnonKey : import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   // Log for debugging (will show in browser console)
   console.log('🔍 Checking Supabase environment variables...');

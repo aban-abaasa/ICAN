@@ -1158,7 +1158,7 @@ const LandingPage = ({ onGetStarted }) => {
                 <div>
                   <span className={`text-xs font-medium uppercase tracking-wider ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>Transport &amp; delivery</span>
                   <h4 className={`mt-2 text-lg font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>BodaGoEra</h4>
-                  <p className={`mt-1 text-sm ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Connect with rides, riders and delivery services.</p>
+                  <p className={`mt-1 text-sm ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Plan end-to-end journeys by road, air and sea, plus everyday rides and deliveries.</p>
                 </div>
                 <span className={`mt-4 inline-flex items-center gap-2 text-sm font-semibold ${isDarkTheme ? 'text-cyan-300' : 'text-cyan-800'}`}>Explore BodaGoEra <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
               </a>

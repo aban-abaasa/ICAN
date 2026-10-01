@@ -5845,6 +5845,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
           {/* Settings Options - Compact */}
           <div className="glass-card p-4">
+            <a
+              href="https://supermartkera.icanera.space/business-local-server"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mb-3 block rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 transition-colors hover:bg-cyan-500/20"
+            >
+              <span className="block text-sm font-semibold text-cyan-200">Optional business offline server</span>
+              <span className="mt-1 block text-xs leading-5 text-gray-300">Open SupermartKera business settings to set up a local server for your team.</span>
+            </a>
             <h4 className="text-sm font-semibold text-white mb-3">⚙️ Quick Settings</h4>
             <div className="space-y-2">
               <label className="flex items-center justify-between p-2 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-all cursor-pointer">

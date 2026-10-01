@@ -379,14 +379,14 @@ export default function CMSSupplierPurchasePanel({ companyId, requisitionId = nu
     );
   };
 
-  return <div className="mb-6 rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-3 sm:p-4">
-    <div className="flex items-center gap-2 mb-2"><ShoppingCart className="w-5 h-5 shrink-0 text-cyan-300" /><h3 className="font-bold text-white">Order from supplier</h3></div>
-    <p className="text-xs text-gray-300 mb-3">Search every supplier at once, compare price and distance, and have BodaGoera deliver it.</p>
+  return <div className="mb-6 cmms-classic-card p-3 sm:p-4">
+    <div className="flex items-center gap-2 mb-2"><ShoppingCart className="w-5 h-5 shrink-0 text-cyan-300" /><h3 className="cmms-classic-heading">Order from supplier</h3></div>
+    <p className="cmms-classic-muted text-xs mb-3">Search every supplier at once, compare price and distance, and have BodaGoera deliver it.</p>
     {loading ? <div className="flex items-center gap-2 text-gray-300"><Loader className="w-4 h-4 animate-spin" /> Loading supplier catalogs…</div> : <>
       {canOrder ? <form onSubmit={placeOrder} className="space-y-3">
         {/* Delivery point: drives distances, quotes and where the goods go */}
-        <div className="rounded-xl border border-white/15 bg-slate-950/40 p-2.5">
-          <p className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-200"><MapPin className="h-3.5 w-3.5" /> Deliver to</p>
+        <div className="cmms-classic-divider !mt-0 !pt-0 !border-t-0">
+          <p className="cmms-classic-label mb-1.5 flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Deliver to</p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               value={dest.address}
@@ -443,8 +443,8 @@ export default function CMSSupplierPurchasePanel({ companyId, requisitionId = nu
 
         {/* Smart picks */}
         {picks.length > 0 && (
-          <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-2.5">
-            <p className="mb-2 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-amber-200"><Sparkles className="h-3.5 w-3.5" /> Suggested for “{query.trim()}”</p>
+          <div className="cmms-classic-callout p-2.5">
+            <p className="cmms-classic-label mb-2 flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> Suggested for "{query.trim()}"</p>
             <div className="space-y-2">
               {picks.map(({ label, item }) => (
                 <button type="button" key={label} onClick={() => pickItem(item)} className="flex w-full items-center gap-3 rounded-lg border border-white/10 bg-slate-900/70 p-2 text-left hover:border-white/30">
@@ -496,7 +496,7 @@ export default function CMSSupplierPurchasePanel({ companyId, requisitionId = nu
         </div>
 
         {/* Selected product: quantity, delivery, submit */}
-        {selectedItem && <div className="space-y-3 rounded-xl border border-cyan-400/30 bg-slate-950/50 p-3">
+        {selectedItem && <div className="space-y-3 cmms-classic-divider">
           <div className="flex items-start gap-3">
             <ProductImage src={selectedItem.image_url} alt={selectedItem.item_name} className="h-20 w-20 shrink-0 rounded-lg" />
             <div className="min-w-0 flex-1">
@@ -602,7 +602,7 @@ export default function CMSSupplierPurchasePanel({ companyId, requisitionId = nu
 
           <button
             disabled={!canSubmit}
-            className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-cyan-600 px-3 py-2.5 font-semibold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="cmms-classic-btn-primary flex min-h-[44px] w-full items-center justify-center gap-2 px-3 py-2.5"
           >{saving ? <Loader className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />} {useBodaGoera ? 'Order + request BodaGoera delivery' : 'Submit supplier order'}</button>
           {missingDestination && <p className="text-center text-[11px] text-amber-200">Add the delivery address and map point to order with BodaGoera.</p>}
         </div>}
@@ -614,8 +614,8 @@ export default function CMSSupplierPurchasePanel({ companyId, requisitionId = nu
           <span className="break-words">{notice.text}</span>
         </p>
       )}
-      {orders.length > 0 && <div className="mt-4 space-y-1"><p className="text-xs uppercase text-gray-400">Recent supplier orders</p>{orders.slice(0, 5).map((order) => (
-        <div key={order.id} className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 rounded bg-black/20 px-2 py-1.5 text-xs text-gray-200">
+      {orders.length > 0 && <div className="cmms-classic-divider space-y-1"><p className="cmms-classic-label">Recent supplier orders</p>{orders.slice(0, 5).map((order) => (
+        <div key={order.id} className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 rounded px-2 py-1.5 text-xs text-gray-200" style={{ background: 'var(--color-bg)' }}>
           <span className="break-all">{order.order_number}</span>
           <span>{order.status} · {order.quantity} {order.currency}{TRANSPORT_LABEL[order.transport_status] ? ` · ${TRANSPORT_LABEL[order.transport_status]}` : ''}</span>
         </div>

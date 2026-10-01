@@ -540,14 +540,14 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
       )}
 
       {canCreateRequisition ? (
-        <section className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/55 to-cyan-900/35 p-3 sm:p-5">
+        <section className="cmms-classic-card p-3 sm:p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className="min-w-0">
-              <h3 className="text-base sm:text-lg md:text-xl font-bold text-white flex items-center gap-2">
+              <h3 className="cmms-classic-heading text-base sm:text-lg md:text-xl flex items-center gap-2">
                 <Plus className="w-5 h-5 shrink-0 text-cyan-300" />
                 New Maintenance Requisition
               </h3>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="cmms-classic-muted text-xs mt-1">
                 List the items to buy, from inventory or typed in. Once approved, you can open the list to suppliers for bids.
               </p>
             </div>
@@ -561,7 +561,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                 setItemCondition('');
                 setLowStockNotice('');
               }}
-              className="shrink-0 min-h-[40px] px-3 py-2 text-xs font-semibold rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800/70 transition-colors"
+              className="cmms-classic-btn-secondary shrink-0 min-h-[40px] px-3 py-2 text-xs"
             >
               Reset
             </button>
@@ -618,9 +618,9 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
             </div>
 
             <div className="lg:col-span-2 space-y-3 min-w-0">
-              <div className="rounded-xl border border-cyan-500/25 bg-slate-950/55 p-2.5 sm:p-3">
+              <div className="p-2.5 sm:p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <h4 className="text-sm font-semibold text-cyan-200">Items to buy</h4>
+                  <h4 className="cmms-classic-heading text-sm">Items to buy</h4>
                   {lowStockItems.length > 0 && (
                     <button
                       type="button"
@@ -761,7 +761,8 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                     return (
                       <div
                         key={item.id}
-                        className="rounded-lg border border-white/10 bg-slate-900/70 p-2.5"
+                        className="rounded-lg p-2.5"
+                        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
                       >
                         <div className="flex items-start gap-2.5">
                           {stockMatch && (
@@ -824,9 +825,9 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
       )}
 
       {canViewRequisitionList && (
-      <section className="rounded-2xl border border-white/10 bg-slate-900/45 p-3 sm:p-5">
+      <section className="cmms-classic-card p-3 sm:p-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-          <h3 className="text-base sm:text-lg md:text-xl font-bold text-white flex items-center gap-2">
+          <h3 className="cmms-classic-heading text-base sm:text-lg md:text-xl flex items-center gap-2">
             <Clipboard className="w-5 h-5 shrink-0 text-cyan-300" />
             Requisition Register
           </h3>
@@ -859,7 +860,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                 loadRequisitions(true);
               }}
               disabled={isLoading}
-              className="min-h-[44px] sm:min-h-0 rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-3 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-60"
+              className="cmms-classic-btn-secondary min-h-[44px] sm:min-h-0 px-3 py-2 text-sm disabled:opacity-60"
             >
               Refresh
             </button>
@@ -885,7 +886,7 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                 <article
                   key={req.id}
                   onClick={() => setExpandedReqId(isExpanded ? null : req.id)}
-                  className="rounded-xl border border-white/10 bg-gradient-to-br from-slate-950/65 to-slate-900/45 p-3 sm:p-4 cursor-pointer transition-all hover:border-white/20"
+                  className="cmms-classic-card p-3 sm:p-4 cursor-pointer transition-all"
                 >
                   {/* Always visible: title row */}
                   <div className="flex items-start justify-between gap-3">
@@ -913,36 +914,38 @@ const RequisitionWorkspace = ({ userRole, user, companyId, cmmsData, setCmmsData
                         <span className="text-base font-bold text-amber-300 text-right">{formatUgx(req.estimatedCost)}</span>
                       </div>
 
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                        <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
-                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Priority</p>
-                          <p className="text-sm text-white">{PRIORITY_META[req.priority] || 'Normal'}</p>
+                      <dl className="cmms-field-list">
+                        <div className="cmms-field-row">
+                          <dt>Priority</dt>
+                          <dd>{PRIORITY_META[req.priority] || 'Normal'}</dd>
                         </div>
-                        <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
-                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Requested By</p>
-                          <p className="text-sm text-white">{req.createdByName || 'Unknown'}</p>
+                        <div className="cmms-field-row">
+                          <dt>Requested By</dt>
+                          <dd>{req.createdByName || 'Unknown'}</dd>
                         </div>
-                        <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
-                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Created</p>
-                          <p className="text-sm text-white">{new Date(req.createdAt).toLocaleDateString()}</p>
+                        <div className="cmms-field-row">
+                          <dt>Created</dt>
+                          <dd>{new Date(req.createdAt).toLocaleDateString()}</dd>
                         </div>
-                        <div className="rounded-lg bg-slate-900/60 border border-white/5 p-2">
-                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Required By</p>
-                          <p className="text-sm text-white">
-                            {req.requiredByDate ? new Date(req.requiredByDate).toLocaleDateString() : 'Not set'}
-                          </p>
+                        <div className="cmms-field-row">
+                          <dt>Required By</dt>
+                          <dd>{req.requiredByDate ? new Date(req.requiredByDate).toLocaleDateString() : 'Not set'}</dd>
                         </div>
-                      </div>
+                      </dl>
 
                       {Array.isArray(req.items) && req.items.length > 0 && (
-                        <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/40 p-2.5">
-                          <p className="text-[11px] uppercase tracking-wide text-slate-400 mb-2">Line Items</p>
+                        <div className="cmms-classic-divider">
+                          <p className="cmms-classic-label mb-2">Line Items</p>
                           <div className="space-y-2">
                             {req.items.map((item, index) => {
                               const itemName = item.equipment || item.item_name || 'Inventory item';
                               const stockMatch = inventoryProducts.find((product) => product.name === itemName);
                               return (
-                                <div key={item.id || `${req.id}-item-${index}`} className="rounded-md border border-white/10 bg-slate-900/60 p-2.5">
+                                <div
+                                  key={item.id || `${req.id}-item-${index}`}
+                                  className="rounded-md p-2.5"
+                                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+                                >
                                   <div className="flex items-start gap-2.5">
                                     {stockMatch && (
                                       <ProductThumb src={stockMatch.image} alt={itemName} className="h-14 w-14 shrink-0 rounded-lg" />

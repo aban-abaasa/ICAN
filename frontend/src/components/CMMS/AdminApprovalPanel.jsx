@@ -210,36 +210,36 @@ const AdminApprovalPanel = ({
 
       {/* Requisition Summary */}
       {requisition && (
-        <div className="mb-6 p-4 bg-white/5 border border-white/10 rounded-lg">
-          <h4 className="text-sm font-bold text-gray-300 mb-3">📋 Requisition Details</h4>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Title:</span>
-              <span className="text-white font-semibold">{requisition.purpose || 'N/A'}</span>
+        <div className="mb-6">
+          <h4 className="cmms-classic-heading text-sm mb-3">Requisition Details</h4>
+          <dl className="cmms-field-list">
+            <div className="cmms-field-row">
+              <dt>Title</dt>
+              <dd>{requisition.purpose || 'N/A'}</dd>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Requested By:</span>
-              <span className="text-white font-semibold">{requisition.requested_by_name || 'Unknown'}</span>
+            <div className="cmms-field-row">
+              <dt>Requested By</dt>
+              <dd>{requisition.requested_by_name || 'Unknown'}</dd>
             </div>
-            {requisition.total_estimated_cost && (
-              <div className="flex justify-between">
-                <span className="text-gray-400">Total Estimated Cost:</span>
-                <span className="text-amber-300 font-bold">UGX {requisition.total_estimated_cost.toLocaleString()}</span>
-              </div>
-            )}
             {requisition.urgency_level && (
-              <div className="flex justify-between">
-                <span className="text-gray-400">Urgency:</span>
-                <span className="text-white font-semibold uppercase">{requisition.urgency_level}</span>
+              <div className="cmms-field-row">
+                <dt>Urgency</dt>
+                <dd className="uppercase">{requisition.urgency_level}</dd>
               </div>
             )}
-            {requisition.justification && (
-              <div className="border-t border-white/10 pt-2 mt-2">
-                <span className="text-gray-400 block mb-1">Justification:</span>
-                <p className="text-gray-300 text-xs italic">{requisition.justification}</p>
-              </div>
-            )}
-          </div>
+          </dl>
+          {requisition.total_estimated_cost && (
+            <div className="flex items-center justify-between gap-3 mt-3">
+              <span className="cmms-classic-muted text-xs">Total Estimated Cost</span>
+              <span className="text-amber-300 font-bold text-sm">UGX {requisition.total_estimated_cost.toLocaleString()}</span>
+            </div>
+          )}
+          {requisition.justification && (
+            <div className="cmms-classic-divider">
+              <p className="cmms-classic-label mb-1">Justification</p>
+              <p className="cmms-classic-muted text-xs italic">{requisition.justification}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -274,8 +274,8 @@ const AdminApprovalPanel = ({
 
       {/* Approval Action Form */}
       {selectedAction && !isApproved && !isRejected && (
-        <div className="mb-6 p-4 bg-white/5 border border-white/10 rounded-lg">
-          <h4 className="text-sm font-bold text-white mb-3">
+        <div className="cmms-classic-divider mb-6">
+          <h4 className="cmms-classic-heading text-sm mb-3">
             {selectedAction === 'approve' ? '✅ Approve Requisition' : '❌ Reject Requisition'}
           </h4>
 
@@ -322,7 +322,7 @@ const AdminApprovalPanel = ({
                 setApprovalNotes('');
               }}
               disabled={submittingApproval}
-              className="flex-1 px-4 py-2 bg-gray-500/20 border border-gray-400 text-gray-300 rounded-lg font-bold hover:bg-gray-500/40 transition-all disabled:opacity-50"
+              className="cmms-classic-btn-secondary flex-1 px-4 py-2 disabled:opacity-50"
             >
               Cancel
             </button>

@@ -126,19 +126,19 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
   const statusColor = { published: 'text-emerald-400', revoked: 'text-red-400' };
 
   return (
-    <div className="glass-card p-4 md:p-6 border border-slate-700">
+    <div className="cmms-classic-card p-4 md:p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">📄 Service Provider Contracts</h3>
+        <h3 className="cmms-classic-heading text-lg md:text-xl flex items-center gap-2">📄 Service Provider Contracts</h3>
         <button
           onClick={() => { setShowForm((v) => !v); setPublishedLink(null); setError(''); }}
-          className="flex items-center gap-1 text-xs md:text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded px-3 py-1.5 font-semibold"
+          className="cmms-classic-btn-primary flex items-center gap-1 text-xs md:text-sm px-3 py-1.5"
         >
           {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           {showForm ? 'Cancel' : 'Publish Contract'}
         </button>
       </div>
 
-      <p className="text-slate-400 text-xs md:text-sm mb-4">
+      <p className="cmms-classic-muted text-xs md:text-sm mb-4">
         Publish a simple, time-limited public link for an outside service provider (no CMMS login needed) to view their contract, post task follow-ups, and see payments recorded for their work. The link is private -- it needs the PIN or email you set below to open. Payments are real: cash needs the provider's own confirmation from that link, and wallet payments send directly to the provider's IcanEra Wallet once they sign up and link it there.
       </p>
 
@@ -158,7 +158,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
       )}
 
       {showForm && (
-        <div className="space-y-3 bg-slate-800/60 rounded-lg p-4 border border-slate-700 mb-4">
+        <div className="cmms-classic-divider space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-300 mb-1">Provider Name *</label>
@@ -214,15 +214,15 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
               className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 h-16 resize-none" placeholder="Any other simple terms" />
           </div>
 
-          <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-700">
+          <div className="cmms-classic-callout !p-3">
             <label className="block text-xs font-semibold text-gray-300 mb-2">Keep it private -- require *</label>
             <div className="flex gap-2 mb-2">
               <button type="button" onClick={() => setForm({ ...form, accessMode: 'pin' })}
-                className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-2 rounded border ${form.accessMode === 'pin' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-2 rounded border ${form.accessMode === 'pin' ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
                 <Lock className="w-3.5 h-3.5" /> Secret PIN
               </button>
               <button type="button" onClick={() => setForm({ ...form, accessMode: 'email' })}
-                className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-2 rounded border ${form.accessMode === 'email' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
+                className={`flex-1 flex items-center justify-center gap-1.5 text-xs py-2 rounded border ${form.accessMode === 'email' ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white' : 'bg-slate-700 border-slate-600 text-slate-300'}`}>
                 <Mail className="w-3.5 h-3.5" /> Their Email
               </button>
             </div>
@@ -239,7 +239,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
           {error && <p className="text-red-400 text-xs">{error}</p>}
 
           <button onClick={handlePublish} disabled={saving || !form.providerName.trim() || !form.title.trim()}
-            className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 text-white text-xs md:text-sm rounded font-bold">
+            className="cmms-classic-btn-primary w-full py-2 text-xs md:text-sm">
             {saving ? '⏳ Publishing...' : '✓ Publish & Get Link'}
           </button>
         </div>
@@ -365,7 +365,7 @@ const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, on
   };
 
   return (
-    <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-3">
+    <div className="cmms-classic-card p-3">
       <div className="flex items-center justify-between gap-2 cursor-pointer" onClick={onToggle}>
         <div>
           <p className="text-white text-sm font-semibold">{contract.title}</p>
@@ -378,10 +378,10 @@ const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, on
         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           {contract.status !== 'revoked' && (
             <>
-              <button onClick={onCopyLink} title="Copy link" className="p-1.5 rounded bg-slate-700 hover:bg-slate-600"><Copy className="w-3.5 h-3.5 text-slate-300" /></button>
-              <button onClick={onShareLink} title="Share link" className="p-1.5 rounded bg-slate-700 hover:bg-slate-600"><Share2 className="w-3.5 h-3.5 text-slate-300" /></button>
-              <a href={`/service-provider-contract?token=${contract.access_token}`} target="_blank" rel="noreferrer" title="Open" className="p-1.5 rounded bg-slate-700 hover:bg-slate-600"><ExternalLink className="w-3.5 h-3.5 text-slate-300" /></a>
-              <button onClick={onExtend} className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300">Extend</button>
+              <button onClick={onCopyLink} title="Copy link" className="cmms-classic-btn-secondary p-1.5"><Copy className="w-3.5 h-3.5" /></button>
+              <button onClick={onShareLink} title="Share link" className="cmms-classic-btn-secondary p-1.5"><Share2 className="w-3.5 h-3.5" /></button>
+              <a href={`/service-provider-contract?token=${contract.access_token}`} target="_blank" rel="noreferrer" title="Open" className="cmms-classic-btn-secondary p-1.5 inline-flex"><ExternalLink className="w-3.5 h-3.5" /></a>
+              <button onClick={onExtend} className="cmms-classic-btn-secondary text-xs px-2 py-1">Extend</button>
               <button onClick={onRevoke} className="text-xs px-2 py-1 rounded bg-red-900/50 hover:bg-red-900 text-red-300">Revoke</button>
             </>
           )}
@@ -389,7 +389,7 @@ const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, on
       </div>
 
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-slate-700 space-y-3">
+        <div className="cmms-classic-divider !mt-3 !pt-3 space-y-3">
           <div>
             <p className="text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1"><Wallet className="w-3.5 h-3.5" /> Payments</p>
             {payments.map((p) => {
@@ -417,7 +417,7 @@ const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, on
                       <input type="password" placeholder="Wallet PIN to approve" value={approvePin} onChange={(e) => setApprovePin(e.target.value)}
                         className="flex-1 bg-slate-700 text-white text-[11px] rounded px-2 py-1 border border-slate-600" />
                       <button onClick={() => handleApproveWalletPayment(p)} disabled={approvingId === p.id}
-                        className="text-[11px] px-2 py-1 rounded bg-indigo-700 hover:bg-indigo-600 text-white disabled:opacity-50">
+                        className="cmms-classic-btn-primary text-[11px] px-2 py-1">
                         {approvingId === p.id ? 'Approving...' : 'Approve & send'}
                       </button>
                     </div>
@@ -459,7 +459,7 @@ const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, on
             <div className="flex gap-1.5 mt-2">
               <input type="text" placeholder="Add a note..." value={note} onChange={(e) => setNote(e.target.value)}
                 className="flex-1 bg-slate-700 text-white text-xs rounded px-2 py-1 border border-slate-600" />
-              <button onClick={handleAddNote} className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300">Post</button>
+              <button onClick={handleAddNote} className="cmms-classic-btn-secondary text-xs px-2 py-1">Post</button>
             </div>
           </div>
         </div>

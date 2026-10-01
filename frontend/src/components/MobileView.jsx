@@ -7730,15 +7730,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
       {/* ====== FIXED BOTTOM NAVIGATION - ALWAYS ON TOP ====== */}
       {!isWebDashboard && (
-      <div className={`fixed bottom-0 left-0 right-0 z-50 transition-all ${
-        showPitchinPanel 
-          ? 'bg-transparent' 
-          : 'bg-transparent'
-      }`}>
+      <div
+        className="fixed bottom-0 left-0 right-0 z-50 transition-all"
+        style={{
+          background: 'var(--color-bgSecondary)',
+          borderTop: '1px solid var(--color-border)',
+          boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
+          paddingBottom: 'env(safe-area-inset-bottom)'
+        }}
+      >
         <div className={isWebDashboard
-          ? 'flex items-center justify-between py-3 px-4 sm:px-6 max-w-3xl mx-auto mb-4 rounded-2xl border border-green-400/30 bg-slate-900/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(36,18,58,0.45)]'
-          : 'flex items-center justify-between px-2 py-3'
-        }>
+          ? 'flex items-center justify-between py-3 px-4 sm:px-6 max-w-3xl mx-auto mb-4 rounded-2xl'
+          : 'flex items-center justify-between px-1 py-1.5'
+        } style={isWebDashboard ? { border: '1px solid var(--color-border)', background: 'var(--color-bgSecondary)' } : undefined}>
           {[
             { id: 'home',   label: 'Home',   icon: Home,      go: 'dashboard' },
             { id: 'pitchin',label: 'Pitchin',icon: Briefcase, go: 'pitchin'   },
@@ -7752,10 +7756,30 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               <button
                 key={id}
                 onClick={() => navigateTo(go)}
-                className={`flex-1 flex flex-col items-center gap-1 py-2 px-2 transition ${isActive ? 'opacity-100' : 'opacity-60'}`}
+                className="flex-1 flex flex-col items-center gap-1 py-1.5 px-1 transition-colors relative"
               >
-                <Icon className={`w-6 h-6 ${isActive ? 'text-green-400' : 'text-gray-400/60'}`} />
-                <span className={`text-xs font-medium ${isActive ? 'text-gray-300' : 'text-gray-400/60'}`}>{label}</span>
+                <span
+                  className="absolute top-0 h-0.5 rounded-full transition-all"
+                  style={{
+                    width: isActive ? '20px' : '0px',
+                    background: 'var(--color-primary)'
+                  }}
+                />
+                <Icon
+                  className="w-5 h-5"
+                  strokeWidth={isActive ? 2.25 : 1.75}
+                  style={{ color: isActive ? 'var(--color-primary)' : 'var(--color-textSecondary)', opacity: isActive ? 1 : 0.75 }}
+                />
+                <span
+                  className="text-[11px] tracking-wide"
+                  style={{
+                    color: isActive ? 'var(--color-primary)' : 'var(--color-textSecondary)',
+                    fontWeight: isActive ? 600 : 500,
+                    opacity: isActive ? 1 : 0.75
+                  }}
+                >
+                  {label}
+                </span>
               </button>
             );
           })}
@@ -8739,10 +8763,18 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* CMMS Panel - Full Web CMSS UI */}
       {showCmmsPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-950 to-black overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
-          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+          className={`fixed inset-x-0 z-30 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
+          style={{
+            top: isWebDashboard ? dashboardHeaderHeight : 0,
+            bottom: isWebDashboard ? '0' : overlayPanelBottomInset,
+            background: 'var(--color-bg)'
+          }}
         >
-          <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          {/* No side padding here -- CMSSModule owns its own full-bleed layout
+              on mobile (p-0) and switches to a contained, padded shell at the
+              md breakpoint, so wrapping it in padding here would just box in
+              every CMMS page on phones. */}
+          <div className="pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <CMMSModule
               user={userProfile}
               navRef={cmssNavRef}

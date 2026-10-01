@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Megaphone, Briefcase, MapPin, Building2 } from 'lucide-react';
+import { Megaphone, Briefcase, MapPin, Building2, ArrowRight } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import cmmsAnnouncementsService from '../../services/cmmsAnnouncementsService';
 
@@ -11,6 +11,7 @@ const EMPLOYMENT_LABELS = {
   temporary: 'Temporary',
   volunteer: 'Volunteer',
 };
+const PAGE_SIZE = 50;
 
 // Landing-page shelf of public CMMS notices/jobs from EVERY business on
 // IcanEra, browsable with no account -- same "no login required" posture as
@@ -23,16 +24,33 @@ const CMMSNoticeBoardPreview = () => {
   const isDarkTheme = actualTheme === 'dark';
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
 
   useEffect(() => {
-    cmmsAnnouncementsService.browsePublicNotices({ limit: 8 })
-      .then((result) => setPosts(result.data || []))
+    cmmsAnnouncementsService.browsePublicNotices({ limit: PAGE_SIZE })
+      .then((result) => {
+        const nextPosts = result.data || [];
+        setPosts(nextPosts);
+        setHasMore(nextPosts.length === PAGE_SIZE);
+      })
       .catch((err) => console.error('[CMMSNoticeBoardPreview] failed to load posts:', err))
       .finally(() => setLoading(false));
   }, []);
 
-  const openPost = (post) => {
-    window.location.href = cmmsAnnouncementsService.buildPublicNoticeLink(post.cmms_company_id, post.id);
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const result = await cmmsAnnouncementsService.browsePublicNotices({ limit: PAGE_SIZE, offset: posts.length });
+      const nextPosts = result.data || [];
+      setPosts((current) => [...current, ...nextPosts]);
+      setHasMore(nextPosts.length === PAGE_SIZE);
+    } catch (err) {
+      console.error('[CMMSNoticeBoardPreview] failed to load more posts:', err);
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
   if (!loading && posts.length === 0) return null;
@@ -46,24 +64,24 @@ const CMMSNoticeBoardPreview = () => {
             Notices &amp; Jobs
           </div>
           <h2 className={`text-2xl md:text-4xl font-black ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>Announcements &amp; Job Openings from IcanEra Businesses</h2>
-          <p className={`mt-2 text-sm md:text-base ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Public notices and vacancies posted straight from CMMS — no account needed to browse or apply.</p>
+          <p className={`mt-2 text-sm md:text-base ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Anyone can browse public business announcements and job openings without an account. Open a card to visit the company website, read the full post, or apply for a job.</p>
         </div>
 
         {loading ? (
-          <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0" aria-label="Loading public company announcements and job openings">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className={`h-48 rounded-2xl border animate-pulse ${isDarkTheme ? 'border-slate-700/40 bg-slate-800/40' : 'border-slate-200 bg-slate-100'}`} />
+              <div key={i} className={`h-64 w-[min(84vw,22rem)] shrink-0 snap-start rounded-xl border animate-pulse ${isDarkTheme ? 'border-slate-700 bg-slate-900' : 'border-stone-200 bg-white'}`} />
             ))}
           </div>
         ) : (
-          <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0" aria-label="Public company announcements and job openings. Scroll horizontally to browse.">
             {posts.map((post) => (
-              <button
+              <a
                 key={post.id}
-                onClick={() => openPost(post)}
-                className={`flex flex-col text-left rounded-2xl border overflow-hidden transition ${isDarkTheme ? 'border-slate-700/40 bg-slate-900/60 hover:border-purple-400/60' : 'border-slate-200 bg-white hover:border-purple-400/60'}`}
+                href={cmmsAnnouncementsService.buildPublicNoticeLink(post.cmms_company_id, post.id)}
+                className={`group flex w-[min(84vw,22rem)] shrink-0 snap-start flex-col overflow-hidden rounded-xl border text-left transition-colors ${isDarkTheme ? 'border-slate-700 bg-slate-900 hover:border-emerald-600' : 'border-stone-200 bg-white hover:border-emerald-700'}`}
               >
-                <div className={`aspect-video flex items-center justify-center overflow-hidden ${isDarkTheme ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                <div className={`aspect-[16/9] flex items-center justify-center overflow-hidden ${isDarkTheme ? 'bg-slate-800' : 'bg-stone-100'}`}>
                   {post.poster_url ? (
                     <img src={post.poster_url} alt="" className="w-full h-full object-cover" />
                   ) : post.post_type === 'job' ? (
@@ -72,7 +90,7 @@ const CMMSNoticeBoardPreview = () => {
                     <Megaphone className={`w-8 h-8 ${isDarkTheme ? 'text-slate-600' : 'text-slate-400'}`} />
                   )}
                 </div>
-                <div className="flex flex-col flex-1 p-3.5">
+                <div className="flex flex-1 flex-col p-4">
                   <div className="flex items-center gap-1.5 mb-1">
                     {post.company_logo_url ? (
                       <img src={post.company_logo_url} alt="" className="w-4 h-4 rounded object-cover flex-shrink-0" />
@@ -81,7 +99,8 @@ const CMMSNoticeBoardPreview = () => {
                     )}
                     <p className={`text-[11px] font-semibold truncate ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>{post.company_name}</p>
                   </div>
-                  <p className={`text-sm font-bold line-clamp-2 min-h-[2.5rem] ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{post.title}</p>
+                  <h3 className={`text-base font-semibold leading-6 line-clamp-2 min-h-12 ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>{post.title}</h3>
+                  {post.summary && <p className={`mt-2 line-clamp-2 text-sm leading-5 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>{post.summary}</p>}
                   <div className="mt-auto pt-2 flex flex-wrap gap-1.5">
                     {post.post_type === 'job' ? (
                       <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isDarkTheme ? 'bg-emerald-400/10 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -98,9 +117,25 @@ const CMMSNoticeBoardPreview = () => {
                       </span>
                     )}
                   </div>
+                  <span className={`mt-4 inline-flex items-center gap-2 text-sm font-semibold ${isDarkTheme ? 'text-emerald-300' : 'text-emerald-800'}`}>
+                    {post.post_type === 'job' ? 'View vacancy' : 'Read announcement'}
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </span>
                 </div>
-              </button>
+              </a>
             ))}
+          </div>
+        )}
+        {!loading && hasMore && (
+          <div className="mt-5 text-center">
+            <button
+              type="button"
+              onClick={loadMore}
+              disabled={loadingMore}
+              className={`rounded-md border px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-wait disabled:opacity-60 ${isDarkTheme ? 'border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800' : 'border-stone-300 bg-white text-slate-700 hover:bg-stone-50'}`}
+            >
+              {loadingMore ? 'Loading…' : 'Load more public posts'}
+            </button>
           </div>
         )}
       </div>

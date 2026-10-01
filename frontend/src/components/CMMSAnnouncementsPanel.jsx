@@ -720,7 +720,7 @@ const CMMSAnnouncementsPanel = ({
   // just without any of the write controls below.
   if (!canView && !canCreate && !canEdit && !canManageApplications) {
     return (
-      <div className="glass-card p-6 text-orange-200">
+      <div className="cmms-classic-card p-6 text-orange-300">
         Your role does not have access to Announcements &amp; job postings. Ask your company administrator to grant this tool under Role configuration.
       </div>
     );
@@ -826,14 +826,14 @@ const CMMSAnnouncementsPanel = ({
       </div>
 
       {subTab === 'profile' && canEdit && (
-        <div className="space-y-4">
-          <div className="glass-card p-5 border border-white/10">
-            <h3 className="text-white font-semibold mb-1 flex items-center gap-2"><Sparkles className="w-4 h-4 text-purple-300" /> Make it look like your website</h3>
-            <p className="text-sm text-gray-400 mb-4">
+        <div className="cmms-classic-card p-5 space-y-5">
+          <div>
+            <h3 className="cmms-classic-heading mb-1 flex items-center gap-2"><Sparkles className="w-4 h-4 text-purple-400" /> Make it look like your website</h3>
+            <p className="text-sm cmms-classic-muted mb-4">
               A cover photo, a one-line tagline, and real contact details are what turn this into a page customers actually recognize as your business — not just a notice feed.
             </p>
 
-            <label className="block text-xs font-semibold text-gray-400 mb-1">Cover photo &amp; logo</label>
+            <label className="block text-xs font-semibold cmms-classic-muted mb-1">Cover photo &amp; logo</label>
             {/* Logo sits overlapping the cover's bottom-left corner, same
                 layout the public page's hero actually uses -- so this is a
                 rough live preview of the real thing, not just two unrelated
@@ -876,7 +876,7 @@ const CMMSAnnouncementsPanel = ({
               </div>
             </div>
 
-            <label className="block text-xs font-semibold text-gray-400 mb-1">Tagline</label>
+            <label className="block text-xs font-semibold cmms-classic-muted mb-1">Tagline</label>
             <input
               value={websiteDraft.tagline}
               onChange={(e) => setWebsiteDraft((d) => ({ ...d, tagline: e.target.value }))}
@@ -887,7 +887,7 @@ const CMMSAnnouncementsPanel = ({
 
             <div className="grid sm:grid-cols-2 gap-4 mb-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5" /> WhatsApp number</label>
+                <label className="block text-xs font-semibold cmms-classic-muted mb-1 flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5" /> WhatsApp number</label>
                 <input
                   value={websiteDraft.whatsapp}
                   onChange={(e) => setWebsiteDraft((d) => ({ ...d, whatsapp: e.target.value }))}
@@ -896,7 +896,7 @@ const CMMSAnnouncementsPanel = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Opening hours</label>
+                <label className="block text-xs font-semibold cmms-classic-muted mb-1 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Opening hours</label>
                 <input
                   value={websiteDraft.hoursText}
                   onChange={(e) => setWebsiteDraft((d) => ({ ...d, hoursText: e.target.value }))}
@@ -907,7 +907,7 @@ const CMMSAnnouncementsPanel = ({
               </div>
             </div>
 
-            <label className="block text-xs font-semibold text-gray-400 mb-1">Social links</label>
+            <label className="block text-xs font-semibold cmms-classic-muted mb-1">Social links</label>
             <div className="grid sm:grid-cols-2 gap-3 mb-2">
               {[
                 { key: 'facebookUrl', label: 'Facebook', placeholder: 'https://facebook.com/yourbusiness' },
@@ -930,16 +930,16 @@ const CMMSAnnouncementsPanel = ({
               <button
                 disabled={savingWebsiteProfile || !websiteProfileDirty}
                 onClick={saveWebsiteProfile}
-                className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-sm font-semibold flex items-center gap-2"
+                className="cmms-classic-btn-primary px-4 py-2 text-sm flex items-center gap-2"
               >
                 {savingWebsiteProfile ? <><Loader className="w-4 h-4 animate-spin" /> Saving…</> : <><Save className="w-4 h-4" /> Save website details</>}
               </button>
             </div>
           </div>
 
-          <div className="glass-card p-5 border border-white/10">
-            <h3 className="text-white font-semibold mb-1">About this business</h3>
-            <p className="text-sm text-gray-400 mb-3">Shown at the top of your public board — in your visitors' own words, what does this business actually do?</p>
+          <div className="cmms-classic-divider">
+            <h3 className="cmms-classic-heading mb-1">About this business</h3>
+            <p className="text-sm cmms-classic-muted mb-3">Shown at the top of your public board — in your visitors' own words, what does this business actually do?</p>
             <textarea
               value={aboutDraft}
               onChange={(e) => setAboutDraft(e.target.value)}
@@ -952,20 +952,20 @@ const CMMSAnnouncementsPanel = ({
               <button
                 disabled={savingAbout || aboutDraft === savedAbout}
                 onClick={saveAbout}
-                className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-sm font-semibold"
+                className="cmms-classic-btn-primary px-4 py-2 text-sm"
               >
                 {savingAbout ? 'Saving…' : 'Save about'}
               </button>
             </div>
           </div>
 
-          <div className="glass-card p-5 border border-white/10">
-            <h3 className="text-white font-semibold mb-1">Products &amp; services</h3>
-            <p className="text-sm text-gray-400 mb-3">
+          <div className="cmms-classic-divider">
+            <h3 className="cmms-classic-heading mb-1">Products &amp; services</h3>
+            <p className="text-sm cmms-classic-muted mb-3">
               Link one of your own ICANera Dropship storefronts to show its products on your public board. Visitors can browse for free; paying uses their own ICANera wallet, same as your storefront's normal checkout.
             </p>
             {myBusinessProfiles.length === 0 ? (
-              <p className="text-sm text-gray-500">You don't have a Dropship storefront yet under this ICANera account. Set one up from Business &rarr; Dropship, then come back here to link it.</p>
+              <p className="text-sm cmms-classic-muted">You don't have a Dropship storefront yet under this ICANera account. Set one up from Business &rarr; Dropship, then come back here to link it.</p>
             ) : (
               <>
                 <select
@@ -982,7 +982,7 @@ const CMMSAnnouncementsPanel = ({
                   <button
                     disabled={savingStorefront || businessProfileId === savedBusinessProfileId}
                     onClick={saveStorefront}
-                    className="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-sm font-semibold"
+                    className="cmms-classic-btn-primary px-4 py-2 text-sm"
                   >
                     {savingStorefront ? 'Saving…' : 'Save storefront link'}
                   </button>
@@ -1134,8 +1134,8 @@ const CMMSAnnouncementsPanel = ({
           {applicationsLoading ? (
             <div className="flex justify-center py-10"><Loader className="w-6 h-6 text-purple-400 animate-spin" /></div>
           ) : visibleApplications.length === 0 ? (
-            <div className="glass-card p-8 text-center text-gray-400">
-              <Users className="w-10 h-10 mx-auto mb-3 text-gray-600" />
+            <div className="cmms-classic-card p-8 text-center cmms-classic-muted">
+              <Users className="w-10 h-10 mx-auto mb-3 opacity-50" />
               No applications yet.
             </div>
           ) : (
@@ -1176,12 +1176,12 @@ const CMMSAnnouncementsPanel = ({
             className="min-h-screen flex items-start justify-center p-4 pb-16"
             style={{ paddingBottom: 'max(4rem, calc(env(safe-area-inset-bottom) + 2rem))' }}
           >
-            <div className="glass-card w-full max-w-2xl p-6 my-8 border border-purple-400/30">
+            <div className="cmms-classic-card w-full max-w-2xl p-6 my-8">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white">
+                <h3 className="cmms-classic-heading text-lg">
                   {draft.id ? 'Edit' : 'New'} {draft.postType === 'job' ? 'job posting' : 'announcement'}
                 </h3>
-                <button onClick={resetForm} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+                <button onClick={resetForm} className="cmms-classic-muted hover:opacity-70"><X className="w-5 h-5" /></button>
               </div>
 
               <div className="space-y-4">
@@ -1230,7 +1230,7 @@ const CMMSAnnouncementsPanel = ({
                 />
 
                 {draft.postType === 'job' && (
-                  <div className="grid md:grid-cols-2 gap-3 border-t border-white/10 pt-4">
+                  <div className="grid md:grid-cols-2 gap-3 cmms-classic-divider">
                     <input value={draft.department} onChange={(e) => setDraft({ ...draft, department: e.target.value })} placeholder="Department" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
                     <input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} placeholder="Location" className="px-3 py-2 rounded bg-white/10 text-white border border-white/20" />
                     <select value={draft.employmentType} onChange={(e) => setDraft({ ...draft, employmentType: e.target.value })} className="px-3 py-2 rounded bg-slate-900 text-white border border-white/20">
@@ -1244,23 +1244,23 @@ const CMMSAnnouncementsPanel = ({
                   </div>
                 )}
 
-                <div className="grid md:grid-cols-2 gap-4 border-t border-white/10 pt-4">
+                <div className="grid md:grid-cols-2 gap-4 cmms-classic-divider">
                   <div>
-                    <p className="text-sm font-semibold text-white mb-2 flex items-center gap-1"><ImageIcon className="w-4 h-4" /> Poster image</p>
+                    <p className="text-sm font-semibold cmms-classic-heading mb-2 flex items-center gap-1"><ImageIcon className="w-4 h-4" /> Poster image</p>
                     {(posterPreview || existingPosterUrl) && (
                       <img src={posterPreview || existingPosterUrl} alt="Poster preview" className="w-full h-32 object-cover rounded-lg border border-white/10 mb-2" />
                     )}
-                    <label className="block text-xs text-gray-400 cursor-pointer">
+                    <label className="block text-xs cmms-classic-muted cursor-pointer">
                       <span className="inline-block px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-white">Choose image</span>
                       <input type="file" accept="image/*" onChange={handlePosterSelect} className="hidden" />
                     </label>
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-white mb-2 flex items-center gap-1"><FileText className="w-4 h-4" /> PDF document</p>
+                    <p className="text-sm font-semibold cmms-classic-heading mb-2 flex items-center gap-1"><FileText className="w-4 h-4" /> PDF document</p>
                     {(documentFile || existingDocumentUrl) && (
-                      <p className="text-xs text-blue-300 mb-2 truncate">{documentFile?.name || 'Existing document attached'}</p>
+                      <p className="text-xs text-blue-400 mb-2 truncate">{documentFile?.name || 'Existing document attached'}</p>
                     )}
-                    <label className="block text-xs text-gray-400 cursor-pointer">
+                    <label className="block text-xs cmms-classic-muted cursor-pointer">
                       <span className="inline-block px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-white">Choose PDF</span>
                       <input type="file" accept="application/pdf" onChange={handleDocumentSelect} className="hidden" />
                     </label>
@@ -1268,11 +1268,11 @@ const CMMSAnnouncementsPanel = ({
                 </div>
 
                 <div className="flex flex-wrap justify-end gap-2 pt-2 pb-1">
-                  <button onClick={resetForm} className="px-4 py-2 rounded text-gray-300 hover:text-white">Cancel</button>
-                  <button disabled={saving} onClick={() => saveDraft('draft')} className="px-4 py-2 rounded bg-white/10 hover:bg-white/20 text-white font-semibold">
+                  <button onClick={resetForm} className="cmms-classic-btn-secondary px-4 py-2">Cancel</button>
+                  <button disabled={saving} onClick={() => saveDraft('draft')} className="cmms-classic-btn-secondary px-4 py-2 font-semibold">
                     {saving ? 'Saving…' : 'Save as draft'}
                   </button>
-                  <button disabled={saving} onClick={() => saveDraft('published')} className="px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white font-semibold flex items-center gap-2">
+                  <button disabled={saving} onClick={() => saveDraft('published')} className="cmms-classic-btn-primary px-4 py-2 font-semibold flex items-center gap-2">
                     <Save className="w-4 h-4" /> {saving ? 'Publishing…' : 'Publish'}
                   </button>
                 </div>
@@ -1323,15 +1323,15 @@ const ApplicationRow = ({ application, saving, onSave, companyId, companyStaff, 
   };
 
   return (
-    <div className="glass-card p-4 border border-white/10">
+    <div className="cmms-classic-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-white font-semibold">{application.applicant_name}</p>
-          <p className="text-xs text-gray-400">{application.applicant_email} {application.applicant_phone ? `· ${application.applicant_phone}` : ''}</p>
-          <p className="text-xs text-purple-300 font-mono mt-1">{application.reference_code}</p>
-          <p className="text-xs text-gray-500 mt-1">Applied for: {application.job?.title || 'Job posting'} · {new Date(application.created_at).toLocaleDateString()}</p>
+          <p className="cmms-classic-heading">{application.applicant_name}</p>
+          <p className="text-xs cmms-classic-muted">{application.applicant_email} {application.applicant_phone ? `· ${application.applicant_phone}` : ''}</p>
+          <p className="text-xs text-purple-400 font-mono mt-1">{application.reference_code}</p>
+          <p className="text-xs cmms-classic-muted opacity-75 mt-1">Applied for: {application.job?.title || 'Job posting'} · {new Date(application.created_at).toLocaleDateString()}</p>
           {application.ican_verified && <p className="text-xs text-emerald-400 mt-1">✓ Linked to an ICAN account</p>}
-          {application.cover_note && <p className="text-sm text-gray-300 mt-2 max-w-xl">{application.cover_note}</p>}
+          {application.cover_note && <p className="text-sm cmms-classic-muted mt-2 max-w-xl">{application.cover_note}</p>}
           <div className="flex flex-wrap gap-3 mt-2">
             {application.resume_url && (
               <a href={application.resume_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-blue-300 hover:text-blue-200">
@@ -1353,7 +1353,7 @@ const ApplicationRow = ({ application, saving, onSave, companyId, companyStaff, 
           <button
             disabled={!dirty || saving}
             onClick={() => onSave(application, status, note)}
-            className="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-sm font-semibold"
+            className="cmms-classic-btn-primary px-3 py-1.5 text-sm"
           >
             {saving ? 'Saving…' : 'Save status'}
           </button>
@@ -1496,7 +1496,7 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
   };
 
   return (
-    <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center gap-2">
+    <div className="cmms-classic-divider flex flex-wrap items-center gap-2">
       <button onClick={() => setShowTestPicker((v) => !v)} className="px-3 py-1.5 rounded bg-indigo-600/80 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5">
         <ClipboardList className="w-3.5 h-3.5" /> Send written test
       </button>
@@ -1608,11 +1608,11 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
       )}
 
       {showTestPicker && (
-        <div className="w-full mt-2 p-3 rounded bg-white/5 border border-white/10 space-y-2">
-          <p className="text-sm font-semibold text-white">Send a written test</p>
+        <div className="w-full cmms-classic-divider space-y-2">
+          <p className="text-sm font-semibold cmms-classic-heading">Send a written test</p>
           {tests.length === 0 ? (
-            <p className="text-xs text-gray-400">
-              No published written test for this job yet. Go to the <span className="text-white font-medium">Posts</span> tab and use the <span className="text-white font-medium">Written test</span> button on this job posting to build and publish one first.
+            <p className="text-xs cmms-classic-muted">
+              No published written test for this job yet. Go to the <span className="cmms-classic-heading font-medium">Posts</span> tab and use the <span className="cmms-classic-heading font-medium">Written test</span> button on this job posting to build and publish one first.
             </p>
           ) : (
             <div className="space-y-1.5">
@@ -1629,23 +1629,23 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
             </div>
           )}
           <div className="flex justify-end">
-            <button onClick={() => setShowTestPicker(false)} className="px-3 py-1.5 text-xs text-gray-300 hover:text-white">Close</button>
+            <button onClick={() => setShowTestPicker(false)} className="cmms-classic-btn-secondary px-3 py-1.5 text-xs">Close</button>
           </div>
         </div>
       )}
 
       {showScheduler && (
-        <div className="w-full mt-2 p-3 rounded bg-white/5 border border-white/10 space-y-2">
-          <p className="text-sm font-semibold text-white">Schedule a live video interview</p>
+        <div className="w-full cmms-classic-divider space-y-2">
+          <p className="text-sm font-semibold cmms-classic-heading">Schedule a live video interview</p>
           <div className="grid md:grid-cols-2 gap-2">
             <input type="datetime-local" value={scheduleForm.scheduledAt} onChange={(e) => setScheduleForm((c) => ({ ...c, scheduledAt: e.target.value }))} className="px-2 py-1.5 rounded bg-slate-900 text-white border border-white/20 text-sm" />
             <input type="number" min="5" value={scheduleForm.durationMinutes} onChange={(e) => setScheduleForm((c) => ({ ...c, durationMinutes: e.target.value }))} placeholder="Duration (minutes)" className="px-2 py-1.5 rounded bg-white/10 text-white border border-white/20 text-sm" />
           </div>
           <div>
-            <p className="text-xs text-gray-400 mb-1">Interviewer(s)</p>
+            <p className="text-xs cmms-classic-muted mb-1">Interviewer(s)</p>
             <div className="flex flex-wrap gap-2">
               {companyStaff.map((s) => (
-                <label key={s.id} className="flex items-center gap-1 text-xs text-gray-300">
+                <label key={s.id} className="flex items-center gap-1 text-xs cmms-classic-muted">
                   <input type="checkbox" checked={scheduleForm.interviewerIds.includes(s.id)} onChange={() => toggleInterviewer(s.id)} />
                   {s.full_name || s.user_name || s.email}
                 </label>
@@ -1654,7 +1654,7 @@ const ApplicationPipelineControls = ({ application, companyId, companyStaff, cur
           </div>
           <textarea value={scheduleForm.notes} onChange={(e) => setScheduleForm((c) => ({ ...c, notes: e.target.value }))} placeholder="Notes for interviewers (optional)" rows={2} className="w-full px-2 py-1.5 rounded bg-white/10 text-white border border-white/20 text-sm" />
           <div className="flex justify-end gap-2">
-            <button onClick={() => setShowScheduler(false)} className="px-3 py-1.5 text-xs text-gray-300 hover:text-white">Cancel</button>
+            <button onClick={() => setShowScheduler(false)} className="cmms-classic-btn-secondary px-3 py-1.5 text-xs">Cancel</button>
             <button disabled={scheduling} onClick={submitSchedule} className="px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold">{scheduling ? 'Scheduling…' : 'Schedule & get link'}</button>
           </div>
         </div>
@@ -1690,22 +1690,22 @@ const TestGradingPanel = ({ assignment, onClose, onGraded }) => {
   const textAnswers = answers.filter((a) => a.question?.question_type === 'short_text' || a.question?.question_type === 'long_text');
 
   return (
-    <div className="w-full mt-2 p-3 rounded bg-white/5 border border-white/10 space-y-3">
+    <div className="w-full cmms-classic-divider space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-white">Grade written answers — {assignment.test?.title || 'Test'}</p>
-        <button onClick={onClose} className="text-gray-400 hover:text-white text-xs">Close</button>
+        <p className="text-sm font-semibold cmms-classic-heading">Grade written answers — {assignment.test?.title || 'Test'}</p>
+        <button onClick={onClose} className="cmms-classic-muted hover:opacity-70 text-xs">Close</button>
       </div>
       {loading ? (
         <div className="flex justify-center py-4"><Loader className="w-4 h-4 text-purple-400 animate-spin" /></div>
       ) : textAnswers.length === 0 ? (
-        <p className="text-xs text-gray-400">Every question on this test is multiple-choice/yes-no, already auto-graded -- nothing here needs manual review.</p>
+        <p className="text-xs cmms-classic-muted">Every question on this test is multiple-choice/yes-no, already auto-graded -- nothing here needs manual review.</p>
       ) : (
         textAnswers.map((a) => (
-          <div key={a.id} className="rounded border border-white/10 bg-white/5 p-3 space-y-2">
-            <p className="text-sm text-white font-medium">{a.question?.question_text}</p>
-            <p className="text-sm text-gray-300 whitespace-pre-wrap rounded bg-black/20 p-2">{a.answer_text || '(left blank)'}</p>
+          <div key={a.id} className="border-b last:border-b-0 pb-2 space-y-2" style={{ borderColor: 'var(--color-border)' }}>
+            <p className="text-sm cmms-classic-heading font-medium">{a.question?.question_text}</p>
+            <p className="text-sm cmms-classic-muted whitespace-pre-wrap rounded bg-black/20 p-2">{a.answer_text || '(left blank)'}</p>
             {a.question?.sample_answer && (
-              <p className="text-xs text-gray-500">Your reference answer: {a.question.sample_answer}</p>
+              <p className="text-xs cmms-classic-muted opacity-75">Your reference answer: {a.question.sample_answer}</p>
             )}
             <PointsAwardInput
               answer={a}
@@ -1772,8 +1772,8 @@ const InterviewOutcomeForm = ({ interview, existing, onCancel, onSave }) => {
   };
 
   return (
-    <div className="w-full ml-5 mt-1 p-3 rounded bg-white/5 border border-white/10 space-y-2 max-w-md">
-      <p className="text-xs font-semibold text-white">Were you satisfied with this candidate's interview?</p>
+    <div className="w-full ml-5 mt-1 cmms-classic-divider space-y-2 max-w-md">
+      <p className="text-xs font-semibold cmms-classic-heading">Were you satisfied with this candidate's interview?</p>
       <div className="flex gap-2">
         <button
           onClick={() => setOutcome('satisfied')}
@@ -1796,11 +1796,11 @@ const InterviewOutcomeForm = ({ interview, existing, onCancel, onSave }) => {
         className="w-full px-2.5 py-2 rounded bg-white/10 text-white border border-white/20 text-xs"
       />
       <div className="flex justify-end gap-2">
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-300 hover:text-white">Cancel</button>
+        <button onClick={onCancel} className="cmms-classic-btn-secondary px-3 py-1.5 text-xs">Cancel</button>
         <button
           disabled={!outcome || saving}
           onClick={save}
-          className="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold"
+          className="cmms-classic-btn-primary px-3 py-1.5 text-xs"
         >
           {saving ? 'Saving…' : existing ? 'Update outcome' : 'Save outcome'}
         </button>

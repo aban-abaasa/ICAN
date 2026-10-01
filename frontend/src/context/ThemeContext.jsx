@@ -51,6 +51,30 @@ export const THEMES = {
     name: 'Sienna Light',
     icon: '🤎',
     description: 'Warm brown & purple, daylight'
+  },
+  gold: {
+    id: 'gold',
+    name: 'Classic Gold',
+    icon: '🟡',
+    description: 'Ivory & gold, boardroom classic'
+  },
+  bronze: {
+    id: 'bronze',
+    name: 'Bronze Elite',
+    icon: '🥉',
+    description: 'Warm bronze & copper'
+  },
+  violet: {
+    id: 'violet',
+    name: 'Royal Violet',
+    icon: '💜',
+    description: 'Deep violet & plum, daylight'
+  },
+  sky: {
+    id: 'sky',
+    name: 'Classic Sky',
+    icon: '🩵',
+    description: 'Crisp sky blue & navy'
   }
 };
 
@@ -132,6 +156,54 @@ const THEME_COLORS = {
     primaryLight: '#f0e2d1',
     secondary: '#7c4fa0',
     accent: '#b5762e'
+  },
+  // ==================== Classic business presets ====================
+  // Light, paper-toned surfaces with a single deep jewel-tone accent --
+  // boardroom palettes rather than app-neon, so dense admin screens (CMMS)
+  // read as fewer, calmer blocks of color instead of competing hues.
+  gold: {
+    bg: '#fdfbf3',
+    bgSecondary: '#f8f0d9',
+    text: '#2b2110',
+    textSecondary: '#6b5a2e',
+    border: '#e6d5a8',
+    primary: '#a6790a',
+    primaryLight: '#f8f0d9',
+    secondary: '#8a6d1f',
+    accent: '#c9a227'
+  },
+  bronze: {
+    bg: '#fbf6f0',
+    bgSecondary: '#f0e0cd',
+    text: '#3b2a1e',
+    textSecondary: '#7a5a3f',
+    border: '#ddbfa0',
+    primary: '#a0522d',
+    primaryLight: '#f0e0cd',
+    secondary: '#c97b3d',
+    accent: '#a65b2e'
+  },
+  violet: {
+    bg: '#faf8fc',
+    bgSecondary: '#f0e9f7',
+    text: '#2e1a47',
+    textSecondary: '#5e4b7a',
+    border: '#d9c7ec',
+    primary: '#6b3fa0',
+    primaryLight: '#f0e9f7',
+    secondary: '#8e5bc0',
+    accent: '#7c3fae'
+  },
+  sky: {
+    bg: '#f5fbff',
+    bgSecondary: '#e3f2fb',
+    text: '#0c2d44',
+    textSecondary: '#3b5a73',
+    border: '#bfe0f2',
+    primary: '#0369a1',
+    primaryLight: '#e3f2fb',
+    secondary: '#0ea5e9',
+    accent: '#0284c7'
   }
 };
 
@@ -169,7 +241,8 @@ const applyThemeImmediate = (themeId) => {
   // Generate comprehensive CSS with ALL color utility overrides
   const generateComprehensiveThemeCSS = (colors, themeId) => {
     const isDarkTheme = themeId === 'dark' || themeId === 'sienna';
-    const isFlatLightTheme = themeId === 'light' || themeId === 'siennaLight';
+    const isFlatLightTheme = themeId === 'light' || themeId === 'siennaLight' ||
+      themeId === 'gold' || themeId === 'bronze' || themeId === 'violet' || themeId === 'sky';
     const mappedPrimarySurface = isDarkTheme ? colors.primaryLight : colors.primary;
     const mappedGradientFrom = isDarkTheme ? colors.bg : colors.bgSecondary;
     const mappedGradientVia = isDarkTheme ? colors.bgSecondary : colors.primary;

@@ -1740,12 +1740,12 @@ const CMMSModule = ({
       <div className="space-y-6">
         {/* Create Requisition Form - ALWAYS VISIBLE */}
         {canCreateRequisition && (
-          <div className="glass-card p-6 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 border border-blue-500/20">
-            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-              <Plus className="w-6 h-6 text-blue-400" />
+          <div className="cmms-classic-card p-6">
+            <h3 className="cmms-classic-heading text-xl mb-2 flex items-center gap-2">
+              <Plus className="w-6 h-6" style={{ color: 'var(--color-primary)' }} />
               Create Maintenance Requisition
             </h3>
-            <p className="text-gray-400 text-sm mb-4">Submit a new maintenance request</p>
+            <p className="cmms-classic-muted text-sm mb-4">Submit a new maintenance request</p>
 
             <div className="grid md:grid-cols-2 gap-4 mb-4">
               <div>
@@ -1933,7 +1933,7 @@ const CMMSModule = ({
         )}
 
         {!canCreateRequisition && (
-          <div className="glass-card p-4 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
+          <div className="cmms-classic-card p-4" style={{ borderLeft: '4px solid #f97316' }}>
             <p className="text-orange-300 text-sm">
               🔒 <span className="font-semibold">View-Only Mode</span> - Only Technicians, Supervisors, and Coordinators can create requisitions.
             </p>
@@ -1942,19 +1942,19 @@ const CMMSModule = ({
 
         {/* Requisitions List - Independent of form */}
         {loadingRequisitions && (
-          <div className="glass-card p-6 bg-cyan-500/10 border border-cyan-500/30">
+          <div className="cmms-classic-card p-6">
             <div className="text-center py-8">
               <div className="inline-block">
                 <div className="animate-spin rounded-full h-12 w-12 border border-cyan-400 border-t-transparent mx-auto mb-3"></div>
               </div>
-              <p className="text-gray-400">Loading your maintenance requisitions...</p>
-              <p className="text-gray-500 text-xs mt-2">This usually takes a few seconds</p>
+              <p className="cmms-classic-muted">Loading your maintenance requisitions...</p>
+              <p className="cmms-classic-muted text-xs mt-2">This usually takes a few seconds</p>
             </div>
           </div>
         )}
 
         {!loadingRequisitions && (
-        <div className="glass-card p-6">
+        <div className="cmms-classic-card p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-bold text-white flex items-center gap-2">
               <Clipboard className="w-6 h-6 text-cyan-400" />
@@ -2581,10 +2581,10 @@ const CMMSModule = ({
         {/* TAB 1: YOUR ASSIGNED TASKS */}
         {tasksTab === 'tasks' && (
           <div className="space-y-4">
-            <div className="glass-card p-4 md:p-6">
+            <div className="cmms-classic-card p-4 md:p-6">
               <div className="flex items-center justify-between gap-3 mb-4">
-                <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                  <Briefcase className="w-5 h-5 md:w-6 md:h-6 text-emerald-400" />
+                <h3 className="cmms-classic-heading text-lg md:text-xl flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 md:w-6 md:h-6" style={{ color: 'var(--color-primary)' }} />
                   Your Assigned Tasks
                 </h3>
                 <button
@@ -2626,14 +2626,14 @@ const CMMSModule = ({
             {/* Tasks List */}
             <div className="space-y-3">
               {isLoadingTasks ? (
-                <div className="glass-card p-6 text-center">
+                <div className="cmms-classic-card p-6 text-center">
                   <Loader className="w-8 h-8 text-emerald-400 animate-spin mx-auto mb-3" />
-                  <p className="text-gray-300">Loading your tasks...</p>
+                  <p className="cmms-classic-muted">Loading your tasks...</p>
                 </div>
               ) : filteredTasks.length === 0 ? (
-                <div className="glass-card p-6 text-center">
+                <div className="cmms-classic-card p-6 text-center">
                   <Briefcase className="w-12 h-12 text-gray-500 mx-auto mb-3 opacity-50" />
-                  <p className="text-gray-300">
+                  <p className="cmms-classic-muted">
                     {taskFilter === 'all' ? 'No tasks assigned yet' : `No ${taskFilter} tasks`}
                   </p>
                 </div>
@@ -2648,7 +2648,7 @@ const CMMSModule = ({
                     <div
                       key={task.id}
                       ref={el => { taskItemRefs.current[task.id] = el; }}
-                      className={`glass-card border transition-all ${
+                      className={`cmms-classic-card border transition-all ${
                         isHighlighted ? 'border-purple-400 ring-2 ring-purple-400/60' : isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700'
                       }`}
                     >
@@ -2895,8 +2895,8 @@ const CMMSModule = ({
             )}
 
             {!selectedUserToMessage && (
-              <div className="glass-card p-4 md:p-6 border border-slate-700 text-center flex-1 flex items-center justify-center">
-                <p className="text-gray-400 text-xs md:text-sm">
+              <div className="cmms-classic-card p-4 md:p-6 text-center flex-1 flex items-center justify-center">
+                <p className="cmms-classic-muted text-xs md:text-sm">
                   👆 Select a person above to start messaging
                 </p>
               </div>
@@ -2909,8 +2909,8 @@ const CMMSModule = ({
           <div className="space-y-4">
             {canAssignJobs && (
             <>
-            <div className="glass-card p-4 md:p-6 border border-slate-700">
-              <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <div className="cmms-classic-card p-4 md:p-6">
+              <h3 className="cmms-classic-heading text-lg md:text-xl mb-4 flex items-center gap-2">
                 🎯 Assign Job
               </h3>
 
@@ -2998,7 +2998,7 @@ const CMMSModule = ({
               </div>
             </div>
 
-            <div className="glass-card p-4 md:p-6 border border-slate-700 bg-blue-500/10">
+            <div className="cmms-classic-card p-4 md:p-6" style={{ borderLeft: '4px solid #3b82f6' }}>
               <p className="text-blue-300 text-xs md:text-sm">
                 💡 <strong>Tip:</strong> Jobs assigned here will be added to the recipient's "Your Assigned Tasks" list and will receive a notification.
               </p>
@@ -3015,9 +3015,9 @@ const CMMSModule = ({
         {/* TAB 4: TRACK PROGRESS OF TASKS I ASSIGNED (Admin/Coordinator/Supervisor only) */}
         {tasksTab === 'progress' && canAssignJobs && (
           <div className="space-y-4">
-            <div className="glass-card p-4 md:p-6">
+            <div className="cmms-classic-card p-4 md:p-6">
               <div className="flex items-center justify-between gap-3 mb-2">
-                <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                <h3 className="cmms-classic-heading text-lg md:text-xl flex items-center gap-2">
                   📈 Tasks You Assigned
                 </h3>
                 <button
@@ -3035,21 +3035,21 @@ const CMMSModule = ({
 
             <div className="space-y-3">
               {isLoadingAssignedByMe ? (
-                <div className="glass-card p-6 text-center">
+                <div className="cmms-classic-card p-6 text-center">
                   <Loader className="w-8 h-8 text-purple-400 animate-spin mx-auto mb-3" />
-                  <p className="text-gray-300">Loading tasks you assigned...</p>
+                  <p className="cmms-classic-muted">Loading tasks you assigned...</p>
                 </div>
               ) : assignedByMeTasks.length === 0 ? (
-                <div className="glass-card p-6 text-center">
+                <div className="cmms-classic-card p-6 text-center">
                   <Briefcase className="w-12 h-12 text-gray-500 mx-auto mb-3 opacity-50" />
-                  <p className="text-gray-300">You haven't assigned any tasks yet</p>
+                  <p className="cmms-classic-muted">You haven't assigned any tasks yet</p>
                 </div>
               ) : (
                 assignedByMeTasks.map(task => (
                   <div
                     key={task.id}
                     ref={el => { taskItemRefs.current[task.id] = el; }}
-                    className={`glass-card border p-4 transition-all ${
+                    className={`cmms-classic-card border p-4 transition-all ${
                       highlightedTaskId === task.id ? 'border-purple-400 ring-2 ring-purple-400/60' : 'border-slate-700'
                     }`}
                   >
@@ -4240,21 +4240,21 @@ const CMMSModule = ({
         )}
 
         {!companyIdToUse && (
-          <div className="glass-card p-4 md:p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
+          <div className="cmms-classic-card p-4 md:p-6" style={{ borderLeft: '4px solid #f97316' }}>
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-orange-300 font-semibold text-sm md:text-base">Company profile missing</p>
-                <p className="text-gray-300 text-xs md:text-sm mt-1">Create/select a CMMS company first to write and view shared company reports.</p>
+                <p className="cmms-classic-muted text-xs md:text-sm mt-1">Create/select a CMMS company first to write and view shared company reports.</p>
               </div>
             </div>
           </div>
         )}
 
-        <div className="glass-card p-4 md:p-6">
+        <div className="cmms-classic-card p-4 md:p-6">
           <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-              <Clipboard className="w-5 h-5 md:w-6 md:h-6 text-emerald-400" />
+            <h3 className="cmms-classic-heading text-lg md:text-xl flex items-center gap-2">
+              <Clipboard className="w-5 h-5 md:w-6 md:h-6" style={{ color: 'var(--color-primary)' }} />
               Company Report Board
             </h3>
             <button
@@ -4372,9 +4372,9 @@ const CMMSModule = ({
         </div>
 
         {canViewCompanyReports ? (
-          <div className="glass-card p-4 md:p-6">
+          <div className="cmms-classic-card p-4 md:p-6">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <h3 className="text-base md:text-lg font-bold text-white">Recent Company Reports</h3>
+              <h3 className="cmms-classic-heading text-base md:text-lg">Recent Company Reports</h3>
               <div className="flex gap-1 rounded-lg bg-slate-800/60 p-1">
                 <button
                   type="button"
@@ -4650,25 +4650,25 @@ const CMMSModule = ({
             )}
           </div>
         ) : (
-          <div className="glass-card p-4 md:p-6 bg-blue-500/10 border-l-4 border-blue-500">
-            <h3 className="text-base md:text-lg font-bold text-white mb-2">🔒 Personal Reports Only</h3>
+          <div className="cmms-classic-card p-4 md:p-6" style={{ borderLeft: '4px solid #3b82f6' }}>
+            <h3 className="cmms-classic-heading text-base md:text-lg mb-2">🔒 Personal Reports Only</h3>
             <p className="text-blue-300 text-sm">Your role-based access is limited to your own submitted reports. Supervisors and admins can view more reports based on their department or company-wide access.</p>
           </div>
         )}
 
         {!canViewAnalytics && (
-          <div className="glass-card p-4 md:p-6 bg-blue-500/10 border-l-4 border-blue-500">
+          <div className="cmms-classic-card p-4 md:p-6" style={{ borderLeft: '4px solid #3b82f6' }}>
             <p className="text-blue-300 font-semibold text-sm md:text-base">Analytics are limited for your role</p>
-            <p className="text-gray-300 text-xs md:text-sm mt-1">You can still create company reports, but report visibility and export analytics remain role-based.</p>
+            <p className="cmms-classic-muted text-xs md:text-sm mt-1">You can still create company reports, but report visibility and export analytics remain role-based.</p>
           </div>
         )}
 
         {canViewAnalytics && canExportReports && (
           <>
         {/* Inventory Report */}
-        <div className="glass-card p-4 md:p-6">
-          <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Package className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
+        <div className="cmms-classic-card p-4 md:p-6">
+          <h3 className="cmms-classic-heading text-lg md:text-xl mb-4 flex items-center gap-2">
+            <Package className="w-5 h-5 md:w-6 md:h-6" style={{ color: 'var(--color-primary)' }} />
             {inventoryReport.title}
           </h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
@@ -4692,9 +4692,9 @@ const CMMSModule = ({
         </div>
 
         {/* Requisition Report */}
-        <div className="glass-card p-4 md:p-6">
-          <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Wrench className="w-5 h-5 md:w-6 md:h-6 text-purple-400" />
+        <div className="cmms-classic-card p-4 md:p-6">
+          <h3 className="cmms-classic-heading text-lg md:text-xl mb-4 flex items-center gap-2">
+            <Wrench className="w-5 h-5 md:w-6 md:h-6" style={{ color: 'var(--color-primary)' }} />
             {requisitionReport.title}
           </h3>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 md:gap-4">
@@ -4722,8 +4722,8 @@ const CMMSModule = ({
         </div>
 
         {/* Export Reports */}
-        <div className="glass-card p-4 md:p-6">
-          <h3 className="text-base md:text-lg font-bold text-white mb-4">Export Reports</h3>
+        <div className="cmms-classic-card p-4 md:p-6">
+          <h3 className="cmms-classic-heading text-base md:text-lg mb-4">Export Reports</h3>
 
           <div className="mb-3">
             <label className="block text-[11px] md:text-xs text-gray-400 mb-1">
@@ -4947,12 +4947,12 @@ const CMMSModule = ({
 
     if (!canEditCompany && !isCreateOnlyMode) {
       return (
-        <div className="glass-card p-4 md:p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
+        <div className="cmms-classic-card p-4 md:p-6" style={{ borderLeft: '4px solid #f97316' }}>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-orange-300 font-semibold text-sm md:text-base">Access Restricted</p>
-              <p className="text-gray-400 text-xs md:text-sm mt-1">Only Administrators can view and edit company details. Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span></p>
+              <p className="cmms-classic-muted text-xs md:text-sm mt-1">Only Administrators can view and edit company details. Your role: <span className="cmms-classic-chip ml-1">{userRole}</span></p>
             </div>
           </div>
         </div>
@@ -5167,12 +5167,12 @@ const CMMSModule = ({
 
     if (!profile && !showProfileForm) {
       return (
-        <div className="glass-card p-4 md:p-6 space-y-4">
-          <h3 className="text-lg md:text-xl font-bold text-white">Company Profile</h3>
-          <p className="text-gray-300 text-sm">Create your company profile to continue.</p>
+        <div className="cmms-classic-card p-4 md:p-6 space-y-4">
+          <h3 className="cmms-classic-heading text-lg md:text-xl">Company Profile</h3>
+          <p className="cmms-classic-muted text-sm">Create your company profile to continue.</p>
           <button
             onClick={() => setShowProfileForm(true)}
-            className="px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm"
+            className="cmms-classic-btn-primary px-4 py-2 text-sm"
           >
             Create Company Profile
           </button>
@@ -5183,8 +5183,8 @@ const CMMSModule = ({
     return (
       <div className="space-y-4">
         {(showProfileForm || isEditingProfile || !profile) && (
-          <div className="glass-card p-4 md:p-6 space-y-4">
-            <h3 className="text-lg md:text-xl font-bold text-white">{(profile && !isNewCompanyMode) ? '🏢 Edit Company Profile' : '🏢 Create Company Profile'}</h3>
+          <div className="cmms-classic-card p-4 md:p-6 space-y-4">
+            <h3 className="cmms-classic-heading text-lg md:text-xl">{(profile && !isNewCompanyMode) ? 'Edit Company Profile' : 'Create Company Profile'}</h3>
 
             {profileError && (
               <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
@@ -5269,9 +5269,9 @@ const CMMSModule = ({
               </div>
 
               {/* Department Input - Moved Here */}
-              <div className="space-y-3 md:col-span-2 bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-30 rounded-lg p-4">
-                <h4 className="text-sm font-bold text-white mb-2">🏭 Add Departments <span className="text-red-400 text-xs">(Required)</span></h4>
-                <p className="text-gray-400 text-xs mb-3">Create your own departments manually.</p>
+              <div className="space-y-3 md:col-span-2 cmms-classic-callout">
+                <h4 className="cmms-classic-heading text-sm">Add Departments <span className="text-red-400 text-xs font-semibold">(Required)</span></h4>
+                <p className="cmms-classic-muted text-xs mb-3">Create your own departments manually.</p>
 
                 {departmentError && (
                   <div className="p-2 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-xs">
@@ -5306,7 +5306,7 @@ const CMMSModule = ({
                         setDepartmentForm({ department_name: '', description: '', location: '' });
                       }
                     }}
-                    className="px-3 py-2 bg-blue-500 bg-opacity-40 text-blue-100 rounded-lg font-semibold hover:bg-opacity-60 transition-all text-sm whitespace-nowrap"
+                    className="cmms-classic-btn-primary px-3 py-2 text-sm whitespace-nowrap"
                   >
                     + Add
                   </button>
@@ -5331,23 +5331,20 @@ const CMMSModule = ({
 
                 {/* Selected Departments Preview */}
                 {selectedDepartments.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-white border-opacity-20 space-y-1">
-                    <div className="text-gray-300 text-xs font-semibold">Selected ({selectedDepartments.length})</div>
-                    <div className="space-y-1">
+                  <div className="cmms-classic-divider !mt-2 !pt-2 space-y-1.5">
+                    <div className="cmms-classic-label">Selected ({selectedDepartments.length})</div>
+                    <div className="flex flex-wrap gap-1.5">
                       {selectedDepartments.map((dept, idx) => (
-                        <div key={idx} className="bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30 rounded px-2 py-1 flex items-center justify-between text-xs">
-                          <div>
-                            <div className="text-white font-semibold">{dept.name}</div>
-                            {dept.description && <div className="text-gray-400 text-xs">{dept.description}</div>}
-                          </div>
+                        <span key={idx} className="cmms-classic-chip !font-semibold !normal-case gap-1.5">
+                          {dept.name}
                           <button
                             onClick={() => setSelectedDepartments(selectedDepartments.filter((_, i) => i !== idx))}
-                            className="text-red-400 hover:text-red-300 transition-colors p-0.5 ml-2"
+                            className="hover:opacity-70 transition-opacity"
                             title="Remove"
                           >
                             <X className="w-3 h-3" />
                           </button>
-                        </div>
+                        </span>
                       ))}
                     </div>
                   </div>
@@ -5359,7 +5356,7 @@ const CMMSModule = ({
               <button
                 onClick={handleSaveProfile}
                 disabled={isSavingProfile}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-green-600 transition-all text-sm disabled:opacity-50"
+                className="cmms-classic-btn-primary flex-1 px-4 py-2 text-sm"
               >
                 {isSavingProfile ? 'Saving...' : (profile && !isNewCompanyMode) ? 'Save Profile Changes' : 'Create Profile'}
               </button>
@@ -5377,7 +5374,7 @@ const CMMSModule = ({
                       setShowNewCompanyOverlay(false);
                     }
                   }}
-                  className="px-4 py-2 bg-gray-500 bg-opacity-30 text-gray-300 rounded-lg font-semibold hover:bg-opacity-50 transition-all text-sm"
+                  className="cmms-classic-btn-secondary px-4 py-2 text-sm"
                 >
                   Cancel
                 </button>
@@ -5387,34 +5384,34 @@ const CMMSModule = ({
         )}
 
         {profile && !showProfileForm && !isEditingProfile && !isNewCompanyMode && (
-          <div className="glass-card p-4 md:p-6">
-            <h3 className="text-lg md:text-xl font-bold text-white mb-4">📋 Company Profile</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-6">
-              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-                <div className="text-gray-400 text-xs md:text-sm">Company Name</div>
-                <div className="text-white font-bold text-sm md:text-base">{displayProfile.companyName}</div>
+          <div className="cmms-classic-card p-4 md:p-6">
+            <h3 className="cmms-classic-heading text-lg md:text-xl mb-4">Company Profile</h3>
+            <dl className="cmms-field-list mb-6">
+              <div className="cmms-field-row">
+                <dt>Company Name</dt>
+                <dd>{displayProfile.companyName}</dd>
               </div>
-              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-                <div className="text-gray-400 text-xs md:text-sm">Registration</div>
-                <div className="text-white font-bold text-sm md:text-base">{displayProfile.companyRegistration}</div>
+              <div className="cmms-field-row">
+                <dt>Registration</dt>
+                <dd>{displayProfile.companyRegistration || '—'}</dd>
               </div>
-              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-                <div className="text-gray-400 text-xs md:text-sm">Location</div>
-                <div className="text-white font-bold text-sm md:text-base">{displayProfile.location}</div>
+              <div className="cmms-field-row">
+                <dt>Location</dt>
+                <dd>{displayProfile.location || '—'}</dd>
               </div>
-              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-                <div className="text-gray-400 text-xs md:text-sm">Email</div>
-                <div className="text-white font-bold text-sm md:text-base break-all">{displayProfile.email}</div>
+              <div className="cmms-field-row">
+                <dt>Email</dt>
+                <dd className="break-all">{displayProfile.email || '—'}</dd>
               </div>
-              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-                <div className="text-gray-400 text-xs md:text-sm">Phone</div>
-                <div className="text-white font-bold text-sm md:text-base">{displayProfile.phone || '—'}</div>
+              <div className="cmms-field-row">
+                <dt>Phone</dt>
+                <dd>{displayProfile.phone || '—'}</dd>
               </div>
-              <div className="bg-white bg-opacity-5 p-3 md:p-4 rounded">
-                <div className="text-gray-400 text-xs md:text-sm">Website</div>
-                <div className="text-white font-bold text-sm md:text-base break-all">{displayProfile.website || '—'}</div>
+              <div className="cmms-field-row">
+                <dt>Website</dt>
+                <dd className="break-all">{displayProfile.website || '—'}</dd>
               </div>
-            </div>
+            </dl>
 
             <div className="flex flex-col sm:flex-row gap-2">
               <button
@@ -5428,9 +5425,9 @@ const CMMSModule = ({
                   setDepartmentForm({ department_name: '', description: '', location: '' });
                   setSelectedDepartments([]);
                 }}
-                className="flex-1 px-4 py-2 bg-orange-500 bg-opacity-30 text-orange-300 rounded-lg hover:bg-opacity-40 transition-all text-sm font-semibold"
+                className="cmms-classic-btn-primary flex-1 px-4 py-2 text-sm"
               >
-                ✏️ Edit Profile
+                Edit Profile
               </button>
               <button
                 onClick={() => {
@@ -5443,7 +5440,7 @@ const CMMSModule = ({
                   setProfileError('');
                   setDepartmentError('');
                 }}
-                className="flex-1 px-4 py-2 bg-green-500 bg-opacity-30 text-green-300 rounded-lg hover:bg-opacity-40 transition-all text-sm font-semibold"
+                className="cmms-classic-btn-secondary flex-1 px-4 py-2 text-sm"
               >
                 ➕ Create Another Company
               </button>
@@ -5546,14 +5543,14 @@ const CMMSModule = ({
 
             {/* View Departments */}
             {departments.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-white border-opacity-20">
-                <h4 className="text-sm font-bold text-gray-300 mb-3">🏭 Departments ({departments.length})</h4>
-                <div className="space-y-2">
+              <div className="cmms-classic-divider">
+                <h4 className="cmms-classic-label mb-2">Departments ({departments.length})</h4>
+                <div className="cmms-field-list">
                   {departments.map(dept => (
-                    <div key={dept.id} className="bg-white bg-opacity-5 border border-white border-opacity-10 rounded px-3 py-2">
-                      <div className="text-white text-sm font-semibold">{dept.department_name}</div>
+                    <div key={dept.id} className="cmms-field-row">
+                      <dt className="!normal-case !tracking-normal !font-semibold" style={{ color: 'var(--color-text)' }}>{dept.department_name}</dt>
                       {(dept.location || dept.description) && (
-                        <div className="text-gray-400 text-xs mt-1">{[dept.location, dept.description].filter(Boolean).join(' • ')}</div>
+                        <dd>{[dept.location, dept.description].filter(Boolean).join(' • ')}</dd>
                       )}
                     </div>
                   ))}
@@ -5576,45 +5573,43 @@ const CMMSModule = ({
     if (!isAdminUser) {
       return (
         <div className="space-y-4">
-          <div className="glass-card p-4 md:p-6 bg-orange-500 bg-opacity-10 border-l-4 border-orange-500">
+          <div className="cmms-classic-card p-4 md:p-6" style={{ borderLeft: '4px solid #f97316' }}>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
               <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-orange-300 font-semibold text-sm md:text-base">🔒 User Management Restricted</p>
-                <p className="text-gray-400 text-xs md:text-sm mt-1">Only Administrators can manage users and assign roles. Your role: <span className="text-blue-300 font-bold uppercase">{userRole}</span></p>
+                <p className="text-orange-400 font-semibold text-sm md:text-base">User Management Restricted</p>
+                <p className="cmms-classic-muted text-xs md:text-sm mt-1">Only Administrators can manage users and assign roles. Your role: <span className="cmms-classic-chip ml-1">{userRole}</span></p>
               </div>
             </div>
           </div>
-          
+
           {/* View-only user list for authorized roles */}
           {hasPermission('canViewCompany') && (
-            <div className="glass-card p-4 md:p-6">
-              <h3 className="text-base md:text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <Users className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+            <div className="cmms-classic-card p-4 md:p-6">
+              <h3 className="cmms-classic-heading text-base md:text-lg mb-4 flex items-center gap-2">
+                <Users className="w-4 h-4 md:w-5 md:h-5" style={{ color: 'var(--color-primary)' }} />
                 Team Members (View Only)
               </h3>
-              <div className="space-y-2 md:space-y-3">
+              <dl className="cmms-field-list !grid-cols-1">
                 {cmmsData.users.length === 0 ? (
-                  <p className="text-gray-400 text-sm">No team members assigned yet</p>
+                  <p className="cmms-classic-muted text-sm">No team members assigned yet</p>
                 ) : (
                   cmmsData.users.map(user => (
-                    <div key={user.id} className="bg-white bg-opacity-5 p-2 md:p-3 rounded flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 border border-white border-opacity-10">
+                    <div key={user.id} className="cmms-field-row" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-white font-semibold text-sm break-words">{user.name}</p>
+                          <dt className="!normal-case !tracking-normal !font-semibold break-words" style={{ color: 'var(--color-text)' }}>{user.name}</dt>
                           {user.isCreator && (
-                            <span className="px-2 py-0.5 bg-amber-500 bg-opacity-40 text-amber-200 rounded text-xs font-bold flex items-center gap-1">
-                              👑 Creator
-                            </span>
+                            <span className="cmms-classic-chip">Creator</span>
                           )}
                         </div>
-                        <p className="text-gray-400 text-xs break-all">{user.email}</p>
+                        <dd className="!font-normal break-all">{user.email}</dd>
                       </div>
-                      <span className="px-2 md:px-3 py-1 bg-blue-500 bg-opacity-30 text-blue-300 rounded text-xs md:text-sm font-semibold uppercase whitespace-nowrap">{user.role}</span>
+                      <span className="cmms-classic-chip whitespace-nowrap">{user.role}</span>
                     </div>
                   ))
                 )}
-              </div>
+              </dl>
             </div>
           )}
         </div>
@@ -6139,16 +6134,16 @@ const CMMSModule = ({
         `}</style>
 
         {userRole === 'admin' && (
-          <div className="glass-card p-4 bg-green-500 bg-opacity-10 border-l-4 border-green-500">
+          <div className="cmms-classic-card p-4" style={{ borderLeft: '4px solid #22c55e' }}>
             <p className="text-green-300 font-semibold text-sm">Admin full access is active.</p>
-            <p className="text-gray-300 text-xs mt-1">You can assign another Admin and manage all CMMS roles.</p>
+            <p className="cmms-classic-muted text-xs mt-1">You can assign another Admin and manage all CMMS roles.</p>
           </div>
         )}
 
         {/* Add New User Form with Dropdown Search */}
-        <div className="glass-card p-6">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <User className="w-6 h-6 text-blue-400" />
+        <div className="cmms-classic-card p-6">
+          <h3 className="cmms-classic-heading text-xl mb-4 flex items-center gap-2">
+            <User className="w-6 h-6" style={{ color: 'var(--color-primary)' }} />
             Add User to CMMS
           </h3>
 
@@ -6404,9 +6399,9 @@ const CMMSModule = ({
         </div>
 
         {/* Users List */}
-        <div className="glass-card p-6">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Users className="w-6 h-6 text-green-400" />
+        <div className="cmms-classic-card p-6">
+          <h3 className="cmms-classic-heading text-xl mb-4 flex items-center gap-2">
+            <Users className="w-6 h-6" style={{ color: 'var(--color-primary)' }} />
             Users & Roles ({cmmsData.users.length})
           </h3>
           <div className="space-y-3">
@@ -6695,9 +6690,9 @@ const CMMSModule = ({
 
         {/* Add New Department */}
         {isAdmin && (
-          <div className="glass-card p-6">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Plus className="w-6 h-6 text-blue-400" />
+          <div className="cmms-classic-card p-6">
+            <h3 className="cmms-classic-heading text-xl mb-4 flex items-center gap-2">
+              <Plus className="w-6 h-6" style={{ color: 'var(--color-primary)' }} />
               Add New Department
             </h3>
 
@@ -6747,9 +6742,9 @@ const CMMSModule = ({
         )}
 
         {/* Departments List */}
-        <div className="glass-card p-6">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Building className="w-6 h-6 text-green-400" />
+        <div className="cmms-classic-card p-6">
+          <h3 className="cmms-classic-heading text-xl mb-4 flex items-center gap-2">
+            <Building className="w-6 h-6" style={{ color: 'var(--color-primary)' }} />
             Departments ({managedDepts.length})
           </h3>
 
@@ -7234,14 +7229,14 @@ const CMMSModule = ({
       <div className="space-y-4 md:space-y-6">
         {/* Permission Badge */}
         {!canEditInventory && (
-          <div className="glass-card p-3 md:p-4 bg-blue-500 bg-opacity-10 border-l-4 border-blue-500">
+          <div className="cmms-classic-card p-3 md:p-4" style={{ borderLeft: '4px solid #3b82f6' }}>
             <p className="text-blue-300 text-xs md:text-sm">👁️ <span className="font-semibold">View-Only Mode</span> - You can see inventory but cannot make changes. Only Storeman and Admin can edit.</p>
           </div>
         )}
 
         {/* Add Inventory Item */}
         {canEditInventory && (
-          <div className="glass-card p-5 md:p-6 space-y-4">
+          <div className="cmms-classic-card p-5 md:p-6 space-y-4">
             {/* Error Message */}
             {addItemError && (
               <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm">
@@ -7251,10 +7246,10 @@ const CMMSModule = ({
 
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
+                <Package className="w-5 h-5 md:w-6 md:h-6" style={{ color: 'var(--color-primary)' }} />
                 <div>
-                  <h3 className="text-lg md:text-xl font-bold text-white">Add Inventory Item</h3>
-                  <p className="text-xs text-gray-300">Smart defaults keep stores funded to prevent the maintenance cliff.</p>
+                  <h3 className="cmms-classic-heading text-lg md:text-xl">Add Inventory Item</h3>
+                  <p className="cmms-classic-muted text-xs">Smart defaults keep stores funded to prevent the maintenance cliff.</p>
                 </div>
               </div>
               <div className="px-3 py-2 rounded-lg bg-emerald-600/20 border border-emerald-400/40 text-emerald-100 text-sm">
@@ -7425,23 +7420,23 @@ const CMMSModule = ({
 
         {/* Inventory Stats */}
         <div className="grid md:grid-cols-3 gap-4">
-          <div className="glass-card p-4">
-            <div className="text-gray-400 text-sm">Total Items</div>
+          <div className="cmms-classic-card p-4">
+            <div className="cmms-classic-muted text-sm">Total Items</div>
             <div className="text-3xl font-bold text-blue-300">{cmmsData.inventory.length}</div>
           </div>
-          <div className="glass-card p-4">
-            <div className="text-gray-400 text-sm">Inventory Value</div>
+          <div className="cmms-classic-card p-4">
+            <div className="cmms-classic-muted text-sm">Inventory Value</div>
             <div className="text-3xl font-bold text-green-300">UGX {(totalInventoryValue / 1000000).toFixed(1)}M</div>
           </div>
-          <div className="glass-card p-4">
-            <div className="text-gray-400 text-sm">Low Stock Alerts</div>
+          <div className="cmms-classic-card p-4">
+            <div className="cmms-classic-muted text-sm">Low Stock Alerts</div>
             <div className="text-3xl font-bold text-orange-300">{lowStockItems.length}</div>
           </div>
         </div>
 
         {/* Inventory List - Collapsible Items */}
-        <div className="glass-card p-6">
-          <h3 className="text-xl font-bold text-white mb-4">Inventory Items ({cmmsData.inventory.length})</h3>
+        <div className="cmms-classic-card p-6">
+          <h3 className="cmms-classic-heading text-xl mb-4">Inventory Items ({cmmsData.inventory.length})</h3>
           <div className="space-y-2 max-h-full overflow-y-auto">
             {cmmsData.inventory.map(item => {
               const isExpanded = expandedItems[item.id];
@@ -7788,10 +7783,10 @@ const CMMSModule = ({
         </div>
 
         {/* Item Custody Log — proof of who currently has which item */}
-        <div className="glass-card p-6">
+        <div className="cmms-classic-card p-6">
           <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-              <LogOut className="w-5 h-5 text-indigo-400" />
+            <h3 className="cmms-classic-heading text-xl flex items-center gap-2">
+              <LogOut className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
               Signed-Out Items ({custodyLog.length})
             </h3>
             <button
@@ -7846,10 +7841,10 @@ const CMMSModule = ({
         {/* Sign-Out Modal */}
         {checkoutItem && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="w-full max-w-md glass-card p-6">
+            <div className="w-full max-w-md cmms-classic-card p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <LogOut className="w-5 h-5 text-indigo-400" />
+                <h3 className="cmms-classic-heading text-lg flex items-center gap-2">
+                  <LogOut className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
                   Sign Out: {checkoutItem.item_name}
                 </h3>
                 <button onClick={() => setCheckoutItem(null)} className="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10">
@@ -7897,10 +7892,10 @@ const CMMSModule = ({
         {/* Sign Back In Modal */}
         {returnRecord && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="w-full max-w-md glass-card p-6">
+            <div className="w-full max-w-md cmms-classic-card p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <RotateCcw className="w-5 h-5 text-emerald-400" />
+                <h3 className="cmms-classic-heading text-lg flex items-center gap-2">
+                  <RotateCcw className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
                   Sign Back In: {returnRecord.item_name}
                 </h3>
                 <button onClick={() => setReturnRecord(null)} className="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10">
@@ -7971,19 +7966,19 @@ const CMMSModule = ({
 
     if (!isAdminUser) {
       return (
-        <div className="glass-card p-6 text-center">
+        <div className="cmms-classic-card p-6 text-center">
           <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-amber-300" />
-          <h3 className="text-lg font-bold text-white">CMMS modules have not been configured</h3>
-          <p className="mt-2 text-sm text-gray-300">Your business administrator must select the CMMS features that apply to this business before tabs become available.</p>
+          <h3 className="cmms-classic-heading text-lg">CMMS modules have not been configured</h3>
+          <p className="mt-2 text-sm cmms-classic-muted">Your business administrator must select the CMMS features that apply to this business before tabs become available.</p>
         </div>
       );
     }
 
     return (
-      <div className="glass-card p-4 md:p-6">
+      <div className="cmms-classic-card p-4 md:p-6">
         <div className="mb-5">
-          <h3 className="text-lg font-bold text-white">Choose CMMS features for this business</h3>
-          <p className="mt-1 text-sm text-gray-300">Nothing is enabled by default. Turn on only the tabs your business needs; changes apply immediately for the whole company.</p>
+          <h3 className="cmms-classic-heading text-lg">Choose CMMS features for this business</h3>
+          <p className="mt-1 text-sm cmms-classic-muted">Nothing is enabled by default. Turn on only the tabs your business needs; changes apply immediately for the whole company.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {CMMS_TOOL_OPTIONS.filter((tool) => !tool.permissionOnly).map((tool) => {
@@ -8696,42 +8691,49 @@ const CMMSModule = ({
   // MAIN CMMS INTERFACE FOR AUTHORIZED USERS
   // ============================================
   return (
-    <div className="relative p-0 md:p-6 lg:p-8 cmms-clean-shell">
+    <div className="relative min-h-full p-0 md:p-6 lg:p-8 cmms-clean-shell cmms-page-classic">
       <style>{`
         .cmms-clean-shell {
-          background: transparent;
           border: none;
           box-shadow: none;
         }
 
+        /* Classic-business shell -- CMMS's fixed ivory/gold identity (see
+           .cmms-page-classic / .cmms-classic-card in index.css, ported from
+           BodaGoEra's customer dashboard). Stays put regardless of the
+           app-wide theme selected elsewhere, same as BodaGoEra's own
+           dashboard always looking like BodaGoEra. */
         .cmms-clean-shell .cmms-top-header {
-          border-bottom-color: rgba(148, 163, 184, 0.35);
-          background: linear-gradient(120deg, rgba(30, 64, 175, 0.18), rgba(13, 148, 136, 0.14));
-          border-radius: 14px;
+          border-bottom: none;
+          background: #fffdf8;
+          border: 1px solid rgba(196, 160, 82, 0.28);
+          box-shadow: 0 1px 2px rgba(44, 36, 22, 0.05), 0 12px 28px -18px rgba(44, 36, 22, 0.28);
+          border-radius: 16px;
           padding: 14px;
         }
 
         .cmms-clean-shell .cmms-role-badge {
-          background: linear-gradient(135deg, rgba(37, 99, 235, 0.28), rgba(20, 184, 166, 0.24));
-          border: 1px solid rgba(125, 211, 252, 0.45);
-          color: #dbeafe;
+          background: #fbf3dc;
+          border: 1px solid rgba(196, 160, 82, 0.5);
+          color: #7a5a12;
         }
 
         .cmms-clean-shell .cmms-title {
-          background: linear-gradient(120deg, #22c55e, #0ea5e9, #f59e0b);
-          -webkit-background-clip: text;
-          background-clip: text;
-          color: transparent;
+          color: #1e293b;
+          font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+          font-weight: 700;
+          letter-spacing: 0.01em;
         }
 
         .cmms-clean-shell .cmms-subtitle {
-          color: #67e8f9;
+          color: #64748b;
         }
 
         @media (max-width: 767px) {
           .cmms-clean-shell .cmms-top-header {
             background: transparent;
             border: 0;
+            box-shadow: none;
             border-radius: 0;
             padding: 12px 52px 10px 0;
             margin-bottom: 6px;
@@ -8805,7 +8807,7 @@ const CMMSModule = ({
           {companyMemberships.length > 1 && (
             <div className="hidden md:flex items-end gap-2">
               <div className="min-w-[220px]">
-                <label className="block text-[10px] uppercase tracking-wide text-gray-400 mb-1">Business profile / CMMS administrator</label>
+                <label className="cmms-classic-label mb-1">Business profile / CMMS administrator</label>
                 <select
                   value={userCompanyId || ''}
                   onChange={handleSwitchCompany}
@@ -8883,7 +8885,7 @@ const CMMSModule = ({
               modules, and company-scoped data together. */}
           {companyMemberships.length > 1 && (
             <div className="md:hidden w-full">
-              <label className="block text-[10px] uppercase tracking-wide text-gray-400 mb-1">Business profile / CMMS administrator</label>
+              <label className="cmms-classic-label mb-1">Business profile / CMMS administrator</label>
               <select
                 value={userCompanyId || companyIdToUse || ''}
                 onChange={handleSwitchCompany}
@@ -8918,7 +8920,7 @@ const CMMSModule = ({
 
           {!isCreator && availableUserRoles.length > 1 && (
             <div className="hidden md:block min-w-[190px]">
-              <label className="block text-[10px] uppercase tracking-wide text-gray-400 mb-1">Use CMMS as</label>
+              <label className="cmms-classic-label mb-1">Use CMMS as</label>
               <select
                 value={normalizeRoleKey(userRole)}
                 onChange={handleRoleSelection}
@@ -8952,7 +8954,7 @@ const CMMSModule = ({
             <button
               type="button"
               onClick={() => setShowModuleConfiguration((current) => !current)}
-              className="inline-flex w-full md:w-auto items-center justify-center px-4 md:px-6 py-2.5 md:py-3 rounded-xl border border-cyan-300/40 bg-cyan-500/10 text-sm font-bold text-cyan-100 hover:bg-cyan-500/20 transition-all"
+              className="cmms-classic-btn-secondary inline-flex w-full md:w-auto items-center justify-center px-4 md:px-6 py-2.5 md:py-3 text-sm"
             >
               {showModuleConfiguration ? 'Close module setup' : 'Configure modules'}
             </button>
