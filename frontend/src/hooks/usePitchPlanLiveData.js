@@ -16,8 +16,8 @@ const DEBOUNCE_MS = 1_500;
 
 const emptyLive = {
   valuation: null,
-  inventory: { items: [], count: 0, valueUgx: 0, lowStock: 0 },
-  reports: { total: 0, open: 0, resolved: 0, recent: [] },
+  inventory: { items: [], count: 0, valueUgx: 0, lowStock: 0, lowItems: [], topCategories: [] },
+  reports: { total: 0, open: 0, resolved: 0, recent: [], openCategories: [] },
   transactions: { count: 0, netUgx: 0, recent: [] },
 };
 

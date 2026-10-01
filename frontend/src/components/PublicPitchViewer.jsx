@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Share2, Briefcase, X, Send, AlertCircle, Loader, Check } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Briefcase, X, Send, AlertCircle, Loader, Check, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
-import { getPitchById } from '../services/pitchingService';
+import { getPitchById, PITCH_PLAN_SECTIONS } from '../services/pitchingService';
 import {
   likePitchDb,
   unlikePitchDb,
@@ -21,6 +21,76 @@ import ShareSigningFlow from './ShareSigningFlow';
 // with no account required. Interacting further (like/comment/invest) is
 // what actually needs an account, so only those specific actions prompt
 // sign-in -- never the page load itself.
+// Styles for the written-plan page. Colours are CSS variables switched by
+// data-mode so light (parchment + burgundy) and dark (midnight + gold) share
+// one set of rules.
+const PLAN_CSS = `
+.pp-root{--bg:#f6efdf;--surface:#fffaf0;--ink:#2a2118;--muted:#6a5a48;--accent:#7a1f2b;--accent2:#b8892b;--line:#e0d1b2;--shadow:0 10px 30px -12px rgba(90,60,20,.35);
+  background:radial-gradient(1200px 500px at 50% -10%,rgba(184,137,43,.18),transparent 60%),var(--bg);color:var(--ink);font-family:Georgia,'Times New Roman',serif;transition:background .5s,color .5s}
+.pp-root[data-mode=dark]{--bg:#0d1325;--surface:#151d36;--ink:#efe6d1;--muted:#a9a290;--accent:#e3b765;--accent2:#7fa8ff;--line:#2a3558;--shadow:0 10px 30px -12px rgba(0,0,0,.7);
+  background:radial-gradient(1000px 500px at 50% -10%,rgba(127,168,255,.16),transparent 60%),radial-gradient(800px 400px at 100% 100%,rgba(227,183,101,.08),transparent 60%),var(--bg)}
+.pp-progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:50;transform-origin:left;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:transform .1s linear}
+.pp-header{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.pp-brand{font-weight:700;letter-spacing:.18em;text-transform:uppercase;font-size:13px;color:var(--accent)}
+.pp-header-actions{display:flex;align-items:center;gap:8px}
+.pp-icon-btn{background:none;border:0;padding:6px;border-radius:999px;color:var(--muted);cursor:pointer;transition:transform .3s,color .2s,background .2s}
+.pp-icon-btn:hover{color:var(--accent);background:var(--line);transform:rotate(15deg)}
+.pp-pill-solid{font:600 12px system-ui,sans-serif;padding:7px 14px;border-radius:999px;border:0;background:var(--accent);color:var(--bg);cursor:pointer;transition:transform .2s,filter .2s}
+.pp-pill-solid:hover{transform:translateY(-1px);filter:brightness(1.1)}
+.pp-main{max-width:760px;margin:0 auto;padding:44px 20px 80px}
+.pp-hero{text-align:center}
+.pp-avatar-ring{display:inline-block;padding:4px;border-radius:50%;background:conic-gradient(var(--accent),var(--accent2),var(--accent));animation:pp-spin 12s linear infinite}
+.pp-avatar{display:block;width:84px;height:84px;border-radius:50%;object-fit:cover;border:3px solid var(--bg);animation:pp-spin 12s linear infinite reverse}
+.pp-avatar-fallback{display:flex;align-items:center;justify-content:center;background:var(--surface);color:var(--accent);font-size:32px;font-weight:700}
+.pp-eyebrow{margin-top:16px;font:600 12px system-ui,sans-serif;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
+.pp-title{margin-top:10px;font-size:clamp(28px,6vw,46px);line-height:1.15;font-weight:700;background:linear-gradient(100deg,var(--ink) 30%,var(--accent) 50%,var(--ink) 70%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:pp-sheen 6s ease-in-out infinite}
+.pp-kicker{font-style:italic;color:var(--muted);font-size:15px}
+.pp-ornament{display:flex;align-items:center;justify-content:center;gap:14px;margin:22px auto;color:var(--accent2);max-width:320px}
+.pp-ornament span{flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--accent2),transparent);transform-origin:center;animation:pp-grow 1.2s .3s both}
+.pp-ornament i{font-style:normal;font-size:14px;animation:pp-twinkle 3s ease-in-out infinite}
+.pp-cover{display:block;width:100%;max-height:420px;object-fit:cover;border-radius:16px;margin:8px 0 22px;border:1px solid var(--line);box-shadow:var(--shadow)}
+.pp-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.pp-pill{display:inline-flex;align-items:center;gap:6px;font:600 13px system-ui,sans-serif;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;box-shadow:var(--shadow);transition:transform .2s,border-color .2s,color .2s}
+.pp-pill:hover{transform:translateY(-2px);border-color:var(--accent);color:var(--accent)}
+.pp-pill:active{transform:scale(.96)}
+.pp-liked{color:#e0334a;fill:#e0334a;animation:pp-beat .5s}
+.pp-tiles{display:grid;gap:14px;margin-top:34px}
+.pp-tiles-2{grid-template-columns:repeat(2,1fr)}
+.pp-tiles-3{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.pp-tile{position:relative;text-align:center;padding:20px 12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;transition:transform .3s}
+.pp-tile::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.pp-tile:hover{transform:translateY(-4px) rotate(-.4deg)}
+.pp-tile-label{font:700 10px system-ui,sans-serif;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.pp-tile-value{margin-top:6px;font-size:24px;font-weight:700;color:var(--accent);word-break:break-word}
+.pp-sections{margin-top:44px;display:flex;flex-direction:column;gap:34px}
+.pp-section{display:grid;grid-template-columns:56px 1fr;gap:16px;padding:22px 22px 22px 0;border-radius:14px;transition:background .3s,transform .3s}
+.pp-section:hover{background:color-mix(in srgb,var(--surface) 70%,transparent);transform:translateX(4px)}
+.pp-num{font-size:34px;font-weight:700;font-style:italic;text-align:center;color:var(--accent2);opacity:.85;line-height:1}
+.pp-h2{font-size:22px;font-weight:700;color:var(--accent);margin-bottom:8px;position:relative;display:inline-block}
+.pp-h2::after{content:'';position:absolute;left:0;bottom:-3px;height:2px;width:100%;background:var(--accent2);transform:scaleX(0);transform-origin:left;transition:transform .5s}
+.pp-section:hover .pp-h2::after{transform:scaleX(1)}
+.pp-body{white-space:pre-wrap;line-height:1.8;font-size:17px;color:var(--ink)}
+.pp-dropcap::first-letter{float:left;font-size:3.4em;line-height:.9;padding:6px 10px 0 0;font-weight:700;color:var(--accent)}
+.pp-note{text-align:center;font-style:italic;color:var(--muted);font-size:13px;margin-top:20px}
+.pp-invest{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:16px;border:0;border-radius:14px;font:700 16px system-ui,sans-serif;letter-spacing:.04em;color:#fff;background:linear-gradient(110deg,var(--accent),#a8452f 55%,var(--accent2));background-size:200% 100%;cursor:pointer;box-shadow:var(--shadow);transition:transform .25s,background-position .6s}
+.pp-root[data-mode=dark] .pp-invest{color:#1a1405;background-image:linear-gradient(110deg,var(--accent),#f3d58f 55%,var(--accent2))}
+.pp-invest:hover{transform:translateY(-2px);background-position:100% 0}
+.pp-invest:disabled{opacity:.6;cursor:wait}
+.pp-invest::after{content:'';position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);transform:skewX(-20deg);animation:pp-shine 3.5s ease-in-out infinite}
+.pp-rise{opacity:0;animation:pp-rise .8s cubic-bezier(.2,.7,.2,1) forwards}
+.pp-pop{opacity:0;animation:pp-pop .6s cubic-bezier(.3,1.4,.5,1) forwards}
+@keyframes pp-rise{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+@keyframes pp-pop{from{opacity:0;transform:scale(.85) translateY(12px)}to{opacity:1;transform:none}}
+@keyframes pp-spin{to{transform:rotate(360deg)}}
+@keyframes pp-sheen{0%,100%{background-position:100% 0}50%{background-position:0 0}}
+@keyframes pp-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes pp-twinkle{0%,100%{opacity:.5;transform:scale(1) rotate(0)}50%{opacity:1;transform:scale(1.3) rotate(45deg)}}
+@keyframes pp-beat{0%{transform:scale(1)}40%{transform:scale(1.5)}100%{transform:scale(1)}}
+@keyframes pp-shine{0%,60%{left:-60%}100%{left:140%}}
+@media (max-width:520px){.pp-section{grid-template-columns:36px 1fr;gap:10px}.pp-num{font-size:24px}.pp-body{font-size:16px}.pp-tiles-2{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.pp-root *,.pp-root *::before,.pp-root *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}.pp-rise,.pp-pop{opacity:1}}
+`;
+
 const PublicPitchViewer = ({ pitchId }) => {
   const { user, loading: authLoading } = useAuth();
   const [pitch, setPitch] = useState(null);
@@ -38,6 +108,14 @@ const PublicPitchViewer = ({ pitchId }) => {
   const [authView, setAuthView] = useState('signup');
   const [selectedForInvestment, setSelectedForInvestment] = useState(null);
   const [investLoading, setInvestLoading] = useState(false);
+  const [planMode, setPlanMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pitchPlanMode');
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch { /* storage unavailable */ }
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+  const [planProgress, setPlanProgress] = useState(0);
   const videoRef = useRef(null);
   const autoInvestTriggered = useRef(false);
 
@@ -199,6 +277,12 @@ const PublicPitchViewer = ({ pitchId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pitch, authLoading]);
 
+  const togglePlanMode = () => {
+    const next = planMode === 'dark' ? 'light' : 'dark';
+    setPlanMode(next);
+    try { localStorage.setItem('pitchPlanMode', next); } catch { /* storage unavailable */ }
+  };
+
   const goToApp = () => {
     window.history.replaceState({}, '', '/');
     window.location.href = '/';
@@ -230,10 +314,112 @@ const PublicPitchViewer = ({ pitchId }) => {
   const bizName = pitch.business_profiles?.business_name || 'Pitcher';
   const bizPhoto = pitch.business_profiles?.avatar_url || pitch.business_profiles?.owner_avatar_url;
 
+  // A written plan (no video) is shown as a readable web document, not as a
+  // video player with nothing to play.
+  const plan = !pitch.video_url && pitch.plan_content ? pitch.plan_content : null;
+  const planMoney = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  const planTiles = plan ? [
+    plan.total_value ? { label: 'Seeking', value: planMoney(plan.total_value) } : null,
+    plan.shares ? { label: 'Shares offered', value: Number(plan.shares).toLocaleString() } : null,
+    plan.share_price ? { label: 'Price per share', value: planMoney(plan.share_price) } : null,
+  ].filter(Boolean) : [];
+  const planSections = plan ? PITCH_PLAN_SECTIONS.filter(({ key }) => plan[key]) : [];
+
   return (
-    <div className="fixed inset-0 bg-black w-screen h-screen overflow-hidden">
+    <div
+      className={plan ? 'pp-root fixed inset-0 w-screen h-screen overflow-y-auto' : 'fixed inset-0 bg-black w-screen h-screen overflow-hidden'}
+      data-mode={plan ? planMode : undefined}
+      onScroll={plan ? (e) => { const el = e.currentTarget; const max = el.scrollHeight - el.clientHeight; setPlanProgress(max > 0 ? el.scrollTop / max : 0); } : undefined}
+    >
+      {plan && (
+        <>
+          <style>{PLAN_CSS}</style>
+          <div className="pp-progress" style={{ transform: `scaleX(${planProgress})` }} />
+          <header className="pp-header">
+            <span className="pp-brand">IcanEra</span>
+            <div className="pp-header-actions">
+              <button onClick={togglePlanMode} className="pp-icon-btn" title={planMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} aria-label="Toggle light or dark mode">
+                {planMode === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+              {!authLoading && !user && (
+                <button onClick={() => requireAuth('signup')} className="pp-pill-solid">Sign up</button>
+              )}
+              <button onClick={goToApp} className="pp-icon-btn" title="Open IcanEra" aria-label="Close">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </header>
+
+          <main className="pp-main">
+            <div className="pp-hero pp-rise" style={{ animationDelay: '0ms' }}>
+              <div className="pp-avatar-ring">
+                {bizPhoto ? (
+                  <img src={bizPhoto} alt={bizName} className="pp-avatar" />
+                ) : (
+                  <div className="pp-avatar pp-avatar-fallback">{bizName.charAt(0).toUpperCase()}</div>
+                )}
+              </div>
+              <p className="pp-eyebrow">{bizName}</p>
+              <h1 className="pp-title">{pitch.title}</h1>
+              <div className="pp-ornament" aria-hidden="true"><span /><i>❖</i><span /></div>
+              <p className="pp-kicker">Investor Business Plan</p>
+            </div>
+
+            {plan.image_url && (
+              <img src={plan.image_url} alt={pitch.title} className="pp-cover pp-pop" style={{ animationDelay: '60ms' }} />
+            )}
+
+            <div className="pp-actions pp-rise" style={{ animationDelay: '120ms' }}>
+              <button onClick={handleLike} className="pp-pill">
+                <Heart className={`w-4 h-4 ${liked ? 'pp-liked' : ''}`} /> {likesCount}
+              </button>
+              <button onClick={openComments} className="pp-pill">
+                <MessageCircle className="w-4 h-4" /> {pitch.comments_count || 0}
+              </button>
+              <button onClick={handleShare} className="pp-pill">
+                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />} {copied ? 'Link copied' : sharesCount}
+              </button>
+            </div>
+
+            {planTiles.length > 0 && (
+              <div className={`pp-tiles pp-tiles-${planTiles.length}`}>
+                {planTiles.map((t, i) => (
+                  <div key={t.label} className="pp-tile pp-pop" style={{ animationDelay: `${220 + i * 110}ms` }}>
+                    <p className="pp-tile-label">{t.label}</p>
+                    <p className="pp-tile-value">{t.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="pp-sections">
+              {planSections.map(({ key, label }, i) => (
+                <section key={key} className="pp-section pp-rise" style={{ animationDelay: `${360 + i * 140}ms` }}>
+                  <div className="pp-num">{String(i + 1).padStart(2, '0')}</div>
+                  <div>
+                    <h2 className="pp-h2">{label}</h2>
+                    <p className={`pp-body ${i === 0 ? 'pp-dropcap' : ''}`}>{plan[key]}</p>
+                  </div>
+                </section>
+              ))}
+            </div>
+
+            {plan.has_mou && (
+              <p className="pp-note">A memorandum of understanding is shared with investors on request.</p>
+            )}
+
+            <div className="pp-ornament" aria-hidden="true"><span /><i>❖</i><span /></div>
+            <button onClick={handleInvest} disabled={investLoading} className="pp-invest">
+              {investLoading ? <Loader className="w-5 h-5 animate-spin" /> : <Briefcase className="w-5 h-5" />}
+              <span>Invest in {bizName}</span>
+            </button>
+          </main>
+        </>
+      )}
+
       {/* Top bar -- branding + close. Anonymous visitors get a sign-in nudge
           here too, not just on the gated action buttons below. */}
+      {!plan && (<>
       <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
         <span className="text-white font-bold text-sm tracking-wide">IcanEra</span>
         <div className="flex items-center gap-2">
@@ -321,6 +507,7 @@ const PublicPitchViewer = ({ pitchId }) => {
           </div>
         </button>
       </div>
+      </>)}
 
       {/* Comments panel */}
       {showComments && (

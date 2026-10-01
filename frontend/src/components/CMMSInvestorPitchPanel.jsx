@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Video, FileUp, Eye, Heart, Loader, AlertCircle, ExternalLink, Sparkles, Lock, FileText, ArrowLeft, Globe } from 'lucide-react';
+import { Video, FileUp, Eye, Heart, Loader, AlertCircle, ExternalLink, Sparkles, Lock, FileText, ArrowLeft, Globe, Pencil, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import { uploadToR2 } from '../services/r2StorageService';
 import { brandPitchDeck } from '../utils/pptxBranding';
@@ -11,6 +11,7 @@ import usePitchPlanLiveData from '../hooks/usePitchPlanLiveData';
 import {
   getPitchesByBusinessProfileId,
   createManagedPitch,
+  editManagedPitchPlan,
   updateManagedPitch,
   deleteManagedPitch,
   uploadVideo,
@@ -81,6 +82,11 @@ const CMMSInvestorPitchPanel = ({ businessProfileId, cmmsCompanyId = null }) => 
   const [invitePitch, setInvitePitch] = useState(null);
   const [showPlan, setShowPlan] = useState(false);
   const [publishingPlan, setPublishingPlan] = useState(false);
+  // The published plan pitch being edited (null = writing a new plan).
+  const [editingPitch, setEditingPitch] = useState(null);
+  // Optional cover image for the written plan (stored in plan_content.image_url).
+  const [planImage, setPlanImage] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const docsRef = useRef(null);
   const liveData = usePitchPlanLiveData({
     businessProfileId,
@@ -224,30 +230,58 @@ const CMMSInvestorPitchPanel = ({ businessProfileId, cmmsCompanyId = null }) => 
     if (shares) planContent.shares = shares;
     if (sharePrice) planContent.share_price = sharePrice;
     if (total) planContent.total_value = total;
+    if (planImage) planContent.image_url = planImage;
     Object.keys(planContent).forEach((k) => { if (planContent[k] === '') delete planContent[k]; });
 
     setPublishingPlan(true);
     try {
       await docsRef.current.saveDocuments();
-      const result = await createManagedPitch({
-        business_profile_id: profile.id,
-        title: `${profile.business_name} Business Plan`,
-        description: plan.wants.slice(0, 200) || profile.description || '',
-        category: profile.business_type || 'Technology',
-        pitch_type: 'Equity',
-        target_funding: total,
-        equity_offering: shares,
-        has_ip: false,
-        plan_content: planContent,
-      });
-      if (!result.success) throw new Error(result.error || 'Failed to publish plan');
+      const description = plan.wants.split(/\n*\s*Live figures/)[0].slice(0, 200) || profile.description || '';
+      const result = editingPitch
+        ? await editManagedPitchPlan(editingPitch.id, {
+            description,
+            target_funding: total,
+            equity_offering: shares,
+            plan_content: planContent,
+          })
+        : await createManagedPitch({
+            business_profile_id: profile.id,
+            title: `${profile.business_name} Business Plan`,
+            description,
+            category: profile.business_type || 'Technology',
+            pitch_type: 'Equity',
+            target_funding: total,
+            equity_offering: shares,
+            has_ip: false,
+            plan_content: planContent,
+          });
+      if (!result.success) throw new Error(result.error || (editingPitch ? 'Failed to save changes' : 'Failed to publish plan'));
       setShowPlan(false);
+      setEditingPitch(null);
       await loadPitches();
     } catch (error) {
       console.error('Error publishing plan-only pitch:', error);
       alert('Failed to publish plan: ' + error.message);
     } finally {
       setPublishingPlan(false);
+    }
+  };
+
+  // Reuses the existing R2 presigned upload (same one the deck import uses).
+  const handlePlanImage = async (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { alert('Please choose an image file.'); return; }
+    if (file.size > 5 * 1024 * 1024) { alert('Image is too large -- 5 MB maximum.'); return; }
+    setUploadingImage(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const result = await uploadToR2({ file, folder: 'pitches', accessToken: session?.access_token });
+      if (!result.success) throw new Error(result.error || 'Image upload failed');
+      setPlanImage(result.url);
+    } catch (error) {
+      alert('Failed to upload image: ' + error.message);
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -340,7 +374,7 @@ const CMMSInvestorPitchPanel = ({ businessProfileId, cmmsCompanyId = null }) => 
         </p>
         <div className="grid grid-cols-2 gap-2.5">
           <button
-            onClick={() => setShowPlan(true)}
+            onClick={() => { setEditingPitch(null); setPlanImage(''); setShowPlan(true); }}
             disabled={creating || publishingPlan}
             className="ip-btn ip-btn-primary col-span-2"
           >
@@ -408,6 +442,16 @@ const CMMSInvestorPitchPanel = ({ businessProfileId, cmmsCompanyId = null }) => 
                       <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> {fmtCount(pitch.likes_count)}</span>
                     </div>
                   </div>
+                  {label === 'Plan' && (
+                    <button
+                      onClick={() => { setEditingPitch(pitch); setPlanImage(pitch.plan_content?.image_url || ''); setShowPlan(true); }}
+                      className="ip-icon-btn flex-shrink-0 p-2 rounded-lg"
+                      title="Edit plan"
+                      aria-label="Edit plan"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => setInvitePitch(pitch)}
                     className="ip-icon-btn flex-shrink-0 p-2 rounded-lg"
@@ -438,20 +482,53 @@ const CMMSInvestorPitchPanel = ({ businessProfileId, cmmsCompanyId = null }) => 
           <style>{IP_STYLES}</style>
           <div className="max-w-4xl mx-auto px-4 pt-5 pb-28 ip-rise">
             <button
-              onClick={() => setShowPlan(false)}
+              onClick={() => { setShowPlan(false); setEditingPitch(null); }}
               className="flex items-center gap-1.5 text-sm bpd-muted hover:opacity-80 mb-3 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
             <h2 className="text-2xl font-bold bpd-text mb-1" style={{ fontFamily: '"Playfair Display", Georgia, serif' }}>
-              {profile.business_name} plan
+              {editingPitch ? `Edit ${profile.business_name} plan` : `${profile.business_name} plan`}
             </h2>
-            <p className="text-sm bpd-muted mb-5">Prefilled from your profile. Review each step, mark it done, then publish.</p>
+            <p className="text-sm bpd-muted mb-5">
+              {editingPitch
+                ? 'Your saved plan is loaded. Change what you need, then save. The link, likes and comments stay.'
+                : 'Prefilled from your profile. Review each step, mark it done, then publish.'}
+            </p>
+            <div className="mb-5 flex items-center gap-3 p-3 rounded-xl border" style={{ borderColor: 'var(--bpd-border)' }}>
+              {planImage ? (
+                <img src={planImage} alt="" className="w-20 h-20 rounded-lg object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-20 h-20 rounded-lg flex items-center justify-center flex-shrink-0 bpd-muted" style={{ border: '1px dashed var(--bpd-border)' }}>
+                  <ImageIcon className="w-6 h-6" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold bpd-text">Plan image <span className="bpd-muted font-normal">(optional)</span></p>
+                <p className="text-xs bpd-muted mb-2">Shown at the top of your plan page. Max 5 MB.</p>
+                <div className="flex gap-2">
+                  <label className={`ip-btn ip-btn-soft cursor-pointer ${uploadingImage ? 'opacity-60 pointer-events-none' : ''}`}>
+                    {uploadingImage ? <Loader className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                    {uploadingImage ? 'Uploading…' : planImage ? 'Change' : 'Add image'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingImage}
+                      onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handlePlanImage(f); }}
+                    />
+                  </label>
+                  {planImage && (
+                    <button type="button" onClick={() => setPlanImage('')} className="ip-btn ip-btn-soft">Remove</button>
+                  )}
+                </div>
+              </div>
+            </div>
             <BusinessProfileDocuments
               ref={docsRef}
               businessProfile={docsProfile}
               onDocumentsComplete={noop}
-              onCancel={() => setShowPlan(false)}
+              onCancel={() => { setShowPlan(false); setEditingPitch(null); }}
               hideSkip
               liveData={liveData}
             />
@@ -460,11 +537,11 @@ const CMMSInvestorPitchPanel = ({ businessProfileId, cmmsCompanyId = null }) => 
             <div className="max-w-4xl mx-auto">
               <button
                 onClick={handlePublishPlan}
-                disabled={publishingPlan}
+                disabled={publishingPlan || uploadingImage}
                 className="ip-btn ip-btn-primary w-full"
               >
                 {publishingPlan ? <Loader className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
-                {publishingPlan ? 'Publishing…' : 'Publish to website'}
+                {publishingPlan ? (editingPitch ? 'Saving…' : 'Publishing…') : (editingPitch ? 'Save changes' : 'Publish to website')}
               </button>
             </div>
           </div>

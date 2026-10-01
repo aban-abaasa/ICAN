@@ -1107,6 +1107,30 @@ export const updateManagedPitch = async (pitchId, updates) => {
   }
 };
 
+// Edit the written plan of an already-published pitch in place (keeps its
+// likes, comments and shared link). CMMS_PITCH_EDIT_PLAN.sql.
+export const editManagedPitchPlan = async (pitchId, fields) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) return { success: false, error: 'Supabase not configured' };
+
+    const { data, error } = await sb.rpc('fn_cmms_edit_managed_pitch_plan', {
+      p_pitch_id: pitchId,
+      p_title: fields.title ?? null,
+      p_description: fields.description ?? null,
+      p_target_funding: fields.target_funding ?? null,
+      p_equity_offering: fields.equity_offering ?? null,
+      p_plan_content: fields.plan_content ?? null,
+    });
+
+    if (error) throw error;
+    return { success: true, data: data?.[0] };
+  } catch (error) {
+    console.error('Error editing managed pitch plan:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 // Rollback-only: deletes a just-created managed pitch when its video upload
 // failed (mirrors Pitchin.jsx's own "Video is required" deletePitch() call).
 export const deleteManagedPitch = async (pitchId) => {

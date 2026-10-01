@@ -2314,6 +2314,9 @@ const PitchPlanDocument = ({ plan }) => {
   const sections = PITCH_PLAN_SECTIONS.filter(({ key }) => plan[key]);
   return (
     <div className="mt-5">
+      {plan.image_url && (
+        <img src={plan.image_url} alt="" className="w-full max-h-64 object-cover rounded-xl mb-5 nb-rise" />
+      )}
       {tiles.length > 0 && (
         <div className={`grid gap-2.5 mb-5 ${tiles.length === 1 ? 'grid-cols-1' : tiles.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
           {tiles.map((t, i) => (
@@ -2399,7 +2402,16 @@ const PitchDetailModal = ({ pitch, offer, onClose, onShare }) => {
         {pitch.pitch_type && <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-green">{pitch.pitch_type}</span>}
         {pitch.category && <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-neutral">{pitch.category}</span>}
       </div>
-      {pitch.description && <p className="nb-text-muted whitespace-pre-wrap leading-relaxed">{pitch.description}</p>}
+      {pitch.description && <p className="nb-text-muted whitespace-pre-wrap leading-relaxed">{pitch.description.split(/\n*\s*Live figures/)[0]}</p>}
+
+      {pitch.plan_content && !pitch.video_url && (
+        <a
+          href={`/pitchin/${pitch.id}`}
+          className="mt-4 w-full py-2.5 rounded-xl border nb-border nb-link font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99]"
+        >
+          <FileText className="w-4 h-4" /> Open as a full page
+        </a>
+      )}
 
       {pitch.plan_content && <PitchPlanDocument plan={pitch.plan_content} />}
 
