@@ -459,7 +459,40 @@ const CMMSModule = ({
             industry: row.industry,
             architecture: row.architecture
           }));
-          setCompanyMemberships(pichinMemberships);
+          // The RPC only returns Pichin-linked businesses. A user can also be
+          // an administrator (or employee) of CMMS companies that are not
+          // Pichin-linked; merge those in so the business switcher lists every
+          // business the user can open, not just the Pichin ones.
+          const pichinCompanyIds = new Set(pichinMemberships.map((membership) => membership.cmms_company_id));
+          let otherMemberships = [];
+          const { data: otherRows } = await supabase
+            .from('cmms_users_with_roles')
+            .select('id, cmms_company_id, email, is_active, created_at, effective_role, role_labels, is_creator')
+            .ilike('email', user.email)
+            .eq('is_active', true)
+            .order('created_at', { ascending: true });
+          const extraRows = (otherRows || []).filter((row) => row.cmms_company_id && !pichinCompanyIds.has(row.cmms_company_id));
+          if (extraRows.length > 0) {
+            const { data: extraProfiles } = await supabase
+              .from('cmms_company_profiles')
+              .select('id, company_name, created_by, created_by_user_id, owner_email, pichin_business_profile_id, pichin_business_type, industry, architecture')
+              .in('id', [...new Set(extraRows.map((row) => row.cmms_company_id))]);
+            otherMemberships = extraRows.map((row) => {
+              const company = (extraProfiles || []).find((profile) => profile.id === row.cmms_company_id);
+              const creatorById = company?.created_by_user_id || company?.created_by;
+              const creatorByEmail = company?.owner_email
+                && company.owner_email.toLowerCase() === user.email.toLowerCase();
+              return {
+                ...row,
+                is_creator: Boolean(row.is_creator || creatorByEmail || creatorById === row.id),
+                is_pichin_business_admin: false,
+                company_name: company?.company_name || null,
+                pichin_business_profile_id: company?.pichin_business_profile_id || null,
+                pichin_business_type: company?.pichin_business_type || null
+              };
+            });
+          }
+          setCompanyMemberships([...pichinMemberships, ...otherMemberships]);
           const requestedPichinMembership = requestedBusinessProfileId
             ? pichinMemberships.find((membership) => membership.pichin_business_profile_id === requestedBusinessProfileId)
             : null;
