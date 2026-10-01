@@ -2589,6 +2589,7 @@ const CMMSModule = ({
         tabs={taskTabs}
         tab={tasksTab}
         onTab={openTaskTab}
+        fullPageOnTab
       >
         {/* ========== TAB CONTENT ========== */}
         {/* TAB 1: YOUR ASSIGNED TASKS */}
@@ -2655,9 +2656,7 @@ const CMMSModule = ({
                     <div
                       key={task.id}
                       ref={el => { taskItemRefs.current[task.id] = el; }}
-                      className={`cmms-classic-card border transition-all ${
-                        isHighlighted ? 'border-purple-400 ring-2 ring-purple-400/60' : isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700'
-                      }`}
+                      className={`inv-row transition-all ${isHighlighted ? 'ring-2 ring-purple-400/60 rounded-lg' : isOverdue ? 'inv-row-low' : ''}`}
                     >
                       <button
                         onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
@@ -2759,14 +2758,11 @@ const CMMSModule = ({
         {/* TAB 2: MESSAGES */}
         {tasksTab === 'messages' && (
           <div className="flex flex-col h-auto md:h-screen overflow-hidden">
-            <h3 className="text-lg md:text-xl font-bold text-white mb-4 flex items-center gap-2">
-              💬 Messages
-            </h3>
 
             {/* User List Section - Scrollable */}
-            <div className="flex flex-col mb-4 h-auto md:h-48 border border-slate-700 rounded-lg bg-slate-800/50 overflow-hidden">
+            <div className="flex flex-col mb-3 h-auto">
               {/* Search Input */}
-              <div className="flex-shrink-0 p-3 md:p-4 border-b border-slate-700">
+              <div className="flex-shrink-0 pb-2">
                 <input
                   type="text"
                   placeholder="🔍 Search users..."
@@ -2777,7 +2773,7 @@ const CMMSModule = ({
               </div>
 
               {/* Scrollable Users List */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1">
                 {isLoadingUsers ? (
                   <div className="p-4 text-center">
                     <p className="text-gray-400 text-xs">Loading users...</p>
@@ -2799,7 +2795,7 @@ const CMMSModule = ({
                     <p className="text-gray-400 text-xs">No users matching "{userSearchQuery}"</p>
                   </div>
                 ) : (
-                  <div className="space-y-1 p-2">
+                  <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" style={{ scrollbarWidth: 'none' }}>
                     {companyUsers
                       .filter(u => (u.email || '').toLowerCase() !== (user?.email || '').toLowerCase())
                       .filter(u => {
@@ -2816,7 +2812,7 @@ const CMMSModule = ({
                             setSelectedUserToMessage(userItem);
                             setUserSearchQuery(''); // Clear search after selection
                           }}
-                          className={`w-full px-3 py-2 rounded-lg text-left text-xs md:text-sm transition-all flex flex-col ${
+                          className={`max-w-[14rem] shrink-0 px-3 py-1.5 rounded-full text-left text-xs md:text-sm transition-all flex flex-col ${
                             selectedUserToMessage?.id === userItem.id
                               ? 'bg-blue-600 text-white'
                               : 'bg-slate-700/30 text-gray-300 hover:bg-slate-700/60'
@@ -2828,13 +2824,6 @@ const CMMSModule = ({
                       ))}
                   </div>
                 )}
-              </div>
-
-              {/* Info text */}
-              <div className="flex-shrink-0 p-2 md:p-3 border-t border-slate-700 bg-slate-900/50">
-                <p className="text-gray-400 text-xs text-center">
-                  Select a person to start or continue chatting.
-                </p>
               </div>
             </div>
 
@@ -2902,11 +2891,9 @@ const CMMSModule = ({
             )}
 
             {!selectedUserToMessage && (
-              <div className="cmms-classic-card p-4 md:p-6 text-center flex-1 flex items-center justify-center">
-                <p className="cmms-classic-muted text-xs md:text-sm">
-                  👆 Select a person above to start messaging
-                </p>
-              </div>
+              <p className="cmms-classic-muted py-6 text-center text-xs md:text-sm">
+                👆 Select a person above to start messaging
+              </p>
             )}
           </div>
         )}
@@ -2916,11 +2903,13 @@ const CMMSModule = ({
           <div className="space-y-4">
             {canAssignJobs && (
             <>
-            <div className="cmms-classic-card p-4 md:p-6">
-              <h3 className="cmms-classic-heading text-lg md:text-xl mb-4 flex items-center gap-2">
-                🎯 Assign Job
-              </h3>
-
+            <CmmsFold
+              title="Assign job"
+              icon={<Briefcase className="h-4 w-4" aria-hidden="true" />}
+              accent="gold"
+              info="Jobs assigned here are added to the recipient's Tasks list and they receive a notification."
+              defaultOpen
+            >
               <div className="space-y-3 md:space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-300 mb-1">Assign To *</label>
@@ -3003,13 +2992,7 @@ const CMMSModule = ({
                   {isCreatingJob ? '⏳ Assigning...' : '✓ Assign Job'}
                 </button>
               </div>
-            </div>
-
-            <div className="cmms-classic-card p-4 md:p-6" style={{ borderLeft: '4px solid #3b82f6' }}>
-              <p className="text-blue-300 text-xs md:text-sm">
-                💡 <strong>Tip:</strong> Jobs assigned here will be added to the recipient's "Your Assigned Tasks" list and will receive a notification.
-              </p>
-            </div>
+            </CmmsFold>
             </>
             )}
 
@@ -3022,22 +3005,19 @@ const CMMSModule = ({
         {/* TAB 4: TRACK PROGRESS OF TASKS I ASSIGNED (Admin/Coordinator/Supervisor only) */}
         {tasksTab === 'progress' && canAssignJobs && (
           <div className="space-y-4">
-            <div className="cmms-classic-card p-4 md:p-6">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <h3 className="cmms-classic-heading text-lg md:text-xl flex items-center gap-2">
-                  📈 Tasks You Assigned
-                </h3>
-                <button
-                  onClick={loadAssignedByMeTasks}
-                  disabled={isLoadingAssignedByMe}
-                  className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-xs text-white"
-                >
-                  {isLoadingAssignedByMe ? 'Refreshing...' : 'Refresh'}
-                </button>
-              </div>
-              <p className="text-gray-300 text-xs md:text-sm">
-                Live status and progress of jobs you assigned to others. You'll also get a notification whenever the assignee updates their progress.
+            <div className="flex items-center justify-between gap-3">
+              <p className="cmms-classic-muted text-xs md:text-sm">
+                Live status and progress of jobs you assigned to others. You'll get a notification whenever the assignee updates their progress.
               </p>
+              <button
+                onClick={loadAssignedByMeTasks}
+                disabled={isLoadingAssignedByMe}
+                className="cmms-info-btn disabled:opacity-50"
+                title="Refresh"
+                aria-label="Refresh assigned tasks"
+              >
+                <span className={isLoadingAssignedByMe ? 'animate-spin inline-block' : 'inline-block'}>↻</span>
+              </button>
             </div>
 
             <div className="space-y-3">
@@ -3056,9 +3036,7 @@ const CMMSModule = ({
                   <div
                     key={task.id}
                     ref={el => { taskItemRefs.current[task.id] = el; }}
-                    className={`cmms-classic-card border p-4 transition-all ${
-                      highlightedTaskId === task.id ? 'border-purple-400 ring-2 ring-purple-400/60' : 'border-slate-700'
-                    }`}
+                    className={`inv-row py-3 transition-all ${highlightedTaskId === task.id ? 'ring-2 ring-purple-400/60 rounded-lg' : ''}`}
                   >
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="flex-1 min-w-0">
