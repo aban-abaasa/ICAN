@@ -1390,6 +1390,10 @@ html {
   transform: translateY(-1px);
 }
 .cmms-clean-shell.cmms-page-classic button:not(:disabled):active { transform: scale(0.97); }
+/* The jewel gradients above replace the translucent tint these buttons were
+   written with, so their tinted label (text-blue-300, text-red-300, ...) lands
+   blue-on-blue. Keep the label readable on every theme. */
+.cmms-clean-shell.cmms-page-classic button:is([class*="bg-indigo-5"], [class*="bg-indigo-6"], [class*="bg-blue-5"], [class*="bg-blue-6"], [class*="bg-purple-6"], [class*="bg-violet-6"], [class*="bg-emerald-5"], [class*="bg-emerald-6"], [class*="bg-green-5"], [class*="bg-green-6"], [class*="bg-red-5"], [class*="bg-red-6"], [class*="bg-rose-5"], [class*="bg-rose-6"], [class*="bg-amber-5"], [class*="bg-amber-6"], [class*="bg-yellow-5"], [class*="bg-yellow-6"]):not(:disabled) { color: #fff !important; }
 
 /* 6. Pill tabs and nav items already used across CMMS get the same lively
       active state as the payroll tabs. */
@@ -1422,3 +1426,15 @@ html {
 @keyframes invRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes invUnfold { from { opacity: 0; transform: scaleY(0.96) translateY(-4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .inv-fold, .inv-unfold, .inv-chip, .inv-progress > div { animation: none !important; transition: none !important; } }
+
+/* Destructive action that stays readable on every theme */
+.cmms-classic-btn-danger {
+  background: linear-gradient(135deg, #b4233a, #8f1d2f);
+  color: #fff;
+  border-radius: 14px;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  transition: filter 0.15s ease;
+}
+.cmms-classic-btn-danger:hover { filter: brightness(1.08); }
+.cmms-classic-btn-danger:disabled { opacity: 0.5; }

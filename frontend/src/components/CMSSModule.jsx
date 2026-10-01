@@ -7754,7 +7754,7 @@ const CMMSModule = ({
                         <button
                           onClick={() => openCheckout(item)}
                           disabled={item.quantity_in_stock <= 0}
-                          className="w-full px-3 py-2 bg-indigo-500 bg-opacity-20 text-indigo-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="cmms-classic-btn-primary w-full px-3 py-2.5 text-xs flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <LogOut className="w-3 h-3" />
                           {item.quantity_in_stock <= 0 ? 'Out of Stock' : 'Sign Out This Item'}
@@ -7767,14 +7767,14 @@ const CMMSModule = ({
                         <div className="mt-4 pt-4 border-t border-white border-opacity-10 flex gap-2">
                           <button
                             onClick={() => handleStartEdit(item)}
-                            className="flex-1 px-3 py-2 bg-blue-500 bg-opacity-20 text-blue-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center justify-center gap-2"
+                            className="cmms-classic-btn-secondary flex-1 px-3 py-2.5 text-xs flex items-center justify-center gap-2"
                           >
                             <Edit2 className="w-3 h-3" />
                             Edit Item
                           </button>
                           <button
                             onClick={() => handleDeleteItem(item.id)}
-                            className="flex-1 px-3 py-2 bg-red-500 bg-opacity-20 text-red-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center justify-center gap-2"
+                            className="cmms-classic-btn-danger flex-1 px-3 py-2.5 text-xs flex items-center justify-center gap-2"
                           >
                             <Trash2 className="w-3 h-3" />
                             Delete Item
@@ -7830,7 +7830,7 @@ const CMMSModule = ({
                   </div>
                   <button
                     onClick={() => openReturn(record)}
-                    className="flex-shrink-0 px-3 py-1.5 bg-emerald-500 bg-opacity-20 text-emerald-300 text-xs rounded hover:bg-opacity-40 transition-all font-semibold flex items-center gap-1.5"
+                    className="cmms-classic-btn-secondary flex-shrink-0 px-3 py-1.5 text-xs flex items-center gap-1.5"
                   >
                     <RotateCcw className="w-3 h-3" />
                     Sign Back In
