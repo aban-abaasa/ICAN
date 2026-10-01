@@ -116,6 +116,7 @@ const PublicPitchViewer = ({ pitchId }) => {
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
   const [planProgress, setPlanProgress] = useState(0);
+  const [planOffer, setPlanOffer] = useState(null);
   const videoRef = useRef(null);
   const autoInvestTriggered = useRef(false);
 
@@ -137,6 +138,17 @@ const PublicPitchViewer = ({ pitchId }) => {
     load();
     return () => { cancelled = true; };
   }, [pitchId]);
+
+  // Live share price for the plan's terms tiles.
+  useEffect(() => {
+    let cancelled = false;
+    if (!pitch?.plan_content) return undefined;
+    const profileId = pitch.business_profile_id || pitch.business_profiles?.id;
+    getLiveShareOffer(profileId, pitch.business_profiles?.user_id)
+      .then((offer) => { if (!cancelled) setPlanOffer(offer); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [pitch?.id]);
 
   // Once we know who's viewing, check whether they've already liked this
   // pitch so the heart shows the right state instead of always starting cold.
@@ -318,10 +330,17 @@ const PublicPitchViewer = ({ pitchId }) => {
   // video player with nothing to play.
   const plan = !pitch.video_url && pitch.plan_content ? pitch.plan_content : null;
   const planMoney = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  // Live share value when available; the typed dollar figures are the fallback.
+  const planLive = planOffer?.available && Number(planOffer.sharePriceUgx) > 0 ? planOffer : null;
+  const planUgx = (n) => `UGX ${Number(n).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
   const planTiles = plan ? [
-    plan.total_value ? { label: 'Seeking', value: planMoney(plan.total_value) } : null,
+    planLive && plan.shares
+      ? { label: 'Seeking', value: planUgx(Number(plan.shares) * planLive.sharePriceUgx) }
+      : plan.total_value ? { label: 'Seeking', value: planMoney(plan.total_value) } : null,
     plan.shares ? { label: 'Shares offered', value: Number(plan.shares).toLocaleString() } : null,
-    plan.share_price ? { label: 'Price per share', value: planMoney(plan.share_price) } : null,
+    planLive
+      ? { label: 'Live price per share', value: planUgx(planLive.sharePriceUgx) }
+      : plan.share_price ? { label: 'Price per share', value: planMoney(plan.share_price) } : null,
   ].filter(Boolean) : [];
   const planSections = plan ? PITCH_PLAN_SECTIONS.filter(({ key }) => plan[key]) : [];
 

@@ -573,9 +573,50 @@ export async function getLiveShareOffer(businessProfileId, businessOwnerUserId) 
 
   if (!businessProfileId) return blocked('no-business-profile');
 
-  const valuation = await calculateLiveShareValue(businessProfileId, businessOwnerUserId, {
-    saveSnapshot: false
-  });
+  // Only the owner can read the records the live price is computed from
+  // (row-level security), so anyone else -- including signed-out visitors on
+  // the public board -- would compute 0 and be told no price exists. They get
+  // the owner's latest recorded price instead (PITCHIN_PUBLIC_SHARE_OFFER.sql).
+  // The owner falls back to it too if the live calculation is blocked.
+  const snapshotOffer = async () => {
+    const { data: rows, error: offerError } = await supabase.rpc('fn_get_public_share_offer', {
+      p_business_profile_id: businessProfileId
+    });
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    if (offerError) console.warn('[Valuation] Public share offer read failed:', offerError.message);
+    if (!row || !(Number(row.share_price_ugx) > 0)) return null;
+    const total = Number(row.total_shares) || 0;
+    const issued = Number(row.shares_issued) || 0;
+    return {
+      available: true,
+      reason: null,
+      sharePriceUgx: Number(row.share_price_ugx),
+      totalShares: total,
+      sharesIssued: issued,
+      sharesAvailable: Math.max(0, total - issued),
+      icanMarketPriceUgx: null,
+      businessValueUgx: Number(row.business_value_ugx) || null,
+      computedAt: row.snapshot_date ? new Date(row.snapshot_date).toISOString() : null
+    };
+  };
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const viewerId = sessionData?.session?.user?.id;
+  if (!viewerId || viewerId !== businessOwnerUserId) {
+    return (await snapshotOffer()) || blocked('no-live-price');
+  }
+
+  let valuation;
+  try {
+    valuation = await calculateLiveShareValue(businessProfileId, businessOwnerUserId, { saveSnapshot: false });
+  } catch (err) {
+    console.warn('[Valuation] Live calculation failed:', err.message);
+    return (await snapshotOffer()) || blocked('no-live-price');
+  }
+  if (valuation.needsShareSetup || !(Number(valuation.sharePriceUgx) > 0)) {
+    const fallback = await snapshotOffer();
+    if (fallback) return fallback;
+  }
 
   if (valuation.needsShareSetup) return blocked('shares-not-configured');
   if (!(Number(valuation.sharePriceUgx) > 0)) {

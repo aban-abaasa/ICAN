@@ -1601,6 +1601,8 @@ const PitchCard = ({ pitch, offer, index = 0, onSelect }) => (
           <FileText className="w-8 h-8 nb-icon-muted" />
           <span className="text-[11px] font-semibold nb-text-faint">Pitch deck</span>
         </div>
+      ) : pitch.plan_content?.image_url ? (
+        <img src={pitch.plan_content.image_url} alt="" className="w-full h-full object-cover" />
       ) : pitch.plan_content ? (
         <div className="nb-plan-cover w-full h-full flex flex-col items-center justify-center gap-2">
           <span className="nb-plan-emblem relative z-[1] w-14 h-14 rounded-full flex items-center justify-center">
@@ -1661,16 +1663,12 @@ const PitchFundingBar = ({ offer, compact = false }) => {
     return <p className={`text-xs nb-text-faint ${gap}`}>Share price isn't available right now.</p>;
   }
   const soldOut = offer.sharesAvailable <= 0;
-  const percentFunded = Math.min(100, Math.round((offer.sharesIssued / offer.totalShares) * 100));
+  // Visitors see the live price only -- how many shares are sold or left is
+  // not shown, apart from a "Fully subscribed" note when none can be bought.
   return (
-    <div className={gap}>
-      <div className="h-1.5 rounded-full nb-surface-alt overflow-hidden">
-        <div className="h-full nb-btn-primary" style={{ width: `${percentFunded}%` }} />
-      </div>
-      <div className={`flex items-center justify-between mt-1.5 ${compact ? 'text-[11px]' : 'text-xs'} nb-text-faint`}>
-        <span className="font-semibold nb-text">{formatUGX(offer.sharePriceUgx)} / share</span>
-        <span>{soldOut ? 'Fully subscribed' : `${offer.sharesAvailable.toLocaleString()} of ${offer.totalShares.toLocaleString()} shares left`}</span>
-      </div>
+    <div className={`${gap} flex items-center justify-between ${compact ? 'text-[11px]' : 'text-xs'} nb-text-faint`}>
+      <span className="font-semibold nb-text">{formatUGX(offer.sharePriceUgx)} / share</span>
+      {soldOut && <span>Fully subscribed</span>}
     </div>
   );
 };
@@ -2304,12 +2302,19 @@ const JobDetailModal = ({ job, onClose, onShare, viewerUser, onWantAccount }) =>
 // in). No signing/escrow logic is duplicated here.
 // The written plan as a classic document: key terms up top, then numbered
 // serif sections that rise in one after another.
-const PitchPlanDocument = ({ plan }) => {
+const PitchPlanDocument = ({ plan, offer }) => {
   const money = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  // Price and the amount sought come from the live share value when it is
+  // available; the typed dollar figures are only the fallback.
+  const live = offer?.available && Number(offer.sharePriceUgx) > 0 ? offer : null;
   const tiles = [
-    plan.total_value ? { label: 'Seeking', value: money(plan.total_value) } : null,
+    live && plan.shares
+      ? { label: 'Seeking', value: formatUGX(Number(plan.shares) * live.sharePriceUgx) }
+      : plan.total_value ? { label: 'Seeking', value: money(plan.total_value) } : null,
     plan.shares ? { label: 'Shares offered', value: Number(plan.shares).toLocaleString() } : null,
-    plan.share_price ? { label: 'Price per share', value: money(plan.share_price) } : null,
+    live
+      ? { label: 'Live price per share', value: formatUGX(live.sharePriceUgx) }
+      : plan.share_price ? { label: 'Price per share', value: money(plan.share_price) } : null,
   ].filter(Boolean);
   const sections = PITCH_PLAN_SECTIONS.filter(({ key }) => plan[key]);
   return (
@@ -2413,7 +2418,7 @@ const PitchDetailModal = ({ pitch, offer, onClose, onShare }) => {
         </a>
       )}
 
-      {pitch.plan_content && <PitchPlanDocument plan={pitch.plan_content} />}
+      {pitch.plan_content && <PitchPlanDocument plan={pitch.plan_content} offer={offer} />}
 
       <div className="mt-5 p-3.5 rounded-xl nb-surface-alt border nb-border">
         <p className="font-semibold nb-text mb-1 text-sm">The offer</p>
