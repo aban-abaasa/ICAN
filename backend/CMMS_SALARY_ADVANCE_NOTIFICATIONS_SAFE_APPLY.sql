@@ -1,45 +1,12 @@
 -- ============================================================================
--- !! DO NOT RE-RUN THIS WHOLE FILE ON A DATABASE THAT HAS ALREADY RUN
--- !! CMMS_SALARY_ADVANCE_REPAYMENT_PLAN.sql. Skip these two sections:
--- !!   * request_salary_advance(UUID, NUMERIC, TEXT, TEXT) - the 4-arg version
--- !!     here would become an extra overload beside the live 6-arg version
--- !!     (with installments / repayment note) and bypass the repayment plan.
--- !!   * pay_salary_advance - the live version already sends notifications.
--- !! CMMS_SALARY_ADVANCE_NOTIFICATIONS_SAFE_APPLY.sql applies everything else.
--- ============================================================================
--- ============================================================================
--- CMMS notification-center wiring for salary advances, requisitions ("needs"),
--- and reward points/redemptions.
--- Run after CMMS_SALARY_ADVANCE_REQUESTS.sql, CMMS_DEPARTMENT_INVENTORY_REQUISITIONS.sql,
--- CMMS_EMPLOYEE_REWARDS_POINTS.sql, and CMMS_TASK_PROGRESS_TRACKING_AND_NOTIFICATIONS.sql
--- (for fn_create_cmms_notification / the cmms_notifications table).
---
--- GAP THIS CLOSES: fn_assign_job / fn_update_job_assignment_status already
--- feed the bell-icon notification center (cmms_notifications), but three
--- other approval-shaped flows never did:
---   1. Salary advances (business_salary_advances) — an employee's request,
---      an approver's decision, payment, receipt confirmation, and
---      cancellation all happened silently; approvers had to go looking in
---      the Payroll tab for pending requests instead of being told.
---   2. Department requisitions ("needs" — cmms_requisitions) — submitting
---      one, moving it to finance review, and the final approve/reject never
---      notified anyone either.
---   3. Reward points redemptions (cmms_reward_redemptions) — an
---      auto-queued or admin-requested redemption, its payment, and its
---      cancellation never told the employee or an admin.
---
--- This migration redefines each of those functions (same signatures, so
--- existing grants are untouched) to additionally call
--- fn_create_cmms_notification — directly for a single recipient (the
--- employee, the requester, the payer), or through the new
--- cmms_notify_company_approvers helper below when the recipients are
--- "whoever can act on this" (admins, a payroll approver, a department
--- head, finance). fn_create_cmms_notification already swallows its own
--- errors (see CMMS_TASK_PROGRESS_TRACKING_AND_NOTIFICATIONS.sql), so none
--- of this can block the underlying request/decision/payment it rides on.
+-- CMMS notifications — safe apply for databases that already ran
+-- CMMS_SALARY_ADVANCE_REPAYMENT_PLAN.sql.
+-- Same as CMMS_SALARY_ADVANCE_REQUISITION_REWARDS_NOTIFICATIONS.sql but WITHOUT
+-- request_salary_advance (4-arg) and pay_salary_advance, so the live repayment-
+-- plan versions are left untouched. Fixes:
+--   function public.cmms_notify_company_approvers(...) does not exist
 -- ============================================================================
 
--- ============================================================
 -- 0. HELPER: notify every active company member who can act on an approval
 -- — company admins, plus (optionally) an explicit list of extra role names
 -- and/or anyone whose active role has a given tool_access permission.
@@ -89,79 +56,6 @@ $$;
 
 REVOKE ALL ON FUNCTION public.cmms_notify_company_approvers(UUID, TEXT[], VARCHAR, VARCHAR, TEXT, VARCHAR, VARCHAR, VARCHAR, TEXT, TEXT, UUID) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.cmms_notify_company_approvers(UUID, TEXT[], VARCHAR, VARCHAR, TEXT, VARCHAR, VARCHAR, VARCHAR, TEXT, TEXT, UUID) TO authenticated;
-
--- ============================================================
--- 1. SALARY ADVANCES
--- ============================================================
-
-CREATE OR REPLACE FUNCTION public.request_salary_advance(
-  p_cmms_company_id UUID,
-  p_amount NUMERIC,
-  p_currency TEXT DEFAULT NULL,
-  p_reason TEXT DEFAULT NULL
-)
-RETURNS UUID
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_company public.cmms_company_profiles;
-  v_currency TEXT;
-  v_advance_id UUID;
-  v_employee_name TEXT;
-  v_employee_cmms_id UUID;
-BEGIN
-  IF auth.uid() IS NULL THEN
-    RAISE EXCEPTION 'Sign in is required to request a salary advance';
-  END IF;
-
-  IF NOT public.cmms_active_staff(p_cmms_company_id) THEN
-    RAISE EXCEPTION 'You are not an active member of this company';
-  END IF;
-
-  IF p_amount IS NULL OR p_amount <= 0 THEN
-    RAISE EXCEPTION 'Enter an advance amount greater than zero';
-  END IF;
-
-  SELECT * INTO v_company FROM public.cmms_company_profiles WHERE id = p_cmms_company_id;
-  IF v_company.id IS NULL OR v_company.pichin_business_profile_id IS NULL THEN
-    RAISE EXCEPTION 'Link this CMMS company to its Pichin business profile before requesting a salary advance';
-  END IF;
-
-  v_currency := COALESCE(NULLIF(TRIM(p_currency), ''), (
-    SELECT currency FROM public.business_compensation_profiles
-    WHERE business_profile_id = v_company.pichin_business_profile_id
-      AND employee_user_id = auth.uid()
-      AND payroll_status = 'on_pay'
-    ORDER BY effective_from DESC LIMIT 1
-  ), 'UGX');
-
-  BEGIN
-    INSERT INTO public.business_salary_advances (
-      business_profile_id, cmms_company_id, employee_user_id, amount, currency, reason
-    ) VALUES (
-      v_company.pichin_business_profile_id, p_cmms_company_id, auth.uid(), p_amount, v_currency, NULLIF(TRIM(p_reason), '')
-    ) RETURNING id INTO v_advance_id;
-  EXCEPTION WHEN unique_violation THEN
-    RAISE EXCEPTION 'You already have an outstanding salary advance request. Wait for it to be resolved before requesting another.';
-  END;
-
-  SELECT id, COALESCE(full_name, user_name) INTO v_employee_cmms_id, v_employee_name
-    FROM public.cmms_users
-   WHERE cmms_company_id = p_cmms_company_id AND is_active
-     AND lower(email) = lower(auth.jwt() ->> 'email')
-   LIMIT 1;
-
-  PERFORM public.cmms_notify_company_approvers(
-    p_cmms_company_id, NULL, 'salary_advance_requested', 'Salary Advance Request',
-    format('%s requested a %s %s salary advance awaiting your approval.', COALESCE(v_employee_name, 'An employee'), v_currency, p_amount),
-    '💰', 'payroll', 'Review', 'payroll', 'approve', v_employee_cmms_id
-  );
-
-  RETURN v_advance_id;
-END;
-$$;
 
 CREATE OR REPLACE FUNCTION public.decide_salary_advance(
   p_advance_id UUID,
@@ -213,52 +107,6 @@ BEGIN
   );
 END;
 $$;
-
-CREATE OR REPLACE FUNCTION public.pay_salary_advance(
-  p_advance_id UUID,
-  p_payment_method TEXT,
-  p_wallet_transaction_id UUID DEFAULT NULL
-)
-RETURNS VOID
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_advance public.business_salary_advances;
-  v_employee_cmms_id UUID;
-BEGIN
-  IF p_payment_method NOT IN ('cash', 'ican') THEN
-    RAISE EXCEPTION 'Payment method must be cash or ican';
-  END IF;
-
-  SELECT * INTO v_advance FROM public.business_salary_advances WHERE id = p_advance_id FOR UPDATE;
-  IF v_advance.id IS NULL THEN RAISE EXCEPTION 'Salary advance request not found'; END IF;
-  IF v_advance.status <> 'approved' THEN RAISE EXCEPTION 'Only an approved advance can be paid'; END IF;
-
-  IF NOT public.cmms_can_manage_salary_advances(v_advance.cmms_company_id) THEN
-    RAISE EXCEPTION 'You do not have permission to pay salary advances for this company';
-  END IF;
-
-  UPDATE public.business_salary_advances
-  SET status = 'paid', payment_method = p_payment_method, wallet_transaction_id = p_wallet_transaction_id,
-      paid_by = auth.uid(), paid_at = now(), updated_at = now()
-  WHERE id = p_advance_id;
-
-  SELECT id INTO v_employee_cmms_id
-    FROM public.cmms_users
-   WHERE cmms_company_id = v_advance.cmms_company_id AND ican_user_id = v_advance.employee_user_id
-   LIMIT 1;
-
-  PERFORM public.fn_create_cmms_notification(
-    v_employee_cmms_id, v_advance.cmms_company_id, 'salary_advance_paid', 'Salary Advance Paid',
-    format('Your %s %s salary advance was paid via %s.', v_advance.currency, v_advance.amount,
-      CASE WHEN p_payment_method = 'ican' THEN 'IcanEra wallet' ELSE 'cash' END),
-    '💸', 'payroll', 'Confirm Receipt'
-  );
-END;
-$$;
-
 CREATE OR REPLACE FUNCTION public.confirm_salary_advance_received(p_advance_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
