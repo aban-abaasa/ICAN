@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Lock, Clock, CheckCircle, XCircle, AlertCircle, Mail } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase/client';
+import { getBackendUrl } from '../lib/backendUrl';
 
 /**
  * 🔐 PIN RECOVERY MODAL
@@ -216,15 +217,23 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
       redirectTo.searchParams.set('accountType', accountType);
       redirectTo.searchParams.set('flow', 'pin');
       if (accountType === 'business' && businessAccountId) redirectTo.searchParams.set('accountId', businessAccountId);
-      // Sent by Supabase Auth's own mailer (no edge function). The link lands
-      // on /reset-password?flow=pin, which opens ResetPinPage; the
-      // reset_wallet_pin_from_recovery RPC checks the signed-in user owns the
-      // chosen account before changing its PIN.
-      if (!userEmail) throw new Error('No email on file for this account.');
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(userEmail, {
-        redirectTo: redirectTo.toString(),
+      // Sent through Resend by the /api/email/request-pin-reset Vercel
+      // function, which checks the signed-in user owns the chosen account.
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) throw new Error('Your session expired — please sign in again.');
+
+      const response = await fetch(`${getBackendUrl()}/api/email/request-pin-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          accountType,
+          ...(accountType === 'business' && businessAccountId ? { accountId: businessAccountId } : {}),
+          redirectTo: redirectTo.toString()
+        })
       });
-      if (resetError) throw resetError;
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) throw new Error(result.message || 'Failed to send reset link');
 
       setEmailSentTo(userEmail);
       setStep('email_sent');
