@@ -22,7 +22,8 @@ const FX_API_URL = 'https://open.er-api.com/v6/latest/USD';
 // Google Finance access and is delayed up to ~20 min, but that is far fresher
 // than the daily open.er-api.com feed. Sheet values override the daily feed
 // per currency; anything missing/invalid falls back to it.
-const GOOGLE_SHEET_FX_CSV_URL = process.env.GOOGLE_SHEET_FX_CSV_URL;
+const GOOGLE_SHEET_FX_CSV_URL = process.env.GOOGLE_SHEET_FX_CSV_URL ||
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vSpFRW0csXSByWiRw36lNsADXR5kOMXXnYnL7s2W1M8pPB-lhUHf3_TG2dL0mR60QUZJtiE1GlW7GC-/pub?gid=0&single=true&output=csv';
 
 async function fetchGoogleSheetRates() {
   if (!GOOGLE_SHEET_FX_CSV_URL) return {};
