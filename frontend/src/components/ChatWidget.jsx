@@ -1815,6 +1815,18 @@ const ChatWidget = ({ hasBottomNav = false }) => {
         className={`relative flex h-14 w-14 touch-none items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-600 to-slate-800 text-white shadow-2xl transition hover:scale-105 ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         title="Chat with us"
       >
+        <style>{`
+          @keyframes ican-chat-ring-spin { to { transform: rotate(360deg); } }
+          @keyframes ican-chat-ring-hue { to { filter: hue-rotate(360deg); } }
+          .ican-chat-ring {
+            background: conic-gradient(from 0deg, #f43f5e, #f59e0b, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f43f5e);
+            -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+            animation: ican-chat-ring-spin 3s linear infinite, ican-chat-ring-hue 6s linear infinite;
+          }
+          @media (prefers-reduced-motion: reduce) { .ican-chat-ring { animation: none; } }
+        `}</style>
+        <span aria-hidden="true" className="ican-chat-ring pointer-events-none absolute -inset-[4px] rounded-full" />
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
         <GripVertical className="pointer-events-none absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full bg-slate-900/50 p-0.5 text-white/80" />
         {!open && supportUnread && (
