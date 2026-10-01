@@ -1158,7 +1158,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
       {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
     <div className="fixed z-[999]" style={fullScreen ? undefined : { left: position.left, top: position.top }}>
       <style>{`
-          .ican-classic-chat { background: #fffdf8; border-color: rgba(196,160,82,.55); color: #1e293b; box-shadow: 0 24px 48px -20px rgba(122,90,18,.45); }
+          .ican-classic-chat { animation: ican-pop .22s ease both; background: #fffdf8; border-color: rgba(196,160,82,.55); color: #1e293b; box-shadow: 0 24px 48px -20px rgba(122,90,18,.45); }
           .ican-classic-head { background: linear-gradient(180deg, #fffdf8, #f6ecd2); border-bottom: 1px solid rgba(196,160,82,.55); color: #5c430d; position: relative; }
           .ican-classic-head::after { content: ''; position: absolute; left: 50%; bottom: -4px; width: 7px; height: 7px; background: #c4a052; transform: translateX(-50%) rotate(45deg); box-shadow: 0 0 0 3px #fffdf8; z-index: 2; }
           .ican-classic-head button, .ican-classic-head button svg { color: #7a5a12 !important; }
@@ -1199,6 +1199,8 @@ const ChatWidget = ({ hasBottomNav = false }) => {
           .ican-classic-chat .uppercase { font-family: "Playfair Display", Georgia, serif; letter-spacing: .14em; }
           .ican-classic-chat textarea, .ican-classic-chat input { font-family: Georgia, "Times New Roman", serif; }
           .ican-classic-chat .overflow-y-auto > * { animation: ican-rise .35s ease both; }
+          @keyframes ican-pop { from { opacity: 0; scale: .96; } to { opacity: 1; scale: 1; } }
+          @media (prefers-reduced-motion: reduce) { .ican-classic-chat { animation: none; } }
           @keyframes ican-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
           @media (prefers-reduced-motion: reduce) { .ican-classic-chat .overflow-y-auto > * { animation: none; } }
           .ican-classic-chat.is-dark .bg-white, .ican-classic-chat.is-dark .bg-slate-50 { background-color: #131c30 !important; }
@@ -1207,6 +1209,13 @@ const ChatWidget = ({ hasBottomNav = false }) => {
           .ican-classic-chat.is-dark [class*="text-indigo-"] { color: #e6c980 !important; }
           .ican-classic-chat.is-dark .bg-gradient-to-br, .ican-classic-chat.is-dark .bg-gradient-to-r { color: #1e1b0f; }
       `}</style>
+      {open && !fullScreen && (
+        <div
+          aria-hidden="true"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 bg-[#2b2210]/40 backdrop-blur-[2px]"
+        />
+      )}
       {open && (
         <div
           className={`${fullScreen ? 'fixed inset-0 h-[100dvh] w-full rounded-none' : 'fixed left-1/2 top-1/2 h-[min(28rem,calc(100dvh-2rem))] w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-[18px]'} ican-classic-chat ${dark ? 'is-dark' : ''} flex flex-col overflow-hidden border shadow-2xl`}

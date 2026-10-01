@@ -384,6 +384,7 @@ const App = () => {
       <ErrorBoundary>
         <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <ResetPinPage onDone={handlePinResetDone} />
+        <ChatWidget />
       </ErrorBoundary>
     );
   }
@@ -396,6 +397,7 @@ const App = () => {
           initialView="reset-password"
           onRecoveryHandled={handleRecoveryHandled}
         />
+        <ChatWidget />
       </ErrorBoundary>
     );
   }
@@ -405,6 +407,7 @@ const App = () => {
       <ErrorBoundary>
         <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <ConfirmDeleteAccountPage onDone={handleConfirmDeleteAccountDone} />
+        <ChatWidget />
       </ErrorBoundary>
     );
   }
@@ -414,6 +417,7 @@ const App = () => {
       <ErrorBoundary>
         <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <PricingPage onBack={handlePricingBack} onGetStarted={handlePricingGetStarted} />
+        <ChatWidget />
       </ErrorBoundary>
     );
   }
@@ -423,6 +427,7 @@ const App = () => {
       <ErrorBoundary>
         <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <ContractPage onBack={handleContractBack} />
+        <ChatWidget />
       </ErrorBoundary>
     );
   }
@@ -432,6 +437,7 @@ const App = () => {
       <ErrorBoundary>
         <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <BillingPage onBack={handleBillingBack} />
+        <ChatWidget />
       </ErrorBoundary>
     );
   }
