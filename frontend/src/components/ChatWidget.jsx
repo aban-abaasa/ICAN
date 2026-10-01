@@ -1157,16 +1157,74 @@ const ChatWidget = ({ hasBottomNav = false }) => {
       )}
       {lightboxSrc && <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
     <div className="fixed z-[999]" style={fullScreen ? undefined : { left: position.left, top: position.top }}>
+      <style>{`
+          .ican-classic-chat { animation: ican-pop .22s ease both; background: #fffdf8; border-color: rgba(196,160,82,.55); color: #1e293b; box-shadow: 0 24px 48px -20px rgba(122,90,18,.45); }
+          .ican-classic-head { background: linear-gradient(180deg, #fffdf8, #f6ecd2); border-bottom: 1px solid rgba(196,160,82,.55); color: #5c430d; position: relative; }
+          .ican-classic-head::after { content: ''; position: absolute; left: 50%; bottom: -4px; width: 7px; height: 7px; background: #c4a052; transform: translateX(-50%) rotate(45deg); box-shadow: 0 0 0 3px #fffdf8; z-index: 2; }
+          .ican-classic-head button, .ican-classic-head button svg { color: #7a5a12 !important; }
+          .ican-classic-head button:hover { background: rgba(196,160,82,.18) !important; }
+          .ican-title { font-family: "Playfair Display", Georgia, "Times New Roman", serif; font-weight: 700; font-size: .95rem; color: #1e293b; }
+          .ican-sub { font-size: .68rem; color: #8a6a1f; letter-spacing: .02em; }
+          .ican-medallion { display: grid; place-items: center; flex: none; width: 2.1rem; height: 2.1rem; border-radius: 999px; background: radial-gradient(circle at 30% 28%, #fff, #f1e2b8); border: 1px solid rgba(184,137,43,.55); box-shadow: inset 0 0 0 3px #fff, 0 4px 10px -6px #b8892b; }
+          .ican-medallion svg { color: #b8892b; }
+          .ican-tabs { background: #fbf5e4; border-bottom: 1px solid rgba(196,160,82,.35); padding-top: .65rem; }
+          .ican-ctab { border-radius: 999px; border: 1px solid rgba(196,160,82,.4); background: #fffdf8; color: #7a5a12; font-weight: 700; transition: background-color .15s ease, box-shadow .15s ease; }
+          .ican-ctab:hover { background: rgba(196,160,82,.14); }
+          .ican-ctab.is-active { background: linear-gradient(135deg, #d9b765, #b8892b); border-color: #b8892b; color: #fff; box-shadow: 0 6px 14px -8px #b8892b; }
+          .ican-body { background: #fffdf8; }
+          .ican-fab { background: radial-gradient(circle at 30% 28%, #fffaf0, #e8d49a 70%, #c4a052); color: #7a5a12; border: 1px solid #b8892b; box-shadow: inset 0 0 0 3px #fffdf8, 0 10px 24px -8px rgba(122,90,18,.6); }
+          .ican-classic-chat.is-dark { background: #0f172a; border-color: rgba(196,160,82,.4); color: #e2e8f0; }
+          .is-dark .ican-classic-head { background: linear-gradient(180deg, #1e293b, #0f172a); color: #e6c980; border-bottom-color: rgba(196,160,82,.4); }
+          .is-dark .ican-classic-head::after { box-shadow: 0 0 0 3px #0f172a; }
+          .is-dark .ican-classic-head button, .is-dark .ican-classic-head button svg { color: #e6c980 !important; }
+          .is-dark .ican-title { color: #f8fafc; }
+          .is-dark .ican-sub { color: #e6c980; }
+          .is-dark .ican-medallion { background: radial-gradient(circle at 30% 28%, #334155, #1e293b); box-shadow: inset 0 0 0 3px #0f172a; }
+          .is-dark .ican-tabs { background: #0f172a; border-bottom-color: rgba(196,160,82,.3); }
+          .is-dark .ican-ctab { background: transparent; color: #e6c980; }
+          .is-dark .ican-ctab.is-active { color: #1e1b0f; }
+          .is-dark .ican-body { background: #0b1220; }
+          /* classic treatment for every message page (support, community, CMMS, trust, threads, composer) */
+          .ican-classic-chat .bg-gradient-to-br, .ican-classic-chat .bg-gradient-to-r { background-image: linear-gradient(135deg, #d9b765, #b8892b) !important; color: #fff; box-shadow: 0 6px 14px -8px #b8892b; }
+          .ican-classic-chat .bg-white { background-color: #fffdf8 !important; }
+          .ican-classic-chat .bg-slate-50 { background-color: #fbf5e4 !important; }
+          .ican-classic-chat .border-slate-200, .ican-classic-chat [class*="border-slate-700"] { border-color: rgba(196,160,82,.4) !important; }
+          .ican-classic-chat .text-slate-800 { color: #2b2210 !important; }
+          .ican-classic-chat .text-slate-400, .ican-classic-chat .text-slate-500 { color: #8a7a52 !important; }
+          .ican-classic-chat [class*="text-indigo-"] { color: #8a6a1f !important; }
+          .ican-classic-chat .bg-indigo-500\\/10 { background-color: rgba(196,160,82,.18) !important; }
+          .ican-classic-chat [class*="focus:border-indigo-500"]:focus { border-color: #b8892b !important; box-shadow: 0 0 0 3px rgba(196,160,82,.2); }
+          .ican-classic-chat .hover\\:bg-slate-100:hover, .ican-classic-chat .hover\\:bg-slate-50:hover { background-color: rgba(196,160,82,.14) !important; }
+          .ican-classic-chat .rounded-xl.border, .ican-classic-chat .rounded-lg.border { border-radius: 14px; }
+          .ican-classic-chat .uppercase { font-family: "Playfair Display", Georgia, serif; letter-spacing: .14em; }
+          .ican-classic-chat textarea, .ican-classic-chat input { font-family: Georgia, "Times New Roman", serif; }
+          .ican-classic-chat .overflow-y-auto > * { animation: ican-rise .35s ease both; }
+          @keyframes ican-pop { from { opacity: 0; scale: .96; } to { opacity: 1; scale: 1; } }
+          @media (prefers-reduced-motion: reduce) { .ican-classic-chat { animation: none; } }
+          @keyframes ican-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+          @media (prefers-reduced-motion: reduce) { .ican-classic-chat .overflow-y-auto > * { animation: none; } }
+          .ican-classic-chat.is-dark .bg-white, .ican-classic-chat.is-dark .bg-slate-50 { background-color: #131c30 !important; }
+          .ican-classic-chat.is-dark .text-slate-800, .ican-classic-chat.is-dark .text-slate-100 { color: #f1e9d2 !important; }
+          .ican-classic-chat.is-dark .text-slate-400, .ican-classic-chat.is-dark .text-slate-500, .ican-classic-chat.is-dark .text-slate-300 { color: #b9a877 !important; }
+          .ican-classic-chat.is-dark [class*="text-indigo-"] { color: #e6c980 !important; }
+          .ican-classic-chat.is-dark .bg-gradient-to-br, .ican-classic-chat.is-dark .bg-gradient-to-r { color: #1e1b0f; }
+      `}</style>
+      {open && !fullScreen && (
+        <div
+          aria-hidden="true"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 bg-[#2b2210]/40 backdrop-blur-[2px]"
+        />
+      )}
       {open && (
         <div
-          className={`${fullScreen ? 'fixed inset-0 h-[100dvh] w-full rounded-none' : 'fixed left-1/2 top-1/2 h-[min(28rem,calc(100dvh-2rem))] w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl'} flex flex-col overflow-hidden border shadow-2xl ${
-            dark ? 'border-slate-700/50 bg-slate-950' : 'border-slate-200 bg-white'
-          }`}
+          className={`${fullScreen ? 'fixed inset-0 h-[100dvh] w-full rounded-none' : 'fixed left-1/2 top-1/2 h-[min(28rem,calc(100dvh-2rem))] w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-[18px]'} ican-classic-chat ${dark ? 'is-dark' : ''} flex flex-col overflow-hidden border shadow-2xl`}
         >
-          <div className={`flex items-center justify-between bg-gradient-to-r ${channel === 'trust' ? 'from-amber-500 via-orange-600 to-slate-800' : 'from-indigo-500 via-purple-600 to-slate-800'} px-4 text-white ${channel === 'cmms' || channel === 'trust' ? 'py-2' : 'py-3'}`}>
-            <div>
-              <p className="text-sm font-semibold">{channel === 'community' ? 'Community' : channel === 'cmms' ? 'CMMS' : channel === 'trust' ? (trustGroupName || 'Trust & SACCO') : 'IcanEra Support'}</p>
-              {channel !== 'cmms' && channel !== 'trust' && <p className="text-[11px] text-white/80">
+          <div className={`ican-classic-head flex items-center justify-between gap-2 px-4 ${channel === 'cmms' || channel === 'trust' ? 'py-2' : 'py-3'}`}>
+            <span className="ican-medallion" aria-hidden="true">{channel === 'trust' ? <Shield className="h-4 w-4" /> : channel === 'cmms' ? <Briefcase className="h-4 w-4" /> : channel === 'community' ? <Globe className="h-4 w-4" /> : <Headphones className="h-4 w-4" />}</span>
+            <div className="min-w-0 flex-1">
+              <p className="ican-title truncate">{channel === 'community' ? 'Community' : channel === 'cmms' ? 'CMMS' : channel === 'trust' ? (trustGroupName || 'Trust & SACCO') : 'IcanEra Support'}</p>
+              {channel !== 'cmms' && channel !== 'trust' && <p className="ican-sub">
                 {channel === 'community' ? 'Public Q&A — everyone can read this' : 'We usually reply within a few minutes'}
               </p>}
             </div>
@@ -1199,13 +1257,13 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             />
           )}
 
-          <div className={`flex gap-1 border-b px-3 py-2 ${dark ? 'border-slate-700/50 bg-slate-950' : 'border-slate-200 bg-slate-50'}`}>
+          <div className="ican-tabs flex gap-1.5 px-3 py-2">
             <button
               onClick={() => handleSwitchChannel('support')}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition ${
+              className={`ican-ctab flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 text-xs ${
                 channel === 'support'
-                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white'
-                  : dark ? 'text-slate-400 hover:bg-white/5' : 'text-slate-500 hover:bg-slate-100'
+                  ? 'is-active'
+                  : ''
               }`}
             >
               <Headphones className="h-3.5 w-3.5" /> Support
@@ -1213,10 +1271,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             </button>
             <button
               onClick={() => handleSwitchChannel('community')}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition ${
+              className={`ican-ctab flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 text-xs ${
                 channel === 'community'
-                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white'
-                  : dark ? 'text-slate-400 hover:bg-white/5' : 'text-slate-500 hover:bg-slate-100'
+                  ? 'is-active'
+                  : ''
               }`}
             >
               <Globe className="h-3.5 w-3.5" /> Community
@@ -1225,10 +1283,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             {hasCmmsAccess && (
               <button
                 onClick={() => handleSwitchChannel('cmms')}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition ${
+                className={`ican-ctab flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 text-xs ${
                   channel === 'cmms'
-                    ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white'
-                    : dark ? 'text-slate-400 hover:bg-white/5' : 'text-slate-500 hover:bg-slate-100'
+                    ? 'is-active'
+                    : ''
                 }`}
               >
                 <Briefcase className="h-3.5 w-3.5" /> CMMS
@@ -1238,10 +1296,10 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             {hasTrustAccess && (
               <button
                 onClick={() => handleSwitchChannel('trust')}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition ${
+                className={`ican-ctab flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 text-xs ${
                   channel === 'trust'
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white'
-                    : dark ? 'text-slate-400 hover:bg-white/5' : 'text-slate-500 hover:bg-slate-100'
+                    ? 'is-active'
+                    : ''
                 }`}
               >
                 <Shield className="h-3.5 w-3.5" /> Trust
@@ -1250,7 +1308,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             )}
           </div>
 
-          <div ref={scrollRef} onScroll={handleListScroll} className={`flex-1 space-y-2 overflow-y-auto px-3 py-3 ${dark ? 'bg-slate-950' : 'bg-slate-50'}`}>
+          <div ref={scrollRef} onScroll={handleListScroll} className="ican-body flex-1 space-y-2 overflow-y-auto px-3 py-3">
             {channel === 'cmms' ? (
               cmmsLoading && cmmsMessages.length === 0 && cmmsTasks.length === 0 && cmmsRecipients.length === 0 ? (
                 <p className={`mt-6 text-center text-xs ${dark ? 'text-slate-500' : 'text-slate-400'}`}>Loading your CMMS work feed...</p>
@@ -1812,19 +1870,20 @@ const ChatWidget = ({ hasBottomNav = false }) => {
           if (dragMovedRef.current) { dragMovedRef.current = false; return; }
           if (!dragRef.current && !dragging) (open ? setOpen(false) : handleOpen());
         }}
-        className={`relative flex h-14 w-14 touch-none items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 via-purple-600 to-slate-800 text-white shadow-2xl transition hover:scale-105 ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={`ican-fab relative flex h-14 w-14 touch-none items-center justify-center rounded-full shadow-2xl transition hover:scale-105 ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         title="Chat with us"
       >
         <style>{`
           @keyframes ican-chat-ring-spin { to { transform: rotate(360deg); } }
           @keyframes ican-chat-ring-hue { to { filter: hue-rotate(360deg); } }
           .ican-chat-ring {
-            background: conic-gradient(from 0deg, #f43f5e, #f59e0b, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f43f5e);
+            background: conic-gradient(from 0deg, #8a6a1f, #e6c980, #c4a052, #fff3c4, #b8892b, #e6c980, #8a6a1f);
             -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
             mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
             animation: ican-chat-ring-spin 3s linear infinite, ican-chat-ring-hue 6s linear infinite;
           }
           @media (prefers-reduced-motion: reduce) { .ican-chat-ring { animation: none; } }
+
         `}</style>
         <span aria-hidden="true" className="ican-chat-ring pointer-events-none absolute -inset-[4px] rounded-full" />
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
