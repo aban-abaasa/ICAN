@@ -1184,6 +1184,28 @@ const ChatWidget = ({ hasBottomNav = false }) => {
           .is-dark .ican-ctab { background: transparent; color: #e6c980; }
           .is-dark .ican-ctab.is-active { color: #1e1b0f; }
           .is-dark .ican-body { background: #0b1220; }
+          /* classic treatment for every message page (support, community, CMMS, trust, threads, composer) */
+          .ican-classic-chat .bg-gradient-to-br, .ican-classic-chat .bg-gradient-to-r { background-image: linear-gradient(135deg, #d9b765, #b8892b) !important; color: #fff; box-shadow: 0 6px 14px -8px #b8892b; }
+          .ican-classic-chat .bg-white { background-color: #fffdf8 !important; }
+          .ican-classic-chat .bg-slate-50 { background-color: #fbf5e4 !important; }
+          .ican-classic-chat .border-slate-200, .ican-classic-chat [class*="border-slate-700"] { border-color: rgba(196,160,82,.4) !important; }
+          .ican-classic-chat .text-slate-800 { color: #2b2210 !important; }
+          .ican-classic-chat .text-slate-400, .ican-classic-chat .text-slate-500 { color: #8a7a52 !important; }
+          .ican-classic-chat [class*="text-indigo-"] { color: #8a6a1f !important; }
+          .ican-classic-chat .bg-indigo-500\/10 { background-color: rgba(196,160,82,.18) !important; }
+          .ican-classic-chat [class*="focus:border-indigo-500"]:focus { border-color: #b8892b !important; box-shadow: 0 0 0 3px rgba(196,160,82,.2); }
+          .ican-classic-chat .hover\:bg-slate-100:hover, .ican-classic-chat .hover\:bg-slate-50:hover { background-color: rgba(196,160,82,.14) !important; }
+          .ican-classic-chat .rounded-xl.border, .ican-classic-chat .rounded-lg.border { border-radius: 14px; }
+          .ican-classic-chat .uppercase { font-family: "Playfair Display", Georgia, serif; letter-spacing: .14em; }
+          .ican-classic-chat textarea, .ican-classic-chat input { font-family: Georgia, "Times New Roman", serif; }
+          .ican-classic-chat .overflow-y-auto > * { animation: ican-rise .35s ease both; }
+          @keyframes ican-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+          @media (prefers-reduced-motion: reduce) { .ican-classic-chat .overflow-y-auto > * { animation: none; } }
+          .ican-classic-chat.is-dark .bg-white, .ican-classic-chat.is-dark .bg-slate-50 { background-color: #131c30 !important; }
+          .ican-classic-chat.is-dark .text-slate-800, .ican-classic-chat.is-dark .text-slate-100 { color: #f1e9d2 !important; }
+          .ican-classic-chat.is-dark .text-slate-400, .ican-classic-chat.is-dark .text-slate-500, .ican-classic-chat.is-dark .text-slate-300 { color: #b9a877 !important; }
+          .ican-classic-chat.is-dark [class*="text-indigo-"] { color: #e6c980 !important; }
+          .ican-classic-chat.is-dark .bg-gradient-to-br, .ican-classic-chat.is-dark .bg-gradient-to-r { color: #1e1b0f; }
       `}</style>
       {open && (
         <div
