@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, Users, MapPin, AlertTriangle, CheckCircle, LogOut, RefreshCw, AlertCircle, Mail, Download, Car, ChevronDown, ChevronUp, Star } from 'lucide-react';
+import { ArrowLeft, Calendar, Info, Maximize2, Search, QrCode, Users, MapPin, AlertTriangle, CheckCircle, LogOut, RefreshCw, AlertCircle, Mail, Download, Car, ChevronDown, ChevronUp, Star } from 'lucide-react';
 import jsQR from 'jsqr';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
@@ -7,6 +7,11 @@ import { publicAppUrl } from '../utils/publicAppUrl';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadCmmsRecordsExcel, downloadCmmsRecordsPdf } from '../utils/cmmsRecordExports';
 import { getDepartmentVisitorRatings, getStaffVisitorRatings } from '../services/businessManagementService';
+
+// 16px text stops iOS zooming into the field; 44px height is a comfortable tap target on small phones.
+const VISITOR_FIELD = 'w-full h-11 px-3 text-base bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:border-blue-400 transition-all';
+const VISITOR_TAB_ACCENTS = { 'visitor-checkin': 'gold', 'visitor-records': 'navy', 'visitor-edit': 'burgundy', 'visitor-ratings': 'plum' };
+const STATUS_LABELS = { '': 'All visitors', checked_in: 'Checked in', checked_out: 'Checked out', flagged_for_review: 'Flagged' };
 
 const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator }) => {
   const videoRef = useRef(null);
@@ -26,7 +31,13 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
   const [userLocation, setUserLocation] = useState(null);
   const [visitorRecords, setVisitorRecords] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterStatus, setFilterStatus] = useState('');
+  const [fullPage, setFullPage] = useState(false);
+  const [headerInfo, setHeaderInfo] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [moreOpen, setMoreOpen] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [scanMode, setScanMode] = useState('location'); // location, email
   const [scannedVisitor, setScannedVisitor] = useState(null);
@@ -87,10 +98,15 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
     }
   }, [companyProfile?.id, companyProfile?.location]);
 
+  // A QR scan can fill host/purpose; never leave those hidden in a folded section.
+  useEffect(() => {
+    if (hostEmail || purpose || vehicleNumber || visitorEmail) setMoreOpen(true);
+  }, [hostEmail, purpose, vehicleNumber, visitorEmail]);
+
   // Load visitor records
   useEffect(() => {
     if (canViewVisitorRecords) loadVisitorRecords();
-  }, [selectedDate, filterStatus, canViewVisitorRecords]);
+  }, [selectedDate, endDate, filterStatus, canViewVisitorRecords]);
 
   // Ratings a visitor optionally left at check-out (backend/
   // CMMS_VISITOR_RATINGS_AND_STAFF_POINTS.sql) — a positive staff rating
@@ -129,7 +145,7 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
       const { data, error: recordsError } = await supabase.rpc('get_visitor_records', {
         p_cmms_company_id: companyProfile.id,
         p_start_date: selectedDate,
-        p_end_date: selectedDate,
+        p_end_date: endDate || selectedDate,
         p_status: filterStatus || null
       });
 
@@ -340,11 +356,11 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
   ];
 
   const exportVisitors = async (format) => {
-    if (!visitorRecords.length) return setError('No visitor records to export');
-    const filename = `visitor-records-${selectedDate}`;
+    if (!shownVisitors.length) return setError('No visitor records to export');
+    const filename = `visitor-records-${selectedDate}${endDate !== selectedDate ? `-to-${endDate}` : ''}`;
     try {
-      if (format === 'excel') await downloadCmmsRecordsExcel({ filename, sheetName: 'Visitors', columns: visitorColumns, rows: visitorRecords });
-      else await downloadCmmsRecordsPdf({ filename, title: 'Visitor Records Report', subtitle: `${companyProfile?.company_name || 'CMMS'} • ${selectedDate}`, columns: visitorColumns, rows: visitorRecords });
+      if (format === 'excel') await downloadCmmsRecordsExcel({ filename, sheetName: 'Visitors', columns: visitorColumns, rows: shownVisitors });
+      else await downloadCmmsRecordsPdf({ filename, title: 'Visitor Records Report', subtitle: `${companyProfile?.company_name || 'CMMS'} • ${selectedDate}${endDate !== selectedDate ? ` to ${endDate}` : ''}`, columns: visitorColumns, rows: shownVisitors });
     } catch (exportError) {
       console.error('Visitor export error:', exportError);
       setError(`Unable to download ${format.toUpperCase()}. Please try again.`);
@@ -408,60 +424,80 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
     }
   };
 
+  const todayIso = new Date().toISOString().split('T')[0];
+  const fmtDay = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+  const setRangeDays = (days) => {
+    const start = new Date();
+    start.setDate(start.getDate() - (days - 1));
+    setSelectedDate(start.toISOString().split('T')[0]);
+    setEndDate(todayIso);
+  };
+
+  // Smart search: name, email, phone, host, purpose, vehicle, location, and
+  // any date/time text of the visit (e.g. "2026-09-15", "15 sep", "monday",
+  // "08:1").
+  const searchQuery = searchTerm.trim().toLowerCase();
+  const visitSearchText = (record) => {
+    const d = new Date(record.check_in_time);
+    const out = record.check_out_time ? new Date(record.check_out_time) : null;
+    return [
+      record.visitor_name, record.visitor_email, record.visitor_phone, record.host_name, record.host_email,
+      record.purpose, record.vehicle_number, record.check_in_location,
+      record.check_in_time?.slice(0, 10), d.toLocaleDateString(), d.toLocaleTimeString(),
+      d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+      d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      out ? out.toLocaleTimeString() : ''
+    ].filter(Boolean).join(' ').toLowerCase();
+  };
+  const shownVisitors = visitorRecords
+    .filter((record) => !searchQuery || visitSearchText(record).includes(searchQuery))
+    .slice()
+    .sort((a, b) => new Date(b.check_in_time) - new Date(a.check_in_time));
+
   return (
-    <div className="space-y-6">
-      {/* Visitor Management Sub-Tabs */}
-      <div className="flex flex-wrap gap-2 pb-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
-        <button
-          onClick={() => setActiveSubTab('visitor-checkin')}
-          className={`px-4 py-2 text-sm ${
-            activeSubTab === 'visitor-checkin'
-              ? 'cmms-classic-btn-primary'
-              : 'cmms-classic-btn-secondary'
-          }`}
-        >
-          <Users className="inline w-4 h-4 mr-2" />
-          Register Visitor
-        </button>
-        {canViewVisitorRecords && (
-          <button
-            onClick={() => setActiveSubTab('visitor-records')}
-            className={`px-4 py-2 text-sm ${
-              activeSubTab === 'visitor-records'
-                ? 'cmms-classic-btn-primary'
-                : 'cmms-classic-btn-secondary'
-            }`}
-          >
-            <Users className="inline w-4 h-4 mr-2" />
-            Visitor Records
+    <div className={fullPage ? 'cmms-fullpage space-y-5 fixed inset-0 z-50 overflow-y-auto p-4 md:p-8' : 'space-y-5 cmms-classic-card p-4 md:p-6'}>
+      {/* Header: slim row, (i) for the explanation, pill tabs like Payroll */}
+      <div className="cmms-accent-gold space-y-2.5">
+        <div className="flex items-center gap-3">
+          <span className="cmms-medallion"><Users className="h-4 w-4" aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="cmms-classic-heading text-lg leading-tight">Visitor Management</h2>
+            {companyProfile?.company_name && <p className="truncate text-xs cmms-classic-muted">{companyProfile.company_name}</p>}
+          </div>
+          <button type="button" onClick={() => setHeaderInfo(v => !v)} aria-expanded={headerInfo} aria-label="About this page" title="What is this page?" className="cmms-info-btn">
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
+          {fullPage
+            ? <button type="button" onClick={() => setFullPage(false)} className="cmms-classic-btn-secondary inline-flex !h-auto !min-h-0 flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs"><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back</button>
+            : <button type="button" onClick={() => setFullPage(true)} className="cmms-info-btn" title="Open this tab as a full page" aria-label="Open full page"><Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /></button>}
+        </div>
+        {visitorRecords.some(r => r.status === 'checked_in') && canViewVisitorRecords && (
+          <div className="flex flex-wrap gap-1.5">
+            <span className="cmms-classic-chip" style={{ animation: 'cmms-rise .45s ease both' }}>{visitorRecords.filter(r => r.status === 'checked_in').length} visitors on site</span>
+          </div>
         )}
-        {canViewVisitorRecords && (
-          <button
-            onClick={() => setActiveSubTab('visitor-edit')}
-            className={`px-4 py-2 text-sm ${
-              activeSubTab === 'visitor-edit'
-                ? 'cmms-classic-btn-primary'
-                : 'cmms-classic-btn-secondary'
-            }`}
-          >
-            <AlertTriangle className="inline w-4 h-4 mr-2" />
-            Review Suspicious
-          </button>
-        )}
-        {canViewVisitorRecords && (
-          <button
-            onClick={() => setActiveSubTab('visitor-ratings')}
-            className={`px-4 py-2 text-sm ${
-              activeSubTab === 'visitor-ratings'
-                ? 'cmms-classic-btn-primary'
-                : 'cmms-classic-btn-secondary'
-            }`}
-          >
-            <Star className="inline w-4 h-4 mr-2" />
-            Ratings
-          </button>
-        )}
+        {headerInfo && <div className="cmms-info cmms-classic-muted"><p>Register visitors, review who came and when, flag suspicious visits, and see the ratings visitors left.</p></div>}
+        <div className="cmms-ornament" aria-hidden="true" />
+
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap" role="tablist" aria-label="Visitor sections" style={{ scrollbarWidth: 'none' }}>
+          {[
+            { id: 'visitor-checkin', label: 'Register Visitor' },
+            canViewVisitorRecords && { id: 'visitor-records', label: 'Visitor Records' },
+            canViewVisitorRecords && { id: 'visitor-edit', label: 'Review Suspicious' },
+            canViewVisitorRecords && { id: 'visitor-ratings', label: 'Ratings' }
+          ].filter(Boolean).map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeSubTab === tab.id}
+              onClick={() => { setActiveSubTab(tab.id); setFullPage(true); }}
+              className={`cmms-ptab cmms-accent-${VISITOR_TAB_ACCENTS[tab.id] || 'gold'} ${activeSubTab === tab.id ? 'is-active' : ''}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Error/Success Messages */}
@@ -481,116 +517,159 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
 
       {/* Visitor Check-In Form */}
       {activeSubTab === 'visitor-checkin' && (
-        <div className="cmms-classic-card p-4 md:p-6 space-y-4">
-          <h3 className="cmms-classic-heading text-lg flex items-center gap-2">
-            <Users className="w-5 h-5 text-blue-400" />
-            Register New Visitor
-          </h3>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-300 mb-2">Visitor Name *</label>
-              <input
-                type="text"
-                value={visitorName}
-                onChange={(e) => setVisitorName(e.target.value)}
-                placeholder="Full name"
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:border-blue-400 transition-all"
-              />
+        <div className="space-y-4">
+          {/* Who is visiting: the two things reception must always capture come first */}
+          <section className="cmms-sec cmms-accent-emerald" data-open="true">
+            <div className="flex items-center gap-3">
+              <span className="cmms-medallion"><Users className="h-4 w-4" aria-hidden="true" /></span>
+              <h3 className="cmms-classic-heading cmms-sec-title min-w-0">Register new visitor</h3>
             </div>
-
-            <div>
-              <label className="block text-sm text-gray-300 mb-2">Email Address</label>
-              <input
-                type="email"
-                value={visitorEmail}
-                onChange={(e) => setVisitorEmail(e.target.value)}
-                placeholder="visitor@example.com"
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:border-blue-400 transition-all"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-300 mb-2">Phone Number</label>
-              <input
-                type="tel"
-                value={visitorPhone}
-                onChange={(e) => setVisitorPhone(e.target.value)}
-                placeholder="+256 (0) 123-456-789"
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:border-blue-400 transition-all"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-300 mb-2">Check-In Location *</label>
-              <div className="flex gap-2">
+            <div className="mt-4 space-y-3.5">
+              <label className="block min-w-0">
+                <span className="mb-1.5 block text-sm font-semibold">Visitor name <span className="text-red-500" aria-hidden="true">*</span></span>
                 <input
                   type="text"
-                  value={checkInLocation}
-                  onChange={(e) => setCheckInLocation(e.target.value)}
-                  placeholder="Company location"
-                  className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:border-blue-400 transition-all"
+                  value={visitorName}
+                  onChange={(e) => setVisitorName(e.target.value)}
+                  placeholder="Full name"
+                  autoComplete="off"
+                  autoCapitalize="words"
+                  enterKeyHint="next"
+                  required
+                  className={VISITOR_FIELD}
                 />
-                <button
-                  onClick={() => startQRScanner('location')}
-                  className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all"
-                  title="Scan location QR code"
-                >
-                  <QrCode className="w-4 h-4" />
-                </button>
+              </label>
+
+              <label className="block min-w-0">
+                <span className="mb-1.5 block text-sm font-semibold">Phone number</span>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="off"
+                  value={visitorPhone}
+                  onChange={(e) => setVisitorPhone(e.target.value)}
+                  placeholder="+256 7XX XXX XXX"
+                  className={VISITOR_FIELD}
+                />
+              </label>
+
+              <div className="min-w-0">
+                <label htmlFor="visitor-location" className="mb-1.5 block text-sm font-semibold">Check-in location <span className="text-red-500" aria-hidden="true">*</span></label>
+                <div className="flex min-w-0 gap-2">
+                  <input
+                    id="visitor-location"
+                    type="text"
+                    value={checkInLocation}
+                    onChange={(e) => setCheckInLocation(e.target.value)}
+                    placeholder="Company location"
+                    autoComplete="off"
+                    required
+                    className={`${VISITOR_FIELD} min-w-0 flex-1`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => startQRScanner('location')}
+                    className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg bg-purple-600 text-white transition-all hover:bg-purple-700"
+                    title="Scan location QR code"
+                    aria-label="Scan location QR code"
+                  >
+                    <QrCode className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
             </div>
+          </section>
 
-            <div>
-              <label className="block text-sm text-gray-300 mb-2">Host Email (Staff Member)</label>
-              <div className="flex gap-2">
-                <select
-                  value={hostEmail}
-                  onChange={(e) => setHostEmail(e.target.value)}
-                  className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white"
-                >
-                  <option value="">Select host</option>
-                  {cmmsUsers.map(user => (
-                    <option key={user.id} value={user.email}>{user.email}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => startQRScanner('email')}
-                  className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all"
-                  title="Scan host email QR code"
-                >
-                  <QrCode className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-300 mb-2">Purpose of Visit</label>
-              <input
-                type="text"
-                value={purpose}
-                onChange={(e) => setPurpose(e.target.value)}
-                placeholder="Meeting, delivery, maintenance, etc."
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:border-blue-400 transition-all"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-300 mb-2">Vehicle Number</label>
-              <div className="flex gap-2">
-                <span className="flex items-center px-3 bg-white/10 border border-white/20 rounded-lg text-gray-400">
-                  <Car className="w-4 h-4" />
+          {/* Optional details stay folded away so a small screen shows only what is needed */}
+          <section className="cmms-sec cmms-accent-navy" data-open={moreOpen}>
+            <button type="button" onClick={() => setMoreOpen(o => !o)} aria-expanded={moreOpen}
+              className="flex w-full items-center gap-3 text-left !bg-transparent" style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}>
+              <span className="cmms-medallion"><Car className="h-4 w-4" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="cmms-classic-heading cmms-sec-title block">Visit details</span>
+                <span className="block truncate text-xs cmms-classic-muted">
+                  {[hostEmail && `Host: ${hostEmail}`, purpose, vehicleNumber, visitorEmail].filter(Boolean).join(' · ') || 'Optional: email, host, purpose, vehicle'}
                 </span>
-                <input
-                  type="text"
-                  value={vehicleNumber}
-                  onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
-                  placeholder="e.g. UBA 123X"
-                  className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:border-blue-400 transition-all"
-                />
+              </span>
+              <ChevronDown className={`h-4 w-4 flex-shrink-0 cmms-classic-muted transition-transform duration-300 ${moreOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {moreOpen && (
+              <div className="cmms-sec-body mt-4 space-y-3.5">
+                <label className="block min-w-0">
+                  <span className="mb-1.5 block text-sm font-semibold">Email address</span>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    value={visitorEmail}
+                    onChange={(e) => setVisitorEmail(e.target.value)}
+                    placeholder="visitor@example.com"
+                    className={VISITOR_FIELD}
+                  />
+                </label>
+
+                <div className="min-w-0">
+                  <label htmlFor="visitor-host" className="mb-1.5 block text-sm font-semibold">Host (staff member)</label>
+                  <div className="flex min-w-0 gap-2">
+                    <select
+                      id="visitor-host"
+                      value={hostEmail}
+                      onChange={(e) => setHostEmail(e.target.value)}
+                      className={`${VISITOR_FIELD} min-w-0 flex-1 truncate`}
+                    >
+                      <option value="">Select host</option>
+                      {cmmsUsers.map(user => (
+                        <option key={user.id} value={user.email}>{user.email}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => startQRScanner('email')}
+                      className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg bg-purple-600 text-white transition-all hover:bg-purple-700"
+                      title="Scan host email QR code"
+                      aria-label="Scan host email QR code"
+                    >
+                      <QrCode className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                <label className="block min-w-0">
+                  <span className="mb-1.5 block text-sm font-semibold">Purpose of visit</span>
+                  <input
+                    type="text"
+                    value={purpose}
+                    onChange={(e) => setPurpose(e.target.value)}
+                    placeholder="Meeting, delivery, maintenance…"
+                    autoComplete="off"
+                    className={VISITOR_FIELD}
+                  />
+                </label>
+                <div className="-mt-1 flex flex-wrap gap-1.5" aria-label="Quick purposes">
+                  {['Meeting', 'Delivery', 'Interview', 'Maintenance'].map(label => (
+                    <button key={label} type="button" onClick={() => setPurpose(label)} className="cmms-classic-chip !normal-case">{label}</button>
+                  ))}
+                </div>
+
+                <label className="block min-w-0">
+                  <span className="mb-1.5 block text-sm font-semibold">Vehicle number</span>
+                  <div className="relative">
+                    <Car className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                    <input
+                      type="text"
+                      value={vehicleNumber}
+                      onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
+                      placeholder="e.g. UBA 123X"
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      className={`${VISITOR_FIELD} !pl-10`}
+                    />
+                  </div>
+                </label>
               </div>
-            </div>
-          </div>
+            )}
+          </section>
 
           {/* QR Scanner Modal */}
           {showScanner && (
@@ -616,23 +695,27 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
             </div>
           )}
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              onClick={generateVisitorQr}
-              className="cmms-classic-btn-secondary flex-1 px-4 py-3 flex items-center justify-center gap-2"
-            >
-              <QrCode className="w-4 h-4" />
-              Generate Visitor QR
-            </button>
+          {/* Main action first and full width; the QR helper sits under it */}
+          <div className="flex flex-col gap-2.5 sm:flex-row-reverse">
             <button
               onClick={handleVisitorCheckIn}
               disabled={loading || !visitorName.trim() || !checkInLocation.trim()}
-              className="cmms-classic-btn-primary flex-1 px-4 py-3 flex items-center justify-center gap-2"
+              className="cmms-classic-btn-primary flex min-h-[3rem] flex-1 items-center justify-center gap-2 px-4 py-3 disabled:opacity-50"
             >
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-              {loading ? 'Registering...' : 'Register Visitor'}
+              {loading ? 'Registering...' : 'Register visitor'}
+            </button>
+            <button
+              onClick={generateVisitorQr}
+              className="cmms-classic-btn-secondary flex min-h-[3rem] flex-1 items-center justify-center gap-2 px-4 py-3"
+            >
+              <QrCode className="w-4 h-4" />
+              Generate visitor QR
             </button>
           </div>
+          {(!visitorName.trim() || !checkInLocation.trim()) && (
+            <p className="text-center text-xs cmms-classic-muted">Enter the visitor's name and the check-in location to register.</p>
+          )}
 
           {visitorQrCode && (
             <div className="cmms-classic-divider text-center">
@@ -661,133 +744,116 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
 
       {/* Visitor Records */}
       {activeSubTab === 'visitor-records' && (
-        <div className="cmms-classic-card p-4 md:p-6 space-y-4">
-          <h3 className="cmms-classic-heading text-lg">Visitor Records</h3>
-
-          <div className="flex flex-wrap gap-4">
-            <div>
-              <label className="block text-sm text-gray-300 mb-2">Date</label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-300 mb-2">Status Filter</label>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white"
-              >
-                <option value="">All Visitors</option>
-                <option value="checked_in">Checked In</option>
-                <option value="checked_out">Checked Out</option>
-                <option value="flagged_for_review">Flagged</option>
-              </select>
-            </div>
-            <div className="flex items-end">
-              <button
-                onClick={loadVisitorRecords}
-                className="cmms-classic-btn-secondary px-4 py-2 text-sm flex items-center gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Refresh
-              </button>
-            </div>
-            <div className="flex items-end gap-2">
-              <button onClick={() => exportVisitors('excel')} className="cmms-classic-btn-secondary px-4 py-2 text-sm flex items-center gap-2"><Download className="w-4 h-4" /> Excel</button>
-              <button onClick={() => exportVisitors('pdf')} className="cmms-classic-btn-secondary px-4 py-2 text-sm flex items-center gap-2"><Download className="w-4 h-4" /> PDF</button>
-            </div>
-          </div>
-
-          <div className="cmms-classic-divider space-y-2">
-            {visitorRecords.map(record => {
-              const isExpanded = expandedVisitorIds.has(record.id);
-              return (
-                <div key={record.id} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-                  <button
-                    type="button"
-                    onClick={() => toggleVisitorExpanded(record.id)}
-                    className="w-full flex flex-wrap items-center gap-3 px-4 py-3 text-left"
-                  >
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />}
-                    <span className="cmms-classic-heading">{record.visitor_name}</span>
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      record.status === 'flagged_for_review'
-                        ? 'bg-red-500/30 text-red-200'
-                        : record.status === 'checked_out'
-                        ? 'bg-gray-500/30 text-gray-200'
-                        : 'bg-emerald-500/30 text-emerald-200'
-                    }`}>
-                      {record.status === 'flagged_for_review' ? '🚩 Flagged' : record.status === 'checked_out' ? '✓ Out' : '✓ In'}
-                    </span>
-                    <span className="text-xs text-gray-400">{new Date(record.check_in_time).toLocaleTimeString()}</span>
-                    {record.vehicle_number && (
-                      <span className="flex items-center gap-1 text-xs text-gray-400">
-                        <Car className="w-3 h-3" /> {record.vehicle_number}
-                      </span>
-                    )}
-                    <span className="ml-auto flex items-center gap-2">
-                      {record.status === 'checked_in' && (
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          onClick={(e) => { e.stopPropagation(); handleVisitorCheckOut(record.id); }}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); handleVisitorCheckOut(record.id); } }}
-                          className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded inline-flex items-center"
-                        >
-                          <LogOut className="inline w-3 h-3 mr-1" />
-                          Check Out
-                        </span>
-                      )}
-                    </span>
-                  </button>
-
-                  {isExpanded && (
-                    <dl className="cmms-field-list px-4 pb-3 pt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                      <div className="cmms-field-row">
-                        <dt>Email</dt>
-                        <dd>{record.visitor_email || '-'}</dd>
-                      </div>
-                      <div className="cmms-field-row">
-                        <dt>Phone</dt>
-                        <dd>{record.visitor_phone || '-'}</dd>
-                      </div>
-                      <div className="cmms-field-row">
-                        <dt>Vehicle Number</dt>
-                        <dd>{record.vehicle_number || '-'}</dd>
-                      </div>
-                      <div className="cmms-field-row">
-                        <dt>Host</dt>
-                        <dd>{record.host_name || record.host_email || '-'}</dd>
-                      </div>
-                      <div className="cmms-field-row">
-                        <dt>Purpose</dt>
-                        <dd>{record.purpose || '-'}</dd>
-                      </div>
-                      <div className="cmms-field-row">
-                        <dt>Location</dt>
-                        <dd>{record.check_in_location || '-'}</dd>
-                      </div>
-                      <div className="cmms-field-row">
-                        <dt>Check-In</dt>
-                        <dd>{new Date(record.check_in_time).toLocaleString()}</dd>
-                      </div>
-                      <div className="cmms-field-row">
-                        <dt>Check-Out</dt>
-                        <dd>{record.check_out_time ? new Date(record.check_out_time).toLocaleString() : 'Not checked out'}</dd>
-                      </div>
-                    </dl>
-                  )}
+        <div className="space-y-4">
+          {/* Collapsible filters: closed it is one slim row showing the range and status */}
+          <section className="cmms-sec cmms-accent-gold" data-open={filtersOpen}>
+            <button type="button" onClick={() => setFiltersOpen(o => !o)} aria-expanded={filtersOpen}
+              className="flex w-full items-center gap-3 text-left !bg-transparent" style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}>
+              <span className="cmms-medallion"><Calendar className="h-4 w-4" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="cmms-classic-heading cmms-sec-title block">Date range &amp; filters</span>
+                <span className="block truncate text-xs cmms-classic-muted">
+                  {fmtDay(selectedDate)}{endDate !== selectedDate ? ` → ${fmtDay(endDate)}` : ''} · {STATUS_LABELS[filterStatus] || 'All visitors'}
+                </span>
+              </span>
+              <ChevronDown className={`h-4 w-4 flex-shrink-0 cmms-classic-muted transition-transform duration-300 ${filtersOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {filtersOpen && (
+              <div className="cmms-sec-body mt-4 space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="text-xs font-semibold cmms-classic-muted">From
+                    <input type="date" value={selectedDate} max={endDate || undefined} onChange={(e) => setSelectedDate(e.target.value)} className="mt-1 w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg" />
+                  </label>
+                  <label className="text-xs font-semibold cmms-classic-muted">To
+                    <input type="date" value={endDate} min={selectedDate || undefined} max={todayIso} onChange={(e) => setEndDate(e.target.value)} className="mt-1 w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg" />
+                  </label>
                 </div>
-              );
-            })}
-            {visitorRecords.length === 0 && (
-              <div className="text-center py-6 text-gray-400">No visitor records found</div>
+                <div className="flex flex-wrap gap-2">
+                  {[[1, 'Today'], [7, '7 days'], [30, '30 days']].map(([days, label]) => (
+                    <button key={days} type="button" onClick={() => setRangeDays(days)} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary">{label}</button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Status filter">
+                  {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                    <button key={value || 'all'} type="button" onClick={() => setFilterStatus(value)} aria-pressed={filterStatus === value}
+                      className={`cmms-ptab cmms-accent-teal !px-3 !py-1 !text-xs ${filterStatus === value ? 'is-active' : ''}`}>{label}</button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2 border-t border-[rgba(196,160,82,0.3)] pt-3">
+                  <button onClick={loadVisitorRecords} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary flex items-center gap-1.5"><RefreshCw className="w-3.5 h-3.5" /> Refresh</button>
+                  <button onClick={() => exportVisitors('excel')} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> Excel</button>
+                  <button onClick={() => exportVisitors('pdf')} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-primary flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> PDF</button>
+                </div>
+              </div>
             )}
-          </div>
+          </section>
+
+          <label className="relative block">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search visitor, host, vehicle, purpose, date (15 sep) or time" className="w-full rounded-lg border border-white/20 bg-white/10 py-2 pl-9 pr-3 text-sm" />
+          </label>
+          <p className="text-xs cmms-classic-muted">
+            {shownVisitors.length} visitor{shownVisitors.length === 1 ? '' : 's'}{searchQuery ? ' match' : ''} · tap a visitor for the exact date, time in and time out
+          </p>
+
+          {shownVisitors.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>{searchQuery ? 'No visitors match your search' : 'No visitor records found'}</p>
+            </div>
+          ) : (
+            <ul className="grid gap-2.5 lg:grid-cols-2">
+              {shownVisitors.map((record, i) => {
+                const isExpanded = expandedVisitorIds.has(record.id);
+                const initials = (record.visitor_name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+                const checkIn = new Date(record.check_in_time);
+                const tone = record.status === 'flagged_for_review'
+                  ? { bg: 'rgba(239,68,68,0.13)', color: '#dc2626', label: '🚩 Flagged' }
+                  : record.status === 'checked_out'
+                    ? { bg: 'rgba(16,185,129,0.15)', color: '#047857', label: '✓ Out' }
+                    : { bg: 'rgba(245,158,11,0.15)', color: '#b45309', label: 'On site' };
+                return (
+                  <li key={record.id} className="cmms-staff-card" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                    <button type="button" onClick={() => toggleVisitorExpanded(record.id)} aria-expanded={isExpanded}
+                      className="flex w-full items-center gap-3 text-left !bg-transparent" style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}>
+                      <span className="cmms-monogram">{initials || '?'}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold">{record.visitor_name}</span>
+                        <span className="block truncate text-xs cmms-classic-muted">
+                          {checkIn.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} · {checkIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {record.check_out_time ? ` → ${new Date(record.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                        </span>
+                        <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: tone.bg, color: tone.color }}>{tone.label}</span>
+                          {record.host_name || record.host_email ? <span className="cmms-classic-chip !normal-case">Host: {record.host_name || record.host_email}</span> : null}
+                          {record.vehicle_number && <span className="cmms-classic-chip !normal-case inline-flex items-center gap-1"><Car className="w-3 h-3" /> {record.vehicle_number}</span>}
+                        </span>
+                      </span>
+                      <ChevronDown className={`h-4 w-4 flex-shrink-0 cmms-classic-muted transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+                    {record.status === 'checked_in' && (
+                      <button type="button" onClick={() => handleVisitorCheckOut(record.id)} className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700">
+                        <LogOut className="h-3.5 w-3.5" /> Check Out
+                      </button>
+                    )}
+                    {isExpanded && (
+                      <dl className="cmms-field-list cmms-sec-body mt-3 border-t border-[rgba(196,160,82,0.3)] pt-2">
+                        <div className="cmms-field-row"><dt>Email</dt><dd>{record.visitor_email || '-'}</dd></div>
+                        <div className="cmms-field-row"><dt>Phone</dt><dd>{record.visitor_phone || '-'}</dd></div>
+                        <div className="cmms-field-row"><dt>Vehicle Number</dt><dd>{record.vehicle_number || '-'}</dd></div>
+                        <div className="cmms-field-row"><dt>Host</dt><dd>{record.host_name || record.host_email || '-'}</dd></div>
+                        <div className="cmms-field-row"><dt>Purpose</dt><dd>{record.purpose || '-'}</dd></div>
+                        <div className="cmms-field-row"><dt>Location</dt><dd>{record.check_in_location || '-'}</dd></div>
+                        <div className="cmms-field-row"><dt>Check-In</dt><dd>{checkIn.toLocaleString()}</dd></div>
+                        <div className="cmms-field-row"><dt>Check-Out</dt><dd>{record.check_out_time ? new Date(record.check_out_time).toLocaleString() : 'Not checked out'}</dd></div>
+                        <div className="cmms-field-row"><dt>Time on site</dt><dd>{record.check_out_time ? `${Math.floor((new Date(record.check_out_time) - checkIn) / 3600000)}h ${Math.floor(((new Date(record.check_out_time) - checkIn) % 3600000) / 60000)}m` : 'Still on site'}</dd></div>
+                      </dl>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       )}
 

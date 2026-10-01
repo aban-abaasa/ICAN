@@ -1086,3 +1086,325 @@ html {
 :root[data-theme="dark"] .cmms-tone-ok, :root[data-theme="purple"] .cmms-tone-ok, :root[data-theme="green"] .cmms-tone-ok, :root[data-theme="ocean"] .cmms-tone-ok, :root[data-theme="sienna"] .cmms-tone-ok { color: #6ee7b7; }
 :root[data-theme="dark"] .cmms-tone-warn, :root[data-theme="purple"] .cmms-tone-warn, :root[data-theme="green"] .cmms-tone-warn, :root[data-theme="ocean"] .cmms-tone-warn, :root[data-theme="sienna"] .cmms-tone-warn { color: #fcd34d; }
 :root[data-theme="dark"] .cmms-tone-bad, :root[data-theme="purple"] .cmms-tone-bad, :root[data-theme="green"] .cmms-tone-bad, :root[data-theme="ocean"] .cmms-tone-bad, :root[data-theme="sienna"] .cmms-tone-bad { color: #fca5a5; }
+
+/* ==========================================================================
+   Classic "jewel accent" system for the CMMS Payroll pages.
+   Each section / tab carries one accent (gold, emerald, navy, burgundy,
+   plum, teal) that tints its ribbon, medallion, hover glow and active tab.
+   Motion is short and quiet -- a rise on arrival, an unfold when opened, a
+   gold sheen on the ornament -- and is switched off for people who ask their
+   device to reduce motion.
+   ========================================================================== */
+.cmms-accent-gold { --ac: #b8892b; }
+.cmms-accent-emerald { --ac: #1f7a5a; }
+.cmms-accent-navy { --ac: #2f4a7a; }
+.cmms-accent-burgundy { --ac: #8b2e3c; }
+.cmms-accent-plum { --ac: #6b3f7a; }
+.cmms-accent-teal { --ac: #197a82; }
+
+@keyframes cmms-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes cmms-unfold { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes cmms-page-in { from { opacity: 0; transform: scale(0.985) translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes cmms-pop { 0% { transform: scale(0.94); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
+@keyframes cmms-sheen { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+
+/* Section card */
+.cmms-sec {
+  --ac: #b8892b;
+  position: relative;
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem 0.85rem 1.2rem;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #fffdf8 0%, color-mix(in srgb, var(--ac) 9%, #fffdf8) 100%);
+  border: 1px solid color-mix(in srgb, var(--ac) 28%, transparent);
+  box-shadow: 0 1px 2px rgba(44, 36, 22, 0.04), 0 12px 24px -20px color-mix(in srgb, var(--ac) 80%, #000);
+  animation: cmms-rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.cmms-sec::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--ac), color-mix(in srgb, var(--ac) 40%, #fff));
+}
+.cmms-sec:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--ac) 55%, transparent); box-shadow: 0 1px 2px rgba(44, 36, 22, 0.05), 0 16px 28px -18px color-mix(in srgb, var(--ac) 85%, #000); }
+.cmms-sec[data-open="true"] { border-color: color-mix(in srgb, var(--ac) 50%, transparent); }
+.cmms-sec:nth-of-type(2) { animation-delay: 60ms; }
+.cmms-sec:nth-of-type(3) { animation-delay: 120ms; }
+.cmms-sec:nth-of-type(4) { animation-delay: 180ms; }
+.cmms-sec:nth-of-type(5) { animation-delay: 240ms; }
+.cmms-sec:nth-of-type(6) { animation-delay: 300ms; }
+.cmms-sec:nth-of-type(n+7) { animation-delay: 360ms; }
+.cmms-sec-body { animation: cmms-unfold 0.35s ease both; }
+
+/* Round icon medallion */
+.cmms-medallion {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 28%, #fff, color-mix(in srgb, var(--ac, #b8892b) 18%, #fff));
+  border: 1px solid color-mix(in srgb, var(--ac, #b8892b) 45%, transparent);
+  box-shadow: inset 0 0 0 3px #fff, 0 4px 10px -6px var(--ac, #b8892b);
+  transition: transform 0.3s ease;
+}
+.cmms-medallion svg { color: var(--ac, #b8892b) !important; }
+.cmms-sec:hover .cmms-medallion { transform: rotate(-8deg) scale(1.06); }
+
+/* Payroll tab pills */
+.cmms-ptab {
+  --ac: #b8892b;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #475569;
+  background: #fffdf8;
+  border: 1px solid color-mix(in srgb, var(--ac) 35%, transparent);
+  transition: transform 0.18s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+.cmms-ptab:hover { transform: translateY(-1px); border-color: var(--ac); color: var(--ac); }
+.cmms-ptab.is-active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--ac), color-mix(in srgb, var(--ac) 62%, #000));
+  box-shadow: 0 10px 20px -12px var(--ac);
+  animation: cmms-pop 0.35s ease;
+}
+
+/* Page title ornament: gold hairline with a diamond and a slow sheen */
+.cmms-ornament { position: relative; height: 1px; margin: 0.35rem 0; background: linear-gradient(90deg, transparent, rgba(196, 160, 82, 0.85), transparent); }
+.cmms-ornament::after { content: ''; position: absolute; left: 50%; top: -3px; width: 7px; height: 7px; background: #c4a052; transform: translateX(-50%) rotate(45deg); box-shadow: 0 0 0 3px #fffdf8; }
+.cmms-ornament::before { content: ''; position: absolute; inset: -1px 0; background: linear-gradient(90deg, transparent 30%, rgba(255, 255, 255, 0.95) 50%, transparent 70%); background-size: 200% 100%; animation: cmms-sheen 5s linear infinite; }
+
+/* Full page arrival */
+.cmms-fullpage {
+  animation: cmms-page-in 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  background:
+    radial-gradient(900px 340px at 100% -8%, rgba(196, 160, 82, 0.16), transparent 60%),
+    radial-gradient(700px 300px at -5% 105%, rgba(139, 46, 60, 0.07), transparent 60%),
+    var(--color-bg, #fbf7ee);
+}
+
+/* Block inside a tab: accent diamond before the heading */
+.cmms-block { animation: cmms-rise 0.45s ease both; }
+.cmms-block > div > h3::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 0.5rem; background: var(--ac, #c4a052); transform: rotate(45deg); vertical-align: 1px; }
+
+:root[data-theme="dark"] .cmms-sec, :root[data-theme="purple"] .cmms-sec, :root[data-theme="green"] .cmms-sec, :root[data-theme="ocean"] .cmms-sec, :root[data-theme="sienna"] .cmms-sec {
+  background: linear-gradient(135deg, var(--color-bgSecondary), color-mix(in srgb, var(--ac) 14%, var(--color-bgSecondary)));
+  border-color: color-mix(in srgb, var(--ac) 40%, var(--color-border));
+}
+:root[data-theme="dark"] .cmms-medallion, :root[data-theme="purple"] .cmms-medallion, :root[data-theme="green"] .cmms-medallion, :root[data-theme="ocean"] .cmms-medallion, :root[data-theme="sienna"] .cmms-medallion {
+  background: color-mix(in srgb, var(--ac, #b8892b) 22%, var(--color-bgSecondary));
+  box-shadow: inset 0 0 0 3px var(--color-bgSecondary);
+}
+:root[data-theme="dark"] .cmms-ptab, :root[data-theme="purple"] .cmms-ptab, :root[data-theme="green"] .cmms-ptab, :root[data-theme="ocean"] .cmms-ptab, :root[data-theme="sienna"] .cmms-ptab { background: var(--color-bgSecondary); color: var(--color-textSecondary); }
+:root[data-theme="dark"] .cmms-ptab.is-active, :root[data-theme="purple"] .cmms-ptab.is-active, :root[data-theme="green"] .cmms-ptab.is-active, :root[data-theme="ocean"] .cmms-ptab.is-active, :root[data-theme="sienna"] .cmms-ptab.is-active { color: #fff; }
+:root[data-theme="dark"] .cmms-ornament::after, :root[data-theme="purple"] .cmms-ornament::after, :root[data-theme="green"] .cmms-ornament::after, :root[data-theme="ocean"] .cmms-ornament::after, :root[data-theme="sienna"] .cmms-ornament::after { box-shadow: 0 0 0 3px var(--color-bg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cmms-sec, .cmms-sec-body, .cmms-block, .cmms-fullpage, .cmms-ptab.is-active, .cmms-ornament::before { animation: none !important; }
+  .cmms-sec, .cmms-ptab, .cmms-medallion { transition: none !important; }
+}
+
+/* Compact section rows: a closed section is just a slim tab (badge, title,
+   info, chevron). Longer explanations live behind the little (i) button. */
+.cmms-sec[data-open="false"] { padding-top: 0.55rem; padding-bottom: 0.55rem; }
+.cmms-sec-title { font-size: 1rem; line-height: 1.25; }
+.cmms-info-btn {
+  display: inline-grid; place-items: center; flex: none;
+  width: 1.5rem; height: 1.5rem; border-radius: 999px;
+  color: var(--ac, #b8892b); background: color-mix(in srgb, var(--ac, #b8892b) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ac, #b8892b) 40%, transparent);
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+.cmms-info-btn:hover, .cmms-info-btn[aria-expanded="true"] { transform: scale(1.1); background: color-mix(in srgb, var(--ac, #b8892b) 24%, transparent); }
+.cmms-info {
+  margin-top: 0.5rem; padding: 0.55rem 0.75rem; border-radius: 12px; font-size: 0.78rem; line-height: 1.45;
+  background: color-mix(in srgb, var(--ac, #b8892b) 10%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--ac, #b8892b) 45%, transparent);
+  animation: cmms-unfold 0.3s ease both;
+}
+
+/* Employee files: tap-to-choose file zone and document rows */
+.cmms-dropzone {
+  display: flex; align-items: center; gap: 0.6rem; padding: 0.8rem 1rem; border-radius: 14px; cursor: pointer;
+  color: #7a5a12; font-size: 0.875rem; font-weight: 600;
+  border: 1.5px dashed rgba(196, 160, 82, 0.7);
+  background: linear-gradient(135deg, #fffdf8, rgba(196, 160, 82, 0.08));
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+.cmms-dropzone:hover { transform: translateY(-1px); border-color: #c4a052; }
+.cmms-dropzone[data-filled="true"] { border-style: solid; color: #047857; background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.5); }
+.cmms-doc-row {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem;
+  padding: 0.65rem 0.8rem; border-radius: 12px; font-size: 0.875rem;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid color-mix(in srgb, var(--ac, #b8892b) 22%, transparent);
+  animation: cmms-rise 0.45s ease both;
+  transition: transform 0.18s ease, box-shadow 0.2s ease;
+}
+.cmms-doc-row:hover { transform: translateX(2px); box-shadow: 0 8px 18px -14px var(--ac, #b8892b); }
+:root[data-theme="dark"] .cmms-dropzone, :root[data-theme="purple"] .cmms-dropzone, :root[data-theme="green"] .cmms-dropzone, :root[data-theme="ocean"] .cmms-dropzone, :root[data-theme="sienna"] .cmms-dropzone { background: var(--color-bgSecondary); color: var(--color-text); }
+:root[data-theme="dark"] .cmms-doc-row, :root[data-theme="purple"] .cmms-doc-row, :root[data-theme="green"] .cmms-doc-row, :root[data-theme="ocean"] .cmms-doc-row, :root[data-theme="sienna"] .cmms-doc-row { background: var(--color-bg); }
+@media (prefers-reduced-motion: reduce) { .cmms-doc-row { animation: none !important; } .cmms-dropzone, .cmms-doc-row { transition: none !important; } }
+
+/* Bottom breathing room on every CMMS page: the last control used to sit
+   flush against (or behind) the bottom tab bar. */
+.cmms-clean-shell { padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)) !important; }
+.cmms-fullpage { padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px)) !important; }
+@media (min-width: 768px) { .cmms-clean-shell { padding-bottom: 2rem !important; } .cmms-fullpage { padding-bottom: 2.5rem !important; } }
+
+/* Staff cards (phones) -- monogram medallion, gold hairline, staggered rise */
+.cmms-staff-card {
+  --ac: #1f7a5a;
+  position: relative; overflow: hidden;
+  padding: 0.8rem 0.9rem 0.8rem 1.1rem; border-radius: 14px;
+  background: linear-gradient(135deg, #fffdf8, color-mix(in srgb, var(--ac) 8%, #fffdf8));
+  border: 1px solid color-mix(in srgb, var(--ac) 25%, transparent);
+  animation: cmms-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  transition: transform 0.2s ease, box-shadow 0.25s ease;
+}
+.cmms-staff-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(180deg, var(--ac), color-mix(in srgb, var(--ac) 40%, #fff)); }
+.cmms-staff-card:hover { transform: translateY(-2px); box-shadow: 0 14px 24px -18px var(--ac); }
+.cmms-monogram {
+  display: grid; place-items: center; flex: none; width: 2.5rem; height: 2.5rem; border-radius: 999px;
+  font-family: "Playfair Display", Georgia, serif; font-weight: 700; font-size: 0.9rem; color: #fff; letter-spacing: 0.04em;
+  background: linear-gradient(135deg, var(--ac), color-mix(in srgb, var(--ac) 55%, #000));
+  box-shadow: 0 0 0 3px #fffdf8, 0 0 0 4px color-mix(in srgb, var(--ac) 45%, transparent);
+}
+:root[data-theme="dark"] .cmms-staff-card, :root[data-theme="purple"] .cmms-staff-card, :root[data-theme="green"] .cmms-staff-card, :root[data-theme="ocean"] .cmms-staff-card, :root[data-theme="sienna"] .cmms-staff-card { background: var(--color-bgSecondary); }
+:root[data-theme="dark"] .cmms-monogram, :root[data-theme="purple"] .cmms-monogram, :root[data-theme="green"] .cmms-monogram, :root[data-theme="ocean"] .cmms-monogram, :root[data-theme="sienna"] .cmms-monogram { box-shadow: 0 0 0 3px var(--color-bgSecondary); }
+@media (prefers-reduced-motion: reduce) { .cmms-staff-card { animation: none !important; transition: none !important; } }
+
+/* Small round icon buttons / compact buttons: the theme pads plain buttons
+   to a large tap size, which made these look like big white discs. */
+.cmms-info-btn { width: 1.75rem !important; height: 1.75rem !important; min-height: 0 !important; min-width: 0 !important; padding: 0 !important; border-radius: 999px !important; }
+
+/* ==========================================================================
+   CMMS CLASSIC SKIN -- applies the payroll look (serif headings, gold
+   hairlines, jewel-tone buttons, gentle motion) to EVERY CMMS page without
+   touching each panel's markup. It targets the shared patterns the panels
+   already use (headings, tables, tab pills, coloured action buttons, listed
+   rows, the module header) and is scoped to the CMMS shell, so nothing
+   outside CMMS changes. Modals keep their own panel colours; they only get
+   a short entrance.
+   ========================================================================== */
+.cmms-clean-shell.cmms-page-classic {
+  --cmms-gold: #c4a052;
+  --cmms-gold-soft: rgba(196, 160, 82, 0.28);
+  --cmms-label: #8a6a1f;
+}
+:root[data-theme="dark"] .cmms-clean-shell.cmms-page-classic,
+:root[data-theme="purple"] .cmms-clean-shell.cmms-page-classic,
+:root[data-theme="green"] .cmms-clean-shell.cmms-page-classic,
+:root[data-theme="ocean"] .cmms-clean-shell.cmms-page-classic,
+:root[data-theme="sienna"] .cmms-clean-shell.cmms-page-classic { --cmms-label: #e6c980; }
+
+/* 1. Headings: the classic serif, quietly. */
+.cmms-clean-shell.cmms-page-classic :is(h1, h2, h3) {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  letter-spacing: 0.005em;
+}
+.cmms-clean-shell.cmms-page-classic .cmms-title { font-family: "Playfair Display", Georgia, serif; }
+
+/* 2. Module header: gold hairline with a centred diamond instead of a grey rule */
+.cmms-clean-shell.cmms-page-classic .cmms-top-header {
+  position: relative;
+  border-bottom: 0 !important;
+  padding-bottom: 16px;
+  background-image: linear-gradient(90deg, transparent, rgba(196, 160, 82, 0.85), transparent);
+  background-repeat: no-repeat;
+  background-position: bottom;
+  background-size: 100% 1px;
+}
+.cmms-clean-shell.cmms-page-classic .cmms-top-header::after {
+  content: ''; position: absolute; left: 50%; bottom: -3px; width: 7px; height: 7px;
+  background: var(--cmms-gold); transform: translateX(-50%) rotate(45deg);
+}
+
+/* 3. Rows the older panels flatten into open rows get a gold hairline, a
+      gentle rise on arrival and a warm hover. */
+.cmms-clean-shell.cmms-page-classic :is(div, section, article, aside, form):not(.fixed):not(.fixed *):is(
+  .glass-card, .dash-card,
+  [class*="rounded-lg"], [class*="rounded-xl"], [class*="rounded-2xl"], [class*="rounded-3xl"]
+):not([class*="rounded-full"]):not(.cmms-keep):not(.cmms-sec):not(.cmms-staff-card):not(.cmms-doc-row) {
+  border-bottom-color: rgba(196, 160, 82, 0.22) !important;
+}
+.cmms-clean-shell.cmms-page-classic [class*="space-y-"] > :is(div, section, article, form):not(.fixed):not(.cmms-sec):not(.cmms-block) {
+  animation: cmms-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.cmms-clean-shell.cmms-page-classic [class*="space-y-"] > :nth-child(2) { animation-delay: 50ms; }
+.cmms-clean-shell.cmms-page-classic [class*="space-y-"] > :nth-child(3) { animation-delay: 100ms; }
+.cmms-clean-shell.cmms-page-classic [class*="space-y-"] > :nth-child(4) { animation-delay: 150ms; }
+.cmms-clean-shell.cmms-page-classic [class*="space-y-"] > :nth-child(n+5) { animation-delay: 200ms; }
+.cmms-clean-shell.cmms-page-classic :is(div, article):not(.fixed *)[class*="cursor-pointer"] { transition: background-color 0.2s ease, padding-left 0.2s ease; }
+.cmms-clean-shell.cmms-page-classic :is(div, article):not(.fixed *)[class*="cursor-pointer"]:hover {
+  background: linear-gradient(90deg, rgba(196, 160, 82, 0.12), transparent 70%) !important;
+}
+
+/* 4. Tables: small-caps gold column labels, hairline rows, warm hover */
+.cmms-clean-shell.cmms-page-classic table thead th {
+  color: var(--cmms-label);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(196, 160, 82, 0.45) !important;
+}
+.cmms-clean-shell.cmms-page-classic table tbody tr { transition: background-color 0.2s ease; }
+.cmms-clean-shell.cmms-page-classic table tbody tr + tr td { border-top: 1px solid rgba(196, 160, 82, 0.16); }
+.cmms-clean-shell.cmms-page-classic table tbody tr:hover > td { background: rgba(196, 160, 82, 0.09); }
+
+/* 5. Coloured action buttons: jewel gradients, a slow sheen on hover, a
+      soft press. Semantics are kept: green = go, red = remove, gold = caution. */
+.cmms-clean-shell.cmms-page-classic button:is([class*="bg-indigo-5"], [class*="bg-indigo-6"], [class*="bg-blue-5"], [class*="bg-blue-6"], [class*="bg-purple-6"], [class*="bg-violet-6"]):not(:disabled) {
+  background-image: linear-gradient(110deg, var(--color-primary) 0%, var(--color-secondary) 45%, var(--color-primary) 100%) !important;
+}
+.cmms-clean-shell.cmms-page-classic button:is([class*="bg-emerald-5"], [class*="bg-emerald-6"], [class*="bg-green-5"], [class*="bg-green-6"]):not(:disabled) {
+  background-image: linear-gradient(110deg, #1f7a5a 0%, #2f9e75 45%, #1f7a5a 100%) !important;
+}
+.cmms-clean-shell.cmms-page-classic button:is([class*="bg-red-5"], [class*="bg-red-6"], [class*="bg-rose-5"], [class*="bg-rose-6"]):not(:disabled) {
+  background-image: linear-gradient(110deg, #8b2e3c 0%, #b04557 45%, #8b2e3c 100%) !important;
+}
+.cmms-clean-shell.cmms-page-classic button:is([class*="bg-amber-5"], [class*="bg-amber-6"], [class*="bg-yellow-5"], [class*="bg-yellow-6"]):not(:disabled) {
+  background-image: linear-gradient(110deg, #b8892b 0%, #d6a844 45%, #b8892b 100%) !important;
+}
+.cmms-clean-shell.cmms-page-classic button:is([class*="bg-indigo-5"], [class*="bg-indigo-6"], [class*="bg-blue-5"], [class*="bg-blue-6"], [class*="bg-purple-6"], [class*="bg-violet-6"], [class*="bg-emerald-5"], [class*="bg-emerald-6"], [class*="bg-green-5"], [class*="bg-green-6"], [class*="bg-red-5"], [class*="bg-red-6"], [class*="bg-rose-5"], [class*="bg-rose-6"], [class*="bg-amber-5"], [class*="bg-amber-6"], [class*="bg-yellow-5"], [class*="bg-yellow-6"]) {
+  background-size: 220% 100%;
+  background-position: 0% 0;
+  border-radius: 12px;
+  font-weight: 700;
+  box-shadow: 0 8px 18px -12px rgba(44, 36, 22, 0.55);
+  transition: background-position 0.7s ease, transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.cmms-clean-shell.cmms-page-classic button:is([class*="bg-indigo-5"], [class*="bg-indigo-6"], [class*="bg-blue-5"], [class*="bg-blue-6"], [class*="bg-purple-6"], [class*="bg-violet-6"], [class*="bg-emerald-5"], [class*="bg-emerald-6"], [class*="bg-green-5"], [class*="bg-green-6"], [class*="bg-red-5"], [class*="bg-red-6"], [class*="bg-rose-5"], [class*="bg-rose-6"], [class*="bg-amber-5"], [class*="bg-amber-6"], [class*="bg-yellow-5"], [class*="bg-yellow-6"]):hover:not(:disabled) {
+  background-position: 100% 0;
+  transform: translateY(-1px);
+}
+.cmms-clean-shell.cmms-page-classic button:not(:disabled):active { transform: scale(0.97); }
+
+/* 6. Pill tabs and nav items already used across CMMS get the same lively
+      active state as the payroll tabs. */
+.cmms-clean-shell.cmms-page-classic .cmms-classic-tab { border-radius: 999px; padding: 0.5rem 0.95rem; transition: transform 0.18s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
+.cmms-clean-shell.cmms-page-classic .cmms-classic-tab:hover { transform: translateY(-1px); }
+.cmms-clean-shell.cmms-page-classic .cmms-classic-tab.is-active { animation: cmms-pop 0.35s ease; }
+.cmms-clean-shell.cmms-page-classic .cmms-classic-navitem { position: relative; }
+.cmms-clean-shell.cmms-page-classic .cmms-classic-navitem.is-active::before { content: ''; position: absolute; left: 0; top: 18%; bottom: 18%; width: 3px; border-radius: 3px; background: var(--cmms-gold); }
+
+/* 7. Dialogs keep their own colours but arrive gently */
+.cmms-clean-shell.cmms-page-classic .fixed.inset-0 > div { animation: cmms-page-in 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+/* 8. Links */
+.cmms-clean-shell.cmms-page-classic a:not([class*="bg-"]):not(.cmms-classic-navitem) { text-underline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cmms-clean-shell.cmms-page-classic * { animation: none !important; transition: none !important; }
+}

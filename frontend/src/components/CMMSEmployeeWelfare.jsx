@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CalendarDays, ChevronDown, HeartPulse, Loader, Send, ShieldCheck, X } from 'lucide-react';
+import { CalendarDays, ChevronDown, HeartPulse, Loader, Send, ShieldCheck, X, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import {
   WELFARE_CATEGORIES, cancelLeaveRequest, cancelWelfareRequest, getLeaveTypes,
@@ -60,32 +60,32 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString(undefined, { year: 'nu
 // three labeled headers on a phone instead of every leave-type row, every
 // past request, and two open forms all stacked and visible at once. Same
 // accordion pattern as CMMSPayrollPanel's CollapsibleSection.
-function CollapsibleSection({ title, subtitle, icon, badge, defaultOpen = false, children }) {
+function CollapsibleSection({ title, subtitle, icon, badge, accent, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
-  const bodyId = useRef(`welfare-section-${Math.random().toString(36).slice(2)}`).current;
+  const [info, setInfo] = useState(false);
+  const bodyId = useRef(`sec-${Math.random().toString(36).slice(2)}`).current;
+  const toggle = () => setOpen(o => !o);
   return (
-    <section className="cmms-classic-divider">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        aria-expanded={open}
-        aria-controls={bodyId}
-        className="flex w-full items-center justify-between gap-3 text-left !bg-transparent"
-        style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          {icon}
-          <span className="min-w-0">
-            <span className="cmms-classic-heading block">{title}</span>
-            {subtitle && <span className="cmms-classic-muted block text-xs mt-0.5">{subtitle}</span>}
-          </span>
-        </span>
-        <span className="flex flex-shrink-0 items-center gap-2">
-          {badge}
-          <ChevronDown className={`h-4 w-4 cmms-classic-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
-        </span>
-      </button>
-      {open && <div id={bodyId} className="mt-4">{children}</div>}
+    <section className={`cmms-sec cmms-accent-${accent || (/^Probation/.test(title) ? 'navy' : /^Leave/.test(title) ? 'emerald' : 'plum')}`} data-open={open}>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={toggle} aria-expanded={open} aria-controls={bodyId}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left !bg-transparent"
+          style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}>
+          <span className="cmms-medallion">{icon}</span>
+          <span className="cmms-classic-heading cmms-sec-title min-w-0">{title}</span>
+        </button>
+        {badge && <span className="flex-shrink-0">{badge}</span>}
+        {subtitle && (
+          <button type="button" onClick={() => setInfo(v => !v)} aria-expanded={info} aria-label={`About ${title}`} title="What is this?" className="cmms-info-btn">
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        )}
+        <button type="button" onClick={toggle} tabIndex={-1} aria-hidden="true" className="flex-shrink-0 !bg-transparent" style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}>
+          <ChevronDown className={`h-4 w-4 cmms-classic-muted transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+      {info && subtitle && <p className="cmms-info cmms-classic-muted">{subtitle}</p>}
+      {open && <div id={bodyId} className="cmms-sec-body mt-4">{children}</div>}
     </section>
   );
 }
@@ -186,7 +186,7 @@ export default function CMMSEmployeeWelfare({ companyProfile, bare = false }) {
   );
 
   return (
-    <div className="welfare-scope space-y-1">
+    <div className="welfare-scope">
       <style>{WELFARE_STYLES}</style>
       <div className={bare ? '' : 'cmms-classic-divider'}>
         {!bare && <div className="flex items-center gap-3">
@@ -276,6 +276,7 @@ export default function CMMSEmployeeWelfare({ companyProfile, bare = false }) {
 
       <CollapsibleSection
         title="HR & wellbeing requests"
+        icon={<HeartPulse className="h-4 w-4" aria-hidden="true" />}
         subtitle="Grievances, wellness & counseling support, flexible work, training sponsorship, medical or bereavement assistance."
         defaultOpen={false}
       >

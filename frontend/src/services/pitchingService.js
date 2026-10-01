@@ -370,6 +370,17 @@ export const fetchAnyUsers = async (limit = 20) => {
  * Pitch Service - All Supabase operations for pitches
  */
 
+// Written sections of a pitch plan (pitches.plan_content), in display order.
+// Same documents Pitchin collects in BusinessProfileDocuments; the share terms
+// (shares / share_price / total_value) and has_mou are stored beside them.
+export const PITCH_PLAN_SECTIONS = [
+  { key: 'business_plan', label: 'Business plan' },
+  { key: 'financials', label: 'Financial projection' },
+  { key: 'wants', label: 'What customers want' },
+  { key: 'fears', label: 'What customers fear' },
+  { key: 'needs', label: 'What customers need' },
+];
+
 const PITCH_WITH_BUSINESS_SELECT = `
   id,
   title,
@@ -380,6 +391,7 @@ const PITCH_WITH_BUSINESS_SELECT = `
   thumbnail_url,
   deck_url,
   deck_path,
+  plan_content,
   target_funding,
   raised_amount,
   equity_offering,
@@ -517,7 +529,7 @@ export const getPitchesByBusinessProfileId = async (businessProfileId, limit = 1
       .from('pitches')
       .select(PITCH_WITH_BUSINESS_SELECT)
       .eq('business_profile_id', businessProfileId)
-      .or('video_url.not.is.null,deck_url.not.is.null')
+      .or('video_url.not.is.null,deck_url.not.is.null,plan_content.not.is.null')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -525,7 +537,7 @@ export const getPitchesByBusinessProfileId = async (businessProfileId, limit = 1
     if (!data || data.length === 0) return [];
 
     const resolved = (await resolveMediaValues(data, ['video_url', 'thumbnail_url', 'deck_url']))
-      .filter((pitch) => (pitch.video_url && !pitch.video_url.startsWith('blob:')) || pitch.deck_url);
+      .filter((pitch) => (pitch.video_url && !pitch.video_url.startsWith('blob:')) || pitch.deck_url || pitch.plan_content);
     await enrichPitchesWithProfilePhotos(sb, resolved);
     return resolved;
   } catch (error) {
@@ -1059,6 +1071,7 @@ export const createManagedPitch = async (pitchData) => {
       p_equity_offering: pitchData.equity_offering,
       p_has_ip: pitchData.has_ip,
       p_ip_details: pitchData.ip_details || null,
+      p_plan_content: pitchData.plan_content || null,
     });
 
     if (error) throw error;

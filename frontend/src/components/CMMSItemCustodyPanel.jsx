@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Loader, LogOut, RotateCcw } from 'lucide-react';
+import { ChevronDown, ClipboardList, Clock3, Loader, LogOut, PackageCheck, RotateCcw } from 'lucide-react';
 import cmmsService from '../lib/supabase/services/cmmsService';
 
 // Classic ivory/gold surface by default; the dark theme presets re-point the
@@ -18,6 +18,13 @@ const CUSTODY_STYLES = `
 .cmms-custody-table { border-top: 1px solid var(--cu-line); border-bottom: 1px solid var(--cu-line); }
 .cmms-custody-table th { border-bottom: 1px solid var(--cu-line); }
 .cmms-custody-body tr + tr td { border-top: 1px solid var(--cu-line); }
+.cmms-custody-body td { transition: background-color .2s ease; }
+.cmms-custody-body tr:hover td { background: rgba(196,160,82,.10); }
+.cmms-custody-field { transition: border-color .2s ease, box-shadow .25s ease, transform .15s ease; }
+.cmms-custody-field:focus { transform: translateY(-1px); }
+.custody-scope .cmms-classic-btn-primary { position: relative; overflow: hidden; }
+.custody-scope .cmms-classic-btn-primary::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.35) 50%, transparent 65%); transform: translateX(-120%); transition: transform .7s ease; }
+.custody-scope .cmms-classic-btn-primary:hover::after { transform: translateX(120%); }
 `;
 const STATUS_STYLES = { checked_out: 'cu-warn', returned: 'cu-ok', lost: 'cu-bad' };
 const STATUS_LABELS = { checked_out: 'Out', returned: 'Returned', lost: 'Lost' };
@@ -188,8 +195,8 @@ export default function CMMSItemCustodyPanel({ companyProfile, cmmsUsers, embedd
       {error && <div className="cu-bad rounded-lg p-3 text-sm">{error}</div>}
       {notice && <div className="cu-ok rounded-lg p-3 text-sm">{notice}</div>}
 
-      {(canRequest || canManage) && <form onSubmit={takeItem} className="cmms-classic-divider space-y-3">
-        <h3 className="flex items-center gap-2 text-lg font-semibold cmms-classic-heading"><LogOut className="h-5 w-5 text-[var(--color-primary)]" /> {canManage ? 'Record an item taken' : 'Request an item'}</h3>
+      {(canRequest || canManage) && <form onSubmit={takeItem} className="cmms-sec cmms-accent-teal space-y-3">
+        <h3 className="flex items-center gap-3 text-lg cmms-classic-heading"><span className="cmms-medallion"><LogOut className="h-4 w-4" /></span> {canManage ? 'Record an item taken' : 'Request an item'}</h3>
         <p className="text-xs cmms-classic-muted">{canManage
           ? 'Pick the item and who took it. Signing it back in when it is returned is the proof of custody.'
           : 'Ask for an item you need. Once a storeman or admin approves, it is signed out to you, and you sign it back in when you return it.'}</p>
@@ -229,8 +236,8 @@ export default function CMMSItemCustodyPanel({ companyProfile, cmmsUsers, embedd
       </form>}
 
       {canManage && pendingRequests.length > 0 && (
-        <div className="cmms-classic-divider space-y-3">
-          <h3 className="text-lg font-semibold cmms-classic-heading">Pending requests ({pendingRequests.length})</h3>
+        <div className="cmms-sec cmms-accent-gold space-y-3">
+          <h3 className="flex items-center gap-3 text-lg cmms-classic-heading"><span className="cmms-medallion"><Clock3 className="h-4 w-4" /></span>Pending requests ({pendingRequests.length})</h3>
           {pendingRequests.map((r) => (
             <div key={r.id} className="flex flex-col gap-3 cmms-classic-callout sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm">
@@ -249,8 +256,8 @@ export default function CMMSItemCustodyPanel({ companyProfile, cmmsUsers, embedd
       )}
 
       {!canManage && myRequests.length > 0 && (
-        <div className="cmms-classic-divider space-y-2">
-          <h3 className="text-lg font-semibold cmms-classic-heading">My requests</h3>
+        <div className="cmms-sec cmms-accent-navy space-y-2">
+          <h3 className="flex items-center gap-3 text-lg cmms-classic-heading"><span className="cmms-medallion"><ClipboardList className="h-4 w-4" /></span>My requests</h3>
           {myRequests.map((r) => (
             <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 text-sm cmms-classic-muted">
               <div>
@@ -267,9 +274,9 @@ export default function CMMSItemCustodyPanel({ companyProfile, cmmsUsers, embedd
         </div>
       )}
 
-      <div className="cmms-classic-divider space-y-3">
+      <div className="cmms-sec cmms-accent-emerald space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-lg font-semibold cmms-classic-heading">{canManage || canSeeAll ? 'Custody log' : 'My items'}</h3>
+          <h3 className="flex items-center gap-3 text-lg cmms-classic-heading"><span className="cmms-medallion"><PackageCheck className="h-4 w-4" /></span>{canManage || canSeeAll ? 'Custody log' : 'My items'}</h3>
           <div className="flex items-center gap-2">
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="cmms-custody-field !w-auto !py-1.5 max-w-[11rem]">
               <option value="checked_out">Currently out</option>

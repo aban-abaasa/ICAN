@@ -12,7 +12,7 @@ import CMMSItemCustodyPanel from './CMMSItemCustodyPanel.jsx';
 // the right, no box around it.
 function Block({ title, hint, children }) {
   return (
-    <section className="py-3 first:pt-1">
+    <section className="cmms-block py-3 first:pt-1">
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <h3 className="cmms-classic-heading text-sm">{title}</h3>
         {hint && <span className="text-xs cmms-classic-muted">{hint}</span>}
@@ -30,7 +30,7 @@ function TabBar({ tabs, active, onChange, flush = false }) {
       {tabs.map((t) => (
         <button key={t.id} type="button" role="tab" aria-selected={active === t.id} onClick={() => onChange(t.id)}
           className={`relative flex flex-shrink-0 items-center !bg-transparent gap-1.5 whitespace-nowrap px-3 py-2.5 text-sm ${active === t.id ? 'cmms-classic-heading' : 'cmms-classic-muted'}`}
-          style={{ border: 0, boxShadow: 'none', borderBottom: active === t.id ? '2px solid #c4a052' : '2px solid transparent', marginBottom: -1, fontWeight: active === t.id ? 700 : 500 }}>
+          style={{ border: 0, borderRadius: 0, boxShadow: active === t.id ? 'inset 0 -3px 0 var(--ac, #c4a052)' : 'none', marginBottom: -1, fontWeight: active === t.id ? 700 : 500, color: active === t.id ? 'var(--ac, #c4a052)' : undefined, transition: 'box-shadow .25s ease, color .2s ease' }}>
           {t.icon}{t.label}
           {t.alert && <span className="h-2 w-2 rounded-full" style={{ background: '#d97706' }} aria-label="Needs attention" />}
         </button>
@@ -50,7 +50,7 @@ const money = (value, currency = 'UGX') => `${currency} ${Number(value || 0).toL
 // This screen intentionally makes employee-level requests only. It is used
 // for roles whose tool scope is "own" and must never receive company payroll
 // or transport records through component props.
-export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
+export default function CMMSEmployeeSelfService({ companyProfile, mode, autoFull = true }) {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pay');
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -351,12 +351,12 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
   const needsSigning = documents.filter(d => d.status === 'issued').length;
 
   const tabsDef = [
-        { id: 'pay', label: 'Pay', icon: <Receipt className="h-4 w-4" /> },
-        { id: 'attendance', label: 'Attendance', icon: <CalendarDays className="h-4 w-4" /> },
-        { id: 'advance', label: 'Advance', icon: <Wallet className="h-4 w-4" />, alert: unconfirmedAdvanceAction },
-        { id: 'leave', label: 'Leave & HR', icon: <HeartPulse className="h-4 w-4" /> },
-        { id: 'items', label: 'Items', icon: <LogOut className="h-4 w-4" /> },
-        { id: 'docs', label: 'Documents', icon: <FileText className="h-4 w-4" />, alert: needsSigning > 0 || filesToImport.length > 0 }
+        { id: 'pay', accent: 'gold', label: 'Pay', icon: <Receipt className="h-4 w-4" /> },
+        { id: 'attendance', accent: 'navy', label: 'Attendance', icon: <CalendarDays className="h-4 w-4" /> },
+        { id: 'advance', accent: 'emerald', label: 'Advance', icon: <Wallet className="h-4 w-4" />, alert: unconfirmedAdvanceAction },
+        { id: 'leave', accent: 'plum', label: 'Leave & HR', icon: <HeartPulse className="h-4 w-4" /> },
+        { id: 'items', accent: 'teal', label: 'Items', icon: <LogOut className="h-4 w-4" /> },
+        { id: 'docs', accent: 'burgundy', label: 'Documents', icon: <FileText className="h-4 w-4" />, alert: needsSigning > 0 || filesToImport.length > 0 }
       ];
 
   const panel = (
@@ -607,7 +607,7 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
         </dl>
       )}
 
-      <TabBar active={tab} onChange={setTab} tabs={tabsDef} />
+      <TabBar active={tab} onChange={(id) => { setTab(id); if (autoFull) setFullPage(true); }} tabs={tabsDef} />
 
       {!fullPage && (
         <div className="mt-3">
@@ -621,10 +621,10 @@ export default function CMMSEmployeeSelfService({ companyProfile, mode }) {
       )}
 
       {fullPage && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: 'var(--color-bg, #fbf7ee)' }} role="dialog" aria-modal="true">
+        <div className="cmms-fullpage fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
           <div className="sticky top-0 z-10 border-b px-4 pb-0 pt-3 md:px-6" style={{ background: 'var(--color-bg, #fbf7ee)', borderColor: 'var(--color-border)' }}>
             <div className="mx-auto flex max-w-3xl items-center gap-3">
-              <button type="button" onClick={() => setFullPage(false)} className="cmms-classic-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs"><ArrowLeft className="h-3.5 w-3.5" /> Back</button>
+              <button type="button" onClick={() => setFullPage(false)} className="cmms-classic-btn-secondary inline-flex !h-auto !min-h-0 items-center gap-1.5 !px-3 !py-1.5 text-xs"><ArrowLeft className="h-3.5 w-3.5" /> Back</button>
               <h2 className="cmms-classic-heading truncate text-lg">{tabsDef.find((t) => t.id === tab)?.label}</h2>
             </div>
             <div className="mx-auto max-w-3xl"><TabBar active={tab} onChange={setTab} tabs={tabsDef} flush /></div>

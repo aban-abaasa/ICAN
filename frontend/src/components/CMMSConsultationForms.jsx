@@ -119,6 +119,13 @@ const FieldInput = ({ field, value, onChange }) => {
 // CMMS Clinical Operations — "Consultation Forms" sub-tab (alongside the
 // existing activity-log sub-tab in CMMSClinicalOperationsPanel.jsx).
 // businessName is purely cosmetic (print header / public page heading).
+// A preset re-run or a slow load racing an add can hand back the same field
+// twice; keep the first of each id so React keys stay unique.
+const uniqueById = (rows) => {
+  const seen = new Set();
+  return (rows || []).filter((r) => (seen.has(r.id) ? false : seen.add(r.id)));
+};
+
 export default function CMMSConsultationForms({ businessProfileId, businessName }) {
   const { queueAction } = useAuth();
   const [forms, setForms] = useState([]);
@@ -164,7 +171,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
 
   useEffect(() => {
     if (!selectedFormId) { setFields([]); setSubmissions([]); return; }
-    listConsultationFields(selectedFormId).then((r) => r.success && setFields(r.data));
+    listConsultationFields(selectedFormId).then((r) => r.success && setFields(uniqueById(r.data)));
     listConsultationSubmissions(selectedFormId).then((r) => r.success && setSubmissions(r.data));
     setViewingSubmissionId(null);
     setRecording(false);
@@ -243,19 +250,19 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
   const addPresetFields = async () => {
     if (!selectedForm) return;
     const result = await addCommonClinicalFields(selectedForm.id);
-    if (result.success) setFields(result.data);
+    if (result.success) setFields(uniqueById(result.data));
   };
 
   const addPhysiotherapyPreset = async () => {
     if (!selectedForm) return;
     const result = await addPhysiotherapyConsultationFields(selectedForm.id);
-    if (result.success) setFields(result.data); else setError(result.error);
+    if (result.success) setFields(uniqueById(result.data)); else setError(result.error);
   };
 
   const addPatientAssessmentPreset = async () => {
     if (!selectedForm) return;
     const result = await addPatientAssessmentFields(selectedForm.id);
-    if (result.success) setFields(result.data); else setError(result.error);
+    if (result.success) setFields(uniqueById(result.data)); else setError(result.error);
   };
 
   const submitField = async (e) => {
@@ -271,7 +278,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     });
     setSavingField(false);
     if (result.success) {
-      setFields((current) => [...current, result.data]);
+      setFields((current) => uniqueById([...current, result.data]));
       setFieldForm({ label: '', fieldType: 'text', isRequired: false, optionsText: '' });
     } else setError(result.error);
   };
@@ -291,7 +298,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     });
     setSavingSection(false);
     if (result.success) {
-      setFields((current) => [...current, result.data]);
+      setFields((current) => uniqueById([...current, result.data]));
       setSectionLabel('');
     } else setError(result.error);
   };

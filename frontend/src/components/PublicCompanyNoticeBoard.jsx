@@ -12,7 +12,7 @@ import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
 import { getDropshipStorefront, dropshipCheckout, findDeliveryRiders } from '../services/dropshipService';
-import { getPitchesByBusinessProfileId, getPitchById, getBusinessProfileIdByName } from '../services/pitchingService';
+import { getPitchesByBusinessProfileId, getPitchById, getBusinessProfileIdByName, PITCH_PLAN_SECTIONS } from '../services/pitchingService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
@@ -428,6 +428,24 @@ const NB_STYLES = `
 .nb-wordmark-b { color: var(--nb-green); }
 .nb-copied { background: var(--nb-green-soft-bg); color: var(--nb-green-soft-text); }
 .nb-share-btn { background: var(--nb-surface-alt); color: var(--nb-text-muted); }
+/* Written-plan pitches: a "paper" cover with ruled lines and a folded corner,
+   and a classic serif document view. */
+.nb-serif { font-family: "Playfair Display", Georgia, "Times New Roman", serif; }
+.nb-plan-cover { background: linear-gradient(160deg, var(--nb-green-soft-bg), var(--nb-surface-alt)); position: relative; overflow: hidden; }
+.nb-plan-cover::before { content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(180deg, transparent 0 21px, color-mix(in srgb, var(--nb-green) 14%, transparent) 21px 22px); opacity: .7; transition: transform .6s ease; }
+.nb-plan-cover::after { content: ""; position: absolute; top: 0; right: 0; width: 34px; height: 34px; background: linear-gradient(225deg, var(--nb-surface) 50%, color-mix(in srgb, var(--nb-green) 28%, var(--nb-surface-alt)) 50%); border-bottom-left-radius: 8px; box-shadow: -2px 2px 6px rgba(0,0,0,.08); transition: width .3s, height .3s; }
+.group:hover .nb-plan-cover::before { transform: translateY(-11px); }
+.group:hover .nb-plan-cover::after { width: 46px; height: 46px; }
+.nb-plan-emblem { background: var(--nb-surface); color: var(--nb-green); box-shadow: 0 8px 22px -10px rgba(0,0,0,.35); animation: nb-float 4s ease-in-out infinite; }
+@keyframes nb-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes nb-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.nb-rise { animation: nb-rise .45s ease-out backwards; }
+.nb-plan-tile { background: var(--nb-surface-alt); border: 1px solid var(--nb-border); transition: transform .2s, border-color .2s; }
+.nb-plan-tile:hover { transform: translateY(-2px); border-color: var(--nb-green); }
+.nb-plan-rule { border-left: 3px solid var(--nb-green); }
+.nb-read-arrow { display: inline-block; transition: transform .25s; }
+.group:hover .nb-read-arrow { transform: translateX(4px); }
+@media (prefers-reduced-motion: reduce) { .nb-plan-emblem, .nb-rise, .nb-plan-cover::before { animation: none !important; transition: none !important; } }
 .nb-share-btn:hover { background: var(--nb-surface-alt-hover); }
 .nb-closed-banner { background: var(--nb-amber-soft-bg); color: var(--nb-amber-soft-text); }
 .nb-error-text { color: var(--nb-maroon); }
@@ -1583,6 +1601,16 @@ const PitchCard = ({ pitch, offer, index = 0, onSelect }) => (
           <FileText className="w-8 h-8 nb-icon-muted" />
           <span className="text-[11px] font-semibold nb-text-faint">Pitch deck</span>
         </div>
+      ) : pitch.plan_content ? (
+        <div className="nb-plan-cover w-full h-full flex flex-col items-center justify-center gap-2">
+          <span className="nb-plan-emblem relative z-[1] w-14 h-14 rounded-full flex items-center justify-center">
+            <FileText className="w-6 h-6" />
+          </span>
+          <span className="relative z-[1] nb-serif text-sm font-bold nb-text">Business plan</span>
+          {pitch.target_funding > 0 && (
+            <span className="relative z-[1] text-[11px] font-semibold nb-text-muted">Seeking ${Number(pitch.target_funding).toLocaleString()}</span>
+          )}
+        </div>
       ) : (
         <div className="w-full h-full flex items-center justify-center">
           <Video className="w-8 h-8 nb-icon-muted" />
@@ -1606,6 +1634,9 @@ const PitchCard = ({ pitch, offer, index = 0, onSelect }) => (
       {pitch.category && <p className="text-xs nb-text-faint mt-1">{pitch.category}</p>}
       {pitch.description && <p className="text-sm nb-text-muted mt-1.5 line-clamp-2">{pitch.description}</p>}
       <PitchFundingBar offer={offer} compact />
+      {pitch.plan_content && !pitch.video_url && (
+        <p className="mt-3 text-xs font-semibold nb-link inline-flex items-center gap-1">Read the plan <span className="nb-read-arrow">→</span></p>
+      )}
       <div className="flex items-center gap-3 mt-3 text-xs nb-text-faint">
         <span className="inline-flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> {pitch.views_count || 0}</span>
         <span className="inline-flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> {pitch.likes_count || 0}</span>
@@ -2271,6 +2302,45 @@ const JobDetailModal = ({ job, onClose, onShare, viewerUser, onWantAccount }) =>
 // public pitch page, which auto-fires the exact same handleInvest a manual
 // click there would (auth prompt if signed out, ShareSigningFlow if signed
 // in). No signing/escrow logic is duplicated here.
+// The written plan as a classic document: key terms up top, then numbered
+// serif sections that rise in one after another.
+const PitchPlanDocument = ({ plan }) => {
+  const money = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  const tiles = [
+    plan.total_value ? { label: 'Seeking', value: money(plan.total_value) } : null,
+    plan.shares ? { label: 'Shares offered', value: Number(plan.shares).toLocaleString() } : null,
+    plan.share_price ? { label: 'Price per share', value: money(plan.share_price) } : null,
+  ].filter(Boolean);
+  const sections = PITCH_PLAN_SECTIONS.filter(({ key }) => plan[key]);
+  return (
+    <div className="mt-5">
+      {tiles.length > 0 && (
+        <div className={`grid gap-2.5 mb-5 ${tiles.length === 1 ? 'grid-cols-1' : tiles.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+          {tiles.map((t, i) => (
+            <div key={t.label} className="nb-plan-tile nb-rise rounded-xl p-3 text-center" style={{ animationDelay: `${i * 70}ms` }}>
+              <p className="text-[10px] font-bold uppercase tracking-wider nb-text-faint">{t.label}</p>
+              <p className="nb-serif text-base sm:text-lg font-bold nb-text mt-0.5 break-words">{t.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="space-y-5">
+        {sections.map(({ key, label }, i) => (
+          <section key={key} className="nb-plan-rule nb-rise pl-4" style={{ animationDelay: `${(i + tiles.length) * 70}ms` }}>
+            <h3 className="nb-serif text-lg font-bold nb-text mb-1">
+              <span className="nb-link mr-2">{String(i + 1).padStart(2, '0')}</span>{label}
+            </h3>
+            <p className="nb-text-muted whitespace-pre-wrap leading-relaxed text-[15px]">{plan[key]}</p>
+          </section>
+        ))}
+      </div>
+      {plan.has_mou && (
+        <p className="mt-5 text-xs nb-text-faint italic">A memorandum of understanding is shared with investors on request.</p>
+      )}
+    </div>
+  );
+};
+
 const PitchDetailModal = ({ pitch, offer, onClose, onShare }) => {
   const [copied, setCopied] = useState(false);
   const bizName = pitch.business_profiles?.business_name;
@@ -2330,6 +2400,8 @@ const PitchDetailModal = ({ pitch, offer, onClose, onShare }) => {
         {pitch.category && <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-neutral">{pitch.category}</span>}
       </div>
       {pitch.description && <p className="nb-text-muted whitespace-pre-wrap leading-relaxed">{pitch.description}</p>}
+
+      {pitch.plan_content && <PitchPlanDocument plan={pitch.plan_content} />}
 
       <div className="mt-5 p-3.5 rounded-xl nb-surface-alt border nb-border">
         <p className="font-semibold nb-text mb-1 text-sm">The offer</p>

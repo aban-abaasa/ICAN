@@ -83,7 +83,9 @@ export const getOpportunitiesForCompany = async (companyId) => {
   // supplier bids and are awarded from the requisition, not from here -- see
   // cmmsRequisitionBidsService.js. Filtered client-side so this keeps working
   // before CMMS_REQUISITION_SUPPLIER_BIDS.sql adds the column.
-  return { success: true, data: (data || []).filter((o) => o.opportunity_kind !== 'supply') };
+  const rows = (data || []).filter((o) => o.opportunity_kind !== 'supply');
+  // poster_url/document_url are stored as r2:// markers, which <img> can't load.
+  return { success: true, data: await resolveMediaValues(rows, MEDIA_FIELDS) };
 };
 
 export const getBidsForOpportunity = async (opportunityId) => {
@@ -135,7 +137,9 @@ export const getOpenOpportunities = async () => {
   if (error) return { success: false, error: error.message, data: [] };
   // Supply requests take itemised bids from published supplier businesses
   // (Supplier Portal), not a flat bid from another CMMS company.
-  return { success: true, data: (data || []).filter((o) => o.opportunity_kind !== 'supply') };
+  const rows = (data || []).filter((o) => o.opportunity_kind !== 'supply');
+  // poster_url/document_url are stored as r2:// markers, which <img> can't load.
+  return { success: true, data: await resolveMediaValues(rows, MEDIA_FIELDS) };
 };
 
 /** Companies the current user is an active member of -- the "which

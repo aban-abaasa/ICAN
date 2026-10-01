@@ -57,6 +57,7 @@ import { Linkify } from '../utils/linkify';
 import RequisitionWorkspace from './CMMS/RequisitionWorkspace.jsx';
 import RequisitionApprovalsTab from './CMMS/RequisitionApprovalsTab.jsx';
 import CMMSPayrollPanel from './CMMSPayrollPanel.jsx';
+import CmmsFold, { InfoTip } from './CmmsFold.jsx';
 import CMMSMySalaryPanel from './CMMSMySalaryPanel.jsx';
 import CMMSBookTransportPanel from './CMMSBookTransportPanelV2.jsx';
 import CMSSupplierPurchasePanel from './CMSSupplierPurchasePanel.jsx';
@@ -5446,115 +5447,106 @@ const CMMSModule = ({
               </button>
             </div>
 
-            {/* Google publishes no way to prefill its own signup form via
-                URL, so this is the honest version of "one-click register":
-                open the real page, and put the exact text to paste into it
-                one tap away. Only shown once the basics Google actually asks
-                for exist, so the copied block is never mostly blank lines. */}
             {(displayProfile.companyName && displayProfile.phone) && (
-              <div className="mt-4 pt-4 border-t border-white border-opacity-20">
-                <h4 className="text-sm font-bold text-gray-300 mb-1 flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-blue-400" /> Get found on Google Maps
-                </h4>
-                <p className="text-gray-400 text-xs mb-3">
-                  Register this business as a Google Business Profile so customers can find it on Google Search and Maps. Google's signup form can't be pre-filled from here, so copy your details first, then paste them in once you're on Google's page.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <button
-                    onClick={copyGoogleBusinessDetails}
-                    className="flex-1 px-4 py-2 bg-white bg-opacity-10 hover:bg-opacity-20 text-white rounded-lg font-semibold transition-all text-sm flex items-center justify-center gap-2"
-                  >
-                    {copiedGoogleDetails ? <><Check className="w-4 h-4 text-green-400" /> Copied — paste it on Google's page</> : <><Clipboard className="w-4 h-4" /> Copy business details</>}
-                  </button>
-                  <a
-                    href="https://www.google.com/business/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1 px-4 py-2 bg-blue-500 bg-opacity-30 hover:bg-opacity-40 text-blue-200 rounded-lg font-semibold transition-all text-sm flex items-center justify-center gap-2"
-                  >
-                    <Globe className="w-4 h-4" /> Register on Google
-                  </a>
-                </div>
-
-                {!displayProfile.website && (
-                  <div className="mt-3 bg-white bg-opacity-5 rounded-lg p-3">
-                    <p className="text-gray-400 text-xs mb-2">
-                      Google's form also asks for a website. Don't have one? Your notice board already is one — it shows your jobs and announcements to anyone who visits. Copy its link and use it there.
-                    </p>
-                    <button
-                      onClick={copyBoardLink}
-                      disabled={!boardLink}
-                      className="w-full px-3 py-1.5 bg-white bg-opacity-10 hover:bg-opacity-20 disabled:opacity-40 text-white rounded-lg font-semibold transition-all text-xs flex items-center justify-center gap-1.5"
-                    >
-                      {copiedBoardLink ? <><Check className="w-3.5 h-3.5 text-green-400" /> Copied</> : <><Clipboard className="w-3.5 h-3.5" /> Copy my board's link (jobs &amp; announcements)</>}
+              <div className="mt-4">
+                <CmmsFold
+                  title="Get found on Google Maps"
+                  icon={<MapPin className="h-4 w-4" />}
+                  accent="navy"
+                  hint={cmmsData.companyProfile?.google_maps_url ? 'Listed' : 'Not listed'}
+                  hintTone={cmmsData.companyProfile?.google_maps_url ? 'ok' : undefined}
+                  info="Register this business as a Google Business Profile so customers can find it on Google Search and Maps. Google can't pre-fill its signup form from here, so copy your details first and paste them in on Google's page."
+                >
+                  {/* Google publishes no way to prefill its own signup form via
+                      URL, so this is the honest version of "one-click register":
+                      open the real page, with the exact text to paste one tap
+                      away. Only shown once the basics Google asks for exist. */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={copyGoogleBusinessDetails} className="cmms-classic-btn-secondary flex items-center justify-center gap-1.5 !px-3 !py-2 text-xs">
+                      {copiedGoogleDetails ? <><Check className="h-4 w-4" /> Copied</> : <><Clipboard className="h-4 w-4" /> Copy details</>}
                     </button>
+                    <a href="https://www.google.com/business/" target="_blank" rel="noreferrer" className="cmms-classic-btn-primary flex items-center justify-center gap-1.5 !px-3 !py-2 text-xs">
+                      <Globe className="h-4 w-4" /> Register
+                    </a>
                   </div>
-                )}
 
-                <div className="mt-3 pt-3 border-t border-white border-opacity-10">
-                  <label className="block text-xs font-semibold text-gray-400 mb-1">
-                    Already registered? Paste your Google Maps link here so your board's Directions button and map always point customers to it
-                  </label>
-                  {/* Telling a business owner to "go search Google Maps
-                      yourself" is still a few steps of friction -- this
-                      button does the one part that's actually the same every
-                      time (opening Maps with the right search already typed
-                      in), using Google's own documented search-action URL
-                      (maps/search/?api=1&query=...), a real supported link
-                      unlike a prefilled registration form. They still have to
-                      tap their listing, Share, Copy link themselves -- Google
-                      gives no way to skip that part -- but they never have to
-                      type their own business name into Maps to find it. */}
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([displayProfile.companyName, displayProfile.location].filter(Boolean).join(', '))}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-white bg-opacity-10 hover:bg-opacity-20 text-white transition-all mb-2"
-                  >
-                    <MapPin className="w-3.5 h-3.5" /> Find my business on Google Maps
-                  </a>
-                  <p className="text-gray-500 text-[11px] mb-2 leading-relaxed">
-                    Opens Maps already searching for "{displayProfile.companyName}". Tap your listing when you see it, then <span className="text-gray-300 font-medium">Share</span> → <span className="text-gray-300 font-medium">Copy link</span>, and paste it below.
-                    {' '}Don't use the setup link Google showed you right after registering — that one needs your own sign-in and won't work for customers.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      placeholder="https://maps.app.goo.gl/... or a google.com/maps/place/... link"
-                      value={googleMapsUrlDraft}
-                      onChange={(e) => { setGoogleMapsUrlDraft(e.target.value); setGoogleMapsUrlError(''); }}
-                      className="flex-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-500 text-xs focus:border-blue-500 focus:border-opacity-50 outline-none"
-                    />
-                    <button
-                      onClick={saveGoogleMapsUrl}
-                      disabled={savingGoogleMapsUrl || googleMapsUrlDraft.trim() === (cmmsData.companyProfile?.google_maps_url || '')}
-                      className="px-4 py-2 bg-green-500 bg-opacity-30 hover:bg-opacity-40 disabled:opacity-40 text-green-300 rounded-lg font-semibold transition-all text-xs flex items-center justify-center gap-1.5 whitespace-nowrap"
-                    >
-                      {savingGoogleMapsUrl ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Save
-                    </button>
-                  </div>
-                  {googleMapsUrlError && <p className="text-red-400 text-xs mt-1.5">{googleMapsUrlError}</p>}
-                  {cmmsData.companyProfile?.google_maps_url && !googleMapsUrlError && (
-                    <p className="text-green-400 text-xs mt-1.5 flex items-center gap-1"><Check className="w-3 h-3" /> Saved — this exact location now powers Directions and the map on your board.</p>
+                  {!displayProfile.website && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button onClick={copyBoardLink} disabled={!boardLink} className="cmms-classic-btn-secondary flex flex-1 items-center justify-center gap-1.5 !px-3 !py-2 text-xs disabled:opacity-40">
+                        {copiedBoardLink ? <><Check className="h-3.5 w-3.5" /> Copied</> : <><Clipboard className="h-3.5 w-3.5" /> Use my notice board as website</>}
+                      </button>
+                      <InfoTip label="About the website field">Google's form also asks for a website. If you don't have one, your notice board works as one: it shows your jobs and announcements to anyone who visits. Copy its link and use it there.</InfoTip>
+                    </div>
                   )}
-                </div>
+
+                  <div className="space-y-2 border-t pt-3" style={{ borderColor: 'rgba(196,160,82,0.28)' }}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="cmms-classic-label flex-1">Already listed? Add your link</span>
+                      <InfoTip label="How to get your Maps link">
+                        Tap "Find my business", open your listing, then Share → Copy link and paste it below. Don't use the setup link Google showed right after registering — it needs your own sign-in and won't work for customers. Your board's Directions button and map will point to this link.
+                      </InfoTip>
+                    </div>
+                    {/* The search-action URL (maps/search/?api=1&query=...) is
+                        Google's documented link: it opens Maps already
+                        searching for the business, so nobody has to type their
+                        own name into Maps. */}
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([displayProfile.companyName, displayProfile.location].filter(Boolean).join(', '))}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="cmms-classic-chip !text-xs"
+                    >
+                      <MapPin className="mr-1 h-3.5 w-3.5" /> Find my business on Maps
+                    </a>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Paste your Google Maps link"
+                        value={googleMapsUrlDraft}
+                        onChange={(e) => { setGoogleMapsUrlDraft(e.target.value); setGoogleMapsUrlError(''); }}
+                        className="cmms-classic-field min-w-0 flex-1 !text-xs"
+                      />
+                      <button
+                        onClick={saveGoogleMapsUrl}
+                        disabled={savingGoogleMapsUrl || googleMapsUrlDraft.trim() === (cmmsData.companyProfile?.google_maps_url || '')}
+                        className="cmms-classic-btn-primary flex items-center justify-center gap-1.5 !px-4 !py-2 text-xs disabled:opacity-40"
+                      >
+                        {savingGoogleMapsUrl ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Save
+                      </button>
+                    </div>
+                    {googleMapsUrlError && <p className="cmms-tone-bad text-xs">{googleMapsUrlError}</p>}
+                    {cmmsData.companyProfile?.google_maps_url && !googleMapsUrlError && (
+                      <p className="cmms-tone-ok flex items-center gap-1 text-xs"><Check className="h-3 w-3" /> Saved — Directions and the map on your board use this location.</p>
+                    )}
+                  </div>
+                </CmmsFold>
               </div>
             )}
 
-            {/* View Departments */}
+            {/* View Departments -- collapsed by default; a tidy list of
+                monogram rows when opened. */}
             {departments.length > 0 && (
-              <div className="cmms-classic-divider">
-                <h4 className="cmms-classic-label mb-2">Departments ({departments.length})</h4>
-                <div className="cmms-field-list">
-                  {departments.map(dept => (
-                    <div key={dept.id} className="cmms-field-row">
-                      <dt className="!normal-case !tracking-normal !font-semibold" style={{ color: 'var(--color-text)' }}>{dept.department_name}</dt>
-                      {(dept.location || dept.description) && (
-                        <dd>{[dept.location, dept.description].filter(Boolean).join(' • ')}</dd>
-                      )}
-                    </div>
-                  ))}
-                </div>
+              <div className="mt-4">
+                <CmmsFold
+                  title="Departments"
+                  icon={<Building className="h-4 w-4" />}
+                  accent="plum"
+                  hint={`${departments.length}`}
+                >
+                  <ul className="space-y-2">
+                    {departments.map((dept, i) => (
+                      <li key={dept.id} className="cmms-doc-row cmms-accent-plum" style={{ animationDelay: `${Math.min(i, 8) * 45}ms` }}>
+                        <span className="cmms-monogram !h-9 !w-9 !text-xs" style={{ ['--ac']: '#6b3f7a' }} aria-hidden="true">{(dept.department_name || '?').trim().charAt(0).toUpperCase()}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words font-semibold cmms-classic-heading leading-tight">{dept.department_name}</p>
+                          {(dept.location || dept.description) && (
+                            <p className="truncate text-xs cmms-classic-muted">{[dept.location, dept.description].filter(Boolean).join(' • ')}</p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </CmmsFold>
               </div>
             )}
           </div>

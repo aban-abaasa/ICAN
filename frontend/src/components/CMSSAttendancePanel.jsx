@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Download, Users, QrCode, MapPin, CheckCircle, XCircle, Copy, Eye, Search, Filter, Trash2, LogIn, LogOut, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Calendar, ChevronDown, Clock, Download, Info, Maximize2, Users, QrCode, MapPin, CheckCircle, XCircle, Copy, Eye, Search, Filter, Trash2, LogIn, LogOut, RefreshCw } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
 import { getPublicAppUrl } from '../utils/publicAppUrl';
@@ -15,7 +15,17 @@ import CMMSWelfareAdminPanel from './CMMSWelfareAdminPanel.jsx';
 import CMMSItemCustodyPanel from './CMMSItemCustodyPanel.jsx';
 import CMMSEmployeeWelfare from './CMMSEmployeeWelfare.jsx';
 
+// Tab accents match the payroll page's pill tabs (see CMMSPayrollPanel).
+const ATTENDANCE_TAB_ACCENTS = { summary: 'gold', records: 'navy', manual: 'teal', 'qr-codes': 'burgundy', rewards: 'plum', welfare: 'emerald', items: 'gold' };
+
 const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator, hasToolAction }) => {
+  const [fullPage, setFullPage] = useState(false);
+  const [headerInfo, setHeaderInfo] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [logFiltersOpen, setLogFiltersOpen] = useState(false);
+  const [expandedRecordId, setExpandedRecordId] = useState(null);
+  const [copiedQrId, setCopiedQrId] = useState(null);
+  const [expandedStaffId, setExpandedStaffId] = useState(null);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [attendanceSummary, setAttendanceSummary] = useState([]);
   const [activeCheckIns, setActiveCheckIns] = useState([]);
@@ -589,18 +599,39 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
     { label: 'Status', value: (record) => record.check_out_time ? 'Complete' : 'Active' }
   ];
 
+  // Smart search: a staff member matches by name or email, and also by any
+  // date/time text of their check-ins (e.g. "2026-09-15", "15 sep", "monday",
+  // "08:1"). When only dates match, just the matching check-ins are shown.
+  const checkInSearchText = (record) => {
+    const d = new Date(record.check_in_time);
+    const out = record.check_out_time ? new Date(record.check_out_time) : null;
+    return [
+      record.check_in_time?.slice(0, 10), d.toLocaleDateString(), d.toLocaleTimeString(),
+      d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+      d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      out ? out.toLocaleTimeString() : '', record.check_in_location || ''
+    ].join(' ').toLowerCase();
+  };
+  const searchQuery = searchTerm.trim().toLowerCase();
   const visibleAttendanceRecords = attendanceRecords.filter((record) => {
     const query = searchTerm.trim().toLowerCase();
     const matchesSearch = !query || [record.staff?.full_name, record.staff?.email, record.check_in_location, record.check_out_location]
-      .some((value) => value?.toLowerCase().includes(query));
+      .some((value) => value?.toLowerCase().includes(query)) || checkInSearchText(record).includes(query);
     const recordStatus = record.check_out_time ? 'complete' : 'active';
     return matchesSearch && (statusFilter === 'all' || statusFilter === recordStatus);
   });
 
-  const visibleAttendanceSummary = attendanceSummary.filter((entry) => {
-    const query = searchTerm.trim().toLowerCase();
-    return !query || [entry.user_name, entry.user_email].some((value) => value?.toLowerCase().includes(query));
-  });
+  const recordsByStaff = attendanceRecords.reduce((map, record) => {
+    (map[record.cmms_user_id] ||= []).push(record);
+    return map;
+  }, {});
+  const staffRows = attendanceSummary.map((entry) => {
+    const all = (recordsByStaff[entry.cmms_user_id] || []).slice().sort((a, b) => new Date(b.check_in_time) - new Date(a.check_in_time));
+    const nameMatch = !searchQuery || [entry.user_name, entry.user_email].some((value) => value?.toLowerCase().includes(searchQuery));
+    const checkIns = nameMatch ? all : all.filter((record) => checkInSearchText(record).includes(searchQuery));
+    return { entry, checkIns, nameMatch };
+  }).filter((row) => row.nameMatch || row.checkIns.length > 0);
+  const visibleAttendanceSummary = staffRows.map((row) => row.entry);
 
   const summaryColumns = [
     { label: 'Staff Name', value: (entry) => entry.user_name || 'Unknown' },
@@ -680,105 +711,59 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Clock className="h-6 w-6" />
-            Staff Attendance
-          </h2>
-          <p className="text-sm text-slate-400 mt-1">Track and manage staff attendance</p>
+    <div className={fullPage ? 'cmms-fullpage space-y-5 fixed inset-0 z-50 overflow-y-auto p-4 md:p-8' : 'space-y-5 cmms-classic-card p-4 md:p-6'}>
+      {/* Header: slim row (medallion, title, company, actions), live chips, (i) for the explanation */}
+      <div className="cmms-accent-gold space-y-2.5">
+        <div className="flex items-center gap-3">
+          <span className="cmms-medallion"><Clock className="h-4 w-4" aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="cmms-classic-heading text-lg leading-tight">Staff Attendance</h2>
+            {companyProfile?.company_name && <p className="truncate text-xs cmms-classic-muted">{companyProfile.company_name}</p>}
+          </div>
+          <button type="button" onClick={() => setHeaderInfo(v => !v)} aria-expanded={headerInfo} aria-label="About this page" title="What is this page?" className="cmms-info-btn">
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+          {canManage && (
+            <button type="button" onClick={generateQRCode} aria-label="Generate QR Code" title="Generate QR Code" className="cmms-classic-btn-primary inline-flex !h-auto !min-h-0 flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs">
+              <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Generate QR Code</span>
+            </button>
+          )}
+          {fullPage
+            ? <button type="button" onClick={() => setFullPage(false)} className="cmms-classic-btn-secondary inline-flex !h-auto !min-h-0 flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs"><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back</button>
+            : <button type="button" onClick={() => setFullPage(true)} className="cmms-info-btn" title="Open this tab as a full page" aria-label="Open full page"><Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /></button>}
         </div>
-        {canManage && (
-          <button
-            onClick={generateQRCode}
-            className="px-4 py-2 cmms-classic-btn-primary rounded-lg flex items-center gap-2"
-          >
-            <QrCode className="h-4 w-4" />
-            Generate QR Code
-          </button>
+        {activeCheckIns.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            <span className="cmms-classic-chip" style={{ animation: 'cmms-rise .45s ease both' }}>{activeCheckIns.length} checked in now</span>
+          </div>
         )}
-      </div>
+        {headerInfo && <div className="cmms-info cmms-classic-muted"><p>Track and manage staff attendance: check-in counts, the detailed log, manual check-ins, QR codes, rewards, leave and items taken.</p></div>}
+        <div className="cmms-ornament" aria-hidden="true" />
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-700 flex-wrap">
-        <button
-          onClick={() => setActiveTab('summary')}
-          className={`px-4 py-2 font-semibold ${
-            activeTab === 'summary'
-              ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
-              : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          Check-In Summary
-        </button>
-        <button
-          onClick={() => setActiveTab('records')}
-          className={`px-4 py-2 font-semibold ${
-            activeTab === 'records'
-              ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
-              : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          Detailed Log
-        </button>
-        {(canManualCheckInOut || canAddDays) && (
-          <button
-            onClick={() => setActiveTab('manual')}
-            className={`px-4 py-2 font-semibold ${
-              activeTab === 'manual'
-                ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
-                : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
-            }`}
-          >
-            Manual Check-In/Out
-          </button>
-        )}
-        {canManage && (
-          <button
-            onClick={() => setActiveTab('qr-codes')}
-            className={`px-4 py-2 font-semibold ${
-              activeTab === 'qr-codes'
-                ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
-                : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
-            }`}
-          >
-            QR Codes
-          </button>
-        )}
-        <button
-          onClick={() => setActiveTab('rewards')}
-          className={`px-4 py-2 font-semibold ${
-            activeTab === 'rewards'
-              ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
-              : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          Rewards
-        </button>
-        <button
-          onClick={() => setActiveTab('welfare')}
-          className={`px-4 py-2 font-semibold ${
-            activeTab === 'welfare'
-              ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
-              : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          Leave &amp; Welfare
-        </button>
-        {canSeeItemsTab && (
-          <button
-            onClick={() => setActiveTab('items')}
-            className={`px-4 py-2 font-semibold ${
-              activeTab === 'items'
-                ? 'border-b-2 border-[var(--color-primary)] text-[var(--color-primary)]'
-                : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
-            }`}
-          >
-            Items Taken/Returned
-          </button>
-        )}
+        {/* Tabs: pill tabs like Payroll; choosing one opens it as a full page */}
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap" role="tablist" aria-label="Attendance sections" style={{ scrollbarWidth: 'none' }}>
+          {[
+            { id: 'summary', label: 'Check-In Summary' },
+            { id: 'records', label: 'Detailed Log' },
+            (canManualCheckInOut || canAddDays) && { id: 'manual', label: 'Manual Check-In/Out' },
+            canManage && { id: 'qr-codes', label: 'QR Codes' },
+            { id: 'rewards', label: 'Rewards' },
+            { id: 'welfare', label: 'Leave & Welfare' },
+            canSeeItemsTab && { id: 'items', label: 'Items Taken/Returned' }
+          ].filter(Boolean).map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => { setActiveTab(tab.id); setFullPage(true); }}
+              className={`cmms-ptab cmms-accent-${ATTENDANCE_TAB_ACCENTS[tab.id] || 'gold'} ${activeTab === tab.id ? 'is-active' : ''}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Check-In Summary Tab: one row per staff member (count), not one row per day */}
@@ -787,86 +772,121 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
           {summaryLoadError && (
             <div className="bg-red-500/20 border border-red-500/50 text-red-200 p-4 rounded-lg">{summaryLoadError}</div>
           )}
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-              <Calendar className="h-5 w-5 text-slate-400" />
-              <input
-                type="date"
-                value={startDate}
-                max={endDate || undefined}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg"
-                aria-label="Summary start date"
-              />
-              <span className="text-sm text-slate-400">to</span>
-              <input type="date" value={endDate} min={startDate || undefined} max={today} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg" aria-label="Summary end date" />
-              <button onClick={() => setDatePreset(1)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">Today</button>
-              <button onClick={() => setDatePreset(7)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">7 days</button>
-              <button onClick={() => setDatePreset(30)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">30 days</button>
-              <button onClick={setAllTimeRange} className="px-3 py-2 text-xs cmms-classic-btn-secondary">All time</button>
-            </div>
-            {canExport && (
-              <div className="flex flex-wrap gap-2">
-                <button onClick={exportSummaryExcel} className="px-4 py-2 cmms-classic-btn-secondary flex items-center gap-2">
-                  <Download className="h-4 w-4" /> Excel
-                </button>
-                <button onClick={exportSummaryPdf} className="px-4 py-2 bg-rose-700 hover:bg-rose-600 rounded-lg flex items-center gap-2">
-                  <Download className="h-4 w-4" /> PDF
-                </button>
+
+          {/* Collapsible date range + export: closed it is one slim row showing the range */}
+          <section className="cmms-sec cmms-accent-gold" data-open={filtersOpen}>
+            <button type="button" onClick={() => setFiltersOpen(o => !o)} aria-expanded={filtersOpen}
+              className="flex w-full items-center gap-3 text-left !bg-transparent" style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}>
+              <span className="cmms-medallion"><Calendar className="h-4 w-4" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="cmms-classic-heading cmms-sec-title block">Date range</span>
+                <span className="block truncate text-xs cmms-classic-muted">
+                  {startDate ? new Date(`${startDate}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Start'} → {endDate ? new Date(`${endDate}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today'}
+                </span>
+              </span>
+              <ChevronDown className={`h-4 w-4 flex-shrink-0 cmms-classic-muted transition-transform duration-300 ${filtersOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {filtersOpen && (
+              <div className="cmms-sec-body mt-4 space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="text-xs font-semibold cmms-classic-muted">From
+                    <input type="date" value={startDate} max={endDate || undefined} onChange={(e) => setStartDate(e.target.value)} className="mt-1 w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg" aria-label="Summary start date" />
+                  </label>
+                  <label className="text-xs font-semibold cmms-classic-muted">To
+                    <input type="date" value={endDate} min={startDate || undefined} max={today} onChange={(e) => setEndDate(e.target.value)} className="mt-1 w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg" aria-label="Summary end date" />
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => setDatePreset(1)} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary">Today</button>
+                  <button onClick={() => setDatePreset(7)} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary">7 days</button>
+                  <button onClick={() => setDatePreset(30)} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary">30 days</button>
+                  <button onClick={setAllTimeRange} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary">All time</button>
+                </div>
+                {canExport && (
+                  <div className="flex flex-wrap gap-2 border-t border-[rgba(196,160,82,0.3)] pt-3">
+                    <button onClick={exportSummaryExcel} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary flex items-center gap-1.5">
+                      <Download className="h-3.5 w-3.5" /> Excel
+                    </button>
+                    <button onClick={exportSummaryPdf} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-primary flex items-center gap-1.5">
+                      <Download className="h-3.5 w-3.5" /> PDF
+                    </button>
+                  </div>
+                )}
               </div>
             )}
-          </div>
+          </section>
 
-          <label className="relative block max-w-md">
+          <label className="relative block">
             <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search staff or email" className="w-full rounded-lg border border-slate-700 bg-slate-800 py-2 pl-9 pr-3 text-sm" />
+            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search name, email, date (15 sep, 2026-09-15) or time" className="w-full rounded-lg border border-slate-700 bg-slate-800 py-2 pl-9 pr-3 text-sm" />
           </label>
+          <p className="text-xs cmms-classic-muted">
+            {staffRows.length} staff{searchQuery ? ' match' : ''} · tap a person to see the exact date and time of every check-in
+          </p>
 
-          {visibleAttendanceSummary.length === 0 ? (
+          {staffRows.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
               <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No check-ins in this date range</p>
+              <p>{searchQuery ? 'No staff or check-ins match your search' : 'No check-ins in this date range'}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-700">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-800">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-slate-300">Staff</th>
-                    <th className="px-4 py-2 text-left text-slate-300">Email</th>
-                    <th className="px-4 py-2 text-center text-slate-300">Check-Ins</th>
-                    <th className="px-4 py-2 text-center text-slate-300">Days Present</th>
-                    <th className="px-4 py-2 text-left text-slate-300">Last Check In</th>
-                    <th className="px-4 py-2 text-center text-slate-300">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {visibleAttendanceSummary.map((entry) => (
-                    <tr key={entry.cmms_user_id} className="hover:bg-slate-800/60">
-                      <td className="px-4 py-2 font-semibold">{entry.user_name || 'Unknown'}</td>
-                      <td className="px-4 py-2 text-slate-400">{entry.user_email}</td>
-                      <td className="px-4 py-2 text-center">
-                        <span className="cmms-classic-chip !text-sm !normal-case">{entry.check_in_count}</span>
-                      </td>
-                      <td className="px-4 py-2 text-center text-slate-300">
-                        {entry.days_present}
-                        {entry.manual_days_added > 0 && (
-                          <span className="ml-1 text-xs text-emerald-400" title="Includes admin-added days">(+{entry.manual_days_added})</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-slate-400">{entry.last_check_in_time ? new Date(entry.last_check_in_time).toLocaleString() : '—'}</td>
-                      <td className="px-4 py-2 text-center">
-                        {entry.currently_checked_in ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-300"><Clock className="h-3 w-3" />Checked in</span>
+            <ul className="grid gap-2.5 lg:grid-cols-2">
+              {staffRows.map(({ entry, checkIns, nameMatch }, i) => {
+                const name = entry.user_name || 'Unknown';
+                const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+                const open = expandedStaffId === entry.cmms_user_id || (!!searchQuery && !nameMatch);
+                const last = entry.last_check_in_time ? new Date(entry.last_check_in_time) : null;
+                return (
+                  <li key={entry.cmms_user_id} className="cmms-staff-card" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                    <button type="button" onClick={() => setExpandedStaffId(expandedStaffId === entry.cmms_user_id ? null : entry.cmms_user_id)} aria-expanded={open}
+                      className="flex w-full items-center gap-3 text-left !bg-transparent" style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}>
+                      <span className="cmms-monogram">{initials || '?'}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold">{name}</span>
+                        <span className="block truncate text-xs cmms-classic-muted">{entry.user_email}</span>
+                        <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <span className="cmms-classic-chip !normal-case">{entry.check_in_count} check-ins</span>
+                          <span className="cmms-classic-chip !normal-case">
+                            {entry.days_present} days{entry.manual_days_added > 0 && <span title="Includes admin-added days"> (+{entry.manual_days_added})</span>}
+                          </span>
+                          {entry.currently_checked_in
+                            ? <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309' }}><Clock className="h-3 w-3" />In now</span>
+                            : <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(16,185,129,0.15)', color: '#047857' }}><CheckCircle className="h-3 w-3" />Out</span>}
+                        </span>
+                        <span className="mt-1 block text-xs cmms-classic-muted">
+                          Last in: {last ? `${last.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} · ${last.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '—'}
+                        </span>
+                      </span>
+                      <ChevronDown className={`h-4 w-4 flex-shrink-0 cmms-classic-muted transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+                    </button>
+                    {open && (
+                      <div className="cmms-sec-body mt-3 border-t border-[rgba(196,160,82,0.3)] pt-3">
+                        {checkIns.length === 0 ? (
+                          <p className="text-xs cmms-classic-muted">No individual check-ins recorded in this range{entry.manual_days_added > 0 ? ' (days were added by an admin)' : ''}.</p>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300"><CheckCircle className="h-3 w-3" />Checked out</span>
+                          <ul className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                            {checkIns.map((record) => (
+                              <li key={record.id || record.check_in_time} className="cmms-doc-row !py-2">
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-semibold">{new Date(record.check_in_time).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                  <span className="block text-xs cmms-classic-muted">
+                                    In {new Date(record.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    {' → '}
+                                    {record.check_out_time ? `Out ${new Date(record.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'not out yet'}
+                                    {record.check_in_location ? ` · ${record.check_in_location}` : ''}
+                                  </span>
+                                </span>
+                                <span className="cmms-classic-chip !normal-case">{formatDuration(record.check_in_time, record.check_out_time)}</span>
+                              </li>
+                            ))}
+                          </ul>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
       )}
@@ -1006,49 +1026,68 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               <span className="cmms-classic-muted">{rewardBalances[0].lifetime_earned_points} earned all-time{rewardBalances[0].pending_redemption_points > 0 ? ` · ${rewardBalances[0].pending_redemption_points} pending payout` : ''}</span>
             </div>
           )}
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-              <Calendar className="h-5 w-5 text-slate-400" />
-              <input
-                type="date"
-                value={startDate}
-                max={endDate || undefined}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg"
-                aria-label="Attendance start date"
-              />
-              <span className="text-sm text-slate-400">to</span>
-              <input type="date" value={endDate} min={startDate || undefined} max={today} onChange={(e) => setEndDate(e.target.value)} className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg" aria-label="Attendance end date" />
-              <button onClick={() => setDatePreset(1)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">Today</button>
-              <button onClick={() => setDatePreset(7)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">7 days</button>
-              <button onClick={() => setDatePreset(30)} className="px-3 py-2 text-xs cmms-classic-btn-secondary">30 days</button>
-            </div>
-            {canExport && (
-            <div className="flex flex-wrap gap-2">
-            <button
-              onClick={exportAttendanceExcel}
-              className="px-4 py-2 cmms-classic-btn-secondary flex items-center gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Excel
+
+          {/* Collapsible date range + filters + export */}
+          <section className="cmms-sec cmms-accent-navy" data-open={logFiltersOpen}>
+            <button type="button" onClick={() => setLogFiltersOpen(o => !o)} aria-expanded={logFiltersOpen}
+              className="flex w-full items-center gap-3 text-left !bg-transparent" style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}>
+              <span className="cmms-medallion"><Calendar className="h-4 w-4" aria-hidden="true" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="cmms-classic-heading cmms-sec-title block">Date range &amp; filters</span>
+                <span className="block truncate text-xs cmms-classic-muted">
+                  {startDate ? new Date(`${startDate}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Start'} → {endDate ? new Date(`${endDate}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Today'} · {statusFilter === 'all' ? 'All statuses' : statusFilter === 'active' ? 'Checked in' : 'Checked out'}
+                </span>
+              </span>
+              <ChevronDown className={`h-4 w-4 flex-shrink-0 cmms-classic-muted transition-transform duration-300 ${logFiltersOpen ? 'rotate-180' : ''}`} />
             </button>
-            <button onClick={exportAttendancePdf} className="px-4 py-2 bg-rose-700 hover:bg-rose-600 rounded-lg flex items-center gap-2">
-              <Download className="h-4 w-4" /> PDF
-            </button>
-            </div>
+            {logFiltersOpen && (
+              <div className="cmms-sec-body mt-4 space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="text-xs font-semibold cmms-classic-muted">From
+                    <input type="date" value={startDate} max={endDate || undefined} onChange={(e) => setStartDate(e.target.value)} className="mt-1 w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg" aria-label="Attendance start date" />
+                  </label>
+                  <label className="text-xs font-semibold cmms-classic-muted">To
+                    <input type="date" value={endDate} min={startDate || undefined} max={today} onChange={(e) => setEndDate(e.target.value)} className="mt-1 w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg" aria-label="Attendance end date" />
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => setDatePreset(1)} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary">Today</button>
+                  <button onClick={() => setDatePreset(7)} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary">7 days</button>
+                  <button onClick={() => setDatePreset(30)} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary">30 days</button>
+                </div>
+                {canViewAll && (
+                  <label className="block text-xs font-semibold cmms-classic-muted">Staff member
+                    <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+                      <option value="">All staff</option>
+                      {staffOptions.map((staff) => <option key={staff.id} value={staff.id}>{staff.label}</option>)}
+                    </select>
+                  </label>
+                )}
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Status filter">
+                  {[['all', 'All statuses'], ['active', 'Checked in'], ['complete', 'Checked out']].map(([value, label]) => (
+                    <button key={value} type="button" onClick={() => setStatusFilter(value)} aria-pressed={statusFilter === value}
+                      className={`cmms-ptab cmms-accent-teal !px-3 !py-1 !text-xs ${statusFilter === value ? 'is-active' : ''}`}>{label}</button>
+                  ))}
+                </div>
+                {canExport && (
+                  <div className="flex flex-wrap gap-2 border-t border-[rgba(196,160,82,0.3)] pt-3">
+                    <button onClick={exportAttendanceExcel} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> Excel</button>
+                    <button onClick={exportAttendancePdf} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-primary flex items-center gap-1.5"><Download className="h-3.5 w-3.5" /> PDF</button>
+                  </div>
+                )}
+              </div>
             )}
-          </div>
+          </section>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <label className="relative block"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" /><input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search staff, email or location" className="w-full rounded-lg border border-slate-700 bg-slate-800 py-2 pl-9 pr-3 text-sm" /></label>
-            {canViewAll && <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm"><option value="">All staff</option>{staffOptions.map((staff) => <option key={staff.id} value={staff.id}>{staff.label}</option>)}</select>}
-            <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm"><Filter className="h-4 w-4 text-slate-400" /><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full bg-transparent outline-none"><option value="all">All statuses</option><option value="active">Checked in</option><option value="complete">Checked out</option></select></label>
-            <div className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-300">{visibleAttendanceRecords.length} record{visibleAttendanceRecords.length === 1 ? '' : 's'} shown</div>
-          </div>
+          <label className="relative block">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search name, email, location, date (15 sep) or time" className="w-full rounded-lg border border-slate-700 bg-slate-800 py-2 pl-9 pr-3 text-sm" />
+          </label>
 
-          <div className="flex flex-wrap gap-3 text-sm">
-            <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-300">Payroll review ready: {payrollReadyCount}</span>
-            {payrollFollowUpCount > 0 && <span className="rounded-full bg-amber-500/15 px-3 py-1 text-amber-300">Follow up - staff still checked in: {payrollFollowUpCount}</span>}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="cmms-classic-muted">{visibleAttendanceRecords.length} record{visibleAttendanceRecords.length === 1 ? '' : 's'}{searchQuery ? ' match' : ''}</span>
+            <span className="cmms-classic-chip !normal-case" style={{ color: '#047857' }}>Payroll ready: {payrollReadyCount}</span>
+            {payrollFollowUpCount > 0 && <span className="cmms-classic-chip !normal-case" style={{ color: '#b45309' }}>Still checked in: {payrollFollowUpCount}</span>}
           </div>
 
           {visibleAttendanceRecords.length === 0 ? (
@@ -1057,63 +1096,46 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               <p>No attendance records match these filters</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {visibleAttendanceRecords.map((record) => (
-                <div
-                  key={record.id}
-                  className="cmms-classic-card p-4 transition hover:shadow-md"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      {record.staff?.avatar_url ? (
-                        <img
-                          src={record.staff.avatar_url}
-                          alt={record.staff.full_name}
-                          className="h-10 w-10 rounded-full"
-                        />
-                      ) : (
-                        <div className="h-10 w-10 rounded-full bg-slate-700 flex items-center justify-center">
-                          <Users className="h-5 w-5 text-slate-400" />
-                        </div>
-                      )}
-                      <div>
-                        <p className="font-semibold">{record.staff?.full_name || 'Unknown Staff'}</p>
-                        <p className="text-sm text-slate-400">{record.staff?.email}</p>
-                        {record.check_in_location && (
-                          <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
-                            <MapPin className="h-3 w-3" />
-                            {record.check_in_location}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="flex items-center gap-2 justify-end mb-1">
-                        {record.check_out_time ? (
-                          <CheckCircle className="h-4 w-4 text-emerald-400" />
-                        ) : (
-                          <Clock className="h-4 w-4 text-amber-400 animate-pulse" />
-                        )}
-                        <span className="text-sm font-semibold">
-                          {formatDuration(record.check_in_time, record.check_out_time)}
+            <ul className="grid gap-2.5 lg:grid-cols-2">
+              {visibleAttendanceRecords.map((record, i) => {
+                const name = record.staff?.full_name || 'Unknown Staff';
+                const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+                const inAt = new Date(record.check_in_time);
+                const open = expandedRecordId === record.id;
+                const hhmm = { hour: '2-digit', minute: '2-digit' };
+                return (
+                  <li key={record.id} className="cmms-staff-card" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                    <button type="button" onClick={() => setExpandedRecordId(open ? null : record.id)} aria-expanded={open}
+                      className="flex w-full items-center gap-3 text-left !bg-transparent" style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}>
+                      <span className="cmms-monogram">{initials || '?'}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold">{name}</span>
+                        <span className="block text-xs cmms-classic-muted">
+                          {inAt.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} · In {inAt.toLocaleTimeString([], hhmm)}
+                          {record.check_out_time ? ` → Out ${new Date(record.check_out_time).toLocaleTimeString([], hhmm)}` : ''}
                         </span>
-                      </div>
-                      <p className="text-xs text-slate-400">
-                        In: {new Date(record.check_in_time).toLocaleTimeString()}
-                      </p>
-                       {record.check_out_time && (
-                         <p className="text-xs text-slate-400">
-                           Out: {new Date(record.check_out_time).toLocaleTimeString()}
-                         </p>
-                       )}
-                       <p className={`mt-2 text-xs ${record.check_out_time ? 'text-emerald-300' : 'text-amber-300'}`}>
-                         {record.check_out_time ? 'Payroll follow-up: ready for payroll review' : 'Payroll follow-up: employee must check out'}
-                       </p>
-                     </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                        <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                          {record.check_out_time
+                            ? <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(16,185,129,0.15)', color: '#047857' }}><CheckCircle className="h-3 w-3" />Out</span>
+                            : <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: 'rgba(245,158,11,0.15)', color: '#b45309' }}><Clock className="h-3 w-3" />In now</span>}
+                          <span className="cmms-classic-chip !normal-case">{formatDuration(record.check_in_time, record.check_out_time)}</span>
+                        </span>
+                      </span>
+                      <ChevronDown className={`h-4 w-4 flex-shrink-0 cmms-classic-muted transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+                    </button>
+                    {open && (
+                      <dl className="cmms-field-list cmms-sec-body mt-3 border-t border-[rgba(196,160,82,0.3)] pt-2">
+                        <div className="cmms-field-row"><dt>Email</dt><dd className="break-all">{record.staff?.email || '-'}</dd></div>
+                        <div className="cmms-field-row"><dt>Check-in</dt><dd>{inAt.toLocaleString()}</dd></div>
+                        <div className="cmms-field-row"><dt>Check-out</dt><dd>{record.check_out_time ? new Date(record.check_out_time).toLocaleString() : 'Not checked out'}</dd></div>
+                        <div className="cmms-field-row"><dt>Location</dt><dd>{record.check_in_location || '-'}</dd></div>
+                        <div className="cmms-field-row"><dt>Payroll</dt><dd>{record.check_out_time ? 'Ready for payroll review' : 'Employee must check out'}</dd></div>
+                      </dl>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
       )}
@@ -1133,116 +1155,86 @@ const CMSSAttendancePanel = ({ companyProfile, currentUser, cmmsUsers, userRole,
               </button>
             </div>
           ) : (
-            <div className="grid gap-4">
-              {qrCodes.map((qr) => {
+            <ul className="grid gap-3 lg:grid-cols-2">
+              {qrCodes.map((qr, i) => {
                 const qrUrl = getPublicAppUrl(`/staff-attendance?token=${qr.token}`);
+                const stamp = (value) => `${new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} · ${new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
                 return (
-                  <div
-                    key={qr.id}
-                    className={`p-6 border rounded-lg ${
-                      qr.is_active
-                        ? 'bg-emerald-900/20 border-emerald-700'
-                        : 'bg-slate-800 border-slate-700'
-                    }`}
-                  >
-                    <div className="flex flex-col lg:flex-row gap-6">
-                      {/* QR Code Visual */}
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="p-3 bg-white rounded-lg">
-                          <QRCodeSVG 
-                            value={qrUrl} 
-                            size={180}
-                            level="H"
-                            includeMargin={true}
-                          />
-                        </div>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(qrUrl);
-                            alert('QR URL copied to clipboard!');
-                          }}
-                          className="flex items-center gap-2 px-3 py-1 text-xs cmms-classic-btn-secondary"
-                          title="Copy URL"
-                        >
-                          <Copy className="h-3 w-3" />
-                          Copy URL
-                        </button>
-                      </div>
+                  <li key={qr.id} className="cmms-staff-card !p-4" style={{ '--ac': qr.is_active ? '#1f7a5a' : '#64748b', animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                    {/* Where it is + whether it works */}
+                    <div className="flex items-start gap-2">
+                      <h3 className="cmms-classic-heading min-w-0 flex-1 text-base leading-snug">{qr.location_name}</h3>
+                      <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
+                        style={qr.is_active ? { background: 'rgba(16,185,129,0.15)', color: '#047857' } : { background: 'rgba(100,116,139,0.18)', color: '#475569' }}>
+                        {qr.is_active ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                        {qr.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
 
-                      {/* QR Details */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-3">
-                          <p className="font-semibold text-lg">{qr.location_name}</p>
-                          {qr.is_active ? (
-                            <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-full">
-                              Active
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded-full">
-                              Inactive
-                            </span>
-                          )}
-                        </div>
-                        
-                        <div className="space-y-2 mb-4">
-                          <p className="text-xs text-slate-400">
-                            Created: {new Date(qr.created_at).toLocaleDateString()} at {new Date(qr.created_at).toLocaleTimeString()}
-                          </p>
-                          {qr.last_used_at && (
-                            <p className="text-xs text-slate-400">
-                              Last Used: {new Date(qr.last_used_at).toLocaleDateString()} at {new Date(qr.last_used_at).toLocaleTimeString()}
-                            </p>
-                          )}
-                          <p className="text-xs text-slate-500 break-all font-mono">
-                            Token: {qr.token}
-                          </p>
-                          <p className="text-xs text-slate-500 break-all font-mono">
-                            <a href={qrUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">
-                              {qrUrl}
-                            </a>
-                          </p>
-                        </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <span className="cmms-classic-chip !normal-case">Created {stamp(qr.created_at)}</span>
+                      <span className="cmms-classic-chip !normal-case">{qr.last_used_at ? `Last used ${stamp(qr.last_used_at)}` : 'Never used'}</span>
+                    </div>
 
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => downloadQRCode(qr.token, qr.location_name)}
-                            className="flex items-center gap-2 px-3 py-2 text-sm cmms-classic-btn-primary rounded-lg"
-                            title="Download QR Code"
-                          >
-                            <Download className="h-4 w-4" />
-                            Download PDF
-                          </button>
-                          <button
-                            onClick={() => toggleQRCode(qr.id, qr.is_active)}
-                            className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg ${
-                              qr.is_active
-                                ? 'bg-rose-600 hover:bg-rose-700'
-                                : 'bg-emerald-600 hover:bg-emerald-700'
-                            }`}
-                            title={qr.is_active ? 'Deactivate' : 'Activate'}
-                          >
-                            {qr.is_active ? (
-                              <>
-                                <XCircle className="h-4 w-4" />
-                                Deactivate
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle className="h-4 w-4" />
-                                Activate
-                              </>
-                            )}
-                          </button>
-                          <button onClick={() => deleteQRCode(qr)} className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-700 hover:bg-red-700 rounded-lg" title="Delete QR code">
-                            <Trash2 className="h-4 w-4" /> Delete
-                          </button>
-                        </div>
+                    {/* QR visual, sized to the screen */}
+                    <div className="mt-3 flex justify-center">
+                      <div className={`rounded-xl bg-white p-2.5 shadow-sm ${qr.is_active ? '' : 'opacity-50'}`}>
+                        <QRCodeSVG value={qrUrl} size={176} level="H" includeMargin={true} style={{ width: 'min(176px, 55vw)', height: 'auto' }} />
                       </div>
                     </div>
-                  </div>
+
+                    {/* Main action full width, the rest in a tidy row */}
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => downloadQRCode(qr.token, qr.location_name)}
+                        className="cmms-classic-btn-primary col-span-3 flex min-h-[2.75rem] items-center justify-center gap-2 px-3 py-2 text-sm"
+                        title="Download QR Code"
+                      >
+                        <Download className="h-4 w-4" /> Download PDF
+                      </button>
+                      <button
+                        onClick={() => {
+                          Promise.resolve(navigator.clipboard?.writeText(qrUrl)).catch(() => {});
+                          setCopiedQrId(qr.id);
+                          setTimeout(() => setCopiedQrId(id => (id === qr.id ? null : id)), 2000);
+                        }}
+                        className="cmms-classic-btn-secondary flex min-h-[2.5rem] items-center justify-center gap-1.5 !px-2 !py-2 text-xs"
+                        title="Copy URL"
+                      >
+                        {copiedQrId === qr.id ? <><CheckCircle className="h-3.5 w-3.5" /> Copied</> : <><Copy className="h-3.5 w-3.5" /> Copy URL</>}
+                      </button>
+                      <button
+                        onClick={() => toggleQRCode(qr.id, qr.is_active)}
+                        className="cmms-classic-btn-secondary flex min-h-[2.5rem] items-center justify-center gap-1.5 !px-2 !py-2 text-xs"
+                        style={{ color: qr.is_active ? '#b45309' : '#047857' }}
+                        title={qr.is_active ? 'Deactivate' : 'Activate'}
+                      >
+                        {qr.is_active ? <><XCircle className="h-3.5 w-3.5" /> Turn off</> : <><CheckCircle className="h-3.5 w-3.5" /> Turn on</>}
+                      </button>
+                      <button
+                        onClick={() => deleteQRCode(qr)}
+                        className="cmms-classic-btn-secondary flex min-h-[2.5rem] items-center justify-center gap-1.5 !px-2 !py-2 text-xs"
+                        style={{ color: '#dc2626' }}
+                        title="Delete QR code"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Delete
+                      </button>
+                    </div>
+
+                    {/* Long technical strings stay folded away so they cannot overflow a small screen */}
+                    <details className="mt-3 text-xs">
+                      <summary className="cursor-pointer cmms-classic-muted">Link &amp; token</summary>
+                      <div className="mt-2 space-y-1.5">
+                        <p className="break-all font-mono cmms-classic-muted">Token: {qr.token}</p>
+                        <p className="break-all font-mono">
+                          <a href={qrUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-500 underline">{qrUrl}</a>
+                        </p>
+                      </div>
+                    </details>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </div>
       )}

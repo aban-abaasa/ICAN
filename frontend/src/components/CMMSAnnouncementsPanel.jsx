@@ -170,7 +170,7 @@ const CMMSAnnouncementsPanel = ({
   canManageOpportunities = false,
   canViewOpportunityBids = false,
 }) => {
-  const [subTab, setSubTab] = useState('posts');
+  const [subTab, setSubTab] = useState(() => { try { return localStorage.getItem('cmms_announcements_tab') || 'posts'; } catch { return 'posts'; } });
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -747,6 +747,11 @@ const CMMSAnnouncementsPanel = ({
   // "view" alone is a legitimate grant -- a role trusted only to read posts
   // (not draft, edit, or see applicant PII) still needs the panel to render,
   // just without any of the write controls below.
+  // A remembered tab the user can no longer open (role changed) falls back to Posts.
+  useEffect(() => {
+    if ((subTab === "applications" && !canManageApplications) || ((subTab === "profile" || subTab === "pitch") && !canEdit)) setSubTab("posts");
+  }, [subTab, canManageApplications, canEdit]);
+
   if (!canView && !canCreate && !canEdit && !canManageApplications) {
     return (
       <div className="cmms-classic-card p-6 text-orange-300">
@@ -758,99 +763,83 @@ const CMMSAnnouncementsPanel = ({
   return (
     <div className="cap-scope space-y-6">
       <style>{CAP_STYLES}</style>
-      <div className="cap-card p-5 border rounded-2xl">
-        {/* Stacked, not side-by-side, below sm -- the title button and the
-            two "New..." buttons used to share one flex row and fight for
-            width, which is exactly what was pushing "New job posting" past
-            the card's edge and clipping the chevron. Full-width rows can't
-            overflow the card, and grid-cols-2 on the actions row guarantees
-            the two buttons split the width evenly instead of shrinking
-            unevenly (or not at all) the way plain flex did. */}
-        <div className="flex flex-col gap-3">
-          {/* The title bar is always visible and doubles as the collapse
-              toggle -- everything below it (the public-page explainer, the
-              link, and Copy link/QR/Preview) is a one-time "here's what this
-              is" that shouldn't have to be scrolled past again on every
-              return visit, especially on a phone where it used to push the
-              actual post list halfway off the first screen. */}
-          <button
-            type="button"
-            onClick={() => setBoardInfoExpanded((v) => !v)}
-            className="w-full flex items-center justify-between gap-2 text-left"
-            aria-expanded={boardInfoExpanded}
-          >
-            <span className="flex items-center gap-2 min-w-0">
-              <Megaphone className="cap-icon-purple w-5 h-5 flex-shrink-0" />
-              <h2 className="cap-title text-lg sm:text-xl font-bold">Announcements &amp; Job Postings</h2>
-            </span>
-            <ChevronDown className={`cap-text-muted w-4 h-4 flex-shrink-0 transition-transform ${boardInfoExpanded ? 'rotate-180' : ''}`} />
-          </button>
-          {canCreate && (
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:w-auto">
-              <button onClick={() => openCreate('announcement')} className="cap-btn-purple px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors">
-                <Plus className="w-4 h-4 flex-shrink-0" /> <span>New announcement</span>
+      {/* Posts tab keeps the full header (title, "New..." actions, public-page
+          info). Every other tab collapses it to the tab bar alone, so the
+          tab's content gets the whole page -- and the bar is sticky, so
+          switching tabs never needs a scroll back to the top. The inactive
+          tabs drop to icons below sm; the active one always shows its name. */}
+      <div className="cap-card border rounded-2xl sticky top-0 z-20 overflow-hidden">
+        {subTab === 'posts' && (
+          <div className="p-4 pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setBoardInfoExpanded((v) => !v)}
+                className="flex items-center gap-2 min-w-0 text-left"
+                aria-expanded={boardInfoExpanded}
+              >
+                <Megaphone className="cap-icon-purple w-5 h-5 flex-shrink-0" />
+                <h2 className="cap-title text-base sm:text-xl font-bold truncate">Posts &amp; Jobs</h2>
+                <ChevronDown className={`cap-text-muted w-4 h-4 flex-shrink-0 transition-transform ${boardInfoExpanded ? 'rotate-180' : ''}`} />
               </button>
-              <button onClick={() => openCreate('job')} className="cap-btn-emerald px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors">
-                <Briefcase className="w-4 h-4 flex-shrink-0" /> <span>New job posting</span>
-              </button>
+              {canCreate && (
+                <div className="flex gap-1.5 flex-shrink-0">
+                  <button onClick={() => openCreate('announcement')} title="New announcement" className="cap-btn-purple px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1 transition-colors">
+                    <Plus className="w-4 h-4" /> Post
+                  </button>
+                  <button onClick={() => openCreate('job')} title="New job posting" className="cap-btn-emerald px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1 transition-colors">
+                    <Plus className="w-4 h-4" /> Job
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        {boardInfoExpanded && (
-          <div className="mt-2 animate-fadeIn">
-            <p className="cap-text-muted text-sm">
-              Your business now has a real public page, live with no login at{' '}
-              <span className="cap-icon-purple-text font-mono text-xs break-all">{boardLink(companyId)}</span> -- announcements, jobs, products, contact details, all in one place customers can find and search.
-            </p>
-            {canEdit && (
-              <div className="flex flex-wrap gap-2 mt-2.5">
-                <button onClick={copyBoardLink} className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors">
-                  {boardLinkCopied ? <><Check className="cap-icon-emerald-text w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
-                </button>
-                <button onClick={downloadBoardQr} disabled={boardQrDownloading} className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors">
-                  {boardQrDownloading ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <QrCode className="w-3.5 h-3.5" />} Download QR flyer
-                </button>
-                <a href={boardLink(companyId)} target="_blank" rel="noreferrer" className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors">
-                  <Globe className="w-3.5 h-3.5" /> Preview page
-                </a>
+            {boardInfoExpanded && (
+              <div className="mt-2 animate-fadeIn">
+                <p className="cap-text-muted text-sm">
+                  Public page, no login needed:{' '}
+                  <span className="cap-icon-purple-text font-mono text-xs break-all">{boardLink(companyId)}</span>
+                </p>
+                {canEdit && (
+                  <div className="flex flex-wrap gap-2 mt-2.5">
+                    <button onClick={copyBoardLink} className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors">
+                      {boardLinkCopied ? <><Check className="cap-icon-emerald-text w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
+                    </button>
+                    <button onClick={downloadBoardQr} disabled={boardQrDownloading} className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors">
+                      {boardQrDownloading ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <QrCode className="w-3.5 h-3.5" />} QR flyer
+                    </button>
+                    <a href={boardLink(companyId)} target="_blank" rel="noreferrer" className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors">
+                      <Globe className="w-3.5 h-3.5" /> Preview
+                    </a>
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {/* overflow-x-auto + flex-shrink-0/whitespace-nowrap on every button
-            -- without them, flex's default shrink-to-fit squeezed "Board
-            profile" into two wrapped lines and clipped "Applications"/
-            "Opportunities" on a narrow phone. Now the row scrolls instead of
-            the words ever breaking or getting cut off; the trailing fade is
-            the same "there's more, swipe" affordance as the public board's
-            own tab strip (see PublicCompanyNoticeBoard.jsx's .nb-tab-nav). */}
-        <div
-          className="flex gap-1 mt-5 border-b overflow-x-auto"
-          style={{ borderColor: 'var(--cap-border)', WebkitMaskImage: 'linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent 100%)', maskImage: 'linear-gradient(90deg, #000 0, #000 calc(100% - 20px), transparent 100%)' }}
-        >
-          <button onClick={() => setSubTab('posts')} className={`flex-shrink-0 whitespace-nowrap px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'posts' ? 'cap-tab-active' : 'cap-tab'}`}>Posts</button>
-          {canManageApplications && (
-            <button onClick={() => setSubTab('applications')} className={`flex-shrink-0 whitespace-nowrap px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'applications' ? 'cap-tab-active' : 'cap-tab'}`}>
-              Applications {applications.length > 0 && <span className="cap-text-muted ml-1 text-xs">({applications.length})</span>}
+        <div className="flex border-b" style={{ borderColor: 'var(--cap-border)' }} role="tablist">
+          {[
+            { id: 'posts', label: 'Posts', Icon: Megaphone, show: true },
+            { id: 'applications', label: 'Applications', short: 'Applicants', Icon: Users, show: canManageApplications, count: applications.length },
+            { id: 'profile', label: 'Board profile', short: 'Profile', Icon: Globe, show: canEdit },
+            { id: 'pitch', label: 'Investor pitch', short: 'Pitch', Icon: Sparkles, show: canEdit },
+            // Browsing/bidding needs no special permission -- posting an
+            // opportunity or seeing bids on it does (checked inside the panel).
+            { id: 'opportunities', label: 'Opportunities', short: 'Bids', Icon: Briefcase, show: true },
+          ].filter((t) => t.show).map(({ id, label, short, Icon, count }) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={subTab === id}
+              title={label}
+              onClick={() => { setSubTab(id); try { localStorage.setItem('cmms_announcements_tab', id); } catch { /* storage blocked */ } }}
+              className={`flex-1 min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-2 sm:py-3 text-[11px] leading-tight sm:text-sm font-semibold border-b-2 transition ${subTab === id ? 'cap-tab-active' : 'cap-tab'}`}
+            >
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate max-w-full"><span className="sm:hidden">{short || label}</span><span className="hidden sm:inline">{label}</span></span>
+              {count > 0 && <span className="cap-text-muted text-xs">({count})</span>}
             </button>
-          )}
-          {canEdit && (
-            <button onClick={() => setSubTab('profile')} className={`flex-shrink-0 whitespace-nowrap px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'profile' ? 'cap-tab-active' : 'cap-tab'}`}>
-              Board profile
-            </button>
-          )}
-          {canEdit && (
-            <button onClick={() => setSubTab('pitch')} className={`flex-shrink-0 whitespace-nowrap px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'pitch' ? 'cap-tab-active' : 'cap-tab'}`}>
-              Investor pitch
-            </button>
-          )}
-          {/* Browsing/bidding needs no special permission -- posting an
-              opportunity or seeing bids on it does (checked inside the
-              panel via canManageOpportunities/canViewOpportunityBids). */}
-          <button onClick={() => setSubTab('opportunities')} className={`flex-shrink-0 whitespace-nowrap px-4 py-2 text-sm font-semibold border-b-2 transition ${subTab === 'opportunities' ? 'cap-tab-active' : 'cap-tab'}`}>
-            Opportunities
-          </button>
+          ))}
         </div>
       </div>
 
@@ -1023,7 +1012,7 @@ const CMMSAnnouncementsPanel = ({
       )}
 
       {subTab === 'pitch' && canEdit && (
-        <CMMSInvestorPitchPanel businessProfileId={savedBusinessProfileId} />
+        <CMMSInvestorPitchPanel businessProfileId={savedBusinessProfileId} cmmsCompanyId={companyId} />
       )}
 
       {subTab === 'posts' && (

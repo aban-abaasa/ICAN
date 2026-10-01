@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Clock3, DollarSign, Loader, Trash2, UploadCloud, WalletCards } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Clock3, DollarSign, Loader, Maximize2, Trash2, UploadCloud, WalletCards, Info } from 'lucide-react';
 import { applyAttendanceToPayroll, applyLeavePayrollDeductions, applySalaryAdvanceRecovery, createBusinessPayrollPeriod, decideSalaryAdvance, getAttendanceCheckoutPayConfirmations, getBusinessAccessMembers, getBusinessCompensation, getBusinessPayrollEntries, getBusinessPayrollPeriods, getCompanySalaryAdvances, getPendingRewardRedemptions, getRewardsSettings, payRewardRedemption, paySalaryAdvance, recordPayrollPayment, resolveEmployeeAuthIds, saveBusinessCompensation, saveRewardsSettings, syncBusinessPayrollDraftStaff } from '../services/businessManagementService';
 import { ICAN_TO_UGX, transferFromBusinessWallet } from '../services/icanWalletService';
 import { supabase } from '../lib/supabase/client';
@@ -109,32 +109,93 @@ function Banner({ error, notice }) {
 // especially on a phone, where every one of these forms used to render
 // fully expanded whether or not it was the thing someone opened Payroll to
 // do today.
-function CollapsibleSection({ title, subtitle, icon, badge, defaultOpen = false, children }) {
+const SECTION_ACCENTS = {
+  'Attendance deductions and work time': 'navy',
+  'Salary profile': 'emerald',
+  'New attendance payroll run': 'gold',
+  'Review and pay': 'burgundy',
+  'Reward redemptions': 'plum',
+  'Salary advance requests': 'teal'
+};
+function CollapsibleSection({ title, subtitle, icon, badge, accent, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
-  const bodyId = useRef(`pay-section-${Math.random().toString(36).slice(2)}`).current;
+  const [info, setInfo] = useState(false);
+  const bodyId = useRef(`sec-${Math.random().toString(36).slice(2)}`).current;
+  const toggle = () => setOpen(o => !o);
   return (
-    <section className="cmms-classic-divider">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        aria-expanded={open}
-        aria-controls={bodyId}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          {icon}
-          <span className="min-w-0">
-            <span className="cmms-classic-heading block">{title}</span>
-            {subtitle && <span className="cmms-classic-muted block text-xs mt-0.5">{subtitle}</span>}
-          </span>
-        </span>
-        <span className="flex flex-shrink-0 items-center gap-2">
-          {badge}
-          <ChevronDown className={`h-4 w-4 cmms-classic-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
-        </span>
-      </button>
-      {open && <div id={bodyId} className="mt-4">{children}</div>}
+    <section className={`cmms-sec cmms-accent-${accent || SECTION_ACCENTS[title] || 'gold'}`} data-open={open}>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={toggle} aria-expanded={open} aria-controls={bodyId}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left !bg-transparent"
+          style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}>
+          <span className="cmms-medallion">{icon}</span>
+          <span className="cmms-classic-heading cmms-sec-title min-w-0">{title}</span>
+        </button>
+        {badge && <span className="flex-shrink-0">{badge}</span>}
+        {subtitle && (
+          <button type="button" onClick={() => setInfo(v => !v)} aria-expanded={info} aria-label={`About ${title}`} title="What is this?" className="cmms-info-btn">
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        )}
+        <button type="button" onClick={toggle} tabIndex={-1} aria-hidden="true" className="flex-shrink-0 !bg-transparent" style={{ background: 'transparent', border: 0, padding: 0, boxShadow: 'none' }}>
+          <ChevronDown className={`h-4 w-4 cmms-classic-muted transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+      {info && subtitle && <p className="cmms-info cmms-classic-muted">{subtitle}</p>}
+      {open && <div id={bodyId} className="cmms-sec-body mt-4">{children}</div>}
     </section>
+  );
+}
+
+// Small (i) button that reveals a short explanation only when asked.
+function InfoTip({ label = 'More information', children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open} aria-label={label} title={label} className="cmms-info-btn"><Info className="h-3.5 w-3.5" aria-hidden="true" /></button>
+      {open && <div className="cmms-info cmms-classic-muted basis-full">{children}</div>}
+    </>
+  );
+}
+
+// Page header shared by every payroll view. It stays one slim row: a gold
+// medallion, the title with the company beneath it, a couple of live chips,
+// and an (i) button that opens the longer explanation only when asked.
+// "Full page" lifts the whole view (tabs included) to a full-screen page.
+function PayrollHeader({ Icon = DollarSign, description, intro, chips = [], tabs, fullPage, onFullPage, onBack, company }) {
+  const [info, setInfo] = useState(false);
+  const shown = chips.filter(Boolean);
+  return (
+    <div className="cmms-accent-gold space-y-2.5">
+      <div className="flex items-center gap-3">
+        <span className="cmms-medallion"><Icon className="h-4 w-4" aria-hidden="true" /></span>
+        <div className="min-w-0 flex-1">
+          <h2 className="cmms-classic-heading text-lg leading-tight">CMMS Payroll</h2>
+          {company && <p className="truncate text-xs cmms-classic-muted">{company}</p>}
+        </div>
+        {(description || intro) && (
+          <button type="button" onClick={() => setInfo(v => !v)} aria-expanded={info} aria-label="About this page" title="What is this page?" className="cmms-info-btn">
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        )}
+        {fullPage
+          ? <button type="button" onClick={onBack} className="cmms-classic-btn-secondary inline-flex !h-auto !min-h-0 flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs"><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back</button>
+          : <button type="button" onClick={onFullPage} className="cmms-info-btn" title="Open this tab as a full page" aria-label="Open full page"><Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /></button>}
+      </div>
+      {shown.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {shown.map((c, i) => <span key={i} className="cmms-classic-chip" style={{ animation: `cmms-rise .45s ease ${i * 80}ms both` }}>{c}</span>)}
+        </div>
+      )}
+      {info && (
+        <div className="cmms-info cmms-classic-muted space-y-1">
+          {description && <p>{description}</p>}
+          {intro && <p>{intro}</p>}
+        </div>
+      )}
+      <div className="cmms-ornament" aria-hidden="true" />
+      {tabs}
+    </div>
   );
 }
 
@@ -144,9 +205,10 @@ const PAYROLL_TABS = [
   { id: 'my-salary', label: 'My Salary' },
   { id: 'files', label: 'Employee files', requiresFiles: true },
 ];
+const TAB_ACCENTS = { payroll: 'gold', staff: 'emerald', 'my-salary': 'navy', files: 'burgundy' };
 function PayrollTabs({ current, onChange, canViewFiles, staffCount }) {
   return (
-    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Payroll sections">
+    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap" role="tablist" aria-label="Payroll sections" style={{ scrollbarWidth: 'none' }}>
       {PAYROLL_TABS.filter(tab => !tab.requiresFiles || canViewFiles).map(tab => (
         <button
           key={tab.id}
@@ -154,7 +216,7 @@ function PayrollTabs({ current, onChange, canViewFiles, staffCount }) {
           role="tab"
           aria-selected={current === tab.id}
           onClick={() => onChange(tab.id)}
-          className={`cmms-classic-tab px-3 py-2 text-sm ${current === tab.id ? 'is-active' : ''}`}
+          className={`cmms-ptab cmms-accent-${TAB_ACCENTS[tab.id] || 'gold'} ${current === tab.id ? 'is-active' : ''}`}
         >
           {tab.label}{tab.id === 'staff' && staffCount != null ? ` (${staffCount})` : ''}
         </button>
@@ -168,6 +230,15 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], currentUs
   const [members, setMembers] = useState([]); const [extraUsers, setExtraUsers] = useState([]); const [compensation, setCompensation] = useState([]);
   const [periods, setPeriods] = useState([]); const [entries, setEntries] = useState([]); const [periodId, setPeriodId] = useState('');
   const [payrollTab, setPayrollTab] = useState('payroll');
+  const [fullPage, setFullPage] = useState(false);
+  useEffect(() => {
+    if (!fullPage) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setFullPage(false); };
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [fullPage]);
   const [salary, setSalary] = useState({ employee: '', pay_type: 'monthly', pay_frequency: 'monthly', base_salary: '', currency: 'UGX', payroll_status: 'on_pay', contract_start: '', contract_end: '', contract_total: '' });
   const [dates, setDates] = useState({ start: `${today.slice(0, 8)}01`, end: today }); const [payment, setPayment] = useState({ entry: '', method: 'cash', pin: '' });
   const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(''); const [error, setError] = useState('');
@@ -337,38 +408,65 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], currentUs
   const progressTone = progress => progress === 'paid' ? 'success' : progress === 'approved' ? 'info' : 'warning';
   const advanceTone = status => status === 'rejected' ? 'danger' : status === 'paid' || status === 'confirmed' ? 'success' : status === 'approved' ? 'info' : 'warning';
 
+  const rootProps = fullPage
+    ? { className: 'payroll-scope cmms-fullpage space-y-5 fixed inset-0 z-50 overflow-y-auto p-4 md:p-8' }
+    : { className: 'payroll-scope space-y-5 cmms-classic-card p-4 md:p-6' };
+  const currentPeriod = periods.find(p => p.id === periodId);
+  const headerProps = { chips: [`${staffOnPayroll.length} on pay`, currentPeriod && `${currentPeriod.period_start} → ${currentPeriod.period_end} · ${currentPeriod.status}`], fullPage, onFullPage: () => setFullPage(true), onBack: () => setFullPage(false), company: companyProfile.company_name };
+  const openTab = id => { setPayrollTab(id); setFullPage(true); }; // choosing a tab opens it as a full page
+  const tabsFor = count => <PayrollTabs current={payrollTab} onChange={openTab} canViewFiles={canViewFiles} staffCount={count} />;
+
   if (payrollTab === 'my-salary') return (
-    <div className="payroll-scope space-y-5 cmms-classic-card p-4 md:p-6">
+    <div {...rootProps}>
       <style>{PAYROLL_STYLES}</style>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <DollarSign className="h-6 w-6" style={{ color: 'var(--color-primary)' }} aria-hidden="true" />
-          <div><h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2><p className="cmms-classic-muted text-sm">Your own salary and payroll records</p></div>
-        </div>
-        <PayrollTabs current={payrollTab} onChange={setPayrollTab} canViewFiles={canViewFiles} staffCount={null} />
-      </div>
-      <CMMSEmployeeSelfService companyProfile={companyProfile} mode="payroll" />
+      <PayrollHeader {...headerProps} description="Your own salary and payroll records" tabs={tabsFor(null)} />
+      <CMMSEmployeeSelfService companyProfile={companyProfile} mode="payroll" autoFull={!fullPage} />
     </div>
   );
 
   if (payrollTab === 'staff') return (
-    <div className="payroll-scope space-y-5 cmms-classic-card p-4 md:p-6">
+    <div {...rootProps}>
       <style>{PAYROLL_STYLES}</style>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <DollarSign className="h-6 w-6" style={{ color: 'var(--color-primary)' }} aria-hidden="true" />
-          <div><h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2><p className="cmms-classic-muted text-sm">Saved staff pay allocations for {companyProfile.company_name}</p></div>
-        </div>
-        <PayrollTabs current={payrollTab} onChange={setPayrollTab} canViewFiles={canViewFiles} staffCount={staffOnPayroll.length} />
-      </div>
+      <PayrollHeader {...headerProps} description={`Saved staff pay allocations for ${companyProfile.company_name}`} tabs={tabsFor(staffOnPayroll.length)} />
       <Banner error={error} notice={notice} />
-      <section className="cmms-classic-divider">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div><h3 className="cmms-classic-heading">Staff on payroll</h3><p className="cmms-classic-muted mt-1 text-xs">Every saved on-pay staff allocation is included in the current draft, except daily-paid staff, who are settled one day at a time at check-out. Progress shows where each staff member is in that payroll.</p></div>
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="cmms-classic-heading flex-1">Staff on payroll</h3>
           <StatusBadge tone="success">{staffOnPayroll.length} saved</StatusBadge>
+          <InfoTip label="About staff on payroll">Every saved on-pay staff allocation is included in the current draft, except daily-paid staff, who are settled one day at a time at check-out. Progress shows where each staff member is in that payroll.</InfoTip>
         </div>
         {staffOnPayroll.length === 0 ? <p className="cmms-classic-muted text-sm">No staff pay allocations saved yet. Add a salary profile from Payroll runs.</p> : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="space-y-2.5 md:hidden">
+            {staffOnPayroll.map((profile, i) => {
+              const name = profile.employee.name || 'Staff';
+              const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+              return (
+                <li key={profile.id} className="cmms-staff-card cmms-accent-emerald" style={{ animationDelay: `${Math.min(i, 8) * 70}ms` }}>
+                  <div className="flex items-start gap-3">
+                    <span className="cmms-monogram" aria-hidden="true">{initials}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words cmms-classic-heading leading-tight">{name}</p>
+                      <p className="text-xs cmms-classic-muted">{profile.employee.role || 'Employee'} · <span className="capitalize">{String(profile.pay_frequency || profile.pay_type || 'monthly').replace('_', ' ')}</span></p>
+                    </div>
+                    <p className="flex-shrink-0 text-right text-sm font-bold" style={{ color: 'var(--pay-success-text)' }}>{amount(profile.base_salary, profile.currency)}</p>
+                  </div>
+                  <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <StatusBadge tone={payrollStatusTone(profile.payroll_status)}>{payrollStatusLabel(profile.payroll_status)}</StatusBadge>
+                      {profile.dailySummary
+                        ? <StatusBadge tone={profile.dailySummary.confirmedDays === 0 ? 'neutral' : profile.dailySummary.unpaidDays > 0 ? 'warning' : 'success'}>{profile.dailySummary.confirmedDays === 0 ? 'No check-out settled yet' : `${profile.dailySummary.paidDays}/${profile.dailySummary.confirmedDays} day(s) paid`}</StatusBadge>
+                        : <StatusBadge tone={progressTone(profile.payroll_progress)}>{profile.payroll_progress ? profile.payroll_progress.replace('_', ' ') : 'Saved / awaiting draft'}</StatusBadge>}
+                    </div>
+                    {canEdit && profile.employee_user_id && (
+                      <button type="button" onClick={() => { pickEmployeeForSalary(profile.employee_user_id); setPayrollTab('payroll'); }} className="cmms-classic-btn-secondary !h-auto !min-h-0 !px-3 !py-1 text-xs" aria-label={`Edit ${name}'s salary`}>Edit</button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="pay-table w-full text-left text-sm">
               <thead><tr><th>Staff</th><th>Role</th><th>Pay period</th><th>Allocated pay</th><th>Employment</th><th>Payroll progress</th><th aria-label="Actions"></th></tr></thead>
               <tbody>
@@ -393,99 +491,112 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], currentUs
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
     </div>
   );
 
   if (payrollTab === 'files') {
+    const importableDocs = applicationDocs.filter(doc => !employeeFiles.some(f => f.employee_user_id === fileForm.employee && f.source_job_application_id === doc.job_application_id));
+    const fileEmployeeCount = new Set(employeeFiles.map(d => d.employee_user_id)).size;
     const filteredFiles = fileFilterEmployee ? employeeFiles.filter(f => f.employee_user_id === fileFilterEmployee) : employeeFiles;
     return (
-      <div className="payroll-scope space-y-5 cmms-classic-card p-4 md:p-6">
+      <div {...rootProps}>
         <style>{PAYROLL_STYLES}</style>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <UploadCloud className="h-6 w-6" style={{ color: 'var(--color-primary)' }} aria-hidden="true" />
-            <div><h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2><p className="cmms-classic-muted text-sm">Employee credential files for {companyProfile.company_name}</p></div>
-          </div>
-          <PayrollTabs current={payrollTab} onChange={setPayrollTab} canViewFiles={canViewFiles} staffCount={staffOnPayroll.length} />
-        </div>
+        <PayrollHeader {...headerProps} Icon={UploadCloud} description={`Employee credential files for ${companyProfile.company_name}`} tabs={tabsFor(staffOnPayroll.length)} />
         <Banner error={error} notice={notice} />
         {!canViewFiles ? (
           <p className="cmms-classic-muted text-sm">Your role cannot view company-wide employee files. Use "My Salary" to manage your own documents.</p>
         ) : (
           <>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="cmms-classic-chip" style={{ animation: 'cmms-rise .45s ease both' }}>{employeeFiles.length} document{employeeFiles.length === 1 ? '' : 's'}</span>
+              <span className="cmms-classic-chip" style={{ animation: 'cmms-rise .45s ease 80ms both' }}>{employeeFiles.filter(d => d.verified).length} verified</span>
+              <span className="cmms-classic-chip" style={{ animation: 'cmms-rise .45s ease 160ms both' }}>{fileEmployeeCount} employee{fileEmployeeCount === 1 ? '' : 's'}</span>
+            </div>
+
             {canManageFiles && (
-              <form onSubmit={uploadEmployeeFile} className="grid gap-3 cmms-classic-divider md:grid-cols-2">
-                <h3 className="cmms-classic-heading md:col-span-2">Add a document for an employee</h3>
-                <label className="text-sm cmms-classic-muted md:col-span-2">Employee
-                  <select required value={fileForm.employee} onChange={e => setFileForm(v => ({ ...v, employee: e.target.value }))} className="pay-field">
-                    <option value="">Select employee</option>
-                    {employees.map(x => <option key={x.authUserId} value={x.authUserId}>{x.name} — {x.role}</option>)}
-                  </select>
-                </label>
-                {fileForm.employee && applicationDocs.filter(doc => !employeeFiles.some(f => f.employee_user_id === fileForm.employee && f.source_job_application_id === doc.job_application_id)).length > 0 && (
-                  <div className="md:col-span-2 space-y-2 cmms-classic-callout p-3">
-                    <p className="text-xs" style={{ color: 'var(--pay-info-text)' }}>Already on file from this employee's job application — no need to upload again:</p>
-                    {applicationDocs.filter(doc => !employeeFiles.some(f => f.employee_user_id === fileForm.employee && f.source_job_application_id === doc.job_application_id)).map(doc => (
-                      <div key={doc.job_application_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                        <span className="cmms-classic-muted">CV / Resume ({doc.reference_code})</span>
-                        <button type="button" disabled={busy} onClick={() => importApplicationDoc(doc.job_application_id)} className="cmms-classic-btn-primary px-3 py-1.5 text-xs">Use this document</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <label className="text-sm cmms-classic-muted">Category
-                  <select value={fileForm.category} onChange={e => setFileForm(v => ({ ...v, category: e.target.value }))} className="pay-field">
-                    {EMPLOYEE_DOCUMENT_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                  </select>
-                </label>
-                <label className="text-sm cmms-classic-muted">Label
-                  <input required value={fileForm.label} onChange={e => setFileForm(v => ({ ...v, label: e.target.value }))} placeholder="e.g. National ID copy" className="pay-field" type="text" />
-                </label>
-                <label className="text-sm cmms-classic-muted md:col-span-2">File
-                  <input required type="file" onChange={e => setFileForm(v => ({ ...v, file: e.target.files?.[0] || null }))} className="pay-field text-xs" aria-label="Choose a file to upload" />
-                </label>
-                <button disabled={busy} className="cmms-classic-btn-primary px-4 py-2 md:col-span-2">{busy ? 'Adding…' : 'Add document'}</button>
-              </form>
-            )}
-            <section className="cmms-classic-divider">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="cmms-classic-heading">All employee documents</h3>
-                <label className="text-sm cmms-classic-muted">
-                  <span className="sr-only">Filter by employee</span>
-                  <select value={fileFilterEmployee} onChange={e => setFileFilterEmployee(e.target.value)} className="pay-field !mt-0" aria-label="Filter documents by employee">
-                    <option value="">All employees</option>
-                    {employees.map(x => <option key={x.authUserId} value={x.authUserId}>{x.name}</option>)}
-                  </select>
-                </label>
-              </div>
-              {filteredFiles.length === 0 ? <p className="cmms-classic-muted text-sm">No documents on file yet.</p> : (
-                <div className="overflow-x-auto">
-                  <table className="pay-table w-full text-left text-sm">
-                    <thead><tr><th>Employee</th><th>Category</th><th>Label</th><th>Uploaded</th><th>Verified</th><th aria-label="Actions"></th></tr></thead>
-                    <tbody>
-                      {filteredFiles.map(doc => (
-                        <tr key={doc.id}>
-                          <td className="cmms-classic-heading font-medium">{doc.employee_name}</td>
-                          <td className="cmms-classic-muted">{EMPLOYEE_DOCUMENT_CATEGORIES.find(c => c.id === doc.category)?.label || doc.category}</td>
-                          <td className="cmms-classic-muted">{doc.file_url ? <a href={doc.file_url} target="_blank" rel="noreferrer" style={{ color: 'var(--pay-info-text)' }}>{doc.label}</a> : doc.label}</td>
-                          <td className="cmms-classic-muted">{new Date(doc.created_at).toLocaleDateString()}</td>
-                          <td>{canManageFiles ? (
-                            <label className="flex items-center gap-2 text-xs cmms-classic-muted">
-                              <input type="checkbox" checked={doc.verified} onChange={e => toggleFileVerified(doc.id, e.target.checked)} /> Verified
-                            </label>
-                          ) : <StatusBadge tone={doc.verified ? 'success' : 'neutral'}>{doc.verified ? 'Verified' : 'Unverified'}</StatusBadge>}</td>
-                          <td className="text-right">{canManageFiles && (
-                            <button type="button" onClick={() => removeEmployeeFile(doc.id)} style={{ color: 'var(--pay-danger-text)' }} aria-label={`Remove ${doc.label}`} title="Remove"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
-                          )}</td>
-                        </tr>
+              <CollapsibleSection
+                title="Add a document"
+                subtitle="File a National ID, certificate, CV, bank details or any other credential against an employee. Only that employee and payroll staff can see it."
+                icon={<UploadCloud size={17} aria-hidden="true" />}
+                accent="emerald"
+              >
+                <form onSubmit={uploadEmployeeFile} className="grid gap-3 md:grid-cols-2">
+                  <label className="cmms-classic-label md:col-span-2">Employee
+                    <select required value={fileForm.employee} onChange={e => setFileForm(v => ({ ...v, employee: e.target.value }))} className="cmms-classic-field mt-1 normal-case tracking-normal font-normal">
+                      <option value="">Select employee</option>
+                      {employees.map(x => <option key={x.authUserId} value={x.authUserId}>{x.name} — {x.role}</option>)}
+                    </select>
+                  </label>
+                  {fileForm.employee && importableDocs.length > 0 && (
+                    <div className="md:col-span-2 space-y-2 cmms-classic-callout p-3">
+                      <p className="text-xs" style={{ color: 'var(--pay-info-text)' }}>Already on file from this employee's job application — no need to upload again:</p>
+                      {importableDocs.map(doc => (
+                        <div key={doc.job_application_id} className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+                          <span className="cmms-classic-muted">CV / Resume ({doc.reference_code})</span>
+                          <button type="button" disabled={busy} onClick={() => importApplicationDoc(doc.job_application_id)} className="cmms-classic-btn-primary px-3 py-1.5 text-xs">Use this document</button>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </div>
+                  )}
+                  <label className="cmms-classic-label">Category
+                    <select value={fileForm.category} onChange={e => setFileForm(v => ({ ...v, category: e.target.value }))} className="cmms-classic-field mt-1 normal-case tracking-normal font-normal">
+                      {EMPLOYEE_DOCUMENT_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                    </select>
+                  </label>
+                  <label className="cmms-classic-label">Label
+                    <input required value={fileForm.label} onChange={e => setFileForm(v => ({ ...v, label: e.target.value }))} placeholder="e.g. National ID copy" className="cmms-classic-field mt-1 normal-case tracking-normal font-normal" type="text" />
+                  </label>
+                  <label className="cmms-dropzone md:col-span-2" data-filled={!!fileForm.file}>
+                    <UploadCloud className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 truncate">{fileForm.file ? fileForm.file.name : 'Tap to choose a file'}</span>
+                    <input required type="file" className="sr-only" onChange={e => setFileForm(v => ({ ...v, file: e.target.files?.[0] || null }))} aria-label="Choose a file to upload" />
+                  </label>
+                  <button disabled={busy} className="cmms-classic-btn-primary px-4 py-2.5 md:col-span-2">{busy ? 'Adding…' : 'Add document'}</button>
+                </form>
+              </CollapsibleSection>
+            )}
+
+            <CollapsibleSection
+              title="All employee documents"
+              subtitle="Every credential file on record for the company. Tick Verified once you have checked the original."
+              icon={<WalletCards size={17} aria-hidden="true" />}
+              accent="burgundy"
+              defaultOpen
+              badge={<StatusBadge tone="neutral">{filteredFiles.length}</StatusBadge>}
+            >
+              <label className="mb-3 block text-sm cmms-classic-muted">
+                <span className="sr-only">Filter by employee</span>
+                <select value={fileFilterEmployee} onChange={e => setFileFilterEmployee(e.target.value)} className="cmms-classic-field" aria-label="Filter documents by employee">
+                  <option value="">All employees</option>
+                  {employees.map(x => <option key={x.authUserId} value={x.authUserId}>{x.name}</option>)}
+                </select>
+              </label>
+              {filteredFiles.length === 0 ? <p className="cmms-classic-muted text-sm">No documents on file yet.</p> : (
+                <ul className="space-y-2">
+                  {filteredFiles.map((doc, i) => (
+                    <li key={doc.id} className="cmms-doc-row cmms-accent-burgundy" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words font-semibold cmms-classic-heading">{doc.file_url ? <a href={doc.file_url} target="_blank" rel="noreferrer" style={{ color: 'inherit', textDecoration: 'underline', textDecorationColor: 'rgba(196,160,82,.7)' }}>{doc.label}</a> : doc.label}</p>
+                        <p className="text-xs cmms-classic-muted">{doc.employee_name} · {EMPLOYEE_DOCUMENT_CATEGORIES.find(c => c.id === doc.category)?.label || doc.category} · {new Date(doc.created_at).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-3">
+                        {canManageFiles ? (
+                          <label className="flex items-center gap-1.5 text-xs cmms-classic-muted">
+                            <input type="checkbox" checked={doc.verified} onChange={e => toggleFileVerified(doc.id, e.target.checked)} /> Verified
+                          </label>
+                        ) : <StatusBadge tone={doc.verified ? 'success' : 'neutral'}>{doc.verified ? 'Verified' : 'Unverified'}</StatusBadge>}
+                        {canManageFiles && (
+                          <button type="button" onClick={() => removeEmployeeFile(doc.id)} className="!bg-transparent" style={{ color: 'var(--pay-danger-text)', background: 'transparent', border: 0, boxShadow: 'none', padding: 0 }} aria-label={`Remove ${doc.label}`} title="Remove"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </section>
+            </CollapsibleSection>
           </>
         )}
       </div>
@@ -494,18 +605,9 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], currentUs
 
   // Default view: "Payroll runs" -- attendance-adjusted salaries and payment.
   return (
-    <div className="payroll-scope space-y-5 cmms-classic-card p-4 md:p-6">
+    <div {...rootProps}>
       <style>{PAYROLL_STYLES}</style>
-      <div className="flex items-center gap-3">
-        <DollarSign className="h-6 w-6" style={{ color: 'var(--color-primary)' }} aria-hidden="true" />
-        <div>
-          <h2 className="cmms-classic-heading text-xl">CMMS Payroll</h2>
-          <p className="cmms-classic-muted text-sm">Attendance-adjusted salaries and payment for {companyProfile.company_name}</p>
-        </div>
-      </div>
-      <p className="cmms-classic-muted text-sm">Save a staff member's pay allocation, then create a draft period. Every saved active salary profile is included in IcanEra payroll.</p>
-
-      <PayrollTabs current={payrollTab} onChange={setPayrollTab} canViewFiles={canViewFiles} staffCount={staffOnPayroll.length} />
+      <PayrollHeader {...headerProps} description={`Attendance-adjusted salaries and payment for ${companyProfile.company_name}`} intro="Save a staff member's pay allocation, then create a draft period. Every saved active salary profile is included in IcanEra payroll." tabs={tabsFor(staffOnPayroll.length)} />
 
       <Banner error={error} notice={notice} />
       {busy && <p className="flex items-center gap-2 text-sm cmms-classic-muted" role="status"><Loader size={16} className="animate-spin" aria-hidden="true" /> Updating payroll…</p>}
