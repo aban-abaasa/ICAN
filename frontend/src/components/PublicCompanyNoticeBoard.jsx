@@ -3170,69 +3170,28 @@ const Modal = ({ onClose, children, footer }) => {
     };
   }, [onClose]);
 
-  // Swipe-to-dismiss, grip-only (not the whole sheet) so a drag that starts
-  // over the scrollable body still scrolls text instead of fighting it for
-  // the gesture. Past a third of the way down it snaps closed like a real
-  // sheet; short of that it springs back -- the same threshold feel as iOS/
-  // Android system sheets.
-  const [dragY, setDragY] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const dragStartY = useRef(null);
-  const handleGripTouchStart = (e) => {
-    dragStartY.current = e.touches[0].clientY;
-    setDragging(true);
-  };
-  const handleGripTouchMove = (e) => {
-    if (dragStartY.current == null) return;
-    const delta = e.touches[0].clientY - dragStartY.current;
-    if (delta > 0) setDragY(delta);
-  };
-  const handleGripTouchEnd = () => {
-    if (dragY > 120) { onClose(); return; }
-    setDragging(false);
-    setDragY(0);
-    dragStartY.current = null;
-  };
-
   return (
     <div
-      role="presentation"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
       data-theme={theme}
-      className={`icanera-nb fixed inset-0 nb-modal-backdrop backdrop-blur-sm z-50 transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}
+      className={`icanera-nb nb-surface fixed inset-0 z-50 flex flex-col transition-all duration-300 ease-out ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
     >
-      <div
-        className="h-full flex items-end sm:items-center justify-center sm:p-4"
-        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      >
-        <div
-          role="dialog"
-          aria-modal="true"
-          className={`nb-surface w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl border nb-border relative flex flex-col max-h-[90vh] sm:max-h-[85vh] ${dragging ? '' : 'transition-transform duration-300 ease-out'} ${visible ? 'translate-y-0 sm:scale-100' : 'translate-y-full sm:translate-y-2 sm:scale-95'}`}
-          style={dragging ? { transform: `translateY(${dragY}px)` } : undefined}
-        >
-          {/* Grip -- mobile only, this is the one draggable surface. */}
-          <div
-            className="sm:hidden flex-shrink-0 flex justify-center pt-2.5 pb-1 touch-none cursor-grab active:cursor-grabbing"
-            onTouchStart={handleGripTouchStart}
-            onTouchMove={handleGripTouchMove}
-            onTouchEnd={handleGripTouchEnd}
-          >
-            <span className="w-10 h-1.5 rounded-full" style={{ background: 'var(--nb-border-strong)' }} />
-          </div>
-          <button onClick={onClose} aria-label="Close" className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 nb-text-faint hover:opacity-80 transition-colors p-1.5 rounded-full nb-share-btn">
-            <X className="w-5 h-5" />
-          </button>
-          <div className="overflow-y-auto overscroll-contain px-6 pb-6 pt-2 sm:pt-6 flex-1 min-h-0">
-            {children}
-          </div>
-          {footer && (
-            <div className="flex-shrink-0 border-t nb-border px-6 pt-4" style={{ paddingBottom: 'max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem))' }}>
-              {footer}
-            </div>
-          )}
+      <div className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b nb-border">
+        <button onClick={onClose} className="flex items-center gap-1.5 text-sm font-semibold nb-text hover:opacity-80 transition-opacity p-1.5 -ml-1.5 rounded-lg">
+          <ArrowLeft className="w-5 h-5" /> Back
+        </button>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="max-w-3xl mx-auto px-5 sm:px-8 py-6 sm:py-10">
+          {children}
         </div>
       </div>
+      {footer && (
+        <div className="flex-shrink-0 border-t nb-border px-5 pt-4" style={{ paddingBottom: 'max(1rem, calc(env(safe-area-inset-bottom) + 0.5rem))' }}>
+          <div className="max-w-3xl mx-auto">{footer}</div>
+        </div>
+      )}
     </div>
   );
 };
