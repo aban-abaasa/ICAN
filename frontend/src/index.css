@@ -1469,3 +1469,9 @@ html {
 .cmms-sec-title { font-size: clamp(0.9rem, 3.8vw, 1.05rem) !important; }
 .cmms-ptab { font-size: clamp(0.74rem, 3.2vw, 0.9rem); }
 .cmms-classic-chip { font-size: clamp(0.66rem, 2.8vw, 0.78rem); }
+
+.inv-row.inv-row-tool::before { background: var(--row-accent, rgba(148, 163, 184, 0.35)); }
+
+/* Posts & Jobs: flat rows and sections inside the board panel (no boxed cards) */
+.cap-scope .cap-post-card { background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--cap-border, rgba(148, 163, 184, 0.2)) !important; border-radius: 0 !important; box-shadow: none !important; padding-left: 0.25rem !important; padding-right: 0.25rem !important; }
+.cap-scope .cmms-classic-card { background: transparent !important; border: 0 !important; box-shadow: none !important; padding-left: 0 !important; padding-right: 0 !important; }
