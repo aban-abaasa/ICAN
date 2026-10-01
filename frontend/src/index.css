@@ -1438,3 +1438,9 @@ html {
 }
 .cmms-classic-btn-danger:hover { filter: brightness(1.08); }
 .cmms-classic-btn-danger:disabled { opacity: 0.5; }
+
+/* Flat list row: hairline divider instead of a boxed card per item */
+.inv-row { position: relative; padding-left: 0.75rem; border-bottom: 1px solid rgba(148, 163, 184, 0.16); }
+.inv-row:last-child { border-bottom: 0; }
+.inv-row::before { content: ''; position: absolute; left: 0; top: 0.6rem; bottom: 0.6rem; width: 2px; border-radius: 2px; background: rgba(148, 163, 184, 0.35); }
+.inv-row-low::before { background: #f97316; width: 3px; }

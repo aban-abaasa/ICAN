@@ -7463,13 +7463,7 @@ const CMMSModule = ({
               return (
                 <div
                   key={item.id}
-                  className={`rounded-lg border transition-all ${
-                    isLowStock
-                      ? 'bg-orange-500 bg-opacity-20 border-orange-500 border-opacity-50'
-                      : 'bg-white bg-opacity-5 border-white border-opacity-20'
-                  } ${
-                    isExpanded ? 'p-4' : 'p-3'
-                  }`}
+                  className={`inv-row transition-all ${isLowStock ? 'inv-row-low' : ''} ${isExpanded ? 'py-3' : 'py-2'}`}
                 >
                   {/* Compact View - Always Shown */}
                   <div
@@ -7530,7 +7524,7 @@ const CMMSModule = ({
 
                   {/* Expanded View - Full Details */}
                   {isExpanded && (
-                    <div className="mt-4 pt-4 border-t border-white border-opacity-10 space-y-3">
+                    <div className="inv-unfold mt-3 space-y-3">
                       {editingItemId === item.id && canEditInventory ? (
                         /* ---- EDIT MODE ---- */
                         <div className="space-y-3">
@@ -7660,7 +7654,7 @@ const CMMSModule = ({
                       ) : (
                         /* ---- VIEW MODE ---- */
                         <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
                         {/* Basic Info */}
                         <div>
                           <p className="text-gray-400 text-xs uppercase tracking-wider">Item Name</p>
@@ -7699,7 +7693,7 @@ const CMMSModule = ({
                         </div>
                         
                         {/* Assigned Storeman */}
-                        <div className="md:col-span-2">
+                        <div className="col-span-2">
                           <p className="text-gray-400 text-xs uppercase tracking-wider">📦 Department & Assigned Storeman</p>
                           <p className="text-blue-300 font-semibold mt-1">
                             {(() => {
@@ -7711,7 +7705,7 @@ const CMMSModule = ({
                         </div>
 
                         {/* Supplier Name */}
-                        <div className="md:col-span-2">
+                        <div className="col-span-2">
                           <p className="text-gray-400 text-xs uppercase tracking-wider">Supplier Name</p>
                           <p className="text-blue-300 font-semibold mt-1">
                             {item.supplier_name ? `🏭 ${item.supplier_name}` : 'Not specified'}
@@ -7720,7 +7714,7 @@ const CMMSModule = ({
 
                         {/* Storage Location */}
                         {item.storage_location && (
-                          <div className="md:col-span-2">
+                          <div className="col-span-2">
                             <p className="text-gray-400 text-xs uppercase tracking-wider">Storage Location</p>
                             <p className="text-gray-300 font-semibold mt-1">
                               📍 {item.storage_location}
