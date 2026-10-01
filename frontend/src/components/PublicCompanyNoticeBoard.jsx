@@ -1529,33 +1529,36 @@ const NoticeList = ({ notices, onSelect }) => {
   // its row with BusinessInfoSidebar from lg upward, so 3 columns would
   // otherwise start cramping right where the sidebar appears.
   return (
-    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+    <div className="nb-rows">
       {notices.map((notice, i) => (
         <button
           key={notice.id}
           onClick={() => onSelect(notice)}
           style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
-          className="group text-left nb-card rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp"
+          className="nb-row group w-full text-left flex items-center gap-3 animate-fadeInUp"
         >
-          <div className="relative aspect-video w-full overflow-hidden nb-surface-alt">
+          <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 overflow-hidden rounded-lg nb-surface-alt">
             {notice.poster_url ? (
-              <img src={notice.poster_url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              <img src={notice.poster_url} alt="" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <Megaphone className="w-8 h-8 nb-icon-muted" />
+                <Megaphone className="w-6 h-6 nb-icon-muted" />
               </div>
             )}
-            {isRecentlyPublished(notice.published_at) && (
-              <span className="absolute top-2.5 left-2.5 nb-badge-new text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shadow-sm">New</span>
-            )}
           </div>
-          <div className="p-4">
-            <h3 className="font-bold nb-text line-clamp-2">{notice.title}</h3>
-            {notice.summary && <p className="text-sm nb-text-muted mt-1 line-clamp-2">{notice.summary}</p>}
-            <p className="text-xs nb-text-faint mt-3 flex items-center gap-1">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold nb-text line-clamp-2 flex-1 min-w-0">{notice.title}</h3>
+              {isRecentlyPublished(notice.published_at) && (
+                <span className="nb-badge-new text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0">New</span>
+              )}
+            </div>
+            {notice.summary && <p className="text-sm nb-text-muted mt-0.5 line-clamp-1">{notice.summary}</p>}
+            <p className="text-xs nb-text-faint mt-1 flex items-center gap-1">
               <Clock className="w-3 h-3" /> {notice.published_at ? new Date(notice.published_at).toLocaleDateString() : ''}
             </p>
           </div>
+          <ChevronRight className="w-5 h-5 nb-icon-muted flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1" />
         </button>
       ))}
     </div>
@@ -1706,19 +1709,19 @@ const JobList = ({ jobs, onSelect }) => {
     return <EmptyState icon={Briefcase} text="No open positions right now. Check back later." />;
   }
   return (
-    <div className="space-y-3">
+    <div className="nb-rows">
       {jobs.map((job, i) => (
         <button
           key={job.id}
           onClick={() => onSelect(job)}
           style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
-          className="group w-full text-left nb-card rounded-2xl shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-4 p-4 animate-fadeInUp"
+          className="nb-row group w-full text-left flex items-center gap-3 animate-fadeInUp"
         >
           {job.poster_url ? (
-            <img src={job.poster_url} alt="" className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl flex-shrink-0" />
+            <img src={job.poster_url} alt="" className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-lg flex-shrink-0" />
           ) : (
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl nb-chip-green flex items-center justify-center flex-shrink-0">
-              <Briefcase className="w-7 h-7" />
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg nb-chip-green flex items-center justify-center flex-shrink-0">
+              <Briefcase className="w-5 h-5" />
             </div>
           )}
           <div className="flex-1 min-w-0">
@@ -1750,19 +1753,19 @@ const OpportunityList = ({ opportunities, onSelect }) => {
     return <EmptyState icon={Award} text="No open opportunities right now. Check back later." />;
   }
   return (
-    <div className="space-y-3">
+    <div className="nb-rows">
       {opportunities.map((o, i) => (
         <button
           key={o.id}
           onClick={() => onSelect(o)}
           style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
-          className="group w-full text-left nb-card rounded-2xl shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-4 p-4 animate-fadeInUp"
+          className="nb-row group w-full text-left flex items-center gap-3 animate-fadeInUp"
         >
           {o.poster_url ? (
-            <img src={o.poster_url} alt="" className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl flex-shrink-0" />
+            <img src={o.poster_url} alt="" className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-lg flex-shrink-0" />
           ) : (
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl nb-chip-green flex items-center justify-center flex-shrink-0">
-              <Award className="w-7 h-7" />
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg nb-chip-green flex items-center justify-center flex-shrink-0">
+              <Award className="w-5 h-5" />
             </div>
           )}
           <div className="flex-1 min-w-0">

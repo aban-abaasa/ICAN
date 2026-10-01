@@ -1475,3 +1475,9 @@ html {
 /* Posts & Jobs: flat rows and sections inside the board panel (no boxed cards) */
 .cap-scope .cap-post-card { background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--cap-border, rgba(148, 163, 184, 0.2)) !important; border-radius: 0 !important; box-shadow: none !important; padding-left: 0.25rem !important; padding-right: 0.25rem !important; }
 .cap-scope .cmms-classic-card { background: transparent !important; border: 0 !important; box-shadow: none !important; padding-left: 0 !important; padding-right: 0 !important; }
+
+/* Public notice board: classic ledger rows instead of boxed cards */
+.icanera-nb .nb-rows { display: flex; flex-direction: column; }
+.icanera-nb .nb-row { padding: 0.8rem 0.25rem; border-bottom: 1px solid var(--nb-border); background: transparent; transition: background-color 0.2s ease, padding-left 0.2s ease; }
+.icanera-nb .nb-row:last-child { border-bottom: 0; }
+.icanera-nb .nb-row:hover { background: color-mix(in srgb, var(--nb-border) 35%, transparent); padding-left: 0.6rem; }
