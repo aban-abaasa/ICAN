@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import CmmsFold from './CmmsFold.jsx';
 import {
   AlertTriangle, Bike, CheckCircle, ImageOff, Loader, MapPin, Minus, Navigation, Plus, Search,
   ShoppingCart, Sparkles, Truck, X
@@ -379,9 +380,13 @@ export default function CMSSupplierPurchasePanel({ companyId, requisitionId = nu
     );
   };
 
-  return <div className="mb-6 cmms-classic-card p-3 sm:p-4">
-    <div className="flex items-center gap-2 mb-2"><ShoppingCart className="w-5 h-5 shrink-0 text-cyan-300" /><h3 className="cmms-classic-heading">Order from supplier</h3></div>
-    <p className="cmms-classic-muted text-xs mb-3">Search every supplier at once, compare price and distance, and have BodaGoera deliver it.</p>
+  return <CmmsFold
+    title="Order from supplier"
+    icon={<ShoppingCart className="h-4 w-4" aria-hidden="true" />}
+    accent="teal"
+    hint={!loading && catalog.length ? `${catalog.length} items` : undefined}
+    info="Search every supplier at once, compare price and distance, and have BodaGoera deliver it."
+  >
     {loading ? <div className="flex items-center gap-2 text-gray-300"><Loader className="w-4 h-4 animate-spin" /> Loading supplier catalogs…</div> : <>
       {canOrder ? <form onSubmit={placeOrder} className="space-y-3">
         {/* Delivery point: drives distances, quotes and where the goods go */}
@@ -621,5 +626,5 @@ export default function CMSSupplierPurchasePanel({ companyId, requisitionId = nu
         </div>
       ))}</div>}
     </>}
-  </div>;
+  </CmmsFold>;
 }

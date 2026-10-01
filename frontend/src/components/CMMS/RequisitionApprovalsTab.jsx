@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle, Clipboard, Loader, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle, Clipboard, History, Info, Loader, Maximize2, RefreshCw, Smartphone, Wallet, X } from 'lucide-react';
+import CmmsFold from '../CmmsFold.jsx';
 import cmmsService from '../../lib/supabase/services/cmmsService';
 
 const APPROVAL_TAB_ROLES = ['admin', 'coordinator', 'supervisor', 'finance', 'service-provider'];
@@ -77,7 +78,9 @@ const mapRequisitionFromDb = (req) => ({
   items: Array.isArray(req.items) ? req.items.map(normalizeLineItem) : []
 });
 
-const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmmsData, setCmmsData }) => {
+const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmmsData, setCmmsData, topSlot = null }) => {
+  const [fullPage, setFullPage] = useState(false);
+  const [headerInfo, setHeaderInfo] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [decisionTargetId, setDecisionTargetId] = useState(null);
   const [notesById, setNotesById] = useState({});
@@ -335,62 +338,61 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
   }
 
   return (
-    <div className="space-y-6">
-      <section className="cmms-classic-card p-5">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <h3 className="cmms-classic-heading text-lg md:text-xl flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-emerald-600" />
-              Approval Queue
-            </h3>
-            <p className="cmms-classic-muted text-xs mt-1">
-              Dedicated approvals workflow (including service-provider role access).
-            </p>
+    <div className={fullPage ? 'cmms-fullpage space-y-5 fixed inset-0 z-50 overflow-y-auto p-4 md:p-8' : 'space-y-5 cmms-classic-card p-4 md:p-6'}>
+      {/* Header: slim row, live stage chips, (i) for the explanation */}
+      <div className="cmms-accent-gold space-y-2.5">
+        <div className="flex items-center gap-3">
+          <span className="cmms-medallion"><CheckCircle className="h-4 w-4" aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="cmms-classic-heading text-lg leading-tight">Approvals</h2>
+            <p className="truncate text-xs cmms-classic-muted">{queue.length} awaiting decision</p>
           </div>
-          <button
-            onClick={() => {
-              hasLoaded.current = false;
-              loadRequisitions(true);
-              loadMyCashProofs();
-            }}
-            disabled={isLoading}
-            className="cmms-classic-btn-secondary px-3 py-2 text-sm disabled:opacity-60"
-          >
-            Refresh Queue
+          <button type="button" onClick={() => setHeaderInfo((v) => !v)} aria-expanded={headerInfo} aria-label="About this page" title="What is this page?" className="cmms-info-btn">
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
+          <button
+            type="button"
+            onClick={() => { hasLoaded.current = false; loadRequisitions(true); loadMyCashProofs(); }}
+            disabled={isLoading}
+            className="cmms-info-btn disabled:opacity-60"
+            title="Refresh queue"
+            aria-label="Refresh queue"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+          </button>
+          {fullPage
+            ? <button type="button" onClick={() => setFullPage(false)} className="cmms-classic-btn-secondary inline-flex !h-auto !min-h-0 flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs"><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back</button>
+            : <button type="button" onClick={() => setFullPage(true)} className="cmms-info-btn" title="Open this tab as a full page" aria-label="Open full page"><Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /></button>}
         </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <div className="text-[11px] uppercase tracking-wide text-amber-700">Department Stage</div>
-            <div className="mt-1 text-xl font-bold text-slate-800">
-              {queue.filter((item) => item.status === 'pending_department_head').length}
-            </div>
-          </div>
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-            <div className="text-[11px] uppercase tracking-wide text-blue-700">Finance Stage</div>
-            <div className="mt-1 text-xl font-bold text-slate-800">
-              {queue.filter((item) => item.status === 'pending_finance').length}
-            </div>
-          </div>
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-            <div className="text-[11px] uppercase tracking-wide text-emerald-700">Approved</div>
-            <div className="mt-1 text-xl font-bold text-slate-800">
-              {processed.filter((item) => item.status === 'approved').length}
-            </div>
-          </div>
-          <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-            <div className="text-[11px] uppercase tracking-wide text-rose-700">Rejected</div>
-            <div className="mt-1 text-xl font-bold text-slate-800">
-              {processed.filter((item) => String(item.status).startsWith('rejected')).length}
-            </div>
-          </div>
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            `${queue.filter((item) => item.status === 'pending_department_head').length} department`,
+            `${queue.filter((item) => item.status === 'pending_finance').length} finance`,
+            `${processed.filter((item) => item.status === 'approved').length} approved`,
+            `${processed.filter((item) => String(item.status).startsWith('rejected')).length} rejected`
+          ].map((c, i) => (
+            <span key={c} className="cmms-classic-chip" style={{ animation: `cmms-rise .45s ease ${i * 80}ms both` }}>{c}</span>
+          ))}
         </div>
+        {headerInfo && (
+          <div className="cmms-info cmms-classic-muted space-y-1">
+            <p>Dedicated approvals workflow (including service-provider role access): department stage first, then finance, then payout.</p>
+          </div>
+        )}
+        <div className="cmms-ornament" aria-hidden="true" />
+      </div>
 
-        {isFinanceOfficer && (
-          <div className="cmms-classic-divider">
-            <p className="cmms-classic-label mb-2">Cashout Method Tabs (Finance)</p>
-            <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1 gap-1">
+      {topSlot}
+
+      {isFinanceOfficer && (
+        <CmmsFold
+          title="Cashout method"
+          icon={<Wallet className="h-4 w-4" aria-hidden="true" />}
+          accent="gold"
+          hint={financeCashoutMethod === 'cash' ? 'By cash' : 'IcanEra wallet'}
+        >
+
+                        <div className="inline-flex rounded-lg border border-slate-300 bg-white p-1 gap-1">
               <button
                 type="button"
                 onClick={() => setFinanceCashoutMethod('cash')}
@@ -419,15 +421,17 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
                 ? 'Cash mode: after approval, recipient must confirm on phone to complete payout.'
                 : 'IcanEra Wallet mode: after approval, finance can complete payout instantly.'}
             </p>
-          </div>
-        )}
-      </section>
+                  </CmmsFold>
+      )}
 
-      <section className="cmms-classic-card p-5">
-        <h4 className="cmms-classic-heading text-lg flex items-center gap-2 mb-3">
-          <Clipboard className="w-5 h-5 text-blue-600" />
-          Pending Decisions
-        </h4>
+      <CmmsFold
+        title="Pending Decisions"
+        icon={<Clipboard className="h-4 w-4" aria-hidden="true" />}
+        accent="navy"
+        hint={queue.length ? `${queue.length} waiting` : 'All clear'}
+        hintTone={queue.length ? 'warn' : 'ok'}
+        defaultOpen
+      >
 
         {isLoading ? (
           <div className="py-10 text-center">
@@ -555,11 +559,16 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
             })}
           </div>
         )}
-      </section>
+      </CmmsFold>
 
       {isFinanceOfficer && approvedForPayout.length > 0 && (
-        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-          <h4 className="text-base font-semibold text-slate-800 mb-3">Approved Requisitions Ready For Payment</h4>
+        <CmmsFold
+          title="Ready for payment"
+          icon={<Wallet className="h-4 w-4" aria-hidden="true" />}
+          accent="emerald"
+          hint={`${approvedForPayout.length} approved`}
+          defaultOpen
+        >
           <div className="space-y-3">
             {approvedForPayout.map((req) => (
               <article
@@ -606,12 +615,17 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
               </article>
             ))}
           </div>
-        </section>
+        </CmmsFold>
       )}
 
       {pendingProofs.length > 0 && (
-        <section className="cmms-classic-card p-5">
-          <h4 className="cmms-classic-heading text-base mb-3">Pending Payout Confirmations</h4>
+        <CmmsFold
+          title="Payout confirmations"
+          icon={<Smartphone className="h-4 w-4" aria-hidden="true" />}
+          accent="teal"
+          hint={`${pendingProofs.length} pending`}
+          hintTone="warn"
+        >
 
           {isLoadingCashProofs ? (
             <div className="py-8 text-center">
@@ -640,12 +654,16 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
               ))}
             </div>
           )}
-        </section>
+        </CmmsFold>
       )}
 
       {processed.length > 0 && (
-        <section className="cmms-classic-card p-5">
-          <h4 className="cmms-classic-heading text-base mb-3">Recently Processed</h4>
+        <CmmsFold
+          title="Recently processed"
+          icon={<History className="h-4 w-4" aria-hidden="true" />}
+          accent="plum"
+          hint={`${Math.min(processed.length, 8)} shown`}
+        >
           <div className="space-y-1">
             {processed.slice(0, 8).map((req) => {
               const status = STATUS_META[req.status] || STATUS_META.approved;
@@ -689,7 +707,7 @@ const RequisitionApprovalsTab = ({ userRole, canApprove = false, companyId, cmms
               );
             })}
           </div>
-        </section>
+        </CmmsFold>
       )}
     </div>
   );
