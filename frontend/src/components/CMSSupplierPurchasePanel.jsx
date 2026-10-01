@@ -397,9 +397,9 @@ export default function CMSSupplierPurchasePanel({ companyId, requisitionId = nu
               value={dest.address}
               onChange={(e) => setDest((current) => ({ ...current, address: e.target.value }))}
               placeholder="Delivery address or site"
-              className="h-11 min-w-0 flex-1 rounded-lg border border-white/20 bg-slate-900 px-3 text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60 sm:text-sm"
+              className="h-9 min-w-0 flex-1 rounded-md border border-white/20 bg-slate-900 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60 sm:text-sm"
             />
-            <button type="button" onClick={useMyLocation} disabled={locating} className="flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-cyan-400/40 bg-cyan-500/15 px-3 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-60">
+            <button type="button" onClick={useMyLocation} disabled={locating} className="flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-cyan-400/40 bg-cyan-500/15 px-3 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-60">
               {locating ? <Loader className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />} Use my location
             </button>
           </div>
@@ -424,7 +424,7 @@ export default function CMSSupplierPurchasePanel({ companyId, requisitionId = nu
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search any product — all suppliers"
-              className="h-12 w-full rounded-xl border border-white/20 bg-slate-900 pl-9 pr-10 text-base text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
+              className="h-9 w-full rounded-md border border-white/20 bg-slate-900 pl-9 pr-10 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/60"
             />
             {query && (
               <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-gray-400 hover:text-white"><X className="h-4 w-4" /></button>
@@ -432,13 +432,13 @@ export default function CMSSupplierPurchasePanel({ companyId, requisitionId = nu
           </div>
 
           <div className="-mx-3 mt-2 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-            <button type="button" onClick={() => setSupplierFilter('')} className={`min-h-[36px] shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium ${!supplierFilter ? 'border-cyan-300 bg-cyan-500 text-white' : 'border-white/20 bg-slate-900/70 text-gray-200'}`}>All suppliers</button>
+            <button type="button" onClick={() => setSupplierFilter('')} className={`min-h-[28px] shrink-0 rounded-full border px-3 py-0.5 text-xs font-medium ${!supplierFilter ? 'border-cyan-300 bg-cyan-500 text-white' : 'border-white/20 bg-slate-900/70 text-gray-200'}`}>All suppliers</button>
             {suppliers.map((supplier) => (
               <button
                 type="button"
                 key={supplier.id}
                 onClick={() => setSupplierFilter(supplierFilter === supplier.id ? '' : supplier.id)}
-                className={`min-h-[36px] shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium ${supplierFilter === supplier.id ? 'border-cyan-300 bg-cyan-500 text-white' : 'border-white/20 bg-slate-900/70 text-gray-200'}`}
+                className={`min-h-[28px] shrink-0 rounded-full border px-3 py-0.5 text-xs font-medium ${supplierFilter === supplier.id ? 'border-cyan-300 bg-cyan-500 text-white' : 'border-white/20 bg-slate-900/70 text-gray-200'}`}
               >
                 {supplier.name}{supplier.distanceKm != null ? ` · ${formatKm(supplier.distanceKm)}` : ''}
               </button>
@@ -472,7 +472,7 @@ export default function CMSSupplierPurchasePanel({ companyId, requisitionId = nu
             <span className="text-[11px] text-gray-400">{ranked.length} product{ranked.length === 1 ? '' : 's'}{supplierFilter ? ' from this supplier' : ' from all suppliers'}</span>
             <div className="flex gap-1">
               {SORTS.map((sort) => (
-                <button type="button" key={sort.id} onClick={() => setSortBy(sort.id)} className={`min-h-[32px] rounded-md px-2.5 text-[11px] font-semibold ${sortBy === sort.id ? 'bg-cyan-500 text-white' : 'bg-slate-900/70 text-gray-300'}`}>{sort.label}</button>
+                <button type="button" key={sort.id} onClick={() => setSortBy(sort.id)} className={`min-h-[26px] whitespace-nowrap rounded-md px-2 text-[11px] font-semibold ${sortBy === sort.id ? 'bg-cyan-500 text-white' : 'bg-slate-900/70 text-gray-300'}`}>{sort.label}</button>
               ))}
             </div>
           </div>
