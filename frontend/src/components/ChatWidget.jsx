@@ -1192,9 +1192,9 @@ const ChatWidget = ({ hasBottomNav = false }) => {
           .ican-classic-chat .text-slate-800 { color: #2b2210 !important; }
           .ican-classic-chat .text-slate-400, .ican-classic-chat .text-slate-500 { color: #8a7a52 !important; }
           .ican-classic-chat [class*="text-indigo-"] { color: #8a6a1f !important; }
-          .ican-classic-chat .bg-indigo-500\/10 { background-color: rgba(196,160,82,.18) !important; }
+          .ican-classic-chat .bg-indigo-500\\/10 { background-color: rgba(196,160,82,.18) !important; }
           .ican-classic-chat [class*="focus:border-indigo-500"]:focus { border-color: #b8892b !important; box-shadow: 0 0 0 3px rgba(196,160,82,.2); }
-          .ican-classic-chat .hover\:bg-slate-100:hover, .ican-classic-chat .hover\:bg-slate-50:hover { background-color: rgba(196,160,82,.14) !important; }
+          .ican-classic-chat .hover\\:bg-slate-100:hover, .ican-classic-chat .hover\\:bg-slate-50:hover { background-color: rgba(196,160,82,.14) !important; }
           .ican-classic-chat .rounded-xl.border, .ican-classic-chat .rounded-lg.border { border-radius: 14px; }
           .ican-classic-chat .uppercase { font-family: "Playfair Display", Georgia, serif; letter-spacing: .14em; }
           .ican-classic-chat textarea, .ican-classic-chat input { font-family: Georgia, "Times New Roman", serif; }
