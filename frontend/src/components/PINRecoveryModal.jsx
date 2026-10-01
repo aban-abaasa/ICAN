@@ -40,8 +40,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
 
   const selectedBusiness = businessAccounts.find((b) => b.id === businessAccountId) || null;
 
-  // Load the business wallets this user can reset: ones owned through a
-  // business profile, plus any attached directly to the user.
+  // Load the businesses this user can reset the wallet PIN for.
   useEffect(() => {
     if (!isOpen || groupId || accountType !== 'business' || !userId) return undefined;
     let cancelled = false;
@@ -49,34 +48,26 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
       setBusinessLoading(true);
       try {
         const supabase = getSupabaseClient();
-        const [profilesRes, directRes] = await Promise.all([
-          supabase
-            .from('business_profiles')
-            .select('id, business_name, user_accounts(id, account_number, account_holder_name, account_type)')
-            .eq('user_id', userId),
-          supabase
-            .from('user_accounts')
-            .select('id, account_number, account_holder_name')
-            .eq('user_id', userId)
-            .eq('account_type', 'business')
-        ]);
-        const byId = new Map();
-        (profilesRes.data || []).forEach((profile) => {
-          (profile.user_accounts || [])
-            .filter((a) => a.account_type === 'business')
-            .forEach((a) => byId.set(a.id, {
-              id: a.id,
-              name: profile.business_name || a.account_holder_name || 'Business',
-              accountNumber: a.account_number
-            }));
-        });
-        (directRes.data || []).forEach((a) => {
-          if (!byId.has(a.id)) {
-            byId.set(a.id, { id: a.id, name: a.account_holder_name || 'Business', accountNumber: a.account_number });
-          }
-        });
+        // Business wallet PINs belong to the business profile (iCanEra
+        // business wallet), not to a user_accounts row.
+        const { data: profiles, error: profilesError } = await supabase
+          .from('business_profiles')
+          .select('id, business_name')
+          .eq('user_id', userId);
+        if (profilesError) throw profilesError;
+        const ids = (profiles || []).map((p) => p.id);
+        let walletsByProfile = {};
+        if (ids.length) {
+          const { data: wallets } = await supabase
+            .from('ican_business_wallets')
+            .select('business_profile_id, wallet_address')
+            .in('business_profile_id', ids);
+          walletsByProfile = Object.fromEntries((wallets || []).map((w) => [w.business_profile_id, w.wallet_address]));
+        }
         if (cancelled) return;
-        const list = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+        const list = (profiles || [])
+          .map((p) => ({ id: p.id, name: p.business_name || 'Business', accountNumber: walletsByProfile[p.id] || null }))
+          .sort((x, y) => x.name.localeCompare(y.name));
         setBusinessAccounts(list);
         // Only one business → nothing to choose; otherwise force an explicit pick.
         setBusinessAccountId((current) => (list.some((b) => b.id === current) ? current : (list.length === 1 ? list[0].id : '')));
@@ -299,7 +290,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
                   <p className="text-sm text-gray-500">Loading your businesses...</p>
                 ) : noBusinessFound ? (
                   <p className="text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded-lg p-3">
-                    No business wallet account found. Create a wallet for your business first, then reset its PIN here.
+                    No business found on your account. Create a business profile first, then reset its wallet PIN here.
                   </p>
                 ) : (
                   <div className="space-y-2 max-h-48 overflow-y-auto">

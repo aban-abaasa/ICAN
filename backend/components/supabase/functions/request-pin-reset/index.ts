@@ -65,29 +65,44 @@ serve(async (req) => {
     const requestedAccountId = accountType === "business" && typeof request?.accountId === "string"
       ? request.accountId
       : null;
-    // A user can own several business wallets, so don't use maybeSingle()
-    // (it errors on multiple rows). Also match business wallets through the
-    // business profiles the user owns.
-    let accountQuery = admin
-      .from("user_accounts")
-      .select("id, account_holder_name")
-      .eq("account_type", accountType)
-      .limit(1);
-    if (requestedAccountId) accountQuery = accountQuery.eq("id", requestedAccountId);
+    // Business wallet PINs belong to a business profile (the chosen id is a
+    // business_profiles.id). The reset RPC enforces the real authority rule
+    // (highest-ownership shareholder); here we just confirm involvement.
+    let account: { id: string; account_holder_name: string | null } | null = null;
+    let accountError: unknown = null;
     if (accountType === "business") {
-      const { data: ownedProfiles } = await admin
+      if (!requestedAccountId) {
+        return jsonResponse({ success: false, message: "Choose which business to reset." }, 400);
+      }
+      const { data: profile, error } = await admin
         .from("business_profiles")
-        .select("id")
-        .eq("user_id", user.id);
-      const ownedIds = (ownedProfiles || []).map((p: { id: string }) => p.id);
-      accountQuery = ownedIds.length
-        ? accountQuery.or(`user_id.eq.${user.id},business_id.in.(${ownedIds.join(",")})`)
-        : accountQuery.eq("user_id", user.id);
+        .select("id, business_name, user_id")
+        .eq("id", requestedAccountId)
+        .maybeSingle();
+      accountError = error;
+      if (profile) {
+        let involved = profile.user_id === user.id;
+        if (!involved) {
+          const { data: co } = await admin
+            .from("business_co_owners")
+            .select("id")
+            .eq("business_profile_id", profile.id)
+            .eq("user_id", user.id)
+            .limit(1);
+          involved = !!co?.length;
+        }
+        if (involved) account = { id: profile.id, account_holder_name: profile.business_name };
+      }
     } else {
-      accountQuery = accountQuery.eq("user_id", user.id);
+      const { data: rows, error } = await admin
+        .from("user_accounts")
+        .select("id, account_holder_name")
+        .eq("account_type", "personal")
+        .eq("user_id", user.id)
+        .limit(1);
+      accountError = error;
+      account = rows?.[0] ?? null;
     }
-    const { data: accountRows, error: accountError } = await accountQuery;
-    const account = accountRows?.[0] ?? null;
 
     if (accountError) {
       console.error("PIN reset account lookup failed:", accountError);
