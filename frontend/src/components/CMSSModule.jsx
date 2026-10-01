@@ -6620,32 +6620,25 @@ const CMMSModule = ({
     };
 
     return (
-      <div className="space-y-6">
-        {/* Department Overview Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="dash-card dash-card-blue p-4">
-            <div className="text-xs text-gray-400 font-semibold">TOTAL DEPARTMENTS</div>
-            <div className="text-2xl font-bold text-blue-300 mt-1">{managedDepts.length}</div>
-          </div>
-          <div className="dash-card dash-card-orange p-4">
-            <div className="text-xs text-gray-400 font-semibold">ACTIVE STAFF</div>
-            <div className="text-2xl font-bold text-orange-300 mt-1">{cmmsData.users?.length || 0}</div>
-          </div>
-          <div className="dash-card dash-card-purple p-4">
-            <div className="text-xs text-gray-400 font-semibold">AVG STAFF/DEPT</div>
-            <div className="text-2xl font-bold text-purple-300 mt-1">
-              {managedDepts.length > 0 ? Math.ceil((cmmsData.users?.length || 0) / managedDepts.length) : 0}
-            </div>
-          </div>
-        </div>
+      <CmmsPageShell
+        title="Departments"
+        subtitle={`${managedDepts.length} department${managedDepts.length === 1 ? '' : 's'}`}
+        icon={<Building className="h-4 w-4" aria-hidden="true" />}
+        chips={[
+          `${managedDepts.length} department${managedDepts.length === 1 ? '' : 's'}`,
+          `${cmmsData.users?.length || 0} active staff`,
+          `${managedDepts.length > 0 ? Math.ceil((cmmsData.users?.length || 0) / managedDepts.length) : 0} avg per department`
+        ]}
+        info="Departments group your staff, scope their data access and route requisitions and approvals."
+      >
 
         {/* Add New Department */}
         {isAdmin && (
-          <div className="cmms-classic-card p-6">
-            <h3 className="cmms-classic-heading text-xl mb-4 flex items-center gap-2">
-              <Plus className="w-6 h-6" style={{ color: 'var(--color-primary)' }} />
-              Add New Department
-            </h3>
+          <CmmsFold
+            title="Add a department"
+            icon={<Plus className="h-4 w-4" aria-hidden="true" />}
+            accent="emerald"
+          >
 
             {deptError && (
               <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-200 text-sm mb-4">
@@ -6684,22 +6677,23 @@ const CMMSModule = ({
               <button
                 onClick={handleAddDepartment}
                 disabled={isSavingDept}
-                className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
+                className="cmms-classic-btn-primary w-full px-4 py-2.5 text-sm disabled:opacity-50"
               >
                 {isSavingDept ? '⏳ Creating...' : '✅ Create Department'}
               </button>
             </div>
-          </div>
+          </CmmsFold>
         )}
 
         {/* Departments List */}
-        <div className="cmms-classic-card p-6">
-          <h3 className="cmms-classic-heading text-xl mb-4 flex items-center gap-2">
-            <Building className="w-6 h-6" style={{ color: 'var(--color-primary)' }} />
-            Departments ({managedDepts.length})
-          </h3>
-
-          <div className="space-y-3">
+        <CmmsFold
+          title="Departments"
+          icon={<Building className="h-4 w-4" aria-hidden="true" />}
+          accent="navy"
+          hint={`${managedDepts.length} total`}
+          defaultOpen
+        >
+          <div>
             {managedDepts.map(dept => {
               const staffCount = getStaffCount(dept.id);
               const staff = getDepartmentStaff(dept.id);
@@ -6707,7 +6701,7 @@ const CMMSModule = ({
 
               if (isEditing) {
                 return (
-                  <div key={dept.id} className="bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-50 rounded-lg p-4">
+                  <div key={dept.id} className="inv-row py-3" style={{ '--row-accent': '#60a5fa' }}>
                     <div className="space-y-3">
                       <input
                         type="text"
@@ -6751,10 +6745,10 @@ const CMMSModule = ({
               }
 
               return (
-                <div key={dept.id} className="bg-gradient-to-r from-indigo-500 bg-opacity-10 border border-indigo-500 border-opacity-30 rounded-lg p-4">
+                <div key={dept.id} className="inv-row inv-row-tool py-3">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
-                      <h4 className="text-white font-bold text-lg">{dept.department_name}</h4>
+                      <h4 className="text-white font-bold text-base md:text-lg">{dept.department_name}</h4>
                       <p className="text-gray-400 text-sm mt-1">{dept.description}</p>
                       {dept.location && <p className="text-gray-500 text-xs mt-1">📍 {dept.location}</p>}
                       <div className="mt-3 flex gap-2 flex-wrap">
@@ -6768,8 +6762,8 @@ const CMMSModule = ({
 
                       {/* Staff List */}
                       {staffCount > 0 && (
-                        <div className="mt-3 space-y-1">
-                          <p className="text-xs font-semibold text-gray-300">Staff Members:</p>
+                        <details className="mt-2 space-y-1">
+                          <summary className="cursor-pointer text-xs font-semibold text-gray-300">Show staff members</summary>
                           {staff.map(member => {
                             const memberRole = allRoles.find(r => r.id === normalizeRoleKey(member.role));
                             return (
@@ -6780,7 +6774,7 @@ const CMMSModule = ({
                               </div>
                             );
                           })}
-                        </div>
+                        </details>
                       )}
                     </div>
 
@@ -6789,13 +6783,13 @@ const CMMSModule = ({
                         <>
                           <button
                             onClick={() => handleEditDepartment(dept)}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold transition-all"
+                            className="cmms-classic-btn-secondary px-3 py-1 text-xs"
                           >
                             ✏️ Edit
                           </button>
                           <button
                             onClick={() => handleDeleteDepartment(dept)}
-                            className="px-3 py-1.5 bg-red-500 bg-opacity-30 text-red-300 rounded text-xs hover:bg-opacity-50 font-semibold transition-all"
+                            className="cmms-classic-btn-danger px-3 py-1 text-xs"
                           >
                             🗑️ Delete
                           </button>
@@ -6813,8 +6807,8 @@ const CMMSModule = ({
               </div>
             )}
           </div>
-        </div>
-      </div>
+        </CmmsFold>
+      </CmmsPageShell>
     );
   };
 

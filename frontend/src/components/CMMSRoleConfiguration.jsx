@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Edit2, Plus, Save, Trash2, X } from 'lucide-react';
+import { Briefcase, Check, Edit2, KeyRound, Plus, Save, ShieldCheck, Trash2, Users, X } from 'lucide-react';
+import CmmsPageShell from './CmmsPageShell.jsx';
+import CmmsFold from './CmmsFold.jsx';
 import { supabase } from '../lib/supabase/client';
 
 export const CMMS_TOOL_OPTIONS = [
@@ -208,16 +210,38 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
     if (deleteError) setError(deleteError.message); else await loadRoles();
   };
 
-  if (!isAdmin) return <div className="cmms-classic-card p-6 text-orange-300">Only the company administrator can configure CMMS roles and tools.</div>;
+  if (!isAdmin) return <div className="cmms-classic-callout p-4 text-sm text-orange-300">Only the company administrator can configure CMMS roles and tools.</div>;
 
+  const customRoles = roles.filter((r) => !r.is_system_role && r.cmms_company_id === companyId);
   return (
-    <div className="space-y-6">
-      <div className="cmms-classic-card p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
-          <div className="min-w-0"><h2 className="cmms-classic-heading text-lg sm:text-xl">Role and tool configuration</h2><p className="cmms-classic-muted text-sm">Create any role your company needs and choose exactly which CMMS tools it can access.</p></div>
-          {editingId && <button type="button" onClick={reset} className="p-1.5 -m-1.5 cmms-classic-muted hover:opacity-70 shrink-0"><X className="w-5 h-5" /></button>}
-        </div>
-        <form onSubmit={saveRole} className="space-y-4 mt-5">
+    <CmmsPageShell
+      title="Roles & tools"
+      subtitle="Who can open what"
+      icon={<KeyRound className="h-4 w-4" aria-hidden="true" />}
+      chips={[`${roles.length} role${roles.length === 1 ? '' : 's'}`, `${customRoles.length} custom`, `${CMMS_TOOL_OPTIONS.length} tools`]}
+      info="Create any role your company needs and choose exactly which CMMS tools it can access. Roles are company-specific; fixed roles can be deactivated and replaced with your own names and tool combinations."
+    >
+      <CmmsFold
+        title="Company roles"
+        icon={<Users className="h-4 w-4" aria-hidden="true" />}
+        accent="navy"
+        hint={`${roles.length} role${roles.length === 1 ? '' : 's'}`}
+        defaultOpen
+      >
+        <>{loading ? <p className="cmms-classic-muted">Loading roles…</p> : <div>{roles.map((role) => <div key={role.id} className="flex flex-wrap items-center justify-between gap-3 py-3 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}><div className="min-w-0 flex-1"><p className="cmms-classic-heading text-sm break-words">{role.display_name || role.role_name}</p><p className="text-xs cmms-classic-muted break-words">{role.description || 'No description'} · {Object.values(role.tool_access || {}).filter(Boolean).length} tools</p></div><div className="flex gap-1 shrink-0">{!role.is_system_role && role.cmms_company_id === companyId && <><button onClick={() => { setDraft({ ...role, tool_access: role.tool_access || {} }); setEditingId(role.id); }} className="p-2.5 text-blue-300 active:text-white active:bg-white/10 rounded-lg" title="Edit role"><Edit2 className="w-5 h-5" /></button><button onClick={() => deleteRole(role)} className="p-2.5 text-red-300 active:text-white active:bg-white/10 rounded-lg" title="Deactivate role"><Trash2 className="w-5 h-5" /></button></>}</div></div>)}</div>}</>
+      </CmmsFold>
+
+      <CmmsFold
+        key={editingId || 'new'}
+        title={editingId ? 'Edit role' : 'Create a role'}
+        icon={editingId ? <Edit2 className="h-4 w-4" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
+        accent="emerald"
+        hint={editingId ? 'Editing' : undefined}
+        hintTone={editingId ? 'warn' : undefined}
+        defaultOpen={Boolean(editingId)}
+      >
+        {editingId && <div className="flex justify-end"><button type="button" onClick={reset} className="cmms-classic-btn-secondary !h-auto !min-h-0 inline-flex items-center gap-1.5 !px-3 !py-1 text-xs"><X className="w-3.5 h-3.5" /> Cancel edit</button></div>}
+        <form onSubmit={saveRole} className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="block">
               <span className="block text-xs font-semibold text-gray-400 mb-1">Role name</span>
@@ -233,11 +257,11 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
             <textarea value={draft.description || ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Describe what this role is responsible for" rows={2} className="w-full px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
           </label>
           <div>
-            <p className="cmms-classic-heading text-sm mb-2">Tools this role may access</p>
-            <div className="grid sm:grid-cols-2 gap-3">
+            <p className="cmms-classic-label mb-1 flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" /> Tools this role may access</p>
+            <div className="grid sm:grid-cols-2 gap-x-6">
               {CMMS_TOOL_OPTIONS.map((tool) => {
                 const enabled = Boolean(selectedTools[tool.id]);
-                return <div key={tool.id} className={`rounded-lg border p-3 ${enabled ? 'bg-green-500/10 border-green-400/50' : ''}`} style={!enabled ? { borderColor: 'var(--color-border)' } : undefined}>
+                return <div key={tool.id} className={`inv-row inv-row-tool py-2.5 ${enabled ? '' : 'opacity-80'}`} style={enabled ? { '--row-accent': '#34d399' } : undefined}>
                   <button type="button" onClick={() => toggleTool(tool)} className={`w-full flex items-center gap-2 text-left font-semibold py-1.5 -m-1.5 px-1.5 rounded ${enabled ? 'text-green-200' : 'cmms-classic-muted active:bg-white/5'}`}>
                     <Check className={`shrink-0 w-5 h-5 ${enabled ? 'opacity-100' : 'opacity-20'}`} />
                     <span className="flex-1 min-w-0 break-words">{tool.label}</span>
@@ -269,9 +293,7 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
               })}
             </div>
           </div>
-          <div className="cmms-classic-divider">
-            <p className="cmms-classic-heading text-sm mb-1">Position details <span className="text-xs font-normal cmms-classic-muted">(optional)</span></p>
-            <p className="text-xs cmms-classic-muted mb-3">Fill this in once and a job posting created "from this role" auto-fills these fields instead of retyping them — see Announcements &amp; job postings.</p>
+          <CmmsFold title="Position details" icon={<Briefcase className="h-4 w-4" aria-hidden="true" />} accent="gold" hint="Optional" info={'Fill this in once and a job posting created "from this role" auto-fills these fields instead of retyping them — see Announcements & job postings.'}>
             <div className="grid sm:grid-cols-2 gap-3">
               <input value={draft.job_title || ''} onChange={(e) => setDraft({ ...draft, job_title: e.target.value })} placeholder="Job title (e.g. Warehouse Supervisor)" className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
               <input value={draft.department || ''} onChange={(e) => setDraft({ ...draft, department: e.target.value })} placeholder="Department" className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base" />
@@ -285,14 +307,12 @@ const CMMSRoleConfiguration = ({ companyId, isAdmin, onRolesChanged }) => {
               <textarea value={draft.responsibilities || ''} onChange={(e) => setDraft({ ...draft, responsibilities: e.target.value })} placeholder="Key responsibilities" rows={2} className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base sm:col-span-2" />
               <textarea value={draft.required_skills || ''} onChange={(e) => setDraft({ ...draft, required_skills: e.target.value })} placeholder="Required skills / qualifications" rows={2} className="px-3 py-2.5 rounded bg-white/10 text-white border border-white/20 text-base sm:col-span-2" />
             </div>
-          </div>
+          </CmmsFold>
           {error && <p className="text-red-300 text-sm">{error}</p>}
           <button disabled={saving} className="cmms-classic-btn-primary w-full sm:w-auto px-4 py-3 sm:py-2 flex items-center justify-center gap-2"><Save className="w-4 h-4" />{saving ? 'Saving…' : editingId ? 'Update role' : 'Create role'}</button>
         </form>
-      </div>
-      <div className="cmms-classic-card p-4 sm:p-5"><h3 className="cmms-classic-heading text-lg mb-4">Company roles ({roles.length})</h3>{loading ? <p className="cmms-classic-muted">Loading roles…</p> : <div>{roles.map((role) => <div key={role.id} className="flex flex-wrap items-center justify-between gap-3 py-3 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}><div className="min-w-0 flex-1"><p className="cmms-classic-heading text-sm break-words">{role.display_name || role.role_name}</p><p className="text-xs cmms-classic-muted break-words">{role.description || 'No description'} · {Object.values(role.tool_access || {}).filter(Boolean).length} tools</p></div><div className="flex gap-1 shrink-0">{!role.is_system_role && role.cmms_company_id === companyId && <><button onClick={() => { setDraft({ ...role, tool_access: role.tool_access || {} }); setEditingId(role.id); }} className="p-2.5 text-blue-300 active:text-white active:bg-white/10 rounded-lg" title="Edit role"><Edit2 className="w-5 h-5" /></button><button onClick={() => deleteRole(role)} className="p-2.5 text-red-300 active:text-white active:bg-white/10 rounded-lg" title="Deactivate role"><Trash2 className="w-5 h-5" /></button></>}</div></div>)}</div>}</div>
-      <div className="text-xs cmms-classic-muted flex items-center gap-2"><Plus className="w-4 h-4" />Roles are company-specific. Existing fixed roles can be deactivated and replaced with your company’s own names and tool combinations.</div>
-    </div>
+      </CmmsFold>
+      </CmmsPageShell>
   );
 };
 

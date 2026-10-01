@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import CmmsPageShell from './CmmsPageShell.jsx';
 import {
   Megaphone, Briefcase, Plus, Edit2, Trash2, X, Save, Image as ImageIcon,
   FileText, Check, Users, Globe, Lock, Loader, Share2, Radio, ClipboardList,
@@ -760,88 +761,57 @@ const CMMSAnnouncementsPanel = ({
     );
   }
 
+  const apTabs = [
+    { id: 'posts', label: 'Posts', accent: 'gold', show: true },
+    { id: 'applications', label: `Applications${applications.length ? ` (${applications.length})` : ''}`, accent: 'emerald', show: canManageApplications },
+    { id: 'profile', label: 'Board profile', accent: 'navy', show: canEdit },
+    { id: 'pitch', label: 'Investor pitch', accent: 'plum', show: canEdit },
+    { id: 'opportunities', label: 'Opportunities', accent: 'teal', show: true },
+  ].filter((t) => t.show);
+  const jobCount = posts.filter((x) => x.post_type === 'job').length;
+  const boardInfoNode = (
+    <div className="space-y-2">
+      <p>Public page, no login needed: <span className="font-mono text-xs break-all">{boardLink(companyId)}</span></p>
+      {canEdit && (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={copyBoardLink} className="cmms-classic-btn-secondary !h-auto !min-h-0 inline-flex items-center gap-1.5 !px-2.5 !py-1 text-xs">
+            {boardLinkCopied ? <><Check className="w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
+          </button>
+          <button type="button" onClick={downloadBoardQr} disabled={boardQrDownloading} className="cmms-classic-btn-secondary !h-auto !min-h-0 inline-flex items-center gap-1.5 !px-2.5 !py-1 text-xs disabled:opacity-60">
+            {boardQrDownloading ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <QrCode className="w-3.5 h-3.5" />} QR flyer
+          </button>
+          <a href={boardLink(companyId)} target="_blank" rel="noreferrer" className="cmms-classic-btn-secondary !h-auto !min-h-0 inline-flex items-center gap-1.5 !px-2.5 !py-1 text-xs">
+            <Globe className="w-3.5 h-3.5" /> Preview
+          </a>
+        </div>
+      )}
+    </div>
+  );
+
   return (
+    <CmmsPageShell
+      title="Posts & Jobs"
+      subtitle={`${posts.length} post${posts.length === 1 ? '' : 's'} on your public board`}
+      icon={<Megaphone className="h-4 w-4" aria-hidden="true" />}
+      chips={[
+        `${jobCount} job${jobCount === 1 ? '' : 's'}`,
+        `${posts.length - jobCount} announcement${posts.length - jobCount === 1 ? '' : 's'}`,
+        canManageApplications && applications.length > 0 && `${applications.length} applicant${applications.length === 1 ? '' : 's'}`
+      ]}
+      info={boardInfoNode}
+      actions={canCreate && subTab === 'posts' && (
+        <>
+          <button type="button" onClick={() => openCreate('announcement')} title="New announcement" className="cmms-classic-btn-secondary !h-auto !min-h-0 inline-flex items-center gap-1 !px-2.5 !py-1 text-xs"><Plus className="w-3.5 h-3.5" /> Post</button>
+          <button type="button" onClick={() => openCreate('job')} title="New job posting" className="cmms-classic-btn-primary !h-auto !min-h-0 inline-flex items-center gap-1 !px-2.5 !py-1 text-xs"><Plus className="w-3.5 h-3.5" /> Job</button>
+        </>
+      )}
+      tabs={apTabs}
+      tab={subTab}
+      onTab={(id) => { setSubTab(id); try { localStorage.setItem('cmms_announcements_tab', id); } catch { /* storage blocked */ } }}
+      fullPageOnTab
+    >
     <div className="cap-scope space-y-6">
       <style>{CAP_STYLES}</style>
-      {/* Posts tab keeps the full header (title, "New..." actions, public-page
-          info). Every other tab collapses it to the tab bar alone, so the
-          tab's content gets the whole page -- and the bar is sticky, so
-          switching tabs never needs a scroll back to the top. The inactive
-          tabs drop to icons below sm; the active one always shows its name. */}
-      <div className="cap-card border rounded-2xl sticky top-0 z-20 overflow-hidden">
-        {subTab === 'posts' && (
-          <div className="p-4 pb-2">
-            <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => setBoardInfoExpanded((v) => !v)}
-                className="flex items-center gap-2 min-w-0 text-left"
-                aria-expanded={boardInfoExpanded}
-              >
-                <Megaphone className="cap-icon-purple w-5 h-5 flex-shrink-0" />
-                <h2 className="cap-title text-base sm:text-xl font-bold truncate">Posts &amp; Jobs</h2>
-                <ChevronDown className={`cap-text-muted w-4 h-4 flex-shrink-0 transition-transform ${boardInfoExpanded ? 'rotate-180' : ''}`} />
-              </button>
-              {canCreate && (
-                <div className="flex gap-1.5 flex-shrink-0">
-                  <button onClick={() => openCreate('announcement')} title="New announcement" className="cap-btn-purple px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1 transition-colors">
-                    <Plus className="w-4 h-4" /> Post
-                  </button>
-                  <button onClick={() => openCreate('job')} title="New job posting" className="cap-btn-emerald px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-1 transition-colors">
-                    <Plus className="w-4 h-4" /> Job
-                  </button>
-                </div>
-              )}
-            </div>
-            {boardInfoExpanded && (
-              <div className="mt-2 animate-fadeIn">
-                <p className="cap-text-muted text-sm">
-                  Public page, no login needed:{' '}
-                  <span className="cap-icon-purple-text font-mono text-xs break-all">{boardLink(companyId)}</span>
-                </p>
-                {canEdit && (
-                  <div className="flex flex-wrap gap-2 mt-2.5">
-                    <button onClick={copyBoardLink} className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors">
-                      {boardLinkCopied ? <><Check className="cap-icon-emerald-text w-3.5 h-3.5" /> Copied</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
-                    </button>
-                    <button onClick={downloadBoardQr} disabled={boardQrDownloading} className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors">
-                      {boardQrDownloading ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <QrCode className="w-3.5 h-3.5" />} QR flyer
-                    </button>
-                    <a href={boardLink(companyId)} target="_blank" rel="noreferrer" className="cap-toolbar-btn cap-text px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors">
-                      <Globe className="w-3.5 h-3.5" /> Preview
-                    </a>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex border-b" style={{ borderColor: 'var(--cap-border)' }} role="tablist">
-          {[
-            { id: 'posts', label: 'Posts', Icon: Megaphone, show: true },
-            { id: 'applications', label: 'Applications', short: 'Applicants', Icon: Users, show: canManageApplications, count: applications.length },
-            { id: 'profile', label: 'Board profile', short: 'Profile', Icon: Globe, show: canEdit },
-            { id: 'pitch', label: 'Investor pitch', short: 'Pitch', Icon: Sparkles, show: canEdit },
-            // Browsing/bidding needs no special permission -- posting an
-            // opportunity or seeing bids on it does (checked inside the panel).
-            { id: 'opportunities', label: 'Opportunities', short: 'Bids', Icon: Briefcase, show: true },
-          ].filter((t) => t.show).map(({ id, label, short, Icon, count }) => (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={subTab === id}
-              title={label}
-              onClick={() => { setSubTab(id); try { localStorage.setItem('cmms_announcements_tab', id); } catch { /* storage blocked */ } }}
-              className={`flex-1 min-w-0 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1 sm:px-3 py-2 sm:py-3 text-[11px] leading-tight sm:text-sm font-semibold border-b-2 transition ${subTab === id ? 'cap-tab-active' : 'cap-tab'}`}
-            >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              <span className="truncate max-w-full"><span className="sm:hidden">{short || label}</span><span className="hidden sm:inline">{label}</span></span>
-              {count > 0 && <span className="cap-text-muted text-xs">({count})</span>}
-            </button>
-          ))}
-        </div>
-      </div>
 
       {subTab === 'profile' && canEdit && (
         <div className="cmms-classic-card p-5 space-y-5">
@@ -1322,6 +1292,7 @@ const CMMSAnnouncementsPanel = ({
         />
       )}
     </div>
+    </CmmsPageShell>
   );
 };
 

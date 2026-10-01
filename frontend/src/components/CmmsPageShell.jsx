@@ -43,7 +43,7 @@ export default function CmmsPageShell({ title, subtitle, icon, chips = [], info,
             {shown.map((c, i) => <span key={i} className="cmms-classic-chip" style={{ animation: `cmms-rise .45s ease ${i * 80}ms both` }}>{c}</span>)}
           </div>
         )}
-        {infoOpen && info && <div className="cmms-info cmms-classic-muted space-y-1"><p>{info}</p></div>}
+        {infoOpen && info && <div className="cmms-info cmms-classic-muted space-y-1">{typeof info === 'string' ? <p>{info}</p> : info}</div>}
         <div className="cmms-ornament" aria-hidden="true" />
         {tabs && (
           <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap" role="tablist" style={{ scrollbarWidth: 'none' }}>
