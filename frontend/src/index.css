@@ -1452,3 +1452,20 @@ html {
 .inv-strip b { font-size: 1.15rem; line-height: 1.2; font-weight: 700; }
 .inv-strip span { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; }
 .inv-stat { padding: 0.15rem 0.6rem; border-left: 2px solid rgba(148, 163, 184, 0.28); }
+
+/* Export menu: a classic ledger of flat rows instead of a pile of big buttons */
+.inv-acts { display: flex; flex-direction: column; }
+.inv-acts-head { margin: 0.9rem 0 0.15rem; font-size: clamp(0.62rem, 2.4vw, 0.72rem); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #c4a052; }
+.inv-acts-head:first-child { margin-top: 0; }
+.inv-acts-head em { margin-left: 0.4rem; font-style: normal; font-weight: 600; letter-spacing: 0; text-transform: none; color: #94a3b8; }
+.inv-act { display: flex; align-items: center; gap: 0.6rem; width: 100%; padding: 0.55rem 0.15rem; text-align: left; background: transparent !important; background-image: none !important; box-shadow: none !important; border: 0; border-bottom: 1px solid rgba(148, 163, 184, 0.16); border-radius: 0 !important; color: inherit !important; font-size: clamp(0.74rem, 3.1vw, 0.9rem); font-weight: 600; transition: background-color 0.15s ease, padding-left 0.15s ease; }
+.inv-act:hover:not(:disabled) { background: rgba(196, 160, 82, 0.08) !important; padding-left: 0.4rem; }
+.inv-act:disabled { opacity: 0.4; }
+.inv-act-ico { flex: 0 0 1.4rem; text-align: center; }
+.inv-act-label { flex: 1; min-width: 0; }
+.inv-act-tag { flex: 0 0 auto; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: clamp(0.6rem, 2.4vw, 0.7rem); font-weight: 700; letter-spacing: 0.04em; color: #c4a052; border: 1px solid rgba(196, 160, 82, 0.45); }
+
+/* Fluid type: fold titles, pill tabs and chips shrink gracefully on small phones and grow on desktops */
+.cmms-sec-title { font-size: clamp(0.9rem, 3.8vw, 1.05rem) !important; }
+.cmms-ptab { font-size: clamp(0.74rem, 3.2vw, 0.9rem); }
+.cmms-classic-chip { font-size: clamp(0.66rem, 2.8vw, 0.78rem); }

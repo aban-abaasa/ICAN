@@ -4720,12 +4720,12 @@ const CMMSModule = ({
 
           <div className="mb-3">
             <label className="block text-[11px] md:text-xs text-gray-400 mb-1">
-              Admin: choose a department to scope "Written Reports" export/print below (always available — pick "All Departments" to cover the whole company)
+              Scope for written and consolidated exports
             </label>
             <select
               value={reportDepartmentFilter}
               onChange={(e) => { setReportDepartmentFilter(e.target.value); setReportReporterFilter('all'); }}
-              className="w-full md:w-72 px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-xs md:text-sm"
+              className="w-full md:w-72 px-2 py-1 rounded-md bg-slate-800/70 border border-slate-600/60 text-white text-xs"
             >
               <option value="all">All Departments</option>
               {(cmmsData.departments || []).map((dept) => (
@@ -4735,55 +4735,22 @@ const CMMSModule = ({
             </select>
           </div>
 
-          <div className="flex gap-2 md:gap-3 flex-wrap">
-            <button onClick={downloadInventoryPdf} className="px-3 md:px-4 py-2 bg-blue-500 bg-opacity-30 text-blue-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
-              📄 Download Inventory Report (PDF)
-            </button>
-            <button onClick={downloadRequisitionPdf} className="px-3 md:px-4 py-2 bg-purple-500 bg-opacity-30 text-purple-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
-              📄 Download Requisition Report (PDF)
-            </button>
-            <button onClick={exportToExcel} className="px-3 md:px-4 py-2 bg-green-500 bg-opacity-30 text-green-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm">
-              📊 Export to Excel
-            </button>
-            <button
-              onClick={() => downloadGroupedReportsPdf(filteredCompanyReports, reportScopeLabel)}
-              disabled={filteredCompanyReports.length === 0}
-              className="px-3 md:px-4 py-2 bg-cyan-500 bg-opacity-30 text-cyan-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm disabled:opacity-40"
-            >
-              📝 Download Written Reports (PDF) — {reportScopeLabel}
-            </button>
-            <button
-              onClick={() => printGroupedReports(filteredCompanyReports, reportScopeLabel)}
-              disabled={filteredCompanyReports.length === 0}
-              className="px-3 md:px-4 py-2 bg-amber-500 bg-opacity-30 text-amber-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm disabled:opacity-40"
-            >
-              🖨️ Print Written Reports — {reportScopeLabel}
-            </button>
+          <div className="inv-acts">
+            <p className="inv-acts-head">Company reports</p>
+            <button type="button" onClick={downloadInventoryPdf} className="inv-act"><span className="inv-act-ico">📄</span><span className="inv-act-label">Inventory report</span><span className="inv-act-tag">PDF</span></button>
+            <button type="button" onClick={downloadRequisitionPdf} className="inv-act"><span className="inv-act-ico">📄</span><span className="inv-act-label">Requisition report</span><span className="inv-act-tag">PDF</span></button>
+            <button type="button" onClick={exportToExcel} className="inv-act"><span className="inv-act-ico">📊</span><span className="inv-act-label">Everything in one workbook</span><span className="inv-act-tag">Excel</span></button>
+
+            <p className="inv-acts-head">Written reports <em>{reportScopeLabel}</em></p>
+            <button type="button" onClick={() => downloadGroupedReportsPdf(filteredCompanyReports, reportScopeLabel)} disabled={filteredCompanyReports.length === 0} className="inv-act"><span className="inv-act-ico">📝</span><span className="inv-act-label">By department and employee</span><span className="inv-act-tag">PDF</span></button>
+            <button type="button" onClick={() => printGroupedReports(filteredCompanyReports, reportScopeLabel)} disabled={filteredCompanyReports.length === 0} className="inv-act"><span className="inv-act-ico">🖨️</span><span className="inv-act-label">Print written reports</span><span className="inv-act-tag">Print</span></button>
             {userRole === 'admin' && (
-              <button
-                onClick={() => setShowExportShareModal(true)}
-                disabled={filteredCompanyReports.length === 0}
-                className="px-3 md:px-4 py-2 bg-emerald-500 bg-opacity-30 text-emerald-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm disabled:opacity-40 flex items-center gap-2"
-              >
-                <Link2 size={14} />
-                Share Written Reports — {reportScopeLabel}
-              </button>
+              <button type="button" onClick={() => setShowExportShareModal(true)} disabled={filteredCompanyReports.length === 0} className="inv-act"><span className="inv-act-ico"><Link2 size={14} /></span><span className="inv-act-label">Share a read-only link</span><span className="inv-act-tag">Share</span></button>
             )}
-            <button
-              onClick={() => downloadConsolidatedReportPdf(filteredCompanyReports, reportScopeLabel)}
-              disabled={filteredCompanyReports.length === 0}
-              className="px-3 md:px-4 py-2 bg-pink-500 bg-opacity-30 text-pink-300 rounded-lg hover:bg-opacity-50 transition-all font-semibold text-xs md:text-sm disabled:opacity-40"
-              title="Every report in this scope woven into one document — executive summary, priority highlights, then the full department/employee breakdown"
-            >
-              📋 Download Consolidated Report (PDF) — {reportScopeLabel}
-            </button>
-            <button
-              onClick={() => printConsolidatedReport(filteredCompanyReports, reportScopeLabel)}
-              disabled={filteredCompanyReports.length === 0}
-              className="px-3 md:px-4 py-2 bg-pink-500 bg-opacity-20 border border-pink-400/40 text-pink-200 rounded-lg hover:bg-opacity-40 transition-all font-semibold text-xs md:text-sm disabled:opacity-40"
-            >
-              🖨️ Print Consolidated Report — {reportScopeLabel}
-            </button>
+
+            <p className="inv-acts-head">Consolidated report <em>{reportScopeLabel}</em></p>
+            <button type="button" onClick={() => downloadConsolidatedReportPdf(filteredCompanyReports, reportScopeLabel)} disabled={filteredCompanyReports.length === 0} className="inv-act" title="Every report in this scope woven into one document — executive summary, priority highlights, then the full department/employee breakdown"><span className="inv-act-ico">📋</span><span className="inv-act-label">Executive summary and full breakdown</span><span className="inv-act-tag">PDF</span></button>
+            <button type="button" onClick={() => printConsolidatedReport(filteredCompanyReports, reportScopeLabel)} disabled={filteredCompanyReports.length === 0} className="inv-act"><span className="inv-act-ico">🖨️</span><span className="inv-act-label">Print consolidated report</span><span className="inv-act-tag">Print</span></button>
           </div>
           <p className="text-gray-400 text-[11px] md:text-xs mt-2">
             Written reports are collected by department and employee — use the department picker above, or the filters in the Company Report Board further up the page, to narrow this export to one department or one person. Consolidated Report merges everything in scope into a single executive-style document with a summary and priority highlights up top.
