@@ -1197,13 +1197,26 @@ const CMMSModule = ({
       return [...availableTools.map((tool) => tool.id), ...(categoryAllows('users') ? ['role-config'] : [])];
     }
     const role = cmmsRoleDefinitions.find((item) => normalizeRoleKey(item.role_name) === normalizeRoleKey(userRole) || normalizeRoleKey(item.display_name) === normalizeRoleKey(userRole));
-    if (!role?.tool_access) return [];
     // Listing a module requires explicit view access. The other configured
     // actions (create, edit, approve, assign, etc.) are checked separately
     // before the corresponding controls are enabled.
-    const permittedTools = availableTools
-      .filter((tool) => hasToolAction(tool.id, 'view'))
-      .map((tool) => tool.id);
+    const permittedTools = role?.tool_access
+      ? availableTools
+        .filter((tool) => hasToolAction(tool.id, 'view'))
+        .map((tool) => tool.id)
+      : [];
+    // Every active member is an employee of the company, whatever role (or
+    // none yet) the administrator has assigned. Employees must always reach
+    // their own self-service pages: attendance/leave/welfare and My Salary.
+    // These panels and their RLS policies scope data to the signed-in
+    // employee unless the role grants wider access, so this exposes nothing
+    // beyond the employee's own records.
+    if (isAuthorized) {
+      ['attendance', 'payroll'].forEach((toolId) => {
+        const toolListed = availableTools.some((tool) => tool.id === toolId);
+        if (toolListed && !permittedTools.includes(toolId)) permittedTools.push(toolId);
+      });
+    }
     // Attendance supervisors need a focused payroll screen to set the work
     // schedule and run the reviewable attendance-deduction calculation.
     if (permittedTools.includes('attendance') && categoryAllows('payroll') && !permittedTools.includes('payroll')) {
@@ -9032,7 +9045,10 @@ const CMMSModule = ({
         {['production', 'quality', 'pharmacy'].includes(activeTab) && getTabs().includes(activeTab) && <CMMSOperationsPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} mode={activeTab} />}
         {activeTab === 'clinical' && getTabs().includes('clinical') && <CMMSClinicalOperationsPanel businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} businessName={cmmsData.companyProfile?.company_name} />}
         {activeTab === 'payroll' && getTabs().includes('payroll') && (
-          getToolScope('payroll') === 'own' ? (
+          getToolScope('payroll') === 'own'
+            // Baseline employee access: no Payroll grant (and not an
+            // attendance-payroll supervisor) means personal salary only.
+            || (!hasToolAction('payroll', 'view') && !hasToolAction('attendance')) ? (
             <CMMSMySalaryPanel
               companyProfile={cmmsData.companyProfile}
               users={cmmsData.users}
