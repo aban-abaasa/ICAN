@@ -36,7 +36,14 @@ export const CMMS_ACCESS_LEVELS = [
   { value: 'full', label: 'Full', hint: 'The parent’s admins can also read this branch’s asset register and ledger.' }
 ];
 
+export const WALLET_CONTROL_LEVELS = [
+  { value: 'none', label: 'Private', hint: 'The parent cannot see this branch’s wallet.' },
+  { value: 'view', label: 'View', hint: 'The parent sees its balance and activity.' },
+  { value: 'govern', label: 'Govern', hint: 'The parent also sets limits, assigns approvers, freezes, funds and sweeps the wallet.' }
+];
+
 export const accessRank = (level) => ({ full: 2, summary: 1 }[level] || 0);
+export const walletRank = (level) => ({ govern: 2, view: 1 }[level] || 0);
 
 /** The subtree below a business (itself at depth 0), flat and ordered by depth. */
 export const getBranchTree = (businessId) => call('fn_business_branch_tree', { p_business_id: businessId });
@@ -54,32 +61,34 @@ export const getMyUnlinkedBusinesses = () => call('fn_business_my_unlinked_busin
 
 export const searchBusinessesForBranch = (query) => call('fn_business_search_for_branch', { p_query: query });
 
-export const proposeBranch = (parentId, childId, { relationship = 'branch', ownershipPercent = 100, cmmsAccess = 'summary', notes = null } = {}) =>
+export const proposeBranch = (parentId, childId, { relationship = 'branch', ownershipPercent = 100, cmmsAccess = 'summary', walletControl = 'none', notes = null } = {}) =>
   call('fn_business_propose_branch', {
     p_parent: parentId,
     p_child: childId,
     p_relationship: relationship,
     p_ownership_percent: ownershipPercent,
     p_cmms_access: cmmsAccess,
+    p_wallet_control: walletControl,
     p_notes: notes
   });
 
-export const respondToBranchRequest = (linkId, accept, cmmsAccess = null) =>
-  call('fn_business_respond_branch_link', { p_link_id: linkId, p_accept: accept, p_cmms_access: cmmsAccess });
+export const respondToBranchRequest = (linkId, accept, cmmsAccess = null, walletControl = null) =>
+  call('fn_business_respond_branch_link', { p_link_id: linkId, p_accept: accept, p_cmms_access: cmmsAccess, p_wallet_control: walletControl });
 
-export const updateBranchArrangement = (linkId, { ownershipPercent = null, relationship = null, cmmsAccess = null } = {}) =>
+export const updateBranchArrangement = (linkId, { ownershipPercent = null, relationship = null, cmmsAccess = null, walletControl = null } = {}) =>
   call('fn_business_update_branch_link', {
     p_link_id: linkId,
     p_ownership_percent: ownershipPercent,
     p_relationship: relationship,
-    p_cmms_access: cmmsAccess
+    p_cmms_access: cmmsAccess,
+    p_wallet_control: walletControl
   });
 
 export const endBranchLink = (linkId, reason = null) =>
   call('fn_business_end_branch_link', { p_link_id: linkId, p_reason: reason });
 
 export default {
-  RELATIONSHIPS, CMMS_ACCESS_LEVELS, accessRank,
+  RELATIONSHIPS, CMMS_ACCESS_LEVELS, WALLET_CONTROL_LEVELS, accessRank, walletRank,
   getBranchTree, getOwnershipChain, getOwnershipHistory, getMyBranchRequests, getMyUnlinkedBusinesses,
   searchBusinessesForBranch, proposeBranch, respondToBranchRequest, updateBranchArrangement, endBranchLink
 };

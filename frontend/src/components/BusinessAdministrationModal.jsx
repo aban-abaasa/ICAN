@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Briefcase, Check, Loader, Search, Trash2, UserPlus, X } from 'lucide-react';
 import BusinessBranchesPanel from './BusinessBranchesPanel';
+import BranchWalletsPanel from './BranchWalletsPanel';
 import { searchICANUsers } from '../services/pitchingService';
 import {
   getBusinessAccessMembers,
@@ -107,14 +108,15 @@ export default function BusinessAdministrationModal({ profile, onClose }) {
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20} /></button>
         </div>
 
-        <div className="mb-4 flex gap-2 border-b border-slate-800">
+        <div className="mb-4 flex gap-2 overflow-x-auto border-b border-slate-800 whitespace-nowrap">
           <button onClick={() => setTab('access')} className={`px-3 py-2 text-sm ${tab === 'access' ? 'border-b-2 border-amber-400 text-amber-300' : 'text-slate-400'}`}>Admin access</button>
           <button onClick={() => setTab('salary')} className={`px-3 py-2 text-sm ${tab === 'salary' ? 'border-b-2 border-amber-400 text-amber-300' : 'text-slate-400'}`}>Salaries</button>
           <button onClick={() => setTab('branches')} className={`px-3 py-2 text-sm ${tab === 'branches' ? 'border-b-2 border-amber-400 text-amber-300' : 'text-slate-400'}`}>Branches &amp; ownership</button>
+          <button onClick={() => setTab('wallets')} className={`px-3 py-2 text-sm ${tab === 'wallets' ? 'border-b-2 border-amber-400 text-amber-300' : 'text-slate-400'}`}>Branch wallets</button>
         </div>
 
         {error && <p className="mb-3 rounded-lg border border-red-800/50 bg-red-900/20 p-2 text-sm text-red-300">{error}</p>}
-        {tab === 'branches' ? <BusinessBranchesPanel profile={profile} /> : loading ? <div className="flex items-center gap-2 text-sm text-slate-400"><Loader className="animate-spin" size={16} /> Loading business management...</div> : (
+        {tab === 'branches' ? <BusinessBranchesPanel profile={profile} /> : tab === 'wallets' ? <BranchWalletsPanel profile={profile} /> : loading ? <div className="flex items-center gap-2 text-sm text-slate-400"><Loader className="animate-spin" size={16} /> Loading business management...</div> : (
           tab === 'access' ? (
             <div className="space-y-4">
               <p className="text-sm text-slate-400">Grant employees access to manage this business profile, payroll, assets, or inventory. This does not grant ownership.</p>

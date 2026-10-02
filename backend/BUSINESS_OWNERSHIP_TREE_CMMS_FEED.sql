@@ -30,6 +30,8 @@
 --     none     the branch is in the tree but its CMMS is not shared
 --     summary  branch totals appear in the parent's consolidated report
 --     full     the parent's admins may also read the branch's register + ledger
+-- WALLETS. wallet_control on each link (none | view | govern) says what the parent
+-- may do with the branch's business wallet; see BRANCH_WALLETS_APPROVERS.sql.
 -- CONSENT. The parent proposes; the child's administrator accepts (automatic
 -- when one person administers both). Only the CHILD side can raise the access
 -- level; the parent side can only lower it.
@@ -51,6 +53,11 @@ CREATE TABLE IF NOT EXISTS public.business_ownership_links (
                              CHECK (ownership_percent > 0 AND ownership_percent <= 100),
   cmms_access_level          TEXT NOT NULL DEFAULT 'summary'
                              CHECK (cmms_access_level IN ('none', 'summary', 'full')),
+  -- What the parent may do with the branch's business wallet (see
+  -- BRANCH_WALLETS_APPROVERS.sql): none | view (balances, activity) | govern
+  -- (limits, approvers, freeze, fund, sweep). Same consent rule as CMMS sharing.
+  wallet_control             TEXT NOT NULL DEFAULT 'none'
+                             CHECK (wallet_control IN ('none', 'view', 'govern')),
   status                     TEXT NOT NULL DEFAULT 'pending'
                              CHECK (status IN ('pending', 'active', 'declined', 'ended')),
   proposed_by                UUID,
@@ -63,6 +70,9 @@ CREATE TABLE IF NOT EXISTS public.business_ownership_links (
   updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (parent_business_profile_id <> child_business_profile_id)
 );
+
+ALTER TABLE public.business_ownership_links ADD COLUMN IF NOT EXISTS wallet_control TEXT NOT NULL DEFAULT 'none'
+  CHECK (wallet_control IN ('none', 'view', 'govern'));
 
 -- A business has at most ONE live (pending or active) parent: that is what makes it a tree.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_business_ownership_one_live_parent
@@ -109,27 +119,36 @@ RETURNS INT LANGUAGE sql IMMUTABLE AS $$
   SELECT CASE p_level WHEN 'full' THEN 2 WHEN 'summary' THEN 1 ELSE 0 END;
 $$;
 
--- Every ACTIVE ancestor of a business, nearest first, with the weakest access
--- rank on the path from that ancestor down to the business.
+CREATE OR REPLACE FUNCTION public._bol_wallet_rank(p_level TEXT)
+RETURNS INT LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE p_level WHEN 'govern' THEN 2 WHEN 'view' THEN 1 ELSE 0 END;
+$$;
+
+-- Every ACTIVE ancestor of a business, nearest first, with the weakest CMMS
+-- access rank and the weakest wallet-control rank on the path from that
+-- ancestor down to the business.
+DROP FUNCTION IF EXISTS public._bol_ancestors(UUID);
 CREATE OR REPLACE FUNCTION public._bol_ancestors(p_business_id UUID)
-RETURNS TABLE (ancestor_id UUID, depth INT, access_rank INT)
+RETURNS TABLE (ancestor_id UUID, depth INT, access_rank INT, wallet_rank INT)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   WITH RECURSIVE up AS (
     SELECT l.parent_business_profile_id AS anc, 1 AS depth,
            public._bol_access_rank(l.cmms_access_level) AS rk,
+           public._bol_wallet_rank(l.wallet_control) AS wk,
            ARRAY[l.child_business_profile_id, l.parent_business_profile_id] AS path
     FROM public.business_ownership_links l
     WHERE l.child_business_profile_id = p_business_id AND l.status = 'active'
     UNION ALL
     SELECT l.parent_business_profile_id, up.depth + 1,
            LEAST(up.rk, public._bol_access_rank(l.cmms_access_level)),
+           LEAST(up.wk, public._bol_wallet_rank(l.wallet_control)),
            up.path || l.parent_business_profile_id
     FROM up
     JOIN public.business_ownership_links l
       ON l.child_business_profile_id = up.anc AND l.status = 'active'
     WHERE NOT l.parent_business_profile_id = ANY (up.path)
   )
-  SELECT anc, depth, rk FROM up;
+  SELECT anc, depth, rk, wk FROM up;
 $$;
 
 CREATE OR REPLACE FUNCTION public._bol_root_of(p_business_id UUID)
@@ -461,9 +480,11 @@ $$;
 -- ============================================================================
 
 -- Parent proposes a branch. If one person administers both, it is active at once.
+DROP FUNCTION IF EXISTS public.fn_business_propose_branch(UUID, UUID, TEXT, NUMERIC, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.fn_business_propose_branch(
   p_parent UUID, p_child UUID, p_relationship TEXT DEFAULT 'branch',
-  p_ownership_percent NUMERIC DEFAULT 100, p_cmms_access TEXT DEFAULT 'summary', p_notes TEXT DEFAULT NULL
+  p_ownership_percent NUMERIC DEFAULT 100, p_cmms_access TEXT DEFAULT 'summary', p_notes TEXT DEFAULT NULL,
+  p_wallet_control TEXT DEFAULT 'none'
 ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_link public.business_ownership_links; v_auto BOOLEAN;
 BEGIN
@@ -483,28 +504,30 @@ BEGIN
     RAISE EXCEPTION 'That would make the business its own owner (a loop in the tree)';
   END IF;
   IF p_cmms_access NOT IN ('none', 'summary', 'full') THEN RAISE EXCEPTION 'CMMS access must be none, summary or full'; END IF;
+  IF COALESCE(p_wallet_control, 'none') NOT IN ('none', 'view', 'govern') THEN RAISE EXCEPTION 'Wallet control must be none, view or govern'; END IF;
 
   v_auto := public.unified_business_admin(p_child);
 
   INSERT INTO public.business_ownership_links (
     parent_business_profile_id, child_business_profile_id, relationship, ownership_percent,
-    cmms_access_level, status, proposed_by, responded_by, effective_from, notes
+    cmms_access_level, wallet_control, status, proposed_by, responded_by, effective_from, notes
   ) VALUES (
     p_parent, p_child, COALESCE(p_relationship, 'branch'), COALESCE(p_ownership_percent, 100),
-    p_cmms_access, CASE WHEN v_auto THEN 'active' ELSE 'pending' END, auth.uid(),
+    p_cmms_access, COALESCE(p_wallet_control, 'none'), CASE WHEN v_auto THEN 'active' ELSE 'pending' END, auth.uid(),
     CASE WHEN v_auto THEN auth.uid() END, CASE WHEN v_auto THEN CURRENT_DATE END, p_notes
   ) RETURNING * INTO v_link;
 
   PERFORM public._bol_log(v_link, CASE WHEN v_auto THEN 'proposed_and_accepted' ELSE 'proposed' END,
     jsonb_build_object('relationship', v_link.relationship, 'ownership_percent', v_link.ownership_percent,
-                       'cmms_access_level', v_link.cmms_access_level));
+                       'cmms_access_level', v_link.cmms_access_level, 'wallet_control', v_link.wallet_control));
   RETURN jsonb_build_object('link_id', v_link.id, 'status', v_link.status);
 END;
 $$;
 
 -- Child administrator answers a proposal; may accept at a LOWER CMMS access level.
+DROP FUNCTION IF EXISTS public.fn_business_respond_branch_link(UUID, BOOLEAN, TEXT);
 CREATE OR REPLACE FUNCTION public.fn_business_respond_branch_link(
-  p_link_id UUID, p_accept BOOLEAN, p_cmms_access TEXT DEFAULT NULL
+  p_link_id UUID, p_accept BOOLEAN, p_cmms_access TEXT DEFAULT NULL, p_wallet_control TEXT DEFAULT NULL
 ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_link public.business_ownership_links;
 BEGIN
@@ -528,11 +551,20 @@ BEGIN
     RAISE EXCEPTION 'You can accept at the proposed level or lower, not higher';
   END IF;
 
+  IF p_wallet_control IS NOT NULL AND p_wallet_control NOT IN ('none', 'view', 'govern') THEN
+    RAISE EXCEPTION 'Wallet control must be none, view or govern';
+  END IF;
+  IF p_wallet_control IS NOT NULL AND public._bol_wallet_rank(p_wallet_control) > public._bol_wallet_rank(v_link.wallet_control) THEN
+    RAISE EXCEPTION 'You can accept at the proposed wallet control or lower, not higher';
+  END IF;
+
   UPDATE public.business_ownership_links
   SET status = 'active', responded_by = auth.uid(), effective_from = CURRENT_DATE,
-      cmms_access_level = COALESCE(p_cmms_access, cmms_access_level), updated_at = NOW()
+      cmms_access_level = COALESCE(p_cmms_access, cmms_access_level),
+      wallet_control = COALESCE(p_wallet_control, wallet_control), updated_at = NOW()
   WHERE id = p_link_id RETURNING * INTO v_link;
-  PERFORM public._bol_log(v_link, 'accepted', jsonb_build_object('cmms_access_level', v_link.cmms_access_level));
+  PERFORM public._bol_log(v_link, 'accepted', jsonb_build_object('cmms_access_level', v_link.cmms_access_level,
+                                                                  'wallet_control', v_link.wallet_control));
   RETURN jsonb_build_object('status', 'active');
 END;
 $$;
@@ -540,8 +572,10 @@ $$;
 -- Change the arrangement of a live link.
 --   parent admin: relationship, ownership %, and may only LOWER the CMMS access
 --   child admin : may set the CMMS access to any level (the data is theirs to share)
+DROP FUNCTION IF EXISTS public.fn_business_update_branch_link(UUID, NUMERIC, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.fn_business_update_branch_link(
-  p_link_id UUID, p_ownership_percent NUMERIC DEFAULT NULL, p_relationship TEXT DEFAULT NULL, p_cmms_access TEXT DEFAULT NULL
+  p_link_id UUID, p_ownership_percent NUMERIC DEFAULT NULL, p_relationship TEXT DEFAULT NULL, p_cmms_access TEXT DEFAULT NULL,
+  p_wallet_control TEXT DEFAULT NULL
 ) RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_link public.business_ownership_links;
@@ -559,6 +593,12 @@ BEGIN
       RAISE EXCEPTION 'Only the branch can raise how much of its CMMS is shared';
     END IF;
   END IF;
+  IF p_wallet_control IS NOT NULL THEN
+    IF p_wallet_control NOT IN ('none', 'view', 'govern') THEN RAISE EXCEPTION 'Wallet control must be none, view or govern'; END IF;
+    IF NOT v_is_child AND public._bol_wallet_rank(p_wallet_control) > public._bol_wallet_rank(v_link.wallet_control) THEN
+      RAISE EXCEPTION 'Only the branch can raise how much control the parent has over its wallet';
+    END IF;
+  END IF;
   IF (p_ownership_percent IS NOT NULL OR p_relationship IS NOT NULL) AND NOT v_is_parent THEN
     RAISE EXCEPTION 'Only the parent business can change ownership or the relationship';
   END IF;
@@ -567,16 +607,17 @@ BEGIN
   END IF;
 
   v_before := jsonb_build_object('relationship', v_link.relationship, 'ownership_percent', v_link.ownership_percent,
-                                 'cmms_access_level', v_link.cmms_access_level);
+                                 'cmms_access_level', v_link.cmms_access_level, 'wallet_control', v_link.wallet_control);
   UPDATE public.business_ownership_links SET
     ownership_percent = COALESCE(p_ownership_percent, ownership_percent),
     relationship      = COALESCE(p_relationship, relationship),
     cmms_access_level = COALESCE(p_cmms_access, cmms_access_level),
+    wallet_control    = COALESCE(p_wallet_control, wallet_control),
     updated_at = NOW()
   WHERE id = p_link_id RETURNING * INTO v_link;
   PERFORM public._bol_log(v_link, 'changed', jsonb_build_object('before', v_before,
     'after', jsonb_build_object('relationship', v_link.relationship, 'ownership_percent', v_link.ownership_percent,
-                                'cmms_access_level', v_link.cmms_access_level)));
+                                'cmms_access_level', v_link.cmms_access_level, 'wallet_control', v_link.wallet_control)));
   RETURN jsonb_build_object('status', 'active');
 END;
 $$;
@@ -603,12 +644,14 @@ $$;
 
 -- The subtree below a business (itself at depth 0), with the arrangement on every edge.
 -- Pending / declined proposals of nodes in the tree are listed one level only.
+DROP FUNCTION IF EXISTS public.fn_business_branch_tree(UUID);
 CREATE OR REPLACE FUNCTION public.fn_business_branch_tree(p_business_id UUID)
 RETURNS TABLE (
   link_id UUID, business_id UUID, parent_id UUID, depth INT, business_name TEXT,
   relationship TEXT, ownership_percent NUMERIC, effective_percent NUMERIC,
   cmms_access_level TEXT, effective_access TEXT, status TEXT,
-  cmms_company_id UUID, cmms_company_name TEXT, can_manage BOOLEAN
+  cmms_company_id UUID, cmms_company_name TEXT, can_manage BOOLEAN,
+  wallet_control TEXT, effective_wallet TEXT
 ) LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF NOT (public._bol_is_business_admin(p_business_id)
@@ -620,12 +663,14 @@ BEGIN
   WITH RECURSIVE down AS (
     SELECT NULL::UUID AS lid, p_business_id AS biz, NULL::UUID AS par, 0 AS d,
            NULL::TEXT AS rel, 100::NUMERIC AS pct, 100::NUMERIC AS eff, 'full'::TEXT AS lvl, 2 AS rk,
-           'active'::TEXT AS st, ARRAY[p_business_id] AS path
+           'active'::TEXT AS st, ARRAY[p_business_id] AS path,
+           'govern'::TEXT AS wlvl, 2 AS wk
     UNION ALL
     SELECT l.id, l.child_business_profile_id, l.parent_business_profile_id, down.d + 1,
            l.relationship, l.ownership_percent, ROUND(down.eff * l.ownership_percent / 100, 3),
            l.cmms_access_level, LEAST(down.rk, public._bol_access_rank(l.cmms_access_level)),
-           l.status, down.path || l.child_business_profile_id
+           l.status, down.path || l.child_business_profile_id,
+           l.wallet_control, LEAST(down.wk, public._bol_wallet_rank(l.wallet_control))
     FROM down
     JOIN public.business_ownership_links l
       ON l.parent_business_profile_id = down.biz AND l.status IN ('active', 'pending')
@@ -636,7 +681,8 @@ BEGIN
          d.rel, d.pct, d.eff, d.lvl,
          CASE d.rk WHEN 2 THEN 'full' WHEN 1 THEN 'summary' ELSE 'none' END,
          d.st, cc.id, cc.company_name::TEXT,
-         public._bol_is_business_admin(d.par) OR public._bol_is_business_admin(d.biz)
+         public._bol_is_business_admin(d.par) OR public._bol_is_business_admin(d.biz),
+         d.wlvl, CASE d.wk WHEN 2 THEN 'govern' WHEN 1 THEN 'view' ELSE 'none' END
   FROM down d
   JOIN public.business_profiles bp ON bp.id = d.biz
   LEFT JOIN public.cmms_company_profiles cc ON cc.id = public._bol_cmms_company_of(d.biz)
@@ -672,16 +718,17 @@ END;
 $$;
 
 -- Proposals waiting on me (incoming) and mine still waiting on others (outgoing)
+DROP FUNCTION IF EXISTS public.fn_business_my_branch_requests();
 CREATE OR REPLACE FUNCTION public.fn_business_my_branch_requests()
 RETURNS TABLE (
   link_id UUID, direction TEXT, parent_id UUID, parent_name TEXT, child_id UUID, child_name TEXT,
-  relationship TEXT, ownership_percent NUMERIC, cmms_access_level TEXT, created_at TIMESTAMPTZ
+  relationship TEXT, ownership_percent NUMERIC, cmms_access_level TEXT, created_at TIMESTAMPTZ, wallet_control TEXT
 ) LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT l.id,
          CASE WHEN public.unified_business_admin(l.child_business_profile_id) THEN 'incoming' ELSE 'outgoing' END,
          l.parent_business_profile_id, pb.business_name::TEXT,
          l.child_business_profile_id, cb.business_name::TEXT,
-         l.relationship, l.ownership_percent, l.cmms_access_level, l.created_at
+         l.relationship, l.ownership_percent, l.cmms_access_level, l.created_at, l.wallet_control
   FROM public.business_ownership_links l
   JOIN public.business_profiles pb ON pb.id = l.parent_business_profile_id
   JOIN public.business_profiles cb ON cb.id = l.child_business_profile_id
@@ -749,9 +796,9 @@ REVOKE INSERT, UPDATE, DELETE ON public.business_ownership_links, public.busines
 GRANT SELECT ON public.business_ownership_links, public.business_ownership_events TO authenticated;
 
 GRANT EXECUTE ON FUNCTION
-  public.fn_business_propose_branch(UUID, UUID, TEXT, NUMERIC, TEXT, TEXT),
-  public.fn_business_respond_branch_link(UUID, BOOLEAN, TEXT),
-  public.fn_business_update_branch_link(UUID, NUMERIC, TEXT, TEXT),
+  public.fn_business_propose_branch(UUID, UUID, TEXT, NUMERIC, TEXT, TEXT, TEXT),
+  public.fn_business_respond_branch_link(UUID, BOOLEAN, TEXT, TEXT),
+  public.fn_business_update_branch_link(UUID, NUMERIC, TEXT, TEXT, TEXT),
   public.fn_business_end_branch_link(UUID, TEXT),
   public.fn_business_branch_tree(UUID),
   public.fn_business_ownership_chain(UUID),

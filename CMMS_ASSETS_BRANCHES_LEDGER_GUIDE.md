@@ -6,6 +6,9 @@
 2. `backend/BUSINESS_OWNERSHIP_TREE_CMMS_FEED.sql` (needs `CMMS_ASSET_INVENTORY_FOUNDATION.sql`,
    `SHARED_BUSINESS_AUTHORITY_AND_PAYROLL.sql` and `UNIFIED_BUSINESS_MANAGEMENT_AND_SUPPLIER_MARKETPLACE.sql`
    for `unified_business_admin`)
+3. `backend/BRANCH_WALLETS_APPROVERS.sql` (needs the business-wallet files:
+   `PITCHIN_BUSINESS_PROFILE_ICAN_WALLET.sql`, `PITCHIN_BUSINESS_WALLET_CMMS_FINANCE_APPROVAL.sql`,
+   `UNIFIED_BUSINESS_WALLET_OPERATIONS.sql`, `ICAN_BUSINESS_WALLET_TRANSFERS.sql`)
 
 Both are idempotent. The supermarket functions also need `MULTI_TENANT_PLATFORM.sql` and
 `DCE_CUSTOMER_SELFCHECKOUT.sql`; without them only those functions raise a clear error.
@@ -49,6 +52,22 @@ the consolidated report; `full` = also the asset register and ledger rows.
 **Supermarket.** Link a branch to a supermarket you own or manage, map consumables to its products, and move
 stock store room ⇄ shop floor in one transaction with a signed ledger entry on the CMMS side.
 
+**Branch wallets and approvers (Business Administration → Branch wallets).** Every business profile already
+owns a business wallet, so each branch has its own wallet account; this layer ties them to the mother account.
+Money still moves only through the existing business-wallet request/execute flow.
+
+* *Wallet control* on each ownership link (`none` / `view` / `govern`), same consent rule as CMMS sharing: the
+  branch can lower it, only the branch can raise it. A franchise or joint venture can simply stay `view` or `none`.
+* *Approval ladder* per wallet, with assigned approvers who sign with their OWN approval PIN (the business-wallet
+  PIN is never shared): up to the branch limit → N branch approvers; above it → also M mother approvers (owners of
+  a business that governs the branch); above it with no mother → the owners, through the existing approval + PIN.
+  The person who raised a request can never approve it; any rejection stops it; 5 wrong PINs lock for 15 minutes.
+* *Hard limits* per payment and per day, and a *freeze* kill-switch, enforced by database triggers on every
+  request whatever screen creates it. Either side can freeze; only the governor unfreezes.
+* *Mother operations*: fund a branch, sweep surplus back, and scheduled *allowances* (top up to a float, sweep
+  above a ceiling). Allowances only ever create pending requests.
+* Everything is written to an append-only event log.
+
 ## Assumptions to confirm
 
 * "Year of dif" was read as the year the asset was acquired (and optionally manufactured), driving depreciation.
@@ -56,3 +75,9 @@ stock store room ⇄ shop floor in one transaction with a signed ledger entry on
 * Parent admins read branch data through the consolidated view; they are not added as staff in the branch's CMMS.
 * Proceeds of a disposal are recorded in the transaction record, not added to a wallet.
 * `fn_get_company_inventory` still has no caller check (unchanged from before).
+* Wallet amounts are ICAN coin, as in the existing business wallet. Intra-group funding is tagged
+  `branch_funding` / `branch_sweep` so it can be eliminated from consolidated reports.
+* The balance move itself is `pitchin_execute_business_wallet_transfer`, which I could not run here (it needs live
+  ICAN price tables); my tests used a stand-in with the same contract. Try one funding request on staging first.
+* Allowances run when a mother-account administrator opens Branch wallets, or from a scheduler calling
+  `fn_bwp_run_due_allowances()` (e.g. pg_cron).

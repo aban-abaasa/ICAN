@@ -3,6 +3,7 @@ import { Building2, Check, ChevronRight, GitBranch, Loader, Plug, PlugZap, Plus,
 import {
   CMMS_ACCESS_LEVELS,
   RELATIONSHIPS,
+  WALLET_CONTROL_LEVELS,
   endBranchLink,
   getBranchTree,
   getMyBranchRequests,
@@ -22,11 +23,11 @@ const relationshipLabel = (value) => RELATIONSHIPS.find((item) => item.value ===
 const selectClass = 'mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white';
 const inputClass = selectClass;
 
-function AccessPicker({ value, onChange, max = 'full' }) {
-  const order = ['none', 'summary', 'full'];
+function AccessPicker({ value, onChange, max = 'full', levels = CMMS_ACCESS_LEVELS }) {
+  const order = levels.map((level) => level.value);
   return (
     <div className="mt-1 grid grid-cols-3 gap-1.5">
-      {CMMS_ACCESS_LEVELS.map((level) => {
+      {levels.map((level) => {
         const disabled = order.indexOf(level.value) > order.indexOf(max);
         const active = value === level.value;
         return (
@@ -64,12 +65,13 @@ export default function BusinessBranchesPanel({ profile }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [respondAccess, setRespondAccess] = useState({});
+  const [respondWallet, setRespondWallet] = useState({});
 
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
   const [found, setFound] = useState([]);
   const [childId, setChildId] = useState('');
-  const [draft, setDraft] = useState({ relationship: 'branch', ownershipPercent: 100, cmmsAccess: 'summary' });
+  const [draft, setDraft] = useState({ relationship: 'branch', ownershipPercent: 100, cmmsAccess: 'summary', walletControl: 'view' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,7 +146,7 @@ export default function BusinessBranchesPanel({ profile }) {
 
   const openEdit = (node) => {
     setEditingId(node.link_id);
-    setEditForm({ ownershipPercent: node.ownership_percent, relationship: node.relationship, cmmsAccess: node.cmms_access_level });
+    setEditForm({ ownershipPercent: node.ownership_percent, relationship: node.relationship, cmmsAccess: node.cmms_access_level, walletControl: node.wallet_control || 'none' });
   };
 
   const saveEdit = async (node) => {
@@ -152,6 +154,7 @@ export default function BusinessBranchesPanel({ profile }) {
     if (Number(editForm.ownershipPercent) !== Number(node.ownership_percent)) patch.ownershipPercent = Number(editForm.ownershipPercent);
     if (editForm.relationship !== node.relationship) patch.relationship = editForm.relationship;
     if (editForm.cmmsAccess !== node.cmms_access_level) patch.cmmsAccess = editForm.cmmsAccess;
+    if (editForm.walletControl !== (node.wallet_control || 'none')) patch.walletControl = editForm.walletControl;
     if (Object.keys(patch).length === 0) { setEditingId(null); return; }
     const ok = await run(`edit-${node.link_id}`, () => updateBranchArrangement(node.link_id, patch), 'Arrangement updated.');
     if (ok) setEditingId(null);
@@ -200,10 +203,19 @@ export default function BusinessBranchesPanel({ profile }) {
             max={request.cmms_access_level}
             onChange={(level) => setRespondAccess((previous) => ({ ...previous, [request.link_id]: level }))}
           />
+          <p className="mt-3 text-xs text-slate-400">
+            Control over your business wallet proposed: <strong className="text-amber-200">{WALLET_CONTROL_LEVELS.find((item) => item.value === (request.wallet_control || 'none'))?.label}</strong>. Accept at that level or less.
+          </p>
+          <AccessPicker
+            levels={WALLET_CONTROL_LEVELS}
+            value={respondWallet[request.link_id] || request.wallet_control || 'none'}
+            max={request.wallet_control || 'none'}
+            onChange={(level) => setRespondWallet((previous) => ({ ...previous, [request.link_id]: level }))}
+          />
           <div className="mt-3 flex gap-2">
             <button
               disabled={!!busy}
-              onClick={() => run(`ok-${request.link_id}`, () => respondToBranchRequest(request.link_id, true, respondAccess[request.link_id] || request.cmms_access_level), 'You are now part of the tree.')}
+              onClick={() => run(`ok-${request.link_id}`, () => respondToBranchRequest(request.link_id, true, respondAccess[request.link_id] || request.cmms_access_level, respondWallet[request.link_id] || request.wallet_control || 'none'), 'You are now part of the tree.')}
               className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
             ><Check size={14} /> Accept</button>
             <button
@@ -262,7 +274,12 @@ export default function BusinessBranchesPanel({ profile }) {
                       </span>
                     )}
                     {pending && <span className="rounded bg-yellow-900/40 px-1.5 py-0.5 text-[11px] text-yellow-300">Awaiting acceptance</span>}
-                    <span className="ml-auto flex items-center gap-1 text-xs">
+                    <span className="ml-auto flex flex-wrap items-center justify-end gap-1 text-xs">
+                      {!isRoot && (
+                        <span className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-300" title="What the parent may do with this branch’s wallet">
+                          Wallet · {WALLET_CONTROL_LEVELS.find((item) => item.value === (node.effective_wallet || 'none'))?.label}
+                        </span>
+                      )}
                       {node.cmms_company_id ? (
                         <span className={`flex items-center gap-1 rounded px-1.5 py-0.5 ${node.effective_access === 'none' ? 'bg-slate-800 text-slate-400' : 'bg-emerald-900/30 text-emerald-300'}`}
                           title={`CMMS: ${node.cmms_company_name}`}>
@@ -293,7 +310,7 @@ export default function BusinessBranchesPanel({ profile }) {
                     <button onClick={() => removeLink(node)} className="mt-2 text-xs text-red-400 hover:text-red-300">Withdraw request</button>
                   )}
 
-                  {editingId === node.link_id && (
+                  {editingId !== null && editingId === node.link_id && (
                     <div className="mt-3 space-y-3 rounded-lg border border-slate-700 bg-slate-900 p-3">
                       <div className="grid grid-cols-2 gap-3">
                         <label className="text-xs text-slate-300">Relationship
@@ -310,6 +327,11 @@ export default function BusinessBranchesPanel({ profile }) {
                         <p className="text-xs text-slate-300">CMMS sharing</p>
                         <AccessPicker value={editForm.cmmsAccess} onChange={(level) => setEditForm((previous) => ({ ...previous, cmmsAccess: level }))} />
                         <p className="mt-1 text-[11px] text-slate-500">The parent can only lower this. Raising it is the branch’s decision.</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-300">Parent’s control over the branch wallet</p>
+                        <AccessPicker levels={WALLET_CONTROL_LEVELS} value={editForm.walletControl} onChange={(level) => setEditForm((previous) => ({ ...previous, walletControl: level }))} />
+                        <p className="mt-1 text-[11px] text-slate-500">{WALLET_CONTROL_LEVELS.find((level) => level.value === editForm.walletControl)?.hint}</p>
                       </div>
                       <div className="flex gap-2">
                         <button disabled={!!busy} onClick={() => saveEdit(node)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">Save</button>
@@ -372,6 +394,11 @@ export default function BusinessBranchesPanel({ profile }) {
             <p className="text-sm text-slate-300">How much of its CMMS should it share with you?</p>
             <AccessPicker value={draft.cmmsAccess} onChange={(level) => setDraft((previous) => ({ ...previous, cmmsAccess: level }))} />
             <p className="mt-1 text-xs text-slate-500">{CMMS_ACCESS_LEVELS.find((level) => level.value === draft.cmmsAccess)?.hint}</p>
+          </div>
+          <div>
+            <p className="text-sm text-slate-300">How much control should you have over its business wallet?</p>
+            <AccessPicker levels={WALLET_CONTROL_LEVELS} value={draft.walletControl} onChange={(level) => setDraft((previous) => ({ ...previous, walletControl: level }))} />
+            <p className="mt-1 text-xs text-slate-500">{WALLET_CONTROL_LEVELS.find((level) => level.value === draft.walletControl)?.hint}</p>
           </div>
           <div className="flex gap-2">
             <button disabled={!!busy || !childId} className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-50">
