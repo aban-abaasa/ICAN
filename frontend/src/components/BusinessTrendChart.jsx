@@ -82,7 +82,7 @@ export default function BusinessTrendChart({ data = [], loading = false, busines
         ) : !hasData ? (
           <div className="h-40 flex flex-col items-center justify-center gap-2 text-center px-4">
             <LineChartIcon className="w-8 h-8 text-slate-700" />
-            <p className="text-xs text-slate-500">No daily valuation snapshots yet for this business — the trend will appear once Pitchin computes its first live share value.</p>
+            <p className="text-xs text-slate-500">No daily valuation snapshots yet for this business — the trend will appear once IcanEra computes its first live share value.</p>
           </div>
         ) : (
           <>

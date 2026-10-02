@@ -33,7 +33,7 @@ export default function FeeBreakdown({
         description: 'Money moves to community funds'
       },
       investment: {
-        name: 'Investment/Pitch-in',
+        name: 'Investment',
         platform: baseFee,
         platformPercent: 2.0,
         blockchain: baseFee * 0.2,

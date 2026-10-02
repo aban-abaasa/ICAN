@@ -1712,7 +1712,7 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
                     { label:'Active wallets',   val:fmt(wallets.length),    color:'#06b6d4' },
                     { label:'CMMS companies',   val:fmt(companies.length),  color:'#6366f1' },
                     { label:'Total members',    val:fmt(totalMembers),      color:'#6366f1' },
-                    { label:'Pitchin pitches',  val:fmt(businesses.length), color:'#10b981' },
+                    { label:'IcanEra pitches',  val:fmt(businesses.length), color:'#10b981' },
                     { label:'Trust groups',     val:fmt(groups.length),     color:'#f59e0b' },
                     { label:'Active agents',    val:`${activeAgents} / ${agents.length}`, color:'#f97316' },
                     { label:'Txns recorded',    val:fmt(txs.length),        color:'#ec4899' },

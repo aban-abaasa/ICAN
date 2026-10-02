@@ -827,7 +827,7 @@ const CMMSAnnouncementsPanel = ({
                 layout the public page's hero actually uses -- so this is a
                 rough live preview of the real thing, not just two unrelated
                 upload boxes. This logo is the board's OWN, and always wins
-                over the fallback to a linked Pitchin business profile's logo
+                over the fallback to a linked IcanEra business profile's logo
                 (see CMMS_PUBLIC_BOARD_PITCHIN_FALLBACKS.sql) -- set it here
                 and it doesn't depend on that other form's own Submit. */}
             <div className="relative w-full h-32 sm:h-40 mb-10">

@@ -247,7 +247,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Easy transaction logging - the busier you are, the faster you capture'
     },
     {
-      image: '/images/IcanEra expense.png',
+      image: '/images/ICANera expense.png',
       title: 'Your Financial Picture',
       subtitle: 'Dashboard & Analytics',
       description: 'See your complete financial overview at a glance. Real-time analytics show income, expenses, profit, and growth trends.',
@@ -283,7 +283,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Stop begging banks - let your community fund your dreams'
     },
     {
-      image: '/images/IcanEra pitchin.png',
+      image: '/images/ICANera pitchin.png',
       title: 'Invest In Businesses You Believe In',
       subtitle: 'PitchIn - Investor View',
       description: 'Own a piece of promising businesses. See real returns through dividends. Your money works for you.',
@@ -292,7 +292,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Become an investor - own real businesses, earn real returns'
     },
     {
-      image: '/images/IcanEra pitchin 8.png',
+      image: '/images/ICANera pitchin 8.png',
       title: 'AI Finds Perfect Matches',
       subtitle: 'Smart Investment Matching',
       description: 'AI analyzes every pitch and matches you with businesses aligned to your financial goals and values.',
@@ -310,7 +310,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'From losing track to complete control of your operations'
     },
     {
-      image: '/images/IcanEra CMMS.png',
+      image: '/images/ICANera CMMS.png',
       title: 'Manage Teams & Approvals',
       subtitle: 'Department Workflows',
       description: 'Set up roles, permissions, and approval chains. Everyone knows what they\'re doing and why.',
@@ -319,7 +319,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Professional operations management built for growth'
     },
     {
-      image: '/images/IcanEra CMMS1.png',
+      image: '/images/ICANera CMMS1.png',
       title: 'Enterprise-Grade Operations',
       subtitle: 'Advanced CMMS',
       description: 'Advanced features for serious operations. Analytics, automation, and integration for your complex needs.',
@@ -355,7 +355,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Your path to global financial opportunities starts here'
     },
     {
-      image: '/images/IcanEra trust.png',
+      image: '/images/ICANera trust.png',
       title: 'Trust Backed By Blockchain',
       subtitle: 'Verified Transactions',
       description: 'Every transaction blockchain-verified. No fraud, no disputes, no hidden fees. Complete transparency.',
@@ -364,7 +364,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Technology that proves trust, not just promises it'
     },
     {
-      image: '/images/IcanEra trust 2.png',
+      image: '/images/ICANera trust 2.png',
       title: 'Smart Contracts Automate Trust',
       subtitle: 'Advanced Trust System',
       description: 'Smart contracts enforce agreements automatically. No waiting, no lawyers, no middlemen taking their cut.',
@@ -382,7 +382,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'The platform that thinks like you - holistic financial control'
     },
     {
-      image: '/images/IcanEra 3.png',
+      image: '/images/ICANera 3.png',
       title: 'Unlock Premium Features',
       subtitle: 'IcanEra Premium',
       description: 'Premium features for power users - advanced analytics, priority support, exclusive opportunities.',
@@ -391,7 +391,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Premium tools for financial champions'
     },
     {
-      image: '/images/IcanEra tithe.png',
+      image: '/images/ICANera tithe.png',
       title: 'Align Faith With Finances',
       subtitle: 'Tithe Management',
       description: 'Give back meaningfully with automatic tithe calculations and community impact tracking. Your giving, your values, your impact.',
@@ -401,7 +401,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Spiritual giving made simple and transparent'
     },
     {
-      image: '/images/IcanEra tith2.png',
+      image: '/images/ICANera tith2.png',
       title: 'Generous Giving, Real Impact',
       subtitle: 'Tithe Pro',
       description: 'Advanced giving tools for offerings, donations, and community support. See the impact of your generosity.',
@@ -410,7 +410,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Your generosity, amplified and tracked'
     },
     {
-      image: '/images/IcanEra i.png',
+      image: '/images/ICANera i.png',
       title: 'Built On Solid Foundation',
       subtitle: 'IcanEra Core Technology',
       description: 'The foundation powering all IcanEra features. Secure, scalable, designed for billions of transactions.',
@@ -429,7 +429,7 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Track every transaction with precision'
     },
     {
-      image: '/images/IcanEra expense.png',
+      image: '/images/ICANera expense.png',
       title: 'Financial Dashboard',
       subtitle: 'Advanced tracking',
       description: 'Real-time financial insights'
@@ -453,13 +453,13 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Share your vision'
     },
     {
-      image: '/images/IcanEra pitchin.png',
+      image: '/images/ICANera pitchin.png',
       title: 'PitchIn Pro',
       subtitle: 'Professional platform',
       description: 'Connect with investors'
     },
     {
-      image: '/images/IcanEra pitchin 8.png',
+      image: '/images/ICANera pitchin 8.png',
       title: 'Smart Matching',
       subtitle: 'AI-powered',
       description: 'Find perfect investors'
@@ -471,13 +471,13 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Enterprise protection'
     },
     {
-      image: '/images/IcanEra CMMS.png',
+      image: '/images/ICANera CMMS.png',
       title: 'CMMS System',
       subtitle: 'Management tools',
       description: 'Resource optimization'
     },
     {
-      image: '/images/IcanEra CMMS1.png',
+      image: '/images/ICANera CMMS1.png',
       title: 'CMMS Pro',
       subtitle: 'Enterprise edition',
       description: 'Advanced operations'
@@ -501,13 +501,13 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Readiness assessment'
     },
     {
-      image: '/images/IcanEra trust.png',
+      image: '/images/ICANera trust.png',
       title: 'Trust Platform',
       subtitle: 'Blockchain verified',
       description: 'Transparent transfers'
     },
     {
-      image: '/images/IcanEra trust 2.png',
+      image: '/images/ICANera trust 2.png',
       title: 'Trust Pro',
       subtitle: 'Smart contracts',
       description: 'Automated trust mgmt'
@@ -519,19 +519,19 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Integrated experience'
     },
     {
-      image: '/images/IcanEra 3.png',
+      image: '/images/ICANera 3.png',
       title: 'IcanEra Premium',
       subtitle: 'Elite features',
       description: 'Power users'
     },
     {
-      image: '/images/IcanEra tithe.png',
+      image: '/images/ICANera tithe.png',
       title: 'Tithe Management',
       subtitle: 'Spiritual giving',
       description: 'Smart contributions'
     },
     {
-      image: '/images/IcanEra tith2.png',
+      image: '/images/ICANera tith2.png',
       title: 'Tithe Pro',
       subtitle: 'Advanced giving',
       description: 'Community support'
@@ -1190,7 +1190,7 @@ const LandingPage = ({ onGetStarted }) => {
                 <span className={`font-serif text-lg font-bold italic ${isDarkTheme ? 'text-white' : 'text-[#1f1a12]'}`}>The IcanEra Gazette</span>
                 <span className={`text-[10px] sm:text-xs uppercase tracking-[0.2em] ${isDarkTheme ? 'text-slate-400' : 'text-[#6b5f49]'}`}>Your financial picture</span>
               </div>
-              <img src="/images/IcanEra CMMS.png" alt="IcanEra business management system" className="w-full aspect-[1.22] object-cover object-top sepia-[.12]" />
+              <img src="/images/ICANera CMMS.png" alt="IcanEra business management system" className="w-full aspect-[1.22] object-cover object-top sepia-[.12]" />
               <div className={`grid grid-cols-3 divide-x border-t-2 border-double ${isDarkTheme ? 'divide-slate-700 border-slate-600' : 'divide-[#1f1a12]/25 border-[#1f1a12]/70'}`}>
                 {[['I', 'Manage your team'], ['II', 'Find talent'], ['III', 'Reach customers']].map(([number, label]) => <div key={number} className="px-3 py-3"><span className={`block font-serif text-sm italic ${isDarkTheme ? 'text-amber-300' : 'text-emerald-900'}`}>{number}.</span><span className={`mt-0.5 block font-serif text-sm font-semibold ${isDarkTheme ? 'text-slate-100' : 'text-[#1f1a12]'}`}>{label}</span></div>)}
               </div>
