@@ -24,7 +24,7 @@ import { buildKey, getUploadUrl, getDownloadUrl, deleteObject } from '../_lib/r2
 import { applyCors } from '../_lib/cors.js';
 import crypto from 'crypto';
 
-const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes', 'portfolio-chat', 'cmms-employment-documents', 'cmms-opportunities'];
+const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes', 'portfolio-chat', 'cmms-employment-documents', 'cmms-opportunities', 'transaction-receipts'];
 
 const PORTFOLIO_CHAT_GUEST_FOLDER = 'portfolio-chat-guest';
 const CHAT_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];

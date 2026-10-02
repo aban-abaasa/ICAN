@@ -68,6 +68,8 @@ import icanCoinBlockchainService from '../services/icanCoinBlockchainService';
 import ReceiveMoneyModal from './ReceiveMoneyModal';
 import PayMoneyModal from './PayMoneyModal';
 import IcanPaymentReceiptModal from './IcanPaymentReceiptModal';
+import TransactionReceiptModal from './TransactionReceiptModal';
+import { walletTxToReceiptTx } from '../utils/transactionReceipt';
 import PINRecoveryModal from './PINRecoveryModal';
 import WalletAccessModal from './WalletAccessModal';
 import BusinessWalletAccessModal from './BusinessWalletAccessModal';
@@ -261,6 +263,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [showReceiveMoneyModal, setShowReceiveMoneyModal] = useState(false);
   const [showPayMoneyModal, setShowPayMoneyModal] = useState(false);
   const [paymentReceipt, setPaymentReceipt] = useState(null);
+  const [walletReceiptTx, setWalletReceiptTx] = useState(null);
   
   // Payment Cards State
   const [paymentCards, setPaymentCards] = useState([]);
@@ -5224,6 +5227,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   </div>
                 )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => { setWalletReceiptTx(walletTxToReceiptTx(tx)); setSelectedWalletTx(null); }}
+                className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white"
+              >
+                🧾 View receipt
+              </button>
             </div>
           </div>
         );
@@ -8206,6 +8217,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         }}
       />
       <IcanPaymentReceiptModal receipt={paymentReceipt} onClose={() => setPaymentReceipt(null)} />
+      {walletReceiptTx && (
+        <TransactionReceiptModal
+          transaction={walletReceiptTx}
+          onClose={() => setWalletReceiptTx(null)}
+          onProofAttached={(updated) => setWalletReceiptTx(updated)}
+        />
+      )}
       {pinDialog}
     </div>
   );

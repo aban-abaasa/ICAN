@@ -1,0 +1,127 @@
+/**
+ * Receipt helpers for ledger transactions.
+ *
+ * Every transaction gets a receipt: either the proof image the user attached
+ * (stored as an r2:// value in metadata.receipt_url via the existing R2 upload
+ * flow) or a system receipt generated from the ledger row itself. Nothing here
+ * calls the network -- images are resolved/uploaded through r2StorageService.
+ */
+
+export const RECEIPT_FOLDER = 'transaction-receipts';
+export const RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
+
+const shortId = (value) => String(value || '').replace(/-/g, '').slice(0, 8).toUpperCase();
+
+/** Stable receipt number derived from the ledger row, e.g. RCT-20260314-A1B2C3D4 */
+export const getReceiptNumber = (tx) => {
+  if (!tx) return '';
+  const stamped = tx.metadata?.receipt_number;
+  if (stamped) return stamped;
+  const date = new Date(tx.created_at);
+  const day = Number.isNaN(date.getTime()) ? '00000000' : date.toISOString().slice(0, 10).replace(/-/g, '');
+  const ref = shortId(tx.id || tx.metadata?.receipt_id || tx.metadata?.reference_id) || 'LOCAL';
+  return `RCT-${day}-${ref}`;
+};
+
+/** The attached proof image reference (r2:// or https://), or null. */
+export const getReceiptImageRef = (tx) => tx?.metadata?.receipt_url || null;
+
+/** 'attached' = user supplied proof image, 'system' = generated from the ledger row. */
+export const getProofStatus = (tx) => (getReceiptImageRef(tx) ? 'attached' : 'system');
+
+export const getProofLabel = (tx) => (getProofStatus(tx) === 'attached' ? 'Receipt attached' : 'System receipt');
+
+const titleCase = (value) => String(value || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** Ordered [label, value] rows describing the transaction on its receipt. */
+export const getReceiptLines = (tx, { businessName = null, currency = 'UGX' } = {}) => {
+  const meta = tx?.metadata || {};
+  const isIncome = tx?.transaction_type === 'income';
+  const recordCategory = tx?.record_category || meta.record_category || 'personal';
+  const lines = [
+    ['Receipt No.', getReceiptNumber(tx)],
+    ['Type', isIncome ? 'Money in (income)' : 'Money out (expense)'],
+    ['Amount', `${Math.abs(Number(tx?.amount) || 0).toLocaleString()} ${tx?.currency || currency}`],
+    ['Description', tx?.description || 'Transaction'],
+    ['Date', tx?.created_at ? new Date(tx.created_at).toLocaleString() : '—'],
+    ['Account', recordCategory === 'business' ? 'Business' : recordCategory === 'tithe' ? 'Tithe' : 'Personal'],
+  ];
+  if (businessName) lines.push(['Business', businessName]);
+  const category = meta.categoryName || meta.category;
+  if (category) lines.push(['Category', titleCase(category)]);
+  if (meta.accounting_type) lines.push(['Accounting', titleCase(meta.accounting_type)]);
+  if (meta.product_name) lines.push(['Item', meta.product_name]);
+  if (meta.quantity) lines.push(['Quantity', String(meta.quantity)]);
+  if (meta.unit_price) lines.push(['Unit price', `${Number(meta.unit_price).toLocaleString()} ${currency}`]);
+  if (meta.payment_method) lines.push(['Method', titleCase(meta.payment_method)]);
+  if (meta.payer_name) lines.push(['Paid by', meta.payer_name]);
+  if (meta.recipient_name || meta.recipient) lines.push(['Received by', meta.recipient_name || meta.recipient]);
+  if (meta.merchant_name) lines.push(['Merchant', meta.merchant_name]);
+  const source = meta.source || meta.source_app;
+  if (source) lines.push(['Recorded via', titleCase(source)]);
+  if (meta.reference_id) lines.push(['Reference', String(meta.reference_id)]);
+  if (tx?.id && !String(tx.id).startsWith('temp_')) lines.push(['Ledger ID', String(tx.id)]);
+  return lines;
+};
+
+/** Plain-text receipt, used for sharing/clipboard. */
+export const getReceiptText = (tx, options) =>
+  ['IcanEra Transaction Receipt', ...getReceiptLines(tx, options).map(([k, v]) => `${k}: ${v}`)].join('\n');
+
+/**
+ * Downscale big phone photos before upload so receipts stay small. Non-images
+ * (e.g. PDFs) and anything that can't be decoded are returned unchanged.
+ */
+export const compressReceiptImage = async (file, { maxEdge = 1600, quality = 0.82 } = {}) => {
+  if (!file || !/^image\/(jpeg|png|webp)$/i.test(file.type) || typeof document === 'undefined') return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 1024 * 1024) { bitmap.close?.(); return file; }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    if (!blob || blob.size >= file.size) return file;
+    const name = (file.name || 'receipt').replace(/\.[^.]+$/, '') + '.jpg';
+    return new File([blob], name, { type: 'image/jpeg' });
+  } catch (error) {
+    console.warn('Receipt image compression skipped:', error);
+    return file;
+  }
+};
+
+/**
+ * Normalise a wallet-list row (ICANWallet's merged shared/legacy feed) into the
+ * ledger-transaction shape the receipt helpers expect. Only legacy
+ * ican_transactions rows keep a user_id, so only those can take an attached
+ * proof image; shared coin-feed rows always get the system receipt.
+ */
+export const walletTxToReceiptTx = (tx) => {
+  if (!tx) return null;
+  const rawId = String(tx.id || '').replace(/^(shared|legacy)-/, '');
+  const isLegacy = String(tx.id || '').startsWith('legacy-');
+  const amount = Number(tx.local_amount ?? tx.amount) || 0;
+  const incoming = Number(tx.amount) >= 0;
+  return {
+    id: rawId,
+    user_id: isLegacy ? tx.user_id : null,
+    amount: Math.abs(amount),
+    currency: tx.currency || tx.local_currency || 'UGX',
+    transaction_type: incoming ? 'income' : 'expense',
+    description: tx.description || tx.transaction_type || 'Wallet transaction',
+    created_at: tx.created_at,
+    business_profile_id: tx.business_profile_id || null,
+    metadata: {
+      ...(tx.metadata || {}),
+      category: tx.metadata?.category || tx.expense_classification || tx.transaction_type,
+      source: tx.metadata?.source || tx.source_app || 'ican wallet',
+      payment_method: tx.metadata?.payment_method || 'IcanEra wallet',
+      merchant_name: tx.merchant_name || tx.metadata?.merchant_name || null,
+      reference_id: tx.reference_id || tx.metadata?.reference_id || null,
+      ican_amount: Math.abs(Number(tx.amount) || 0),
+    },
+  };
+};

@@ -118,7 +118,10 @@ export class VelocityEngine {
               raw_entry_text: transactionData.raw_entry_text || null,
               entry_mode: transactionData.entry_mode || null,
               quantity: transactionData.quantity || null,
-              unit_price: transactionData.unit_price || null
+              unit_price: transactionData.unit_price || null,
+              // Proof image (r2:// ref from the existing upload flow) — optional
+              receipt_url: transactionData.receipt_url || null,
+              receipt_attached_at: transactionData.receipt_attached_at || null
             }
           }
         ])
