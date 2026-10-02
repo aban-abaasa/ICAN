@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { usernameOf, usernameInitial } from '../utils/usernameOf';
 import { useAuth } from '../context/AuthContext';
 import {
   ArrowLeft,
@@ -33,7 +34,7 @@ import {
 } from '../services/trustService';
 import { supabase } from '../lib/supabase/client';
 
-const AdminApplicationPanel = ({ groupId, onClose }) => {
+const AdminApplicationPanel = ({ groupId, onClose, embedded = false }) => {
   const { user } = useAuth();
   const [pendingApps, setPendingApps] = useState([]);
   const [votingApps, setVotingApps] = useState([]);
@@ -42,7 +43,8 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [activeTab, setActiveTab] = useState('pending');
+  const [activeTab, setActiveTab] = useState('pending-members');
+  const [openId, setOpenId] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [selectedLoanForVoting, setSelectedLoanForVoting] = useState(null);
 
@@ -224,7 +226,7 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
 
   if (loading && !stats) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
+      <div className="trust-classic space-y-2 p-1 sm:p-2">
         <div className="text-center py-12">
           <Loader className="w-12 h-12 text-blue-500 mx-auto mb-4 animate-spin" />
           <p className="text-gray-400">Loading applications...</p>
@@ -234,20 +236,27 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="w-6 h-6 text-white" />
-        </button>
-        <div>
-          <h1 className="text-3xl font-bold text-white">Application Management</h1>
-          <p className="text-gray-400">Review and approve membership and loan applications</p>
+    <div className="trust-classic space-y-2 p-1 sm:p-2">
+      {/* Header (hidden when embedded in the Trust admin tab) */}
+      {!embedded && (
+      <div className="cmms-accent-burgundy mb-3 space-y-2.5 sm:mb-5">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClose}
+            aria-label="Back"
+            className="cmms-classic-btn-secondary inline-flex !h-auto flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back
+          </button>
+          <span className="cmms-medallion"><Users className="h-4 w-4" aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="cmms-classic-heading text-lg leading-tight">Application Management</h2>
+            <p className="hidden truncate text-xs cmms-classic-muted sm:block">Review and approve membership and loan applications</p>
+          </div>
         </div>
+        <div className="cmms-ornament hidden sm:block" aria-hidden="true" />
       </div>
+      )}
 
       {/* Message */}
       {message.text && (
@@ -262,107 +271,27 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
         </div>
       )}
 
-      {/* Statistics */}
-      <div className="mb-8">
-        <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4" />
-          Application Statistics
-        </h2>
-        <div className="space-y-4">
-          {/* Members Statistics */}
-          <div>
-            <p className="text-xs text-gray-400 font-semibold mb-3 ml-1">👥 Membership Applications</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 border border-yellow-400/40 rounded-lg p-4 hover:border-yellow-400/60 transition-all">
-                <div className="text-xs text-gray-400 flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Pending
-                </div>
-                <div className="text-3xl font-bold text-yellow-400 mt-2">{stats?.pending || 0}</div>
-              </div>
-              <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 border border-purple-400/40 rounded-lg p-4 hover:border-purple-400/60 transition-all">
-                <div className="text-xs text-gray-400 flex items-center gap-1">
-                  <Users className="w-3 h-3" /> Voting
-                </div>
-                <div className="text-3xl font-bold text-purple-400 mt-2">{stats?.voting || 0}</div>
-              </div>
-              <div className="bg-gradient-to-br from-green-500/20 to-green-600/10 border border-green-400/40 rounded-lg p-4 hover:border-green-400/60 transition-all">
-                <div className="text-xs text-gray-400 flex items-center gap-1">
-                  <Award className="w-3 h-3" /> Approved
-                </div>
-                <div className="text-3xl font-bold text-green-400 mt-2">{stats?.approved || 0}</div>
-              </div>
-              <div className="bg-gradient-to-br from-red-500/20 to-red-600/10 border border-red-400/40 rounded-lg p-4 hover:border-red-400/60 transition-all">
-                <div className="text-xs text-gray-400 flex items-center gap-1">
-                  <Zap className="w-3 h-3" /> Rejected
-                </div>
-                <div className="text-3xl font-bold text-red-400 mt-2">{stats?.rejected || 0}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Loan Statistics */}
-          <div>
-            <p className="text-xs text-gray-400 font-semibold mb-3 ml-1">💰 Loan Applications</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-400/40 rounded-lg p-4 hover:border-amber-400/60 transition-all">
-                <div className="text-xs text-gray-400 flex items-center gap-1">
-                  <Clock className="w-3 h-3" /> Pending
-                </div>
-                <div className="text-3xl font-bold text-amber-400 mt-2">{pendingLoans.length}</div>
-              </div>
-              <div className="bg-gradient-to-br from-indigo-500/20 to-indigo-600/10 border border-indigo-400/40 rounded-lg p-4 hover:border-indigo-400/60 transition-all">
-                <div className="text-xs text-gray-400 flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" /> Voting
-                </div>
-                <div className="text-3xl font-bold text-indigo-400 mt-2">{votingLoans.length}</div>
-              </div>
-              <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border border-emerald-400/40 rounded-lg p-4 hover:border-emerald-400/60 transition-all">
-                <div className="text-xs text-gray-400 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> Approved
-                </div>
-                <div className="text-3xl font-bold text-emerald-400 mt-2">0</div>
-              </div>
-              <div className="bg-gradient-to-br from-rose-500/20 to-rose-600/10 border border-rose-400/40 rounded-lg p-4 hover:border-rose-400/60 transition-all">
-                <div className="text-xs text-gray-400 flex items-center gap-1">
-                  <XCircle className="w-3 h-3" /> Rejected
-                </div>
-                <div className="text-3xl font-bold text-rose-400 mt-2">0</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Tabs */}
-      <div className="flex gap-2 mb-8 border-b border-slate-700 flex-wrap">
+      <div className="trust-nav -mx-1 mb-5 flex gap-2 overflow-x-auto px-1 pb-1 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap" role="tablist" style={{ scrollbarWidth: 'none' }}>
         {[
-          { id: 'pending-members', label: 'Pending Members', count: pendingApps.length, icon: Clock },
-          { id: 'pending-loans', label: 'Pending Loans', count: pendingLoans.length, icon: Clock },
-          { id: 'voting-members', label: 'Voting Members', count: votingApps.length, icon: Users },
-          { id: 'voting-loans', label: 'Voting Loans', count: votingLoans.length, icon: Users }
+          { id: 'pending-members', label: 'Pending Members', count: pendingApps.length, icon: Clock, accent: 'gold' },
+          { id: 'pending-loans', label: 'Pending Loans', count: pendingLoans.length, icon: Clock, accent: 'emerald' },
+          { id: 'voting-members', label: 'Voting Members', count: votingApps.length, icon: Users, accent: 'navy' },
+          { id: 'voting-loans', label: 'Voting Loans', count: votingLoans.length, icon: Users, accent: 'plum' }
         ].map((tab) => {
           const Icon = tab.icon;
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-5 py-3 font-semibold flex items-center gap-2 transition-all border-b-3 ${
-                activeTab === tab.id
-                  ? 'text-blue-400 border-blue-500 bg-blue-500/10'
-                  : 'text-gray-400 border-transparent hover:text-gray-300 hover:bg-slate-800/50'
-              }`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => { setActiveTab(tab.id); setOpenId(null); }}
+              className={`cmms-ptab cmms-accent-${tab.accent} ${activeTab === tab.id ? 'is-active' : ''}`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className="h-4 w-4" aria-hidden="true" />
               {tab.label}
-              {tab.count > 0 && (
-                <span className={`ml-2 px-3 py-1 rounded-full text-xs font-bold ${
-                  activeTab === tab.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-700 text-gray-300'
-                }`}>
-                  {tab.count}
-                </span>
-              )}
+              <span className="trust-tabcount" data-zero={tab.count === 0}>{tab.count}</span>
             </button>
           );
         })}
@@ -383,14 +312,15 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
               pendingApps.map((app) => (
                 <div
                   key={app.id}
-                  className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border-2 border-yellow-500/40 rounded-xl p-6 hover:border-yellow-500/60 transition-all shadow-lg"
+                  data-open={openId === app.id ? 'true' : 'false'}
+                  className="trust-row bg-gradient-to-br from-slate-800/80 to-slate-900/60 border-2 border-yellow-500/40 rounded-xl p-6 hover:border-yellow-500/60 transition-all shadow-lg"
                 >
-                  <div className="flex items-start justify-between mb-5">
+                  <div className="trust-row-head flex items-start justify-between mb-5" role="button" tabIndex={0} aria-expanded={openId === app.id} onClick={() => setOpenId(openId === app.id ? null : app.id)} onKeyDown={(e) => { if (e.key === 'Enter') setOpenId(openId === app.id ? null : app.id); }}>
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse"></div>
-                        <h3 className="text-lg font-bold text-white">{app.user_email}</h3>
-                      </div>
+                      <div className="flex items-center gap-3 mb-1">
+<span className="trust-avatar" aria-hidden="true">{usernameInitial(app.user_email)}</span>
+<h3 className="min-w-0 truncate text-base font-bold sm:text-lg">@{usernameOf(app.user_email)}</h3>
+</div>
                       <p className="text-xs text-gray-500">
                         📅 Applied {new Date(app.created_at).toLocaleDateString()} at {new Date(app.created_at).toLocaleTimeString()}
                       </p>
@@ -443,9 +373,10 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
               pendingLoans.map((loan) => (
                 <div
                   key={loan.id}
-                  className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border-2 border-amber-500/40 rounded-xl p-6 hover:border-amber-500/60 transition-all shadow-lg"
+                  data-open={openId === loan.id ? 'true' : 'false'}
+                  className="trust-row bg-gradient-to-br from-slate-800/80 to-slate-900/60 border-2 border-amber-500/40 rounded-xl p-6 hover:border-amber-500/60 transition-all shadow-lg"
                 >
-                  <div className="flex items-start justify-between mb-5">
+                  <div className="trust-row-head flex items-start justify-between mb-5" role="button" tabIndex={0} aria-expanded={openId === loan.id} onClick={() => setOpenId(openId === loan.id ? null : loan.id)} onKeyDown={(e) => { if (e.key === 'Enter') setOpenId(openId === loan.id ? null : loan.id); }}>
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></div>
@@ -516,14 +447,15 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
                 return (
                   <div
                     key={app.id}
-                    className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border-2 border-purple-500/40 rounded-xl p-6 hover:border-purple-500/60 transition-all shadow-lg"
+                    data-open={openId === app.id ? 'true' : 'false'}
+                    className="trust-row bg-gradient-to-br from-slate-800/80 to-slate-900/60 border-2 border-purple-500/40 rounded-xl p-6 hover:border-purple-500/60 transition-all shadow-lg"
                   >
-                    <div className="flex items-start justify-between mb-5">
+                    <div className="trust-row-head flex items-start justify-between mb-5" role="button" tabIndex={0} aria-expanded={openId === app.id} onClick={() => setOpenId(openId === app.id ? null : app.id)} onKeyDown={(e) => { if (e.key === 'Enter') setOpenId(openId === app.id ? null : app.id); }}>
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse"></div>
-                          <h3 className="text-lg font-bold text-white">{app.user_email}</h3>
-                        </div>
+                        <div className="flex items-center gap-3 mb-1">
+<span className="trust-avatar" aria-hidden="true">{usernameInitial(app.user_email)}</span>
+<h3 className="min-w-0 truncate text-base font-bold sm:text-lg">@{usernameOf(app.user_email)}</h3>
+</div>
                         <p className="text-xs text-gray-500">
                           Status: {app.status === 'approved'
                             ? '✅ Approved by voting'
@@ -649,9 +581,10 @@ const AdminApplicationPanel = ({ groupId, onClose }) => {
               votingLoans.map((loan) => (
                 <div
                   key={loan.id}
-                  className="bg-gradient-to-br from-slate-800/80 to-slate-900/60 border-2 border-purple-500/40 rounded-xl p-6 hover:border-purple-500/60 transition-all shadow-lg"
+                  data-open={openId === loan.id ? 'true' : 'false'}
+                  className="trust-row bg-gradient-to-br from-slate-800/80 to-slate-900/60 border-2 border-purple-500/40 rounded-xl p-6 hover:border-purple-500/60 transition-all shadow-lg"
                 >
-                  <div className="flex items-start justify-between mb-5">
+                  <div className="trust-row-head flex items-start justify-between mb-5" role="button" tabIndex={0} aria-expanded={openId === loan.id} onClick={() => setOpenId(openId === loan.id ? null : loan.id)} onKeyDown={(e) => { if (e.key === 'Enter') setOpenId(openId === loan.id ? null : loan.id); }}>
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse"></div>

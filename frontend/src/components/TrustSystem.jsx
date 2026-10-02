@@ -30,6 +30,8 @@ import { useAuth } from '../context/AuthContext';
 import LiveBoardroom from './LiveBoardroom';
 import GroupWalletPINModal from './GroupWalletPINModal';
 import AdminApplicationPanel from './AdminApplicationPanel';
+import CmmsPageShell from './CmmsPageShell.jsx';
+import { usernameOf } from '../utils/usernameOf';
 import TrustLoanManagement from './TrustLoanManagement';
 import {
   getPublicTrustGroups,
@@ -384,10 +386,17 @@ const TrustSystem = ({
       return;
     }
 
+    const maxMembers = parseInt(groupForm.maxMembers, 10);
+    if (!Number.isInteger(maxMembers) || maxMembers < 2) {
+      setMessage({ type: 'error', text: 'Max Members must be a whole number of 2 or more' });
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await createTrustGroup({
         ...groupForm,
+        maxMembers,
         creatorId: currentUser.id
       });
 
@@ -926,26 +935,48 @@ const TrustSystem = ({
     }
   };
 
+  // The admin tab opens straight onto the applications: pick the first group
+  // this person created (a dropdown lets them switch when they run several).
+  useEffect(() => {
+    if (activeTab !== 'admin' || selectedAdminGroup) return;
+    const mine = myGroups.filter(g => g.creator_id === currentUser?.id);
+    if (mine.length > 0) setSelectedAdminGroup(mine[0]);
+  }, [activeTab, myGroups, currentUser?.id, selectedAdminGroup]);
+
+  const trustTabs = [
+    { id: 'explore', label: '🔍 Explore', accent: 'emerald' },
+    { id: 'mygroups', label: '👥 My Trusts', accent: 'navy' },
+    { id: 'voting', label: `🗳️ Vote${votingApplications.length > 0 ? ` (${votingApplications.length})` : ''}`, accent: 'burgundy' },
+    { id: 'applications', label: `📮 Applications${myApplications.length > 0 ? ` (${myApplications.length})` : ''}`, accent: 'plum' },
+    { id: 'create', label: '✨ Create', accent: 'gold' },
+    ...(myGroups.some(g => g.creator_id === currentUser?.id) ? [{ id: 'admin', label: '👑 Admin Panel', accent: 'teal' }] : [])
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-emerald-50 py-4 sm:py-8 px-3 sm:px-4 trust-creative-skin">
       {/* Header */}
-      <div className="max-w-7xl mx-auto mb-6 sm:mb-8">
-        <div className="flex items-center justify-between mb-4 sm:mb-6 gap-2">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Shield className="w-7 h-7 sm:w-10 sm:h-10 text-amber-500 flex-shrink-0" />
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-4xl font-bold text-slate-900 truncate">🏦 SACCO HUB</h1>
-              <p className="text-xs sm:text-base text-amber-700 mt-0 sm:mt-1 truncate">Cooperative Savings Groups</p>
-            </div>
-          </div>
-        </div>
-
+      <div className="max-w-7xl mx-auto">
+        <CmmsPageShell
+          title="SACCO HUB"
+          subtitle="Cooperative Savings Groups"
+          icon={<Shield className="h-4 w-4" aria-hidden="true" />}
+          chips={[
+            myGroups.length > 0 && `${myGroups.length} ${myGroups.length === 1 ? 'trust' : 'trusts'} joined`,
+            votingApplications.length > 0 && `${votingApplications.length} to vote on`,
+            myApplications.length > 0 && `${myApplications.length} pending ${myApplications.length === 1 ? 'application' : 'applications'}`,
+            !walletLoading && !hasICANWallet && 'IcanEra wallet needed'
+          ]}
+          info="Find a savings trust, join with a wallet contribution, vote on new members and manage the groups you run. Each tab can be opened as a full page with the expand button."
+          tabs={trustTabs}
+          tab={activeTab}
+          onTab={(id) => { setActiveTab(id); setShowMobileMenu(false); }}
+        >
         {/* Message Alert */}
         {message.text && (
           <div className={`p-4 rounded-lg mb-6 flex justify-between items-center ${
             message.type === 'success' 
-              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-              : 'bg-red-500/10 border border-red-500/20 text-red-400'
+              ? 'bg-emerald-500/10 border border-emerald-600/40 text-emerald-700'
+              : 'bg-red-500/10 border border-red-600/40 text-red-700'
           }`}>
             <span className="flex items-center gap-2">
               {message.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
@@ -960,53 +991,15 @@ const TrustSystem = ({
         {/* ICAN Wallet Requirement Banner */}
         {!walletLoading && !hasICANWallet && (
           <div className="p-4 rounded-lg mb-6 bg-amber-500/15 border border-amber-500/40 flex items-start gap-3">
-            <Wallet className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <Wallet className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-amber-300 font-semibold text-sm sm:text-base">IcanEra Wallet Required</p>
-              <p className="text-amber-200/70 text-xs sm:text-sm mt-1">You need an active IcanEra wallet account to join trust groups and make contributions. Set up your IcanEra wallet first to get started.</p>
+              <p className="text-amber-700 font-semibold text-sm sm:text-base">IcanEra Wallet Required</p>
+              <p className="text-amber-800/80 text-xs sm:text-sm mt-1">You need an active IcanEra wallet account to join trust groups and make contributions. Set up your IcanEra wallet first to get started.</p>
             </div>
           </div>
         )}
 
-        {/* Tabs - Desktop View */}
-        <div className="hidden sm:flex gap-4 border-b border-slate-700 py-0">
-          <button onClick={() => { setActiveTab('explore'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'explore' ? 'text-white border-emerald-500 bg-emerald-500' : 'text-emerald-800 bg-emerald-100 border-emerald-300 hover:bg-emerald-200'}`}>🔍 Explore</button>
-          <button onClick={() => { setActiveTab('mygroups'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'mygroups' ? 'text-white border-blue-500 bg-blue-500' : 'text-blue-800 bg-blue-100 border-blue-300 hover:bg-blue-200'}`}>👥 My Trusts</button>
-          <button onClick={() => { setActiveTab('voting'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'voting' ? 'text-white border-orange-500 bg-orange-500' : 'text-orange-800 bg-orange-100 border-orange-300 hover:bg-orange-200'}`}>🗳️ Vote {votingApplications.length > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{votingApplications.length}</span>}</button>
-          <button onClick={() => { setActiveTab('applications'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'applications' ? 'text-white border-violet-500 bg-violet-500' : 'text-violet-800 bg-violet-100 border-violet-300 hover:bg-violet-200'}`}>📮 Applications {myApplications.length > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold">{myApplications.length}</span>}</button>
-          <button onClick={() => { setActiveTab('create'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'create' ? 'text-white border-amber-500 bg-amber-500' : 'text-amber-800 bg-amber-100 border-amber-300 hover:bg-amber-200'}`}>✨ Create</button>
-          {myGroups.some(g => g.creator_id === currentUser?.id) && (
-            <button onClick={() => { setActiveTab('admin'); setShowMobileMenu(false); }} className={`px-6 py-3 mt-1 mb-1 font-semibold text-base transition-all flex items-center gap-2 whitespace-nowrap rounded-lg border-2 ${activeTab === 'admin' ? 'text-white border-fuchsia-400 bg-fuchsia-500/20' : 'text-fuchsia-300 border-fuchsia-500/40 hover:border-fuchsia-400'}`}>👑 Admin Panel</button>
-          )}
-        </div>
-
-        {/* Tabs - Mobile View with Dots Menu */}
-        <div className="sm:hidden flex items-center justify-between border-b border-slate-700 py-2 px-3 relative">
-          <div className="flex gap-2 flex-1">
-            <button onClick={() => { setActiveTab('explore'); setShowMobileMenu(false); }} className={`px-2 py-2 font-semibold text-sm transition-all flex items-center gap-1 whitespace-nowrap relative ${activeTab === 'explore' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>🔍</button>
-            <button onClick={() => { setActiveTab('mygroups'); setShowMobileMenu(false); }} className={`px-2 py-2 font-semibold text-sm transition-all flex items-center gap-1 whitespace-nowrap relative ${activeTab === 'mygroups' ? 'text-amber-500 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-300'}`}>👥</button>
-          </div>
-          
-          <div className="relative">
-            <button onClick={() => setShowMobileMenu(!showMobileMenu)} className="p-2 hover:bg-slate-800/50 rounded-lg transition-colors text-slate-400 hover:text-white"><MoreVertical className="w-5 h-5" /></button>
-            {showMobileMenu && (
-              <div className="absolute right-0 top-full mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 min-w-max">
-                <button onClick={() => { setActiveTab('explore'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'explore' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>🔍 Explore</button>
-                <button onClick={() => { setActiveTab('mygroups'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'mygroups' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>👥 My Trusts</button>
-                <button onClick={() => { setActiveTab('voting'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'voting' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>🗳️ Vote {votingApplications.length > 0 && <span className="ml-auto px-2 py-1 bg-red-500 text-white text-xs rounded-full font-bold flex-shrink-0">{votingApplications.length}</span>}</button>
-                <button onClick={() => { setActiveTab('applications'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'applications' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>📮 Applications {myApplications.length > 0 && <span className="ml-auto px-2 py-1 bg-red-500 text-white text-xs rounded-full font-bold flex-shrink-0">{myApplications.length}</span>}</button>
-                <button onClick={() => { setActiveTab('create'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'create' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>✨ Create</button>
-                {myGroups.some(g => g.creator_id === currentUser?.id) && (
-                  <button onClick={() => { setActiveTab('admin'); setShowMobileMenu(false); }} className={`w-full text-left px-4 py-3 font-medium transition-all flex items-center justify-between gap-3 ${activeTab === 'admin' ? 'bg-amber-600/20 text-amber-400' : 'text-slate-300 hover:bg-slate-700/50'}`}>👑 Admin Panel</button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-      </div>
-
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="trust-classic">
         {/* EXPLORE GROUPS TAB */}
         {activeTab === 'explore' && (
           <div>
@@ -1242,7 +1235,7 @@ const TrustSystem = ({
           <div className="max-w-2xl mx-auto">
             <div className="bg-gradient-to-br from-emerald-950/80 via-emerald-900/70 to-teal-900/70 border-4 border-green-400 rounded-xl p-8 shadow-xl shadow-green-900/30">
               <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-                <Plus className="text-green-300" />
+                <span className="cmms-medallion"><Plus className="h-4 w-4" aria-hidden="true" /></span>
                 Create a New TRUST Group
               </h2>
 
@@ -1273,15 +1266,18 @@ const TrustSystem = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-white font-semibold mb-2">Max Members</label>
-                    <select
+                    <input
+                      type="number"
+                      required
+                      min="2"
+                      step="1"
+                      inputMode="numeric"
                       value={groupForm.maxMembers}
-                      onChange={(e) => setGroupForm({ ...groupForm, maxMembers: parseInt(e.target.value) })}
-                      className="w-full px-4 py-3 bg-emerald-950/70 border-2 border-green-400/80 rounded-lg text-white focus:outline-none focus:border-lime-300"
-                    >
-                      {[5, 10, 15, 20, 25, 30].map(num => (
-                        <option key={num} value={num}>{num} Members</option>
-                      ))}
-                    </select>
+                      onChange={(e) => setGroupForm({ ...groupForm, maxMembers: e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                      placeholder="Any number, e.g. 50"
+                      className="w-full px-4 py-3 border-2 rounded-lg"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Set any number of members you wish (minimum 2).</p>
                   </div>
 
                   <div>
@@ -1488,7 +1484,7 @@ const TrustSystem = ({
                   <div key={app.id} className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 sm:p-6">
                     <div className="flex justify-between items-start mb-3 sm:mb-4 gap-2">
                       <div>
-                        <h3 className="text-lg sm:text-xl font-bold text-white">{app.applicant_email}</h3>
+                        <h3 className="text-lg sm:text-xl font-bold text-white">@{usernameOf(app.applicant_email)}</h3>
                         <p className="text-slate-400 text-sm">for {app.group_name}</p>
                       </div>
                       <span className="px-2 sm:px-3 py-1 bg-blue-600 text-white text-xs rounded-full flex-shrink-0">Pending</span>
@@ -1553,36 +1549,45 @@ const TrustSystem = ({
         {activeTab === 'admin' && (
           <div className="py-4 sm:py-8 px-3 sm:px-0">
             {/* Dashboard Header */}
-            <div className="mb-6 sm:mb-8">
-              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">👑 Admin Dashboard</h1>
-              <p className="text-slate-400 text-sm sm:text-base">Manage your groups and review member applications</p>
+            <div className="cmms-accent-gold mb-5 space-y-2.5 sm:mb-6">
+              <div className="flex items-center gap-3">
+                <span className="cmms-medallion"><Shield className="h-4 w-4" aria-hidden="true" /></span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="cmms-classic-heading text-lg leading-tight sm:text-xl">Admin Dashboard</h2>
+                  <p className="text-xs cmms-classic-muted sm:text-sm">Manage your groups and review member applications</p>
+                </div>
+              </div>
+              <div className="cmms-ornament" aria-hidden="true" />
             </div>
 
             {/* If a group is selected, show detailed admin application panel */}
             {selectedAdminGroup ? (
               <div>
-                {/* Stats Row - Show pending and voting counts without group name */}
-                <div className="flex gap-3 sm:gap-4 mb-6">
-                  <div className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg p-3">
-                    <p className="text-slate-400 text-xs sm:text-sm">⏳ Pending</p>
-                    <p className="text-xl sm:text-2xl font-bold text-amber-400 mt-1">{myApplications.filter(app => app.group_id === selectedAdminGroup.id && app.status === 'pending').length}</p>
-                  </div>
-                  <div className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg p-3">
-                    <p className="text-slate-400 text-xs sm:text-sm">🗳️ Voting</p>
-                    <p className="text-xl sm:text-2xl font-bold text-blue-400 mt-1">{votingApplications.filter(app => app.group_id === selectedAdminGroup.id).length}</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setSelectedAdminGroup(null);
-                    loadGroups();
-                  }}
-                  className="mb-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg flex items-center gap-2 transition-all text-sm"
-                >
-                  ← Back to Groups
-                </button>
+                {(() => {
+                  const mine = myGroups.filter(g => g.creator_id === currentUser?.id);
+                  const walletOn = groupWallets[selectedAdminGroup.id]?.created;
+                  return (
+                    <div className="mb-3 flex flex-wrap items-center gap-2 sm:mb-4">
+                      {mine.length > 1 ? (
+                        <select
+                          value={selectedAdminGroup.id}
+                          onChange={(e) => { const g = mine.find(x => String(x.id) === e.target.value); if (g) setSelectedAdminGroup(g); }}
+                          aria-label="Choose group"
+                          className="min-w-0 flex-1 px-3 py-2 text-sm font-semibold sm:max-w-xs sm:flex-none"
+                        >
+                          {mine.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                        </select>
+                      ) : (
+                        <span className="cmms-classic-heading min-w-0 truncate text-base">{selectedAdminGroup.name}</span>
+                      )}
+                      <span className="cmms-classic-chip">👤 {selectedAdminGroup.member_count || 0} members</span>
+                      <span className="cmms-classic-chip">{walletOn ? '✅ Wallet active' : '⏳ Wallet setting up'}</span>
+                    </div>
+                  );
+                })()}
                 <AdminApplicationPanel
+                  key={selectedAdminGroup.id}
+                  embedded
                   groupId={selectedAdminGroup.id}
                   onClose={() => {
                     setSelectedAdminGroup(null);
@@ -1593,108 +1598,72 @@ const TrustSystem = ({
             ) : (
               /* Show list of groups the user created */
               <>
+                {/* Overview ledger */}
+                {(() => {
+                  const mine = myGroups.filter(g => g.creator_id === currentUser?.id);
+                  if (mine.length === 0) return null;
+                  const ids = new Set(mine.map(g => g.id));
+                  const pend = myApplications.filter(app => app.status === 'pending' && ids.has(app.group_id)).length;
+                  const vote = votingApplications.filter(app => ids.has(app.group_id)).length;
+                  const members = mine.reduce((t, g) => t + (g.member_count || 0), 0);
+                  return (
+                    <div className="trust-ledger mb-5 cmms-accent-gold">
+                      <div className="trust-figure"><p className="trust-figure-label">Groups</p><p className="trust-figure-value">{mine.length}</p></div>
+                      <div className="trust-figure"><p className="trust-figure-label">Members</p><p className="trust-figure-value">{members}</p></div>
+                      <div className="trust-figure"><p className="trust-figure-label">Pending</p><p className="trust-figure-value trust-tone-warn">{pend}</p></div>
+                      <div className="trust-figure"><p className="trust-figure-label">Voting</p><p className="trust-figure-value trust-tone-info">{vote}</p></div>
+                    </div>
+                  );
+                })()}
+
                 {/* Groups List */}
                 {myGroups.filter(g => g.creator_id === currentUser?.id).length === 0 ? (
-                  <div className="text-center py-12 bg-slate-800/50 rounded-lg border border-slate-700">
-                    <Shield className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-                    <p className="text-gray-400 mb-4">You don't have any groups to manage</p>
+                  <div className="py-10 text-center">
+                    <Shield className="mx-auto mb-3 h-10 w-10 text-slate-500" />
+                    <p className="mb-4 text-sm text-slate-500">You don't have any groups to manage</p>
                     <button
                       onClick={() => setActiveTab('create')}
-                      className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors font-medium text-sm"
+                      className="bg-amber-600 px-4 py-2 text-sm font-medium text-white"
                     >
                       ✨ Create a Group
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
                     {myGroups.filter(g => g.creator_id === currentUser?.id).map(group => {
-                      // Count pending applications for this group
                       const groupPendingApps = myApplications.filter(app => app.group_id === group.id && app.status === 'pending').length;
-                      // Count voting applications for this group
                       const groupVotingApps = votingApplications.filter(app => app.group_id === group.id).length;
-                      
+                      const walletOn = groupWallets[group.id]?.created;
                       return (
-                        <div 
+                        <div
                           key={group.id}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => setSelectedAdminGroup(group)}
-                          className="bg-slate-800/60 border border-slate-700 rounded-lg p-4 sm:p-6 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/20 transition-all cursor-pointer"
+                          onKeyDown={(e) => { if (e.key === 'Enter') setSelectedAdminGroup(group); }}
+                          className="cursor-pointer p-3 sm:p-5 border-2"
                         >
-                          {/* Group Header */}
-                          <div className="flex justify-between items-start gap-3 mb-4">
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-lg sm:text-xl font-bold text-white truncate">{group.name}</h3>
-                              <div className="flex items-center gap-2 mt-2 text-xs sm:text-sm text-slate-400 flex-wrap">
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="text-amber-400">👑</span>
-                                  <span>Creator</span>
-                                </span>
-                                <span className="inline-flex items-center gap-1">
-                                  <span className="text-blue-400">👤</span>
-                                  <span className="font-medium">{group.member_count || 0} members</span>
-                                </span>
-                              </div>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="truncate text-base font-bold sm:text-xl">{group.name}</h3>
+                              <p className="mt-1 line-clamp-2 text-xs text-slate-500 sm:text-sm">{group.description || 'No description yet'}</p>
                             </div>
+                            <span className="flex-shrink-0 text-xs font-bold text-amber-700 sm:text-sm">Manage →</span>
                           </div>
-
-                          {/* Group Description */}
-                          <p className="text-slate-300 text-sm mb-4 line-clamp-2">{group.description}</p>
-
-                          {/* Wallet Status */}
-                          {groupWallets[group.id]?.created ? (
-                            <div className="mb-4 p-3 border border-emerald-500/40 bg-emerald-500/10 rounded-lg">
-                              <p className="text-emerald-400 text-xs sm:text-sm font-semibold flex items-center gap-2">
-                                <span>✅</span>
-                                <span>Trust IcanEra Wallet Active</span>
-                              </p>
-                              <div className="mt-2 space-y-1.5 text-xs text-emerald-300/80">
-                                <p className="flex items-start gap-2">
-                                  <span>•</span>
-                                  <span>Wallet: <span className="font-mono text-emerald-300">{groupWallets[group.id]?.address.substring(0, 20)}...</span></span>
-                                </p>
-                                <p className="flex items-start gap-2">
-                                  <span>•</span>
-                                  <span>Min withdrawal: <span className="font-bold">₿10 IcanEra</span></span>
-                                </p>
-                                <p className="flex items-start gap-2">
-                                  <span>•</span>
-                                  <span>Approval required: <span className="font-bold">60%+ member vote</span></span>
-                                </p>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="mb-4 p-3 border border-amber-500/40 bg-amber-500/10 rounded-lg animate-pulse">
-                              <p className="text-amber-400 text-xs sm:text-sm font-semibold flex items-center gap-2">
-                                <span>⏳</span>
-                                <span>Setting Up Trust IcanEra Wallet...</span>
-                              </p>
-                              <div className="mt-2 space-y-1.5 text-xs text-amber-300/80">
-                                <p className="flex items-start gap-2">
-                                  <span>•</span>
-                                  <span>Creating secure trust wallet</span>
-                                </p>
-                                <p className="flex items-start gap-2">
-                                  <span>•</span>
-                                  <span>Min withdrawal: <span className="font-bold">₿10 IcanEra</span></span>
-                                </p>
-                                <p className="flex items-start gap-2">
-                                  <span>•</span>
-                                  <span>Approval required: <span className="font-bold">60%+ member vote</span></span>
-                                </p>
-                              </div>
-                            </div>
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            <span className="cmms-classic-chip">👑 Creator</span>
+                            <span className="cmms-classic-chip">👤 {group.member_count || 0} members</span>
+                            <span className="cmms-classic-chip">{walletOn ? '✅ Wallet active' : '⏳ Wallet setting up'}</span>
+                          </div>
+                          <div className="trust-ledger mt-3">
+                            <div className="trust-figure"><p className="trust-figure-label">Pending</p><p className="trust-figure-value trust-tone-warn">{groupPendingApps}</p></div>
+                            <div className="trust-figure"><p className="trust-figure-label">Voting</p><p className="trust-figure-value trust-tone-info">{groupVotingApps}</p></div>
+                            <div className="trust-figure"><p className="trust-figure-label">Min withdraw</p><p className="trust-figure-value">₿10</p></div>
+                            <div className="trust-figure"><p className="trust-figure-label">Approval</p><p className="trust-figure-value">60%+</p></div>
+                          </div>
+                          {walletOn && groupWallets[group.id]?.address && (
+                            <p className="mt-2 truncate font-mono text-[0.65rem] text-slate-500 sm:text-xs">Wallet: {groupWallets[group.id].address}</p>
                           )}
-
-                          {/* Stats Row */}
-                          <div className="flex gap-3 sm:gap-4">
-                            <div className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg p-3">
-                              <p className="text-slate-400 text-xs sm:text-sm">⏳ Pending</p>
-                              <p className="text-xl sm:text-2xl font-bold text-amber-400 mt-1">{groupPendingApps}</p>
-                            </div>
-                            <div className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg p-3">
-                              <p className="text-slate-400 text-xs sm:text-sm">🗳️ Voting</p>
-                              <p className="text-xl sm:text-2xl font-bold text-blue-400 mt-1">{groupVotingApps}</p>
-                            </div>
-                          </div>
                         </div>
                       );
                     })}
@@ -1735,6 +1704,8 @@ const TrustSystem = ({
         )}
 
 
+        </div>
+        </CmmsPageShell>
       </div>
       {/* GROUP DETAILS MODAL - Only for My Groups (members viewing their own groups) */}
       {selectedGroup && selectedGroupTab === 'mygroups' && !showGroupModal && !showContributeModal && !showManageModal && createPortal(

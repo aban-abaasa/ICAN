@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { flwCreateTransfer } from "../_shared/flwTransfer.ts";
 
 // Sends real money from a user's IcanEra fiat wallet balance (wallet_accounts,
 // distinct from the ICAN-coin balance) straight to someone else's mobile
@@ -83,7 +84,13 @@ serve(async (req) => {
       recipient_phone,
       recipient_network,
       note,
+      // channel "bank" sends to a bank account instead of a mobile money number.
+      channel,
+      account_number,
+      bank_code,
+      beneficiary_name,
     } = body;
+    const isBank = channel === "bank";
 
     const finalCurrency = String(currency || "UGX").toUpperCase();
     if (finalCurrency !== "UGX") {
@@ -94,14 +101,24 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: "amount must be a positive number." }, 400);
     }
 
-    if (!recipient_phone || !["MTN", "AIRTEL"].includes(recipient_network)) {
+    if (isBank) {
+      if (!/^[0-9]{5,20}$/.test(String(account_number || "").trim())) {
+        return jsonResponse({ success: false, error: "Enter a valid bank account number." }, 400);
+      }
+      if (!bank_code) {
+        return jsonResponse({ success: false, error: "Choose the bank." }, 400);
+      }
+      if (String(beneficiary_name || "").trim().length < 2) {
+        return jsonResponse({ success: false, error: "Enter the account holder's name." }, 400);
+      }
+    } else if (!recipient_phone || !["MTN", "AIRTEL"].includes(recipient_network)) {
       return jsonResponse(
         { success: false, error: "recipient_phone and recipient_network (MTN or AIRTEL) are required." },
         400,
       );
     }
 
-    const normalizedPhone = String(recipient_phone).trim();
+    const normalizedPhone = isBank ? String(account_number).trim() : String(recipient_phone).trim();
 
     // Refuse to send to your own registered phone number — an accidental
     // self-send should fail loudly rather than round-trip real money.
@@ -110,7 +127,7 @@ serve(async (req) => {
       .select("phone_number")
       .eq("user_id", currentUser.id)
       .maybeSingle();
-    if (senderAccount?.phone_number && senderAccount.phone_number === normalizedPhone) {
+    if (!isBank && senderAccount?.phone_number && senderAccount.phone_number === normalizedPhone) {
       return jsonResponse({ success: false, error: "Cannot send money to your own phone number." }, 400);
     }
 
@@ -127,22 +144,36 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: "Could not resolve mobile money network right now." }, 502);
     }
 
-    const match = banks.find((b) => b.name?.toUpperCase().includes(recipient_network));
+    const match = isBank
+      ? banks.find((b) => b.code === String(bank_code))
+      : banks.find((b) => b.name?.toUpperCase().includes(recipient_network));
     if (!match) {
-      return jsonResponse({ success: false, error: `${recipient_network} mobile money is not currently supported.` }, 400);
+      return jsonResponse(
+        { success: false, error: isBank ? "That bank is not supported right now." : `${recipient_network} mobile money is not currently supported.` },
+        400,
+      );
     }
     const accountBank = match.code;
 
     // Debit the sender's fiat wallet and open the send-request row. Nothing
     // has been sent to Flutterwave yet.
-    const { data: requestResult, error: requestError } = await adminClient.rpc("request_fiat_momo_send", {
-      p_user_id: currentUser.id,
-      p_amount: Number(amount),
-      p_currency: finalCurrency,
-      p_recipient_phone: normalizedPhone,
-      p_recipient_network: recipient_network,
-      p_note: note || null,
-    });
+    const { data: requestResult, error: requestError } = isBank
+      ? await adminClient.rpc("request_fiat_bank_send", {
+        p_user_id: currentUser.id,
+        p_amount: Number(amount),
+        p_account_number: normalizedPhone,
+        p_bank_code: match.code,
+        p_beneficiary: String(beneficiary_name).trim(),
+        p_note: note || null,
+      })
+      : await adminClient.rpc("request_fiat_momo_send", {
+        p_user_id: currentUser.id,
+        p_amount: Number(amount),
+        p_currency: finalCurrency,
+        p_recipient_phone: normalizedPhone,
+        p_recipient_network: recipient_network,
+        p_note: note || null,
+      });
 
     if (requestError || !requestResult?.success) {
       return jsonResponse(
@@ -156,22 +187,15 @@ serve(async (req) => {
 
     const webhookUrl = `${supabaseUrl}/functions/v1/flutterwave-transfer-webhook`;
 
-    const transferResponse = await fetch("https://api.flutterwave.com/v3/transfers", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${flutterwaveSecretKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        account_bank: accountBank,
-        account_number: normalizedPhone,
-        amount: netAmount,
-        currency: finalCurrency,
-        narration: note || `IcanEra wallet transfer from ${currentUser.email || "a user"}`,
-        reference,
-        beneficiary_name: note || "IcanEra mobile money recipient",
-        callback_url: webhookUrl,
-      }),
+    const transferResponse = await flwCreateTransfer(flutterwaveSecretKey, {
+      account_bank: accountBank,
+      account_number: normalizedPhone,
+      amount: netAmount,
+      currency: finalCurrency,
+      narration: note || `IcanEra wallet transfer from ${currentUser.email || "a user"}`,
+      reference,
+      beneficiary_name: isBank ? String(beneficiary_name).trim() : (note || "IcanEra mobile money recipient"),
+      callback_url: webhookUrl,
     });
 
     const transferBody = await transferResponse.json().catch(() => null);
