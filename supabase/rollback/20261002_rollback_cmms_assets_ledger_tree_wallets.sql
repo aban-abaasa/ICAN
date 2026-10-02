@@ -11,11 +11,17 @@
 
 BEGIN;
 
+-- 0. Scheduled allowance runner (pg_cron)
+DO $$ BEGIN
+  IF to_regclass('cron.job') IS NOT NULL THEN PERFORM cron.unschedule(jobid) FROM cron.job WHERE jobname = 'branch-wallet-allowances'; END IF;
+END $$;
+
 -- 1. Triggers on existing tables
 DROP TRIGGER IF EXISTS trg_cmms_item_defaults       ON public.cmms_inventory_items;
 DROP TRIGGER IF EXISTS trg_cmms_item_ledger_insert  ON public.cmms_inventory_items;
 DROP TRIGGER IF EXISTS trg_cmms_item_ledger_update  ON public.cmms_inventory_items;
 DROP TRIGGER IF EXISTS trg_bol_after_company_link   ON public.cmms_company_profiles;
+DROP TRIGGER IF EXISTS trg_bwp_credit_recipient     ON public.ican_business_wallet_transactions;
 DROP TRIGGER IF EXISTS trg_bwp_tx_guard_insert      ON public.ican_business_wallet_transactions;
 DROP TRIGGER IF EXISTS trg_bwp_tx_guard_update      ON public.ican_business_wallet_transactions;
 
@@ -91,6 +97,7 @@ BEGIN
     '_bol_would_cycle',
     '_bwe_append_only',
     '_bwp_can_govern',
+    '_bwp_credit_branch_recipient',
     '_bwp_governed_by_ancestor',
     '_bwp_log',
     '_bwp_rank_over',

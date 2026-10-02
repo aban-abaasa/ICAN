@@ -253,6 +253,36 @@ DROP TRIGGER IF EXISTS trg_bwp_tx_guard_update ON public.ican_business_wallet_tr
 CREATE TRIGGER trg_bwp_tx_guard_update BEFORE UPDATE OF status ON public.ican_business_wallet_transactions
   FOR EACH ROW EXECUTE FUNCTION public._bwp_tx_guard_update();
 
+-- The existing executor (pitchin_execute_business_wallet_transfer) debits the paying wallet and credits
+-- recipient_user_id only; it never credits a recipient BUSINESS. Branch funding and sweeps are the
+-- only transfers this layer creates between business wallets, so complete them here: when one of them
+-- turns 'completed', credit the recipient business wallet in the same transaction. Other transfer
+-- kinds are left exactly as they were.
+CREATE OR REPLACE FUNCTION public._bwp_credit_branch_recipient()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.status = 'completed' AND OLD.status IS DISTINCT FROM 'completed'
+     AND NEW.recipient_business_profile_id IS NOT NULL
+     AND COALESCE(to_jsonb(NEW)->>'operation_type', '') IN ('branch_funding', 'branch_sweep') THEN
+    INSERT INTO public.ican_business_wallets (business_profile_id, created_by)
+    SELECT bp.id, bp.user_id FROM public.business_profiles bp WHERE bp.id = NEW.recipient_business_profile_id
+    ON CONFLICT (business_profile_id) DO NOTHING;
+    UPDATE public.ican_business_wallets
+       SET ican_balance = ican_balance + NEW.amount_ican,
+           total_earned = COALESCE(total_earned, 0) + NEW.amount_ican,
+           updated_at = NOW()
+     WHERE business_profile_id = NEW.recipient_business_profile_id;
+    PERFORM public._bwp_log(NEW.business_profile_id, 'branch_transfer_credited',
+      jsonb_build_object('transaction_id', NEW.id, 'recipient', NEW.recipient_business_profile_id,
+                         'amount_ican', NEW.amount_ican, 'kind', to_jsonb(NEW)->>'operation_type'));
+  END IF;
+  RETURN NULL;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_bwp_credit_recipient ON public.ican_business_wallet_transactions;
+CREATE TRIGGER trg_bwp_credit_recipient AFTER UPDATE OF status ON public.ican_business_wallet_transactions
+  FOR EACH ROW EXECUTE FUNCTION public._bwp_credit_branch_recipient();
+
 -- ============================================================================
 -- 4. POLICY, APPROVERS, FREEZE
 -- ============================================================================
@@ -650,7 +680,7 @@ BEGIN
   SELECT * INTO v_pol FROM public.branch_wallet_policies WHERE business_profile_id = p_source AND enabled;
   PERFORM public._bwp_log(p_source, 'transfer_proposed',
     jsonb_build_object('transaction_id', v_tx, 'kind', p_kind, 'target', p_target, 'amount_ican', p_amount));
-  RETURN jsonb_build_object('transaction_id', v_tx, 'status', 'pending_approval', 'ladder', FOUND);
+  RETURN jsonb_build_object('transaction_id', v_tx, 'status', 'pending_approval', 'ladder', v_pol.business_profile_id IS NOT NULL);
 END;
 $$;
 
@@ -785,6 +815,7 @@ BEGIN
     WHERE p.pronamespace = 'public'::regnamespace AND p.proname = ANY (ARRAY[
     '_bwe_append_only',
     '_bwp_can_govern',
+    '_bwp_credit_branch_recipient',
     '_bwp_governed_by_ancestor',
     '_bwp_log',
     '_bwp_rank_over',

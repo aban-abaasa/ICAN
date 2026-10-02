@@ -78,10 +78,13 @@ Money still moves only through the existing business-wallet request/execute flow
   `fn_get_company_inventory`, which is left untouched for the pitch-plan and valuation screens.
 * Wallet amounts are ICAN coin, as in the existing business wallet. Intra-group funding is tagged
   `branch_funding` / `branch_sweep` so it can be eliminated from consolidated reports.
-* The balance move itself is `pitchin_execute_business_wallet_transfer`, which I could not run here (it needs live
-  ICAN price tables); my tests used a stand-in with the same contract. Try one funding request on staging first.
-* Allowances run when a mother-account administrator opens Branch wallets, or from a scheduler calling
-  `fn_bwp_run_due_allowances()` (e.g. pg_cron).
+* The balance move itself is the existing `pitchin_execute_business_wallet_transfer`. That function debits the paying
+  wallet and credits only `recipient_user_id`; it never credits a recipient business. So a trigger
+  (`trg_bwp_credit_recipient`) credits the recipient wallet when a `branch_funding` / `branch_sweep` completes, in the
+  same transaction. Tested end to end in production inside a rolled-back transaction (ladder sweep, standard funding,
+  repeat execution does not credit twice, a plain business payment is untouched).
+* Allowances run when a mother-account administrator opens Branch wallets, or from the hourly pg_cron job `branch-wallet-allowances`
+  (minute 7), which calls `fn_bwp_run_due_allowances()`; it only ever creates pending requests.
 
 ## Production rollout (done)
 
@@ -99,3 +102,8 @@ files are in `supabase/migrations/` (do not re-run them against that database). 
   drops the ledger, tree and wallet-policy data). Tested against a copy of the schema.
 * Existing items were classified (assets from category) and each got an `opening` ledger row; no money rows
   were created for them.
+
+**Existing behaviour worth a look (not changed here).** Ordinary business-to-business payments
+(`pitchin_business_wallet_transfer_to_business`) also complete through the executor above without crediting the
+recipient business. Production has one completed payment of that kind with no recipient user, so its recipient
+may not have received the funds.
