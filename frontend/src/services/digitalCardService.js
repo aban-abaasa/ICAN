@@ -21,6 +21,45 @@ export async function setMyCardQrEnabled(enabled) {
   if (error) throw error;
 }
 
+export async function setMyCardPinPayEnabled(enabled) {
+  const { error } = await supabase.rpc('set_my_card_pin_pay_enabled', { p_enabled: enabled });
+  if (error) throw error;
+}
+
+// Public (no sign-in): the card owner types their PIN on the scanning device.
+// The Edge Function verifies the PIN server-side before any money moves.
+// destType: 'momo' (phone + network) | 'icanera' (phone = 16-digit account) | 'bank' (phone = account no.)
+export async function payWithCardPin({ token, pin, phone, network, amount, note, destType = 'momo', bankCode, beneficiaryName }) {
+  const { data, error } = await supabase.functions.invoke('card-pay-with-pin', {
+    body: {
+      token, pin, phone, network, amount, note: note || null,
+      dest_type: destType, bank_code: bankCode || null, beneficiary_name: beneficiaryName || null,
+    },
+  });
+  // Non-2xx responses carry the server's message in the response body.
+  if (error) {
+    let msg = error.message;
+    try { msg = (await error.context.json())?.error || msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  if (!data?.success) throw new Error(data?.error || 'Payment failed');
+  return data;
+}
+
+// Public: masked holder name ("Mary K.") for an ICANera account number.
+export async function getCardQrAccountName(token, accountNumber) {
+  const { data, error } = await supabase.rpc('get_card_qr_account_name', { p_token: token, p_account_number: accountNumber });
+  if (error) throw error;
+  return data || null;
+}
+
+// Public: Uganda banks for the bank picker.
+export async function listUgandaBanks() {
+  const { data, error } = await supabase.functions.invoke('flutterwave-banks', { method: 'GET' });
+  if (error || !data?.success) throw new Error('Could not load banks');
+  return data.banks || [];
+}
+
 export async function listCardQrRequests(limit = 20) {
   const { data, error } = await supabase.from('ican_card_qr_requests')
     .select('*').order('created_at', { ascending: false }).limit(limit);
