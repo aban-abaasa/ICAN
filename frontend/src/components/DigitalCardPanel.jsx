@@ -108,7 +108,7 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
     const e = `${String(c.expiry_month).padStart(2, '0')}/${String(c.expiry_year).slice(-2)}`;
     const w = window.open('', '_blank', 'width=700,height=600');
     if (!w) { setMsg({ ok: false, text: 'Allow pop-ups to print your card.' }); return; }
-    w.document.write(`<!doctype html><title>ICANera card</title><style>
+    w.document.write(`<!doctype html><title>IcanEra card</title><style>
       @page{size:auto;margin:10mm}body{margin:0;font-family:Arial,sans-serif;display:flex;flex-direction:column;gap:8mm;align-items:center;padding:10mm}
       .card{width:85.6mm;height:53.98mm;border-radius:3.5mm;position:relative;color:#fff;overflow:hidden;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;background:linear-gradient(135deg,#1a1f71,#2f6fb0 60%,#1a1f71)}
       .top{position:absolute;left:5mm;right:5mm;top:4mm;display:flex;justify-content:space-between;font-weight:700}
@@ -118,11 +118,11 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
       .qr img{width:24mm;height:24mm;background:#fff;padding:1mm;border-radius:1.5mm}.qr p{font-size:8px;margin:0}
       .foot{position:absolute;left:5mm;right:5mm;bottom:3mm;font-size:6px;opacity:.75}
     </style>
-    <div class="card"><div class="top"><span>ICANera</span><span style="font-style:italic;font-size:16px">DIGITAL</span></div>
+    <div class="card"><div class="top"><span>IcanEra</span><span style="font-style:italic;font-size:16px">DIGITAL</span></div>
       <div class="num">${fmtNumber(c.card_number)}</div>
       <div class="bot"><div><div style="opacity:.7;font-size:7px">CARD HOLDER</div>${esc(c.holder_name)}</div><div><div style="opacity:.7;font-size:7px">EXPIRES</div>${e}</div></div></div>
     <div class="card"><div class="bar"></div><div class="qr">${qr ? `<img src="${qr}">` : ''}<p>Scan to request money from ${esc(c.holder_name.split(' ')[0])}. Nothing is sent until the owner confirms with their PIN.</p></div>
-      <div class="foot">ICANera digital card · not a Visa/Mastercard network card</div></div>
+      <div class="foot">IcanEra digital card · not a Visa/Mastercard network card</div></div>
     <script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script>`);
     w.document.close();
   };
@@ -155,7 +155,7 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
           <div className="absolute inset-0 rounded-2xl p-5 text-white shadow-xl overflow-hidden"
             style={{ ...CARD_BG, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
             <div className="flex items-start justify-between">
-              <span className="text-sm font-semibold tracking-wide">ICANera</span>
+              <span className="text-sm font-semibold tracking-wide">IcanEra</span>
               <span className="text-2xl font-extrabold italic tracking-tight">DIGITAL</span>
             </div>
             <div className="absolute left-5 right-5" style={{ top: '42%' }}>
@@ -184,11 +184,11 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
               </div>
               <p className="text-[11px] leading-snug opacity-90">Scan to request money from {card.holder_name.split(' ')[0]}. Money is only sent when the owner approves with their PIN.</p>
             </div>
-            <p className="absolute left-5 right-5 bottom-3 text-[9px] opacity-70">ICANera digital card · not a Visa/Mastercard network card · ••••{card.card_number.slice(-4)}</p>
+            <p className="absolute left-5 right-5 bottom-3 text-[9px] opacity-70">IcanEra digital card · not a Visa/Mastercard network card · ••••{card.card_number.slice(-4)}</p>
           </div>
         </div>
       </div>
-      <p className="text-xs text-gray-400">Tap or swipe the card to see the other side. This is your ICANera digital card; it is not a Visa/Mastercard network card and cannot be used at card terminals.</p>
+      <p className="text-xs text-gray-400">Tap or swipe the card to see the other side. This is your IcanEra digital card; it is not a Visa/Mastercard network card and cannot be used at card terminals.</p>
 
       <div className="grid grid-cols-3 gap-2">
         <button onClick={printCard} className="px-3 py-2 text-xs bg-white/10 rounded flex items-center justify-center gap-1 text-white"><Printer className="w-3 h-3" /> Print</button>

@@ -4,7 +4,7 @@ import { getCardQrInfo, submitCardQrRequest, payWithCardPin, getCardQrAccountNam
 import { detectUgandaMobileNetwork } from '../services/icanWalletService';
 
 /**
- * Public page opened by scanning someone's ICANera card QR. No account needed.
+ * Public page opened by scanning someone's IcanEra card QR. No account needed.
  * Works like a card terminal: the card owner types their transaction PIN right
  * here and the payout is approved on the spot (no phone of their own needed).
  * If the owner turned PIN approval off, or they don't have the PIN, this falls
@@ -16,7 +16,7 @@ const CardPayPage = ({ token }) => {
   const [form, setForm] = useState({ name: '', phone: '', network: '', amount: '', note: '', pin: '', bankCode: '', beneficiary: '' });
   const [dest, setDest] = useState('momo'); // 'momo' | 'icanera' | 'bank' (PIN mode only)
   const [banks, setBanks] = useState([]);
-  const [acctName, setAcctName] = useState(null); // masked ICANera holder name, null = unknown
+  const [acctName, setAcctName] = useState(null); // masked IcanEra holder name, null = unknown
   const [mode, setMode] = useState('pin'); // 'pin' | 'request'
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -50,7 +50,7 @@ const CardPayPage = ({ token }) => {
     setError(null);
     const useDest = pinMode ? dest : 'momo';
     if (useDest === 'momo' && !network) { setError('Choose MTN or Airtel'); return; }
-    if (useDest === 'icanera' && !acctName) { setError('Enter a valid 16-digit ICANera account number'); return; }
+    if (useDest === 'icanera' && !acctName) { setError('Enter a valid 16-digit IcanEra account number'); return; }
     setBusy(true);
     try {
       const amount = Number(form.amount);
@@ -87,7 +87,7 @@ const CardPayPage = ({ token }) => {
           <div className="text-center py-6">
             <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
             <p className="font-semibold">Approved</p>
-            <p className="text-sm text-gray-400 mt-1">{done.amount.toLocaleString()} UGX {done.dest === 'icanera' ? `is already in ICANera account ${form.phone}.` : `is on its way to ${form.phone}. It is refunded to the card owner automatically if it is rejected.`}</p>
+            <p className="text-sm text-gray-400 mt-1">{done.amount.toLocaleString()} UGX {done.dest === 'icanera' ? `is already in IcanEra account ${form.phone}.` : `is on its way to ${form.phone}. It is refunded to the card owner automatically if it is rejected.`}</p>
           </div>
         )}
         {info && done?.kind === 'requested' && (
@@ -102,20 +102,20 @@ const CardPayPage = ({ token }) => {
             <div>
               <h1 className="text-lg font-bold">{pinMode ? `Pay with ${info.holder_first_name}'s card` : `Request money from ${info.holder_first_name}`}</h1>
               <p className="text-xs text-gray-400">
-                ICANera card ending {info.last4}. {pinMode ? 'The card owner approves by entering their PIN below.' : 'Money is only sent if they approve.'}
+                IcanEra card ending {info.last4}. {pinMode ? 'The card owner approves by entering their PIN below.' : 'Money is only sent if they approve.'}
               </p>
             </div>
             {!pinMode && <input className={input} placeholder="Your name" value={form.name} onChange={set('name')} required />}
             {pinMode && (
               <div className="grid grid-cols-3 gap-1">
-                {[['momo', 'Mobile money'], ['icanera', 'ICANera'], ['bank', 'Bank']].map(([k, label]) => (
+                {[['momo', 'Mobile money'], ['icanera', 'IcanEra'], ['bank', 'Bank']].map(([k, label]) => (
                   <button type="button" key={k} onClick={() => { setDest(k); setError(null); setForm((f) => ({ ...f, phone: '' })); }}
                     className={`py-2 rounded-lg text-xs font-semibold border ${dest === k ? 'border-blue-400 bg-blue-500/20' : 'border-slate-600'}`}>{label}</button>
                 ))}
               </div>
             )}
             <input className={input}
-              placeholder={!pinMode || dest === 'momo' ? 'Mobile money number (07…)' : dest === 'icanera' ? 'ICANera account number (16 digits)' : 'Bank account number'}
+              placeholder={!pinMode || dest === 'momo' ? 'Mobile money number (07…)' : dest === 'icanera' ? 'IcanEra account number (16 digits)' : 'Bank account number'}
               inputMode={!pinMode || dest === 'momo' ? 'tel' : 'numeric'} value={form.phone} onChange={set('phone')} required />
             {(!pinMode || dest === 'momo') && (
               <div className="grid grid-cols-2 gap-2">
@@ -127,7 +127,7 @@ const CardPayPage = ({ token }) => {
             )}
             {pinMode && dest === 'icanera' && /^\d{16}$/.test(form.phone.trim()) && (
               <p className={`text-xs ${acctName ? 'text-green-300' : 'text-red-300'}`}>
-                {acctName ? `✓ Account holder: ${acctName}` : 'No personal ICANera account found with this number'}
+                {acctName ? `✓ Account holder: ${acctName}` : 'No personal IcanEra account found with this number'}
               </p>
             )}
             {pinMode && dest === 'bank' && (

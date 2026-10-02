@@ -46,7 +46,7 @@ export async function payWithCardPin({ token, pin, phone, network, amount, note,
   return data;
 }
 
-// Public: masked holder name ("Mary K.") for an ICANera account number.
+// Public: masked holder name ("Mary K.") for an IcanEra account number.
 export async function getCardQrAccountName(token, accountNumber) {
   const { data, error } = await supabase.rpc('get_card_qr_account_name', { p_token: token, p_account_number: accountNumber });
   if (error) throw error;
