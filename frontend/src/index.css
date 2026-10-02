@@ -2040,3 +2040,32 @@ button:hover > .bd-chevron { transform: translateX(3px) rotate(45deg); }
 .tithe-web button[class*="bg-purple-6"], .tithe-web button[class*="bg-blue-6"], .tithe-web button[class*="from-purple-"], .tithe-web button[class*="from-green-"], .tithe-web button[class*="bg-green-6"] { box-shadow: 0 8px 18px -12px #b8892b; }
 .tithe-web button[class*="from-"][disabled], .tithe-web button[class*="bg-purple-6"][disabled] { opacity: .5; }
 .tithe-web [class*="bg-purple-500/"], .tithe-web [class*="bg-amber-500/"], .tithe-web [class*="bg-yellow-500/"] { background-color: rgba(196, 160, 82, 0.14) !important; }
+
+
+/* ── Account menu: UX pass (phone + web) ────────────────────────────────────
+   The theme injects `button { background-color: … !important }`, which painted
+   every row as its own boxed card. Rows are flat again, grouped under small
+   section labels, with a profile header and a width that fits phones. */
+.icn-menu { width: 17.5rem; max-width: calc(100vw - 1rem); }
+.icn-menu .icn-menu-item { background-color: transparent !important; border: 0 !important; box-shadow: none; padding: .55rem .75rem; border-radius: 8px; }
+.icn-menu .icn-menu-item:hover, .icn-menu .icn-menu-item:focus-visible { background-color: rgba(196, 160, 82, 0.14) !important; }
+.icn-menu .icn-menu-item.is-active { background-color: rgba(196, 160, 82, 0.2) !important; }
+.icn-menu .icn-menu-item.is-danger:hover { background-color: rgba(220, 38, 38, 0.14) !important; }
+:root[data-theme="light"] .icn-menu .icn-menu-item { color: #4a3d20 !important; }
+:root[data-theme="light"] .icn-menu .icn-menu-item:hover { background-color: rgba(184, 137, 43, 0.14) !important; }
+.icn-menu .icn-menu-item { color: #d9ceb2 !important; }
+.icn-menu .icn-menu-item.is-danger { color: #f0a3a3 !important; }
+:root[data-theme="light"] .icn-menu .icn-menu-item.is-danger { color: #b91c1c !important; }
+.icn-menu .icn-menu-head { display: flex; align-items: center; gap: .7rem; }
+.icn-menu .icn-menu-avatar { width: 2.4rem; height: 2.4rem; flex-shrink: 0; border-radius: 999px; overflow: hidden; border: 1px solid rgba(196, 160, 82, 0.6); }
+.icn-menu .icn-menu-avatar > * { width: 100%; height: 100%; }
+.icn-menu .icn-menu-close { background: transparent !important; border: 0 !important; color: #a9945c !important; width: 1.8rem; height: 1.8rem; border-radius: 999px; font-size: .8rem; line-height: 1; flex-shrink: 0; }
+.icn-menu .icn-menu-close:hover { background-color: rgba(196, 160, 82, 0.16) !important; }
+.icn-menu-label { padding: .55rem .8rem .2rem; font-size: .62rem; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; color: #a9945c; }
+:root[data-theme="light"] .icn-menu-label { color: #8a6a1f; }
+.icn-menu .icn-menu-sep { margin: .35rem .6rem; }
+@media (max-width: 639px) {
+  .icn-menu { width: min(19rem, calc(100vw - 1rem)); }
+  .icn-menu .icn-menu-body { max-height: calc(100dvh - 12rem); overscroll-behavior: contain; }
+  .icn-menu .icn-menu-item { padding: .7rem .8rem; } /* comfortable tap targets */
+}

@@ -7,7 +7,7 @@ import { formatICAN } from '../services/icanWalletService';
  * Referrals tab of the ICAN dev panel: program settings + every referral
  * reward, with approve / reject. Talks to ican_referral_dev_* (see
  * backend/ADD_REFERRAL_SYSTEM.sql) with the panel's dev token, like every
- * other tab. This is the ONE place referrals are managed for BOTH ICANera and
+ * other tab. This is the ONE place referrals are managed for BOTH IcanEra and
  * BodaGoEra (same database, shared settings) — BodaGoEra has no management UI
  * of its own; use the app filter below to see one app at a time.
  */
@@ -162,7 +162,7 @@ export default function ICANReferralsDevTab({ devToken }) {
         <div>
           <p className="text-sm font-black" style={{ color: 'var(--dp-txt)' }}>Referral rewards</p>
           <p className="text-xs" style={{ color: 'var(--dp-sub)' }}>
-            Referrers earn a % of their friend's first deposit, valued at the live coin price — ICANera and BodaGoEra share these settings.
+            Referrers earn a % of their friend's first deposit, valued at the live coin price — IcanEra and BodaGoEra share these settings.
           </p>
           {overview?.live_price_ugx > 0 && (
             <p className="mt-0.5 text-[11px] font-bold" style={{ color: '#84cc16' }}>
@@ -245,7 +245,7 @@ export default function ICANReferralsDevTab({ devToken }) {
         </select>
         <select value={appFilter} onChange={(e) => setAppFilter(e.target.value)} className="rounded-xl border px-3 py-2 text-xs outline-none" style={field}>
           <option value="">Both apps</option>
-          <option value="ican">ICANera</option>
+          <option value="ican">IcanEra</option>
           <option value="mybodaguy">BodaGoEra</option>
         </select>
         {!!t?.pending_approval && (
@@ -271,7 +271,7 @@ export default function ICANReferralsDevTab({ devToken }) {
                 <b style={{ color: 'var(--dp-txt)' }}>{r.referred_name}</b> <span style={{ color: 'var(--dp-muted)' }}>({r.referred_email})</span>
               </p>
               <p className="text-[10px]" style={{ color: 'var(--dp-muted)' }}>
-                {r.source_app === 'ican' ? 'ICANera' : 'BodaGoEra'} · joined {new Date(r.created_at).toLocaleDateString()}
+                {r.source_app === 'ican' ? 'IcanEra' : 'BodaGoEra'} · joined {new Date(r.created_at).toLocaleDateString()}
                 {r.deposit_ican != null && <> · first deposit {r.deposit_ugx != null ? `${ugx(r.deposit_ugx)} = ` : ''}{formatICAN(r.deposit_ican)} ICAN{r.ican_price_ugx != null && <> @ {ugx(r.ican_price_ugx)}</>}</>}
                 {r.decided_by && <> · {r.decided_by}</>}
               </p>

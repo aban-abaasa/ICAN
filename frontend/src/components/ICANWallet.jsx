@@ -317,7 +317,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // 📑 Trade Modal Tabs
   const [activeTradeTab, setActiveTradeTab] = useState('wallet'); // 'wallet', 'chart', 'buy', 'sell', 'book', 'history', 'dropship'
   const [showMobileTradeMenu, setShowMobileTradeMenu] = useState(false);
-  // 🛍️ Dropship — resell any store's inventory at your own price, paid via ICANera wallet
+  // 🛍️ Dropship — resell any store's inventory at your own price, paid via IcanEra wallet
   const [selectedDropshipId, setSelectedDropshipId] = useState(null);
   const [newDropshipName, setNewDropshipName] = useState('');
   const [creatingDropship, setCreatingDropship] = useState(false);
@@ -8231,7 +8231,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-white">Dropship</h3>
-                      <p className="text-sm text-slate-400">List any store's products at your own price. Paid via your ICANera wallet.</p>
+                      <p className="text-sm text-slate-400">List any store's products at your own price. Paid via your IcanEra wallet.</p>
                     </div>
                   </div>
 

@@ -898,7 +898,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     onConfirm: null
   });
 
-  // Supermarketa hands off to ICANera as
+  // Supermarketa hands off to IcanEra as
   // ?business_profile_id=<uuid>&source_app=supermarketa#cmms. Previously the
   // hash was not consumed, so the user landed on the default Manage Business
   // view instead of CMMS.
@@ -5491,12 +5491,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* Classic account menu */}
               {showMenuDropdown && (
-                <div className="icn-menu absolute right-0 top-full mt-2 z-50 w-64" role="menu">
+                <>
+                {/* Tap anywhere outside to dismiss */}
+                <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setShowMenuDropdown(false)} />
+                <div className="icn-menu absolute right-0 top-full mt-2 z-50" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') setShowMenuDropdown(false); }}>
                   <div className="icn-menu-head">
-                    <p className="icn-menu-eyebrow">Signed in</p>
-                    <p className="icn-menu-name">{displayName || 'My account'}</p>
+                    <span className="icn-menu-avatar"><HeaderAvatar url={avatarUrl} name={displayName} /></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="icn-menu-eyebrow">Signed in</p>
+                      <p className="icn-menu-name">{displayName || 'My account'}</p>
+                    </div>
+                    <button type="button" className="icn-menu-close" aria-label="Close menu" onClick={() => setShowMenuDropdown(false)}>✕</button>
                   </div>
                   <div className="icn-menu-body">
+                    <p className="icn-menu-label">Account</p>
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('profile', 'My Profile'); setShowMenuDropdown(false); }}>
                       <User /> <span>My profile</span>
                     </button>
@@ -5525,7 +5533,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       <Shield /> <span>Security</span>
                     </button>
 
-                    <div className="icn-menu-sep" />
+                    <p className="icn-menu-label">Career &amp; growth</p>
 
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('readiness', 'Readiness'); setShowMenuDropdown(false); }}>
                       <Target /> <span>Readiness</span>
@@ -5540,7 +5548,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       <Users /> <span>Professionals</span>
                     </button>
 
-                    <div className="icn-menu-sep" />
+                    <p className="icn-menu-label">Tools</p>
 
                     <button role="menuitem" className="icn-menu-item" onClick={() => navigateTo('reports')}>
                       <BarChart3 /> <span>Reports</span>
@@ -5579,6 +5587,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     )}
                   </div>
                 </div>
+                </>
               )}
               </div>
             </div>
@@ -7385,7 +7394,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               onDrill={handleTrendDrill}
             />
 
-            {/* Live ICANera price chart — real, not a shortcut into the wallet */}
+            {/* Live IcanEra price chart — real, not a shortcut into the wallet */}
             <div className="mt-4">
               <IcanPriceChartWidget />
             </div>

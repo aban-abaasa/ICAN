@@ -135,7 +135,7 @@ export const updateCompanyPublicProfile = async (companyId, fields) => {
 };
 
 // The only sanctioned way to link/unlink this company's public board to one
-// of the caller's own ICANera business_profiles -- see
+// of the caller's own IcanEra business_profiles -- see
 // fn_set_cmms_company_business_profile in CMMS_NOTICE_BOARD_PRODUCTS.sql for
 // why this can't be a plain table update (it must also verify the caller
 // owns/manages the target business profile, not just this CMMS company).
