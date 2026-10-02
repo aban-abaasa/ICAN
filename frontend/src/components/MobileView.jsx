@@ -63,6 +63,7 @@ import {
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import { ProfilePage } from './auth/ProfilePage';
+import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
 import ReadinessPanel from './profile/ReadinessPanel';
 import GrowthPanel from './profile/GrowthPanel';
 import PortfolioTab from './profile/PortfolioTab';
@@ -1280,6 +1281,21 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [showApprovalsModal, setShowApprovalsModal] = useState(false);
+  const [approvalsFocusId, setApprovalsFocusId] = useState(null);
+
+  // Deep link (emails / push): /?approvals=1 or /?approvals=<requestId>
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const target = params.get('approvals');
+      if (!target) return;
+      setApprovalsFocusId(target === '1' || target === 'true' ? null : target);
+      setShowApprovalsModal(true);
+      params.delete('approvals');
+      const qs = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+    } catch { /* ignore */ }
+  }, []);
   const fileInputRef = useRef(null);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -6262,6 +6278,18 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                           // relevant page. 'trust' also opens the right
                           // boardroom group; 'wallet'/'cmms'/'pitchin' are
                           // real feature panels in this app's tab system.
+                          // Investment approval requests open the Approval Center
+                          // directly on that request, not just the Pitchin tab.
+                          if (
+                            notification.source === 'shareholder_notifications' &&
+                            ['investment_signed', 'approval_request', 'approval_rejected'].includes(notification.notification_type)
+                          ) {
+                            setSelectedDetail(null);
+                            setApprovalsFocusId(notification.source_id || null);
+                            setShowApprovalsModal(true);
+                            return;
+                          }
+
                           if (notification.action_tab === 'trust') {
                             const targetGroupId = getTrustBoardroomGroupIdFromNotification(notification);
 
@@ -8738,6 +8766,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             <StatusPage onGoBack={() => setShowStatusPage(false)} />
           </div>
         </div>
+      )}
+
+      {/* Shareholder Approval Center -- opened straight from a notification
+          tap or an ?approvals=<id> link */}
+      {showApprovalsModal && (
+        <ShareholderApprovalsCenter
+          currentUserId={authContextUser?.id}
+          currentUserEmail={authContextUser?.email}
+          focusId={approvalsFocusId}
+          onClose={() => {
+            setShowApprovalsModal(false);
+            setApprovalsFocusId(null);
+          }}
+        />
       )}
 
       {/* Status Uploader Modal */}

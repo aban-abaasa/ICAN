@@ -121,11 +121,12 @@ const MyInvestmentsList = ({ currentUser, onClose, onSelect }) => {
                     <div className={`h-full ${r.status === 'sealed' ? 'bg-green-500' : 'bg-yellow-500'}`} style={{ width: `${pct}%` }} />
                   </div>
                   <div className="flex justify-between mt-1 text-xs text-slate-500">
-                    <span>{r.signed_count} of {r.total_shareholders} shareholders approved</span>
+                    <span>{r.signed_count} of {r.total_shareholders} registered members approved</span>
                     {remaining && <span className="text-yellow-400 font-semibold">⏳ {remaining}</span>}
                   </div>
                   <button
                     onClick={() => downloadInvestmentAgreementPdf({
+                      agreementId: r.agreement_id,
                       businessName: r.business_name, pitchTitle: r.pitch_title, investorName: r.investor_name,
                       investmentType: r.investment_type, shares: parseFloat(r.shares_amount) || 0, sharePrice: r.share_price,
                       totalInvestment: r.total_investment, status: r.status, reference: r.escrow_id,
