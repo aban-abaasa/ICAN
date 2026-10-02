@@ -10,7 +10,7 @@
    `PITCHIN_BUSINESS_PROFILE_ICAN_WALLET.sql`, `PITCHIN_BUSINESS_WALLET_CMMS_FINANCE_APPROVAL.sql`,
    `UNIFIED_BUSINESS_WALLET_OPERATIONS.sql`, `ICAN_BUSINESS_WALLET_TRANSFERS.sql`)
 
-Both are idempotent. The supermarket functions also need `MULTI_TENANT_PLATFORM.sql` and
+All three are idempotent and end with a hardening block. The supermarket functions also need `MULTI_TENANT_PLATFORM.sql` and
 `DCE_CUSTOMER_SELFCHECKOUT.sql`; without them only those functions raise a clear error.
 Copies live in `frontend/backend/` like the other SQL files.
 
@@ -74,10 +74,28 @@ Money still moves only through the existing business-wallet request/execute flow
 * Money rows are rule-based (table above); the AI classifier is no longer used for CMMS stock.
 * Parent admins read branch data through the consolidated view; they are not added as staff in the branch's CMMS.
 * Proceeds of a disposal are recorded in the transaction record, not added to a wallet.
-* `fn_get_company_inventory` still has no caller check (unchanged from before).
+* The new inventory list function `fn_cmms_get_company_inventory` has no caller check, like the original
+  `fn_get_company_inventory`, which is left untouched for the pitch-plan and valuation screens.
 * Wallet amounts are ICAN coin, as in the existing business wallet. Intra-group funding is tagged
   `branch_funding` / `branch_sweep` so it can be eliminated from consolidated reports.
 * The balance move itself is `pitchin_execute_business_wallet_transfer`, which I could not run here (it needs live
   ICAN price tables); my tests used a stand-in with the same contract. Try one funding request on staging first.
 * Allowances run when a mother-account administrator opens Branch wallets, or from a scheduler calling
   `fn_bwp_run_due_allowances()` (e.g. pg_cron).
+
+## Production rollout (done)
+
+Applied to the Supabase project as 64 small tracked migrations plus one hardening migration; the same
+files are in `supabase/migrations/` (do not re-run them against that database). Order was assets and ledger
+(32 steps), ownership tree (15), branch wallets (17), then `cmms_ledger_tree_wallets_hardening`.
+
+* The original `fn_get_company_inventory` was **left untouched**; the CMMS list now calls the new
+  `fn_cmms_get_company_inventory` (the app falls back to the old one if the database is not upgraded).
+* Custody sign-out/in and manual edits are labelled by the ledger trigger from the call stack, because
+  `ALTER FUNCTION ... SET cmms.*` needs superuser on Supabase.
+* Hardening: only the screens' `fn_*` functions are callable by signed-in users and none by `anon`; internal
+  helpers (`_bol_*`, `_bwp_*`, `_cmms_*`) are closed, except the few the row-level policies and triggers call.
+* `supabase/rollback/20261002_rollback_cmms_assets_ledger_tree_wallets.sql` removes all of it (destructive:
+  drops the ledger, tree and wallet-policy data). Tested against a copy of the schema.
+* Existing items were classified (assets from category) and each got an `opening` ledger row; no money rows
+  were created for them.

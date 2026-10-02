@@ -1,0 +1,28 @@
+GRANT SELECT ON public.cmms_business_groups, public.cmms_group_fx_rates TO authenticated;
+GRANT EXECUTE ON FUNCTION
+  public.fn_cmms_accum_depreciation(NUMERIC, NUMERIC, INT, TEXT, INT, INT),
+  public.fn_cmms_set_item_details(UUID, JSONB),
+  public.fn_cmms_create_item(UUID, JSONB),
+  public.fn_cmms_set_item_quantity(UUID, NUMERIC, TEXT, BOOLEAN),
+  public.fn_cmms_unposted_money_entries(UUID),
+  public.fn_cmms_post_missing_money_entries(UUID),
+  public.fn_cmms_post_asset_depreciation(UUID, INT),
+  public.fn_cmms_dispose_asset(UUID, NUMERIC, NUMERIC, TEXT),
+  public.fn_cmms_get_asset_register(UUID, INT),
+  public.fn_cmms_inventory_reconciliation(UUID),
+  public.fn_cmms_inventory_report(UUID, INT, TEXT),
+  public.fn_cmms_create_business_group(UUID, TEXT, TEXT),
+  public.fn_cmms_link_company_to_group(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT),
+  public.fn_cmms_update_branch(UUID, TEXT, TEXT, TEXT, TEXT, TEXT),
+  public.fn_cmms_unlink_company_from_group(UUID),
+  public.fn_cmms_set_group_fx_rate(UUID, TEXT, NUMERIC, DATE),
+  public.fn_cmms_get_my_business_group(UUID),
+  public.fn_cmms_list_my_supermarkets(),
+  public.fn_cmms_link_supermarket(UUID, UUID),
+  public.fn_cmms_unlink_supermarket(UUID),
+  public.fn_cmms_get_linked_supermarket(UUID),
+  public.fn_cmms_search_supermarket_products(UUID, TEXT),
+  public.fn_cmms_link_item_to_product(UUID, UUID),
+  public.fn_cmms_get_supermarket_stock_link(UUID),
+  public.fn_cmms_transfer_stock_supermarket(UUID, NUMERIC, TEXT, TEXT)
+TO authenticated;

@@ -950,9 +950,13 @@ export const getCompanyInventory = async (companyId) => {
     console.log('ðŸ“¦ Fetching inventory for company via RPC:', companyId);
     
     // Use RPC function that bypasses RLS (SECURITY DEFINER)
-    const { data, error } = await supabase.rpc('fn_get_company_inventory', {
+    let { data, error } = await supabase.rpc('fn_cmms_get_company_inventory', {
       p_company_id: companyId
     });
+    // Database not upgraded yet: fall back to the original function (fewer columns)
+    if (error && (error.code === 'PGRST202' || error.code === '42883')) {
+      ({ data, error } = await supabase.rpc('fn_get_company_inventory', { p_company_id: companyId }));
+    }
 
     if (error) {
       console.error('âŒ RPC fetch error:', error);

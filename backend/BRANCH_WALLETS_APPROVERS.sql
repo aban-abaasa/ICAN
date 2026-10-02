@@ -768,3 +768,54 @@ TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 SELECT 'Branch wallets, approval ladder and allowances installed' AS status;
+
+-- ============================================================================
+-- HARDENING: pin search_path, and close the API to everything that is not meant to be called
+-- from the app. Internal helpers (leading underscore) can read other businesses' trees or write
+-- log rows, so only the screens' fn_* functions (and the few harmless helpers the row-level
+-- policies and triggers call as the signed-in user) stay executable by signed-in users (granted
+-- explicitly, since PUBLIC no longer covers them).
+-- ============================================================================
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.proname, p.proconfig
+    FROM pg_proc p
+    WHERE p.pronamespace = 'public'::regnamespace AND p.proname = ANY (ARRAY[
+    '_bwe_append_only',
+    '_bwp_can_govern',
+    '_bwp_governed_by_ancestor',
+    '_bwp_log',
+    '_bwp_rank_over',
+    '_bwp_stage_status',
+    '_bwp_tx_guard_insert',
+    '_bwp_tx_guard_update',
+    '_bwp_user_is_owner',
+    'fn_bwp_assign_approver',
+    'fn_bwp_decide',
+    'fn_bwp_events',
+    'fn_bwp_list_approvers',
+    'fn_bwp_my_pin_status',
+    'fn_bwp_pending_for_me',
+    'fn_bwp_propose_transfer',
+    'fn_bwp_remove_approver',
+    'fn_bwp_run_due_allowances',
+    'fn_bwp_set_allowance',
+    'fn_bwp_set_my_pin',
+    'fn_bwp_set_policy',
+    'fn_bwp_set_wallet_status',
+    'fn_bwp_wallet_overview'
+    ])
+  LOOP
+    IF r.proconfig IS NULL OR NOT EXISTS (SELECT 1 FROM unnest(r.proconfig) c WHERE c LIKE 'search_path=%') THEN
+      EXECUTE 'ALTER FUNCTION ' || r.sig || ' SET search_path = public';
+    END IF;
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION ' || r.sig || ' FROM PUBLIC, anon';
+    IF left(r.proname, 1) = '_' AND r.proname <> ALL (ARRAY['_cmms_can_view_company', '_cmms_kind_from_category', '_cmms_caller_email', '_cmms_guc', '_cmms_money_spec', '_bol_access_rank', '_bol_wallet_rank']) THEN
+      EXECUTE 'REVOKE EXECUTE ON FUNCTION ' || r.sig || ' FROM authenticated';
+    ELSE
+      EXECUTE 'GRANT EXECUTE ON FUNCTION ' || r.sig || ' TO authenticated';
+    END IF;
+  END LOOP;
+END $$;

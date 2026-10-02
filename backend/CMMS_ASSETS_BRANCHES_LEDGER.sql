@@ -614,7 +614,9 @@ BEGIN
 END;
 $$;
 
--- Every quantity change is a movement
+-- Every quantity change is a movement. The existing custody / update functions change stock
+-- without saying why, so the reason is read from the call stack (PG_CONTEXT), which needs no
+-- edit to those functions and no special privilege. Explicit cmms.* settings still win.
 CREATE OR REPLACE FUNCTION public._cmms_item_ledger_update()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -623,13 +625,24 @@ DECLARE
                               CASE WHEN NEW.item_kind = 'asset' THEN NEW.acquisition_cost END,
                               NEW.unit_price, 0);
   v_type  TEXT;
+  v_ref   TEXT;
+  v_ctx   TEXT;
 BEGIN
   IF v_delta = 0 THEN RETURN NULL; END IF;
-  v_type := COALESCE(public._cmms_guc('cmms.txn_type'), CASE WHEN v_delta > 0 THEN 'restock' ELSE 'issue' END);
+  GET DIAGNOSTICS v_ctx = PG_CONTEXT;
+  IF v_ctx LIKE '%function fn_checkout_inventory_item(%' THEN
+    v_type := 'issue';      v_ref := 'staff_custody';
+  ELSIF v_ctx LIKE '%function fn_return_inventory_item(%' THEN
+    v_type := 'restock';    v_ref := 'staff_custody';
+  ELSIF v_ctx LIKE '%function fn_update_inventory_item(%' THEN
+    v_type := 'adjustment'; v_ref := 'manual_edit';
+  END IF;
+  v_type := COALESCE(public._cmms_guc('cmms.txn_type'), v_type, CASE WHEN v_delta > 0 THEN 'restock' ELSE 'issue' END);
+  v_ref  := COALESCE(public._cmms_guc('cmms.txn_reference_type'), v_ref);
 
   PERFORM public._cmms_write_inventory_txn(
     NEW, v_type, v_delta, v_unit, ABS(v_delta) * v_unit, NOW(),
-    public._cmms_guc('cmms.txn_reference_type'), public._cmms_guc('cmms.txn_reference_no'),
+    v_ref, public._cmms_guc('cmms.txn_reference_no'),
     public._cmms_guc('cmms.txn_counterparty'), public._cmms_guc('cmms.txn_notes'),
     COALESCE(public._cmms_guc('cmms.txn_meta')::JSONB, '{}'::JSONB),
     public._cmms_guc('cmms.txn_supermarket_id')::UUID, public._cmms_guc('cmms.txn_product_id')::UUID
@@ -673,35 +686,17 @@ WHERE i.is_active = TRUE
   AND COALESCE(i.quantity_in_stock, 0) > 0
   AND NOT EXISTS (SELECT 1 FROM public.cmms_inventory_transactions t WHERE t.item_id = i.id);
 
--- The existing functions change stock without saying why. Tag them (function-
--- level SET, no body edits) so the ledger records the real reason. Matched by
--- name so a signature difference in your database cannot break the migration.
-DO $$
-DECLARE r RECORD;
-BEGIN
-  FOR r IN
-    SELECT p.oid::regprocedure AS sig, p.proname
-    FROM pg_proc p
-    WHERE p.pronamespace = 'public'::regnamespace
-      AND p.proname IN ('fn_checkout_inventory_item', 'fn_return_inventory_item', 'fn_update_inventory_item')
-  LOOP
-    EXECUTE format('ALTER FUNCTION %s SET cmms.txn_type = %L', r.sig,
-      CASE r.proname WHEN 'fn_checkout_inventory_item' THEN 'issue'
-                     WHEN 'fn_return_inventory_item'   THEN 'restock'
-                     ELSE 'adjustment' END);
-    EXECUTE format('ALTER FUNCTION %s SET cmms.txn_reference_type = %L', r.sig,
-      CASE r.proname WHEN 'fn_update_inventory_item' THEN 'manual_edit' ELSE 'staff_custody' END);
-  END LOOP;
-END $$;
+-- (The existing custody / update functions are recognised by the ledger trigger itself, see
+-- _cmms_item_ledger_update above; nothing to tag on them.)
 
 -- ============================================================================
 -- 4. WRITE FUNCTIONS: item details, linking to the money ledger, depreciation,
 --    disposal
 -- ============================================================================
 
--- Return all columns (old and new) so the client can always map an item
-DROP FUNCTION IF EXISTS public.fn_get_company_inventory(uuid) CASCADE;
-CREATE FUNCTION public.fn_get_company_inventory(p_company_id uuid)
+-- All columns (old and new) so the client can always map an item. A NEW function: the original
+-- fn_get_company_inventory (fixed column list) is left untouched for the callers that use it.
+CREATE OR REPLACE FUNCTION public.fn_cmms_get_company_inventory(p_company_id uuid)
 RETURNS SETOF public.cmms_inventory_items
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
@@ -714,8 +709,8 @@ BEGIN
   ORDER BY i.item_code ASC;
 END;
 $$;
-ALTER FUNCTION public.fn_get_company_inventory(uuid) SET row_security = OFF;
-GRANT EXECUTE ON FUNCTION public.fn_get_company_inventory(uuid) TO authenticated;
+ALTER FUNCTION public.fn_cmms_get_company_inventory(uuid) SET row_security = OFF;
+GRANT EXECUTE ON FUNCTION public.fn_cmms_get_company_inventory(uuid) TO authenticated;
 
 -- Set / change asset (or classification) details on an item.
 CREATE OR REPLACE FUNCTION public.fn_cmms_set_item_details(p_item_id UUID, p_details JSONB)
@@ -1582,3 +1577,73 @@ GRANT EXECUTE ON FUNCTION
 TO authenticated;
 
 SELECT 'CMMS assets, ledger, branches and supermarket link installed' AS status;
+
+-- ============================================================================
+-- HARDENING: pin search_path, and close the API to everything that is not meant to be called
+-- from the app. Internal helpers (leading underscore) can read other businesses' trees or write
+-- log rows, so only the screens' fn_* functions (and the few harmless helpers the row-level
+-- policies and triggers call as the signed-in user) stay executable by signed-in users (granted
+-- explicitly, since PUBLIC no longer covers them).
+-- ============================================================================
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.proname, p.proconfig
+    FROM pg_proc p
+    WHERE p.pronamespace = 'public'::regnamespace AND p.proname = ANY (ARRAY[
+    '_cmms_caller_email',
+    '_cmms_can_manage_inventory',
+    '_cmms_can_view_company',
+    '_cmms_feed_money',
+    '_cmms_fx_rate',
+    '_cmms_guc',
+    '_cmms_is_company_admin',
+    '_cmms_is_group_hq_admin',
+    '_cmms_item_defaults',
+    '_cmms_item_ledger_insert',
+    '_cmms_item_ledger_update',
+    '_cmms_itx_immutable',
+    '_cmms_kind_from_category',
+    '_cmms_member_user_id',
+    '_cmms_money_spec',
+    '_cmms_write_inventory_txn',
+    'fn_cmms_accum_depreciation',
+    'fn_cmms_create_business_group',
+    'fn_cmms_create_item',
+    'fn_cmms_dispose_asset',
+    'fn_cmms_get_asset_register',
+    'fn_cmms_get_company_inventory',
+    'fn_cmms_get_linked_supermarket',
+    'fn_cmms_get_my_business_group',
+    'fn_cmms_get_supermarket_stock_link',
+    'fn_cmms_inventory_reconciliation',
+    'fn_cmms_inventory_report',
+    'fn_cmms_link_company_to_group',
+    'fn_cmms_link_item_to_product',
+    'fn_cmms_link_supermarket',
+    'fn_cmms_list_my_supermarkets',
+    'fn_cmms_post_asset_depreciation',
+    'fn_cmms_post_missing_money_entries',
+    'fn_cmms_search_supermarket_products',
+    'fn_cmms_set_group_fx_rate',
+    'fn_cmms_set_item_details',
+    'fn_cmms_set_item_quantity',
+    'fn_cmms_transfer_stock_supermarket',
+    'fn_cmms_unlink_company_from_group',
+    'fn_cmms_unlink_supermarket',
+    'fn_cmms_unposted_money_entries',
+    'fn_cmms_update_branch'
+    ])
+  LOOP
+    IF r.proconfig IS NULL OR NOT EXISTS (SELECT 1 FROM unnest(r.proconfig) c WHERE c LIKE 'search_path=%') THEN
+      EXECUTE 'ALTER FUNCTION ' || r.sig || ' SET search_path = public';
+    END IF;
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION ' || r.sig || ' FROM PUBLIC, anon';
+    IF left(r.proname, 1) = '_' AND r.proname <> ALL (ARRAY['_cmms_can_view_company', '_cmms_kind_from_category', '_cmms_caller_email', '_cmms_guc', '_cmms_money_spec', '_bol_access_rank', '_bol_wallet_rank']) THEN
+      EXECUTE 'REVOKE EXECUTE ON FUNCTION ' || r.sig || ' FROM authenticated';
+    ELSE
+      EXECUTE 'GRANT EXECUTE ON FUNCTION ' || r.sig || ' TO authenticated';
+    END IF;
+  END LOOP;
+END $$;

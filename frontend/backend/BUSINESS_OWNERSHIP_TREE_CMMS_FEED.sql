@@ -812,3 +812,58 @@ TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 SELECT 'Pitchin ownership tree + CMMS feed installed' AS status;
+
+-- ============================================================================
+-- HARDENING: pin search_path, and close the API to everything that is not meant to be called
+-- from the app. Internal helpers (leading underscore) can read other businesses' trees or write
+-- log rows, so only the screens' fn_* functions (and the few harmless helpers the row-level
+-- policies and triggers call as the signed-in user) stay executable by signed-in users (granted
+-- explicitly, since PUBLIC no longer covers them).
+-- ============================================================================
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT p.oid::regprocedure AS sig, p.proname, p.proconfig
+    FROM pg_proc p
+    WHERE p.pronamespace = 'public'::regnamespace AND p.proname = ANY (ARRAY[
+    '_boe_append_only',
+    '_bol_access_rank',
+    '_bol_after_company_link',
+    '_bol_after_link_change',
+    '_bol_ancestors',
+    '_bol_cmms_company_of',
+    '_bol_is_business_admin',
+    '_bol_log',
+    '_bol_root_of',
+    '_bol_wallet_rank',
+    '_bol_would_cycle',
+    '_cmms_access_level',
+    '_cmms_can_view_company',
+    '_cmms_is_group_hq_admin',
+    '_cmms_sync_tree_group',
+    'fn_business_branch_tree',
+    'fn_business_end_branch_link',
+    'fn_business_my_branch_requests',
+    'fn_business_my_unlinked_businesses',
+    'fn_business_ownership_chain',
+    'fn_business_ownership_history',
+    'fn_business_propose_branch',
+    'fn_business_respond_branch_link',
+    'fn_business_search_for_branch',
+    'fn_business_update_branch_link',
+    'fn_cmms_get_my_business_group',
+    'fn_cmms_inventory_report'
+    ])
+  LOOP
+    IF r.proconfig IS NULL OR NOT EXISTS (SELECT 1 FROM unnest(r.proconfig) c WHERE c LIKE 'search_path=%') THEN
+      EXECUTE 'ALTER FUNCTION ' || r.sig || ' SET search_path = public';
+    END IF;
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION ' || r.sig || ' FROM PUBLIC, anon';
+    IF left(r.proname, 1) = '_' AND r.proname <> ALL (ARRAY['_cmms_can_view_company', '_cmms_kind_from_category', '_cmms_caller_email', '_cmms_guc', '_cmms_money_spec', '_bol_access_rank', '_bol_wallet_rank']) THEN
+      EXECUTE 'REVOKE EXECUTE ON FUNCTION ' || r.sig || ' FROM authenticated';
+    ELSE
+      EXECUTE 'GRANT EXECUTE ON FUNCTION ' || r.sig || ' TO authenticated';
+    END IF;
+  END LOOP;
+END $$;
