@@ -373,4 +373,5 @@ const WalletAccessModal = ({
   );
 };
 
+export { PinPad, Steps, LinkSent, field, label, panel, btnPrimary, btnGhost, linkBtn, PIN_MIN, PIN_MAX };
 export default WalletAccessModal;

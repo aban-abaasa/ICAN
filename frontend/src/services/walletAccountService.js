@@ -373,6 +373,55 @@ class WalletAccountService {
   }
 
   /**
+   * Is a PIN set on this business's iCanEra business wallet? Read from
+   * ican_business_wallet_settings (shareholders can read it) without pulling
+   * the hash itself. Returns null if the status could not be read.
+   * @param {string} businessProfileId - business_profiles.id
+   * @returns {Promise<{pinSet: boolean, lockedUntil: string|null}|null>}
+   */
+  async getBusinessWalletPinStatus(businessProfileId) {
+    try {
+      this.supabase = getSupabaseClient();
+      const { data, error } = await this.supabase
+        .from('ican_business_wallet_settings')
+        .select('pin_set_at, pin_locked_until')
+        .eq('business_profile_id', businessProfileId)
+        .maybeSingle();
+      if (error) {
+        console.error('❌ Error reading business wallet PIN status:', error);
+        return null;
+      }
+      return { pinSet: !!data?.pin_set_at, lockedUntil: data?.pin_locked_until || null };
+    } catch (error) {
+      console.error('❌ Error in getBusinessWalletPinStatus:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check a business-wallet PIN server-side (bcrypt, 5 wrong tries lock it for
+   * 15 minutes) via verify_pitchin_business_wallet_pin — see
+   * backend/BUSINESS_WALLET_PIN_VERIFY.sql.
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  async verifyBusinessWalletPin(businessProfileId, pin) {
+    if (!this.validatePIN(pin)) return { success: false, error: 'PIN must be 4-6 digits' };
+    try {
+      this.supabase = getSupabaseClient();
+      const { data, error } = await this.supabase.rpc('verify_pitchin_business_wallet_pin', {
+        p_business_profile_id: businessProfileId,
+        p_pin: pin
+      });
+      if (error) return { success: false, error: error.message || 'Could not check the PIN' };
+      return data?.success
+        ? { success: true }
+        : { success: false, error: data?.message || 'Incorrect PIN' };
+    } catch (error) {
+      return { success: false, error: error.message || 'Could not check the PIN' };
+    }
+  }
+
+  /**
    * Create wallet entries for each supported currency using the backend
    * function (bypasses RLS policies which block a direct client-side INSERT).
    * Shared by both the "finish an auto-created bare account" and the
