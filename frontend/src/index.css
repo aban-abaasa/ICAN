@@ -2002,3 +2002,41 @@ button:hover > .bd-chevron { transform: translateX(3px) rotate(45deg); }
 .tithe-meter { height: 6px; border-radius: 999px; background: rgba(196, 160, 82, 0.2); overflow: hidden; }
 .tithe-meter > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #b8892b, #e6c980); transition: width .5s ease; }
 .tithe-scope input[type="range"] { accent-color: #b8892b; }
+
+/* ── Tithe web page: reskin the legacy dark slate/purple utility classes used by
+   TitheManager's sub-views to the classic CMMS surfaces. Scoped to .tithe-web
+   so nothing else is touched; on the dark presets it follows the theme tokens. */
+.tithe-web {
+  --tw-surface: #fffdf8; --tw-field: #ffffff; --tw-text: #2c2416; --tw-muted: #5b5340;
+  --tw-border: rgba(196, 160, 82, 0.4); --tw-gold: #b8892b;
+  --tw-green: #047857; --tw-amber: #b45309; --tw-purple: #6b3f7a; --tw-red: #dc2626; --tw-blue: #0369a1;
+}
+:root[data-theme="dark"] .tithe-web,
+:root[data-theme="purple"] .tithe-web,
+:root[data-theme="green"] .tithe-web,
+:root[data-theme="ocean"] .tithe-web,
+:root[data-theme="sienna"] .tithe-web {
+  --tw-surface: var(--color-bgSecondary); --tw-field: var(--color-bg); --tw-text: var(--color-text); --tw-muted: var(--color-textSecondary);
+  --tw-border: var(--color-border); --tw-gold: #e6c980;
+  --tw-green: #6ee7b7; --tw-amber: #fcd34d; --tw-purple: #d8b4fe; --tw-red: #fca5a5; --tw-blue: #7dd3fc;
+}
+.tithe-web [class*="bg-slate-"], .tithe-web [class*="from-slate-"] { background: var(--tw-surface) !important; border-color: var(--tw-border) !important; }
+.tithe-web input[class*="bg-slate-"], .tithe-web select[class*="bg-slate-"], .tithe-web textarea[class*="bg-slate-"], .tithe-web [class*="bg-slate-900"] { background: var(--tw-field) !important; color: var(--tw-text) !important; }
+.tithe-web [class*="border-slate-"], .tithe-web [class*="border-purple-"] { border-color: var(--tw-border) !important; }
+.tithe-web [class~="rounded-xl"][class*="border"], .tithe-web [class~="rounded-lg"][class*="border"] { box-shadow: 0 1px 2px rgba(44, 36, 22, 0.05); }
+.tithe-web input:focus, .tithe-web select:focus, .tithe-web textarea:focus { outline: none; border-color: #c4a052 !important; box-shadow: 0 0 0 3px rgba(196, 160, 82, 0.2); }
+.tithe-web input::placeholder, .tithe-web textarea::placeholder { color: var(--tw-muted); opacity: .7; }
+.tithe-web [class~="text-white"]:not(button):not([class*="from-"]):not([class*="bg-purple-6"]):not([class*="bg-green-6"]):not([class*="bg-blue-6"]) { color: var(--tw-text) !important; }
+.tithe-web [class*="text-gray-"] { color: var(--tw-muted) !important; }
+.tithe-web [class*="text-green-3"], .tithe-web [class*="text-green-4"], .tithe-web [class*="text-emerald-"] { color: var(--tw-green) !important; }
+.tithe-web [class*="text-amber-"], .tithe-web [class*="text-yellow-"], .tithe-web [class*="text-orange-"] { color: var(--tw-amber) !important; }
+.tithe-web [class*="text-purple-"], .tithe-web [class*="text-indigo-"], .tithe-web [class*="text-violet-"] { color: var(--tw-purple) !important; }
+.tithe-web [class*="text-red-"], .tithe-web [class*="text-rose-"] { color: var(--tw-red) !important; }
+.tithe-web [class*="text-blue-"], .tithe-web [class*="text-cyan-"], .tithe-web [class*="text-sky-"] { color: var(--tw-blue) !important; }
+/* selected / primary buttons keep white text on the classic gold fill */
+.tithe-web button[class*="bg-purple-6"], .tithe-web button[class*="bg-blue-6"], .tithe-web button[class*="from-purple-"], .tithe-web button[class*="from-green-"], .tithe-web button[class*="bg-green-6"] {
+  background: linear-gradient(135deg, var(--color-primary, #b8892b), var(--color-secondary, #7a5a1a)) !important; color: #fff !important; border-color: transparent !important;
+}
+.tithe-web button[class*="bg-purple-6"], .tithe-web button[class*="bg-blue-6"], .tithe-web button[class*="from-purple-"], .tithe-web button[class*="from-green-"], .tithe-web button[class*="bg-green-6"] { box-shadow: 0 8px 18px -12px #b8892b; }
+.tithe-web button[class*="from-"][disabled], .tithe-web button[class*="bg-purple-6"][disabled] { opacity: .5; }
+.tithe-web [class*="bg-purple-500/"], .tithe-web [class*="bg-amber-500/"], .tithe-web [class*="bg-yellow-500/"] { background-color: rgba(196, 160, 82, 0.14) !important; }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, BarChart3, Lock, Eye, EyeOff, Check, AlertCircle } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase';
+import CmmsPageShell from './CmmsPageShell';
 
 /**
  * TitheManager Component
@@ -1501,15 +1502,9 @@ export default function TitheManager() {
 
     return (
       <div className="space-y-5">
-        {/* ── Hero header ── */}
-        <div className="rounded-2xl p-5 border border-amber-500/20" style={{ background: 'linear-gradient(135deg, #1c1008 0%, #2d1a00 100%)' }}>
-          <h2 className="text-2xl font-extrabold text-amber-300 mb-0.5">🙏 Tithe Calculator</h2>
-          <p className="text-xs text-amber-700/80 font-medium tracking-wide uppercase">Steward faithfully · Uganda Giving Tracker</p>
-
-          {calcLoading && calcIncomeTx.length === 0 && (
-            <p className="text-xs text-amber-500/60 mt-3 animate-pulse">Loading your income records…</p>
-          )}
-        </div>
+        {calcLoading && calcIncomeTx.length === 0 && (
+          <p className="tithe-notice tithe-notice-warn text-xs animate-pulse" role="status">Loading your income records…</p>
+        )}
 
         {/* ── Personal / Business switch ── */}
         <div className="flex gap-2">
@@ -1848,66 +1843,55 @@ export default function TitheManager() {
   // ============================================================
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
+    <div className="cmms-page-classic tithe-scope tithe-web min-h-screen p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
-            <span className="text-3xl">⛪</span>
-            Tithe Management System
-          </h1>
-          <p className="text-gray-400">Record, track, and manage your charitable giving with blockchain security</p>
-        </div>
-
+        <CmmsPageShell
+          title="Tithe Management"
+          subtitle="Record, track and manage your giving with blockchain security"
+          icon={<span aria-hidden="true">⛪</span>}
+          hideFullPage
+          chips={[
+            summary && `${summary.total_tithes} tithe${summary.total_tithes === 1 ? '' : 's'}`,
+            summary && `Given UGX ${(summary.total_amount || 0).toLocaleString()}`,
+            `Wallet UGX ${showBalance ? (walletBalance || 0).toLocaleString() : '••••'}`,
+          ]}
+          info="Steward faithfully — Uganda giving tracker. Use the Calculator to see what each income owes, then record, settle or review your tithes. Every entry is protected by the blockchain audit trail."
+          tabs={[
+            { id: 'calculator', label: '🙏 Calculator', accent: 'gold' },
+            { id: 'add', label: '➕ Add Tithe', accent: 'emerald' },
+            { id: 'settle', label: '💰 Settle', accent: 'navy' },
+            { id: 'pay', label: '💳 Pay Tithe', accent: 'burgundy' },
+            { id: 'view', label: '👁️ View', accent: 'teal' },
+            { id: 'analytics', label: '📊 Analytics', accent: 'plum' },
+            { id: 'audit', label: '🔒 Audit', accent: 'gold' },
+          ]}
+          tab={formMode}
+          onTab={(id) => {
+            setFormMode(id);
+            if (id === 'calculator') {
+              fetchCalcData();
+            } else if (id === 'pay') {
+              fetchFilteredTransactions(transactionFilter);
+              loadAlreadyTithedMap();
+            } else if (id === 'settle') {
+              fetchUnpaidTithes();
+            }
+          }}
+        >
         {/* Messages */}
         {error && (
-          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
+          <p className="tithe-notice tithe-notice-bad flex items-center gap-2" role="alert">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
             {error}
-          </div>
+          </p>
         )}
 
         {success && (
-          <div className="mb-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-300 flex items-center gap-2">
-            <Check className="w-5 h-5" />
+          <p className="tithe-notice tithe-notice-ok flex items-center gap-2" role="status">
+            <Check className="w-5 h-5 flex-shrink-0" />
             {success}
-          </div>
+          </p>
         )}
-
-        {/* Navigation Tabs */}
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {[
-            { id: 'calculator', label: '🙏 Tithe Calculator', icon: Plus },
-            { id: 'add', label: '➕ Add Tithe', icon: Plus },
-            { id: 'settle', label: '💰 Settle Tithes', icon: Plus },
-            { id: 'pay', label: '💳 Pay Tithe', icon: Plus },
-            { id: 'view', label: '👁️ View Tithes', icon: Eye },
-            { id: 'analytics', label: '📊 Analytics', icon: BarChart3 },
-            { id: 'audit', label: '🔒 Blockchain Audit', icon: Lock }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setFormMode(tab.id);
-                if (tab.id === 'calculator') {
-                  fetchCalcData();
-                } else if (tab.id === 'pay') {
-                  fetchFilteredTransactions(transactionFilter);
-                  loadAlreadyTithedMap();
-                } else if (tab.id === 'settle') {
-                  fetchUnpaidTithes();
-                }
-              }}
-              className={`px-4 py-2 rounded-lg font-medium transition ${
-                formMode === tab.id
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-slate-800 text-gray-300 hover:bg-slate-700'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
 
         {/* Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1996,6 +1980,7 @@ export default function TitheManager() {
             )}
           </div>
         </div>
+        </CmmsPageShell>
       </div>
     </div>
   );
