@@ -32,6 +32,7 @@ import GroupWalletPINModal from './GroupWalletPINModal';
 import AdminApplicationPanel from './AdminApplicationPanel';
 import CmmsPageShell from './CmmsPageShell.jsx';
 import { usernameOf } from '../utils/usernameOf';
+import { useIcanPrice } from '../hooks/useIcanPrice';
 import TrustLoanManagement from './TrustLoanManagement';
 import {
   getPublicTrustGroups,
@@ -110,6 +111,12 @@ const TrustSystem = ({
   const [userCountryCode, setUserCountryCode] = useState('US');
   const [userCurrency, setUserCurrency] = useState('USD');
   const [currencySymbol, setCurrencySymbol] = useState('$');
+  // Live value of 1 IcanEra in the member's own currency (refreshes every minute).
+  const { price: liveIcanPrice } = useIcanPrice(userCurrency);
+  const liveRate = liveIcanPrice?.price_local != null ? Number(liveIcanPrice.price_local) : null;
+  const liveRateCurrency = liveIcanPrice?.currency_code || userCurrency;
+  const toLocalText = (coins) => (liveRate != null ? `${liveRateCurrency} ${formatLocal(Number(coins) * liveRate)}` : 'fetching live rate…');
+  const formatLocal = (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: value >= 100 ? 0 : 2 });
   const [showLoanForm, setShowLoanForm] = useState(false);
   const [selectedGroupForLoan, setSelectedGroupForLoan] = useState(null);
   const [hasICANWallet, setHasICANWallet] = useState(false);
@@ -943,13 +950,21 @@ const TrustSystem = ({
     if (mine.length > 0) setSelectedAdminGroup(mine[0]);
   }, [activeTab, myGroups, currentUser?.id, selectedAdminGroup]);
 
+  // Main navigation is just Explore / My Trusts / Dashboard. Vote, Applications,
+  // Create and the Admin panel live inside the Dashboard as a second, smaller row.
+  const isCreator = myGroups.some(g => g.creator_id === currentUser?.id);
+  const dashboardSubTabs = [
+    ...(isCreator ? [{ id: 'admin', label: '👑 Admin', accent: 'teal' }] : []),
+    { id: 'voting', label: `🗳️ Vote${votingApplications.length > 0 ? ` (${votingApplications.length})` : ''}`, accent: 'burgundy' },
+    { id: 'applications', label: `📮 Applications${myApplications.length > 0 ? ` (${myApplications.length})` : ''}`, accent: 'plum' },
+    { id: 'create', label: '✨ Create', accent: 'gold' }
+  ];
+  const inDashboard = dashboardSubTabs.some(t => t.id === activeTab);
+  const dashboardBadge = votingApplications.length + myApplications.length;
   const trustTabs = [
     { id: 'explore', label: '🔍 Explore', accent: 'emerald' },
     { id: 'mygroups', label: '👥 My Trusts', accent: 'navy' },
-    { id: 'voting', label: `🗳️ Vote${votingApplications.length > 0 ? ` (${votingApplications.length})` : ''}`, accent: 'burgundy' },
-    { id: 'applications', label: `📮 Applications${myApplications.length > 0 ? ` (${myApplications.length})` : ''}`, accent: 'plum' },
-    { id: 'create', label: '✨ Create', accent: 'gold' },
-    ...(myGroups.some(g => g.creator_id === currentUser?.id) ? [{ id: 'admin', label: '👑 Admin Panel', accent: 'teal' }] : [])
+    { id: 'dashboard', label: `📊 Dashboard${dashboardBadge > 0 ? ` (${dashboardBadge})` : ''}`, accent: 'gold' }
   ];
 
   return (
@@ -968,8 +983,9 @@ const TrustSystem = ({
           ]}
           info="Find a savings trust, join with a wallet contribution, vote on new members and manage the groups you run. Each tab can be opened as a full page with the expand button."
           tabs={trustTabs}
-          tab={activeTab}
-          onTab={(id) => { setActiveTab(id); setShowMobileMenu(false); }}
+          tab={inDashboard ? 'dashboard' : activeTab}
+          compactTabs
+          onTab={(id) => { setActiveTab(id === 'dashboard' ? dashboardSubTabs[0].id : id); setShowMobileMenu(false); }}
         >
         {/* Message Alert */}
         {message.text && (
@@ -1000,6 +1016,16 @@ const TrustSystem = ({
         )}
 
         <div className="trust-classic">
+          {inDashboard && (
+            <div className="cmms-tabs-compact cmms-tabs-sub -mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap" role="tablist" aria-label="Dashboard sections" style={{ scrollbarWidth: 'none' }}>
+              {dashboardSubTabs.map(t => (
+                <button key={t.id} type="button" role="tab" aria-selected={activeTab === t.id} onClick={() => setActiveTab(t.id)}
+                  className={`cmms-ptab cmms-accent-${t.accent} ${activeTab === t.id ? 'is-active' : ''}`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
         {/* EXPLORE GROUPS TAB */}
         {activeTab === 'explore' && (
           <div>
@@ -1710,54 +1736,36 @@ const TrustSystem = ({
       {/* GROUP DETAILS MODAL - Only for My Groups (members viewing their own groups) */}
       {selectedGroup && selectedGroupTab === 'mygroups' && !showGroupModal && !showContributeModal && !showManageModal && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100]">
-          <div className="bg-slate-800 rounded-t-lg sm:rounded-lg max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden sm:my-8 flex flex-col border border-slate-700">
-            <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 sm:p-6 flex justify-between items-start gap-2 z-10">
-              <div className="flex-1 min-w-0">
-                <h2 className="text-lg sm:text-2xl font-bold text-white truncate">{selectedGroup.name}</h2>
-                <p className="text-slate-400 mt-1 text-xs sm:text-sm line-clamp-2">{selectedGroup.description}</p>
+          <div className="trust-classic trust-modal-panel rounded-t-2xl sm:rounded-2xl max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden sm:my-8 flex flex-col shadow-2xl">
+            <div className="h-1 bg-gradient-to-r from-amber-700 via-amber-400 to-amber-700"></div>
+            <div className="trust-modal-head sticky top-0 p-4 sm:p-6 flex justify-between items-start gap-3 z-10">
+              <div className="flex min-w-0 flex-1 items-center gap-3 cmms-accent-gold">
+                <span className="cmms-medallion"><Shield className="h-4 w-4" aria-hidden="true" /></span>
+                <div className="min-w-0">
+                  <h2 className="truncate text-lg font-bold leading-tight sm:text-2xl">{selectedGroup.name}</h2>
+                  {selectedGroup.description && <p className="mt-0.5 line-clamp-2 text-xs text-slate-500 sm:text-sm">{selectedGroup.description}</p>}
+                </div>
               </div>
-              <button onClick={() => { setSelectedGroup(null); setSelectedGroupTab(null); }} className="text-slate-400 hover:text-white flex-shrink-0">
-                <X size={24} />
+              <button type="button" onClick={() => { setSelectedGroup(null); setSelectedGroupTab(null); }} className="cmms-info-btn flex-shrink-0" aria-label="Close">
+                <X size={16} />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto pb-24 sm:pb-6 p-4 sm:p-6 space-y-6">
-              {/* Debug: Show what data we have */}
-              {(() => {
-                console.log('🔍 GROUP DETAILS MODAL RENDERING:', {
-                  hasSelectedGroup: !!selectedGroup,
-                  groupName: selectedGroup?.name,
-                  groupId: selectedGroup?.id,
-                  membersCount: selectedGroup?.members?.length,
-                  members: selectedGroup?.members,
-                  currentUserId: currentUser?.id,
-                  monthlyContribution: selectedGroup?.monthly_contribution
-                });
-                return null;
-              })()}
-
-              {/* Quick Test Card - Verify code is updated */}
-              <div className="bg-blue-500/20 border border-blue-500/40 rounded-lg p-3 text-xs text-blue-300">
-                ✅ New UI code loaded - Contribution cards should appear below
-              </div>
               {/* Group Key Info */}
               <div className="space-y-3">
-                {/* Member Fee Card */}
-                <div className="bg-gradient-to-br from-amber-900/30 to-amber-900/10 border border-amber-700/30 rounded-lg p-4">
-                  <p className="text-amber-300 text-xs sm:text-sm font-semibold flex items-center gap-2">
-                    <span>💰</span> Member Fee
-                  </p>
-                  <p className="text-2xl sm:text-3xl font-bold text-amber-400 mt-2">₿{selectedGroup.monthly_contribution} IcanEra</p>
-                  <p className="text-amber-300/60 text-xs mt-1">Monthly contribution required</p>
-                </div>
-
-                {/* Group Size Card */}
-                <div className="bg-gradient-to-br from-blue-900/30 to-blue-900/10 border border-blue-700/30 rounded-lg p-4">
-                  <p className="text-blue-300 text-xs sm:text-sm font-semibold flex items-center gap-2">
-                    <span>👥</span> Group Size
-                  </p>
-                  <p className="text-2xl sm:text-3xl font-bold text-blue-400 mt-2">{selectedGroup.member_count || 0}/{selectedGroup.max_members}</p>
-                  <p className="text-blue-300/60 text-xs mt-1">{Math.max(0, selectedGroup.max_members - (selectedGroup.member_count || 0))} spots available</p>
+                {/* Member fee + group size */}
+                <div className="trust-ledger cmms-accent-gold" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                  <div className="trust-figure">
+                    <p className="trust-figure-label">💰 Member fee</p>
+                    <p className="trust-figure-value trust-tone-warn">₿{selectedGroup.monthly_contribution} IcanEra</p>
+                    <p className="text-[0.65rem] text-slate-500">Monthly contribution</p>
+                  </div>
+                  <div className="trust-figure">
+                    <p className="trust-figure-label">👥 Group size</p>
+                    <p className="trust-figure-value trust-tone-info">{selectedGroup.member_count || 0}/{selectedGroup.max_members}</p>
+                    <p className="text-[0.65rem] text-slate-500">{Math.max(0, selectedGroup.max_members - (selectedGroup.member_count || 0))} spots available</p>
+                  </div>
                 </div>
 
                 {/* YOUR CONTRIBUTION CARD - Collapsible Personal Savings */}
@@ -1765,24 +1773,13 @@ const TrustSystem = ({
                   // Find current user's member record in this group
                   const userMember = selectedGroup.members?.find(m => m.user_id === currentUser?.id);
                   const userContribution = parseFloat(userMember?.total_contributed || 0);
-                  const userContributionUGX = userContribution * 5000;
-                  const monthlyReq = parseFloat(selectedGroup.monthly_contribution || 0);
+                                    const monthlyReq = parseFloat(selectedGroup.monthly_contribution || 0);
                   const contributionStatus = userContribution > 0 ? "Active" : "Not started";
                   const progressPercent = monthlyReq > 0 ? Math.min((userContribution / monthlyReq) * 100, 100) : 0;
                   const isExpanded = expandedSections.yourContribution;
                   
-                  // Debug logging
-                  console.log('💎 Your Contribution card - Debug:', {
-                    currentUserId: currentUser?.id,
-                    membersArray: selectedGroup.members,
-                    foundMember: userMember,
-                    userContribution,
-                    monthlyReq,
-                    progressPercent
-                  });
-                  
                   return (
-                    <div className="bg-gradient-to-br from-emerald-900/40 to-emerald-900/10 border border-emerald-600/40 rounded-lg overflow-hidden">
+                    <div className="cmms-accent-emerald border border-emerald-600/40 rounded-lg overflow-hidden">
                       {/* Collapsible Header */}
                       <button
                         onClick={() => setExpandedSections(prev => ({ ...prev, yourContribution: !isExpanded }))}
@@ -1802,7 +1799,7 @@ const TrustSystem = ({
                       {/* Expandable Content */}
                       {isExpanded && (
                         <div className="px-4 pb-4 border-t border-emerald-600/20 space-y-3">
-                          <p className="text-emerald-300/60 text-xs">= UGX {userContributionUGX.toLocaleString()}</p>
+                          <p className="text-xs text-slate-500">{liveRate != null ? `≈ ${formatLocal(userContribution * liveRate)} ${liveRateCurrency} at the live rate` : 'Fetching live rate…'}</p>
                           
                           {/* Progress bar towards monthly goal */}
                           <div className="space-y-2">
@@ -1825,7 +1822,7 @@ const TrustSystem = ({
                 })()}
 
                 {/* Privacy & Trust Card */}
-                <div className="bg-gradient-to-br from-emerald-900/30 to-emerald-900/10 border border-emerald-700/30 rounded-lg p-4">
+                <div className="cmms-accent-teal border border-emerald-700/30 rounded-lg p-4">
                   <p className="text-emerald-300 text-xs sm:text-sm font-semibold flex items-center gap-2">
                     <span>🔒</span> Privacy First
                   </p>
@@ -1855,14 +1852,11 @@ const TrustSystem = ({
                     const userContribution = parseFloat(userMember?.total_contributed || 0);
                     const monthlyReq = parseFloat(selectedGroup.monthly_contribution || 0);
                     const amountOwed = Math.max(0, monthlyReq - userContribution);
-                    const amountOwedUGX = amountOwed * 5000;
                     const isFullyPaid = amountOwed === 0;
                     const isExpanded = expandedSections.amountOwed;
                     
                     return amountOwed > 0 || isFullyPaid ? (
-                      <div className={`rounded-lg mb-6 border overflow-hidden ${isFullyPaid 
-                        ? 'bg-gradient-to-br from-green-900/40 to-green-900/10 border-green-600/40' 
-                        : 'bg-gradient-to-br from-orange-900/40 to-orange-900/10 border-orange-600/40'}`}>
+                      <div className={`rounded-lg mb-6 border overflow-hidden ${isFullyPaid ? 'cmms-accent-emerald border-green-600/40' : 'cmms-accent-burgundy border-orange-600/40'}`}>
                         {/* Collapsible Header */}
                         <button
                           onClick={() => setExpandedSections(prev => ({ ...prev, amountOwed: !isExpanded }))}
@@ -1886,7 +1880,7 @@ const TrustSystem = ({
                         {isExpanded && (
                           <div className={`px-4 pb-4 border-t ${isFullyPaid ? 'border-green-600/20' : 'border-orange-600/20'}`}>
                             <p className={`text-xs ${isFullyPaid ? 'text-green-300/60' : 'text-orange-300/60'}`}>
-                              = UGX {amountOwedUGX.toLocaleString()} {isFullyPaid ? '(Monthly target reached!)' : 'to reach monthly target'}
+                              {liveRate != null ? `≈ ${formatLocal(amountOwed * liveRate)} ${liveRateCurrency}` : 'Fetching live rate…'} {isFullyPaid ? '(Monthly target reached!)' : 'to reach monthly target'}
                             </p>
                           </div>
                         )}
@@ -2139,7 +2133,6 @@ const TrustSystem = ({
                         
                         {/* Calculate totals */}
                         {(() => {
-                          const liquidatedUGX = totalICANContributed * 5000;
                           
                           return (
                             <div className="space-y-3">
@@ -2151,14 +2144,14 @@ const TrustSystem = ({
                               
                               {/* Liquidated Amount */}
                               <div className="flex justify-between items-center p-3 sm:p-4 bg-gradient-to-r from-green-900/40 to-emerald-900/40 rounded-lg border border-green-500/30">
-                                <span className="text-emerald-300 text-xs sm:text-sm font-medium">Liquidated in UGX:</span>
-                                <span className="text-emerald-400 font-bold text-lg sm:text-xl">UGX {liquidatedUGX.toLocaleString()}</span>
+                                <span className="text-emerald-300 text-xs sm:text-sm font-medium">Liquidated in {liveRateCurrency}:</span>
+                                <span className="text-emerald-400 font-bold text-lg sm:text-xl">{toLocalText(totalICANContributed)}</span>
                               </div>
                               
                               {/* Exchange Rate */}
                               <div className="text-center p-2 bg-slate-900/30 rounded border border-slate-700">
                                 <p className="text-slate-400 text-xs">Exchange Rate</p>
-                                <p className="text-amber-300 font-semibold text-sm">1 IcanEra = 5,000 UGX</p>
+                                <p className="text-amber-300 font-semibold text-sm">1 IcanEra = {liveRate != null ? `${formatLocal(liveRate)} ${liveRateCurrency}` : 'fetching live rate…'}</p>
                               </div>
                             </div>
                           );
@@ -2181,7 +2174,6 @@ const TrustSystem = ({
                       <div className="space-y-2 max-h-48 overflow-y-auto">
                         {selectedGroup.members.map((member, idx) => {
                           const amountICAN = parseFloat(member.total_contributed || 0);
-                          const amountUGX = amountICAN * 5000;
                           return (
                             <div key={member.id} className="flex justify-between items-center p-2.5 bg-slate-800/30 rounded border border-slate-600/50">
                               <span className="flex items-center gap-2 min-w-0 text-slate-300 text-xs sm:text-sm">
@@ -2196,7 +2188,7 @@ const TrustSystem = ({
                               </span>
                               <div className="text-right flex-shrink-0">
                                 <p className="text-amber-400 font-semibold text-sm">₿{amountICAN.toFixed(8)}</p>
-                                <p className="text-emerald-300 text-xs">UGX {amountUGX.toLocaleString()}</p>
+                                <p className="text-emerald-300 text-xs">{toLocalText(amountICAN)}</p>
                               </div>
                             </div>
                           );
@@ -2271,7 +2263,6 @@ const TrustSystem = ({
                       <div className="space-y-2 max-h-48 overflow-y-auto">
                         {selectedGroup.members.map((member, idx) => {
                           const amountICAM = parseFloat(member.total_contributed || 0);
-                          const amountUGX = amountICAM * 5000;
                           return (
                             <div key={member.id} className="flex justify-between items-center p-2.5 bg-slate-800/30 rounded border border-slate-600/50">
                               <span className="flex items-center gap-2 min-w-0 text-slate-300 text-xs sm:text-sm">
@@ -2286,7 +2277,7 @@ const TrustSystem = ({
                               </span>
                               <div className="text-right flex-shrink-0">
                                 <p className="text-amber-400 font-semibold text-sm">₿{amountICAM.toFixed(8)}</p>
-                                <p className="text-emerald-300 text-xs">UGX {amountUGX.toLocaleString()}</p>
+                                <p className="text-emerald-300 text-xs">{toLocalText(amountICAM)}</p>
                               </div>
                             </div>
                           );
@@ -2472,38 +2463,42 @@ const TrustSystem = ({
       {/* JOIN APPLICATION MODAL */}
       {showJoinApplicationModal && groupForJoinApplication && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] pb-24 sm:pb-0">
-          <div className="bg-slate-800 rounded-t-lg sm:rounded-lg max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden sm:my-8 flex flex-col border border-slate-700">
+          <div className="trust-classic trust-modal-panel rounded-t-2xl sm:rounded-2xl max-w-2xl w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden sm:my-8 flex flex-col shadow-2xl">
+            <div className="h-1 bg-gradient-to-r from-amber-700 via-amber-400 to-amber-700"></div>
             {/* Header - Sticky */}
-            <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 sm:p-6 flex justify-between items-start gap-2 z-10">
-              <div className="flex-1 min-w-0">
-                <h2 className="text-lg sm:text-2xl font-bold text-white mb-1">📋 Join Group Application</h2>
-                <p className="text-slate-400 text-sm">Tell us why you want to join</p>
+            <div className="trust-modal-head sticky top-0 p-4 sm:p-6 flex justify-between items-start gap-3 z-10">
+              <div className="flex min-w-0 flex-1 items-center gap-3 cmms-accent-gold">
+                <span className="cmms-medallion"><FileText className="h-4 w-4" aria-hidden="true" /></span>
+                <div className="min-w-0">
+                  <h2 className="text-lg sm:text-2xl font-bold leading-tight">Join Group Application</h2>
+                  <p className="text-sm text-slate-500">Tell us why you want to join</p>
+                </div>
               </div>
-              <button onClick={() => { setShowJoinApplicationModal(false); setGroupForJoinApplication(null); }} className="text-slate-400 hover:text-white flex-shrink-0" aria-label="Close">
-                <X size={24} />
+              <button type="button" onClick={() => { setShowJoinApplicationModal(false); setGroupForJoinApplication(null); }} className="cmms-info-btn flex-shrink-0" aria-label="Close">
+                <X size={16} />
               </button>
             </div>
 
             {/* Content - Scrollable */}
             <div className="flex-1 overflow-y-auto pb-24 sm:pb-6 p-4 sm:p-6 space-y-6">
               {/* Group Info Card */}
-              <div className="bg-gradient-to-br from-amber-900/30 to-amber-900/10 border border-amber-700/30 rounded-lg p-4">
-                <h3 className="text-white font-bold text-lg mb-2">{groupForJoinApplication.name}</h3>
-                <p className="text-amber-300/80 text-sm mb-4">{groupForJoinApplication.description}</p>
-                <div className="space-y-2 text-sm">
-                  <p className="flex justify-between">
-                    <span className="text-slate-400">Monthly Contribution:</span>
-                    <span className="font-semibold text-amber-400">₿{groupForJoinApplication.monthly_contribution} IcanEra</span>
-                  </p>
-                  <p className="flex justify-between">
-                    <span className="text-slate-400">Available Spots:</span>
-                    <span className="font-semibold text-blue-400">{Math.max(0, groupForJoinApplication.max_members - (groupForJoinApplication.member_count || 0))}/{groupForJoinApplication.max_members}</span>
-                  </p>
+              <div className="cmms-accent-gold">
+                <h3 className="mb-1 text-xl font-bold">{groupForJoinApplication.name}</h3>
+                {groupForJoinApplication.description && <p className="mb-3 text-sm text-slate-500">{groupForJoinApplication.description}</p>}
+                <div className="trust-ledger" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                  <div className="trust-figure">
+                    <p className="trust-figure-label">Monthly contribution</p>
+                    <p className="trust-figure-value trust-tone-warn">₿{groupForJoinApplication.monthly_contribution} IcanEra</p>
+                  </div>
+                  <div className="trust-figure">
+                    <p className="trust-figure-label">Available spots</p>
+                    <p className="trust-figure-value trust-tone-info">{Math.max(0, groupForJoinApplication.max_members - (groupForJoinApplication.member_count || 0))}/{groupForJoinApplication.max_members}</p>
+                  </div>
                 </div>
               </div>
 
               {/* Group Conduct/Guidelines */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+              <div className="cmms-accent-emerald border border-slate-700 rounded-lg p-4">
                 <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
                   <Shield size={18} className="text-emerald-500" />
                   Group Conduct & Guidelines
@@ -2550,7 +2545,7 @@ const TrustSystem = ({
               </div>
 
               {/* Important Note */}
-              <div className="bg-blue-500/10 border border-blue-500/30 p-3 rounded-lg">
+              <div className="cmms-accent-navy border border-blue-500/30 p-3 rounded-lg">
                 <p className="text-blue-300 text-xs sm:text-sm">
                   📌 The group creator will review your application. If approved, group members will vote on your membership (requires 60% approval).
                 </p>
@@ -2558,7 +2553,7 @@ const TrustSystem = ({
             </div>
 
             {/* Footer - Action Buttons - Sticky */}
-            <div className="sticky bottom-0 border-t border-slate-700 bg-gradient-to-t from-slate-800 to-slate-800/95 p-4 sm:p-6 flex gap-3 z-10 shadow-lg">
+            <div className="trust-modal-foot sticky bottom-0 p-4 sm:p-6 flex gap-3 z-10">
               <button
                 onClick={() => { setShowJoinApplicationModal(false); setGroupForJoinApplication(null); }}
                 className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-white rounded-lg transition-colors font-medium text-sm"
@@ -2581,12 +2576,12 @@ const TrustSystem = ({
       {/* CONTRIBUTE MODAL - Enhanced with ICAN Coin Functionality */}
       {showContributeModal && selectedGroup && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 z-[100] pb-24 sm:pb-0">
-          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-black rounded-t-lg sm:rounded-lg max-w-md w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden flex flex-col border border-slate-700 sm:border-amber-500/20 shadow-2xl">
+          <div className="trust-classic trust-modal-panel rounded-t-2xl sm:rounded-2xl max-w-md w-full max-h-[85vh] sm:max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
             {/* Top Gradient Bar */}
-            <div className="h-1 bg-gradient-to-r from-amber-600 via-blue-600 to-cyan-600"></div>
+            <div className="h-1 bg-gradient-to-r from-amber-700 via-amber-400 to-amber-700"></div>
 
             {/* Header Section */}
-            <div className="sticky top-0 z-10 bg-gradient-to-r from-slate-900/90 to-amber-900/20 border-b border-amber-500/10 p-4 sm:p-6 flex justify-between items-start gap-3">
+            <div className="trust-modal-head sticky top-0 z-10 p-4 sm:p-6 flex justify-between items-start gap-3">
               <div className="flex items-center gap-3 flex-1">
                 <div className="p-2.5 sm:p-3 bg-gradient-to-br from-amber-600 to-amber-500 rounded-lg sm:rounded-xl flex-shrink-0">
                   <Wallet className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
@@ -2612,17 +2607,23 @@ const TrustSystem = ({
                   <p className="text-xs sm:text-sm text-amber-200/70">Monthly Target: <span className="font-semibold text-amber-300">₿{selectedGroup.monthly_contribution} IcanEra</span></p>
                 </div>
 
-                {/* Cryptocurrency Card - Web UI Detail */}
-                <div className="bg-gradient-to-br from-orange-600/20 to-amber-500/10 border border-amber-500/30 rounded-lg sm:rounded-xl p-3 sm:p-4">
-                  <p className="text-xs text-amber-300 font-semibold uppercase tracking-wide mb-1">💎 Cryptocurrency</p>
-                  <h3 className="text-lg sm:text-xl font-bold text-white mb-2 flex items-center gap-2">
-                    <span className="text-2xl">₿</span>
+                {/* Cryptocurrency Card: live value in the member's own currency */}
+                <div className="cmms-accent-navy border border-amber-500/30 rounded-lg sm:rounded-xl p-3 sm:p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-1 text-amber-300">💎 Cryptocurrency</p>
+                  <h3 className="text-lg sm:text-xl font-bold mb-2 flex items-center gap-2">
+                    <span className="cmms-medallion !h-8 !w-8 text-base font-bold">₿</span>
                     IcanEra Coin
                   </h3>
-                  <p className="text-xs sm:text-sm text-amber-200/70 mb-2">
-                    <span className="font-semibold text-amber-300">1 IcanEra</span> = ~5,000 UGX
+                  <p className="text-sm text-amber-200/70 mb-1">
+                    <span className="font-semibold text-amber-300">1 IcanEra</span> = {liveRate != null
+                      ? <span className="font-semibold text-amber-300">{formatLocal(liveRate)} {liveRateCurrency}</span>
+                      : <span className="italic">fetching live rate…</span>}
                   </p>
-                  <p className="text-xs text-amber-200/50">Your country: Uganda</p>
+                  <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                    Live value · refreshes every minute
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">Your country: <span className="font-semibold">{userCountry || '…'}</span>{userCurrency ? ` · ${userCurrency}` : ''}</p>
                 </div>
               </div>
 
@@ -2674,7 +2675,7 @@ const TrustSystem = ({
                 {contributeForm.amount && (
                   <div className="p-2 sm:p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg mb-4">
                     <p className="text-amber-300 text-xs sm:text-sm font-semibold">
-                      ✓ Ready to contribute: ₿{parseFloat(contributeForm.amount).toFixed(2)} IcanEra
+                      ✓ Ready to contribute: ₿{parseFloat(contributeForm.amount).toFixed(2)} IcanEra{liveRate != null && parseFloat(contributeForm.amount) > 0 ? ` ≈ ${formatLocal(parseFloat(contributeForm.amount) * liveRate)} ${liveRateCurrency}` : ''}
                     </p>
                   </div>
                 )}
@@ -2743,7 +2744,7 @@ const TrustSystem = ({
             </form>
 
             {/* Sticky Action Buttons Footer */}
-            <div className="sticky bottom-0 z-10 bg-gradient-to-t from-slate-800 to-slate-800/80 border-t border-slate-700 p-4 sm:p-6 flex flex-col sm:flex-row gap-3 shadow-lg">
+            <div className="trust-modal-foot sticky bottom-0 z-10 p-4 sm:p-6 flex flex-col sm:flex-row gap-3">
               <button
                 type="submit"
                 form="contribute-form"

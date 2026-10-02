@@ -1792,44 +1792,42 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
   // ── Mode picker ──────────────────────────────────────────────────
   if (!meetingStarted && boardroomMode === null) {
     return (
-      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-6 pb-28 sm:pb-6 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20 pointer-events-none">
-          <div className="absolute top-0 -left-40 w-80 h-80 bg-blue-500 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-0 -right-40 w-80 h-80 bg-purple-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-        </div>
-        <div className="relative z-10 w-full max-w-sm">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white text-center mb-1">{groupName}</h2>
-          <p className="text-center text-slate-400 text-sm mb-8">What would you like to do?</p>
-
-          <div className="flex flex-col gap-4">
-            {/* Message option */}
-            <button
-              onClick={() => setBoardroomMode('chat')}
-              className="flex items-center gap-4 w-full bg-slate-800/70 hover:bg-slate-700/80 border border-slate-600/50 hover:border-purple-500/50 rounded-2xl p-5 transition-all group active:scale-95"
-            >
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-600 to-violet-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-purple-500/30 group-hover:scale-110 transition-transform">
-                <MessageCircle className="w-7 h-7 text-white" />
-              </div>
-              <div className="text-left">
-                <p className="text-white font-bold text-base">Send a Message</p>
-                <p className="text-slate-400 text-xs mt-0.5">Group chat — read & send messages</p>
-              </div>
-            </button>
-
-            {/* Live option */}
-            <button
-              onClick={() => setBoardroomMode('live')}
-              className="flex items-center gap-4 w-full bg-slate-800/70 hover:bg-slate-700/80 border border-slate-600/50 hover:border-blue-500/50 rounded-2xl p-5 transition-all group active:scale-95"
-            >
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/30 group-hover:scale-110 transition-transform">
-                <Video className="w-7 h-7 text-white" />
-              </div>
-              <div className="text-left">
-                <p className="text-white font-bold text-base">{isHost ? 'Start Live' : 'Join Live'}</p>
-                <p className="text-slate-400 text-xs mt-0.5">{isHost ? 'Start a video call for the group' : 'Join a live video meeting'}</p>
-              </div>
-            </button>
+      <div className="bd-page w-full h-full flex flex-col items-center justify-center overflow-y-auto p-4 pb-28 sm:p-6">
+        <div className="cmms-classic-card w-full max-w-md space-y-4 p-5 sm:p-7">
+          <div className="cmms-accent-gold space-y-2 text-center">
+            <span className="cmms-medallion mx-auto !h-12 !w-12"><Users className="h-5 w-5" aria-hidden="true" /></span>
+            <h2 className="cmms-classic-heading text-2xl leading-tight sm:text-3xl">{groupName}</h2>
+            <p className="cmms-classic-muted text-sm">What would you like to do?</p>
+            <div className="cmms-ornament" aria-hidden="true" />
           </div>
+
+          <button
+            type="button"
+            onClick={() => setBoardroomMode('chat')}
+            className="cmms-sec cmms-accent-plum flex w-full items-center gap-4 text-left"
+            style={{ cursor: 'pointer' }}
+          >
+            <span className="cmms-medallion !h-11 !w-11"><MessageCircle className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="min-w-0 flex-1">
+              <span className="cmms-classic-heading block text-base">Send a Message</span>
+              <span className="cmms-classic-muted block text-xs">Group chat — read &amp; send messages</span>
+            </span>
+            <span className="bd-chevron" aria-hidden="true" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setBoardroomMode('live')}
+            className="cmms-sec cmms-accent-navy flex w-full items-center gap-4 text-left"
+            style={{ cursor: 'pointer' }}
+          >
+            <span className="cmms-medallion !h-11 !w-11"><Video className="h-5 w-5" aria-hidden="true" /></span>
+            <span className="min-w-0 flex-1">
+              <span className="cmms-classic-heading block text-base">{isHost ? 'Start Live' : 'Join Live'}</span>
+              <span className="cmms-classic-muted block text-xs">{isHost ? 'Start a video call for the group' : 'Join a live video meeting'}</span>
+            </span>
+            <span className="bd-chevron" aria-hidden="true" />
+          </button>
         </div>
       </div>
     );
@@ -1838,41 +1836,35 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
   // ── Standalone group chat mode ────────────────────────────────────
   if (!meetingStarted && boardroomMode === 'chat') {
     return (
-      <div className="w-full h-full flex flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+      <div className="bd-page w-full h-full flex flex-col">
         {/* Chat header */}
-        <div className="flex-shrink-0 flex items-center gap-3 px-4 py-3 border-b border-slate-700/60 bg-slate-900/80">
-          <button onClick={() => setBoardroomMode(null)} className="p-1.5 hover:bg-slate-700 rounded-lg transition text-slate-400 hover:text-white">
-            <X className="w-5 h-5" />
+        <div className="bd-bar flex-shrink-0 flex items-center gap-3 px-3 py-2.5 sm:px-5 sm:py-3 cmms-accent-plum">
+          <button type="button" onClick={() => setBoardroomMode(null)} className="cmms-classic-btn-secondary inline-flex !h-auto flex-shrink-0 items-center gap-1 !px-3 !py-1.5 text-xs">
+            <X className="h-3.5 w-3.5" aria-hidden="true" /> Back
           </button>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-600 to-violet-600 flex items-center justify-center flex-shrink-0">
-            <MessageCircle className="w-4 h-4 text-white" />
-          </div>
-          <div>
-            <p className="text-white font-bold text-sm leading-tight">{groupName}</p>
-            <p className="text-slate-400 text-xs">Group Chat</p>
+          <span className="cmms-medallion !h-9 !w-9"><MessageCircle className="h-4 w-4" aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="cmms-classic-heading truncate text-base leading-tight">{groupName}</p>
+            <p className="cmms-classic-muted text-xs">Group chat</p>
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-3 sm:space-y-4">
+        <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6 space-y-3 sm:space-y-4">
           {chatMessages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-2">
-              <MessageCircle className="w-10 h-10 text-slate-600" />
-              <p className="text-sm text-slate-500">No messages yet. Say hi! 👋</p>
+            <div className="cmms-classic-muted flex h-full flex-col items-center justify-center gap-2">
+              <span className="cmms-medallion !h-12 !w-12"><MessageCircle className="h-5 w-5" aria-hidden="true" /></span>
+              <p className="text-sm">No messages yet. Say hi! 👋</p>
             </div>
           ) : (
             chatMessages.map((msg) => (
               <div key={msg.id} className={`flex gap-2 ${msg.isThis ? 'flex-row-reverse' : ''}`}>
-                <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-md ${msg.isThis ? 'bg-gradient-to-br from-blue-600 to-blue-500' : 'bg-gradient-to-br from-purple-600 to-violet-600'}`}>
+                <span className="trust-avatar !h-8 !w-8 !text-xs" style={{ '--ac': msg.isThis ? '#b8892b' : '#2f4a7a' }} aria-hidden="true">
                   {msg.sender.charAt(0).toUpperCase()}
-                </div>
-                <div className={`flex flex-col gap-1 ${msg.isThis ? 'items-end' : 'items-start'} flex-1 min-w-0`}>
-                  <p className="text-xs text-gray-400 px-2">{msg.isThis ? 'You' : msg.sender.split('@')[0]}</p>
-                  <div className={`px-3.5 py-2.5 rounded-2xl max-w-[78%] text-sm break-words shadow-md ${
-                    msg.isThis
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none'
-                      : 'bg-slate-800/80 text-gray-100 rounded-bl-none border border-slate-700/50'
-                  }`}>
+                </span>
+                <div className={`flex min-w-0 flex-1 flex-col gap-1 ${msg.isThis ? 'items-end' : 'items-start'}`}>
+                  <p className="cmms-classic-muted px-1 text-[0.7rem] font-semibold">{msg.isThis ? 'You' : `@${msg.sender.split('@')[0]}`}</p>
+                  <div className={`bd-bubble max-w-[82%] break-words px-3.5 py-2.5 text-sm ${msg.isThis ? 'bd-bubble-me' : ''}`}>
                     {msg.message}
                   </div>
                 </div>
@@ -1882,22 +1874,24 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
         </div>
 
         {/* Input */}
-        <div className="flex-shrink-0 px-3 pt-3 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:pb-4 border-t border-slate-700/60 bg-slate-900/80">
-          <div className="flex gap-2 items-center">
+        <div className="bd-bar bd-bar-bottom flex-shrink-0 px-3 pt-3 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-5 sm:pb-4">
+          <div className="flex items-center gap-2">
             <input
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-              placeholder="Message..."
-              className="flex-1 bg-slate-800 text-white text-sm px-4 py-2.5 rounded-full border border-slate-600/50 focus:border-purple-500/50 focus:outline-none placeholder-slate-500 min-w-0"
+              placeholder="Write a message…"
+              className="cmms-classic-field !rounded-full !px-4 !py-2.5 min-w-0 flex-1"
             />
             <button
+              type="button"
               onClick={sendMessage}
               disabled={!newMessage.trim()}
-              className="w-10 h-10 flex items-center justify-center bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-slate-700 disabled:to-slate-700 text-white rounded-full transition-all active:scale-95 flex-shrink-0"
+              aria-label="Send"
+              className="cmms-classic-btn-primary flex h-10 w-10 flex-shrink-0 items-center justify-center !rounded-full"
             >
-              <Send className="w-4 h-4" />
+              <Send className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -1967,48 +1961,42 @@ const LiveBoardroom = ({ groupId, groupName, members, creatorId = null, context 
   // ── Pre-meeting: boardroomMode === 'live' ─────────────────────────
   if (!meetingStarted) {
     return (
-      <div className="w-full h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 pb-28 sm:pb-6 sm:p-6 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-0 -left-40 w-80 h-80 bg-blue-500 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-0 -right-40 w-80 h-80 bg-purple-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-        </div>
-        <div className="relative z-10 text-center max-w-md w-full px-2">
-          <button onClick={() => setBoardroomMode(null)} className="mb-4 text-slate-400 hover:text-white text-xs flex items-center gap-1 mx-auto transition">
+      <div className="bd-page w-full h-full flex flex-col items-center justify-center overflow-y-auto p-4 pb-28 sm:p-6">
+        <div className="cmms-classic-card w-full max-w-md space-y-5 p-5 text-center sm:p-7">
+          <button type="button" onClick={() => setBoardroomMode(null)} className="cmms-classic-btn-secondary mr-auto inline-flex !h-auto items-center gap-1 !px-3 !py-1.5 text-xs">
             ← Back
           </button>
-          <div className="w-16 h-16 sm:w-24 sm:h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 sm:mb-8 shadow-2xl">
-            {isHost ? <Video className="w-8 h-8 sm:w-12 sm:h-12 text-white" /> : <Eye className="w-8 h-8 sm:w-12 sm:h-12 text-white" />}
+          <div className="cmms-accent-navy space-y-2">
+            <span className="cmms-medallion mx-auto !h-14 !w-14">{isHost ? <Video className="h-6 w-6" aria-hidden="true" /> : <Eye className="h-6 w-6" aria-hidden="true" />}</span>
+            <h2 className="cmms-classic-heading text-2xl leading-tight sm:text-3xl">{groupName}</h2>
+            <p className="cmms-classic-eyebrow">Live Boardroom</p>
+            <div className="cmms-ornament" aria-hidden="true" />
           </div>
-          <h2 className="text-3xl sm:text-4xl font-bold text-white mb-2 sm:mb-3">{groupName}</h2>
-          <p className="text-lg sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-4 sm:mb-6">Live Boardroom</p>
-          <>
-            <p className="text-sm sm:text-base text-gray-300 mb-6 sm:mb-8">Ready to start?</p>
-            <div className="flex gap-2 sm:gap-3 justify-center mb-4 sm:mb-6 items-center flex-wrap">
-              <div className="flex -space-x-2 sm:-space-x-3">
-                {groupMembers?.slice(0, 3).map((m, i) => (
-                  <div key={i} title={m?.user_email} className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-2 border-slate-900 text-xs font-bold hover:scale-110 transition-transform cursor-pointer text-white">
-                    {m?.user_email?.charAt(0).toUpperCase()}
-                  </div>
-                ))}
-                {groupMembers?.length > 3 && (
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-slate-600 to-slate-700 rounded-full flex items-center justify-center border-2 border-slate-900 text-xs font-bold text-white">
-                    +{groupMembers.length - 3}
-                  </div>
-                )}
-              </div>
-              <span className="text-sm sm:text-base text-gray-400">{groupMembers?.length || 0} members</span>
+          <p className="cmms-classic-muted text-sm">Ready to start?</p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <div className="flex -space-x-2">
+              {groupMembers?.slice(0, 3).map((m, i) => (
+                <span key={i} title={m?.user_email ? `@${m.user_email.split('@')[0]}` : ''} className="trust-avatar !h-9 !w-9 !text-xs" style={{ '--ac': ['#b8892b', '#2f4a7a', '#1f7a5a'][i % 3] }}>
+                  {m?.user_email?.charAt(0).toUpperCase()}
+                </span>
+              ))}
+              {groupMembers?.length > 3 && (
+                <span className="trust-avatar !h-9 !w-9 !text-xs" style={{ '--ac': '#6b5d45' }}>+{groupMembers.length - 3}</span>
+              )}
             </div>
-            <p className="text-xs sm:text-sm text-gray-400 mb-6 sm:mb-8">
-              {hasActiveCall ? 'Incoming call detected. You can also start a new call.' : 'Any member can start a new meeting call.'}
-            </p>
-            <button
-              onClick={startMeeting}
-              className="px-8 sm:px-12 py-3 sm:py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-2xl font-bold text-base sm:text-lg transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center gap-2 sm:gap-3 mx-auto w-full sm:w-auto justify-center"
-            >
-              <Video className="w-5 h-5 sm:w-6 sm:h-6" />
-              Start Meeting
-            </button>
-          </>
+            <span className="cmms-classic-chip">{groupMembers?.length || 0} members</span>
+          </div>
+          <p className="cmms-classic-muted text-xs">
+            {hasActiveCall ? 'Incoming call detected. You can also start a new call.' : 'Any member can start a new meeting call.'}
+          </p>
+          <button
+            type="button"
+            onClick={startMeeting}
+            className="cmms-classic-btn-primary inline-flex w-full items-center justify-center gap-2 px-6 py-3.5 text-base"
+          >
+            <Video className="h-5 w-5" aria-hidden="true" />
+            Start Meeting
+          </button>
         </div>
       </div>
     );

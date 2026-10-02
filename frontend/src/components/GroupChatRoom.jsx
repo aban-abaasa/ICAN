@@ -77,35 +77,35 @@ const GroupChatRoom = ({ groupId, groupName }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-b from-slate-900 to-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+    <div className="bd-page cmms-classic-card flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className="bg-slate-900/80 border-b border-slate-700 p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <MessageCircle className="w-5 h-5 text-blue-400" />
-          <div>
-            <h3 className="font-bold text-white">{groupName}</h3>
-            <p className="text-xs text-gray-400">{messages.length} messages</p>
+      <div className="bd-bar cmms-accent-plum flex items-center justify-between gap-3 p-3 sm:p-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="cmms-medallion !h-9 !w-9"><MessageCircle className="h-4 w-4" aria-hidden="true" /></span>
+          <div className="min-w-0">
+            <h3 className="cmms-classic-heading truncate text-base leading-tight">{groupName}</h3>
+            <p className="cmms-classic-muted text-xs">{messages.length} {messages.length === 1 ? 'message' : 'messages'}</p>
           </div>
         </div>
-        <button className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
-          <MoreVertical className="w-5 h-5 text-gray-400" />
+        <button type="button" aria-label="More" className="cmms-info-btn">
+          <MoreVertical className="h-3.5 w-3.5" />
         </button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 space-y-3 overflow-y-auto p-3 sm:p-4">
         {loading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex h-full items-center justify-center">
             <div className="text-center">
-              <div className="w-8 h-8 bg-blue-500 rounded-full animate-spin mx-auto mb-2"></div>
-              <p className="text-gray-400">Loading messages...</p>
+              <div className="mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: '#b8892b', borderTopColor: 'transparent' }}></div>
+              <p className="cmms-classic-muted text-sm">Loading messages…</p>
             </div>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <MessageCircle className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400">No messages yet. Start the conversation!</p>
+          <div className="flex h-full items-center justify-center">
+            <div className="cmms-accent-plum text-center">
+              <span className="cmms-medallion mx-auto mb-3 !h-12 !w-12"><MessageCircle className="h-5 w-5" aria-hidden="true" /></span>
+              <p className="cmms-classic-muted text-sm">No messages yet. Start the conversation!</p>
             </div>
           </div>
         ) : (
@@ -113,19 +113,13 @@ const GroupChatRoom = ({ groupId, groupName }) => {
             const isOwn = msg.user_id === user?.id;
             return (
               <div key={msg.id || idx} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                    isOwn
-                      ? 'bg-blue-600 text-white rounded-br-none'
-                      : 'bg-slate-700 text-gray-100 rounded-bl-none'
-                  }`}
-                >
+                <div className={`bd-bubble max-w-[85%] px-3.5 py-2.5 sm:max-w-md ${isOwn ? 'bd-bubble-me' : ''}`}>
                   {!isOwn && (
-                    <p className="text-xs font-semibold text-gray-300 mb-1">{msg.user_email}</p>
+                    <p className="mb-1 text-xs font-bold" style={{ color: '#2f4a7a' }}>@{String(msg.user_email || 'member').split('@')[0]}</p>
                   )}
-                  <p className="text-sm break-words"><Linkify text={msg.message} /></p>
-                  <p className="text-xs opacity-70 mt-1 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
+                  <p className="break-words text-sm"><Linkify text={msg.message} /></p>
+                  <p className="mt-1 flex items-center gap-1 text-[0.68rem] opacity-70">
+                    <Clock className="h-3 w-3" />
                     {new Date(msg.created_at).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit'
@@ -140,38 +134,36 @@ const GroupChatRoom = ({ groupId, groupName }) => {
       </div>
 
       {/* Input */}
-      <div className="bg-slate-900/80 border-t border-slate-700 p-4 space-y-3">
-        <div className="flex gap-2">
+      <div className="bd-bar bd-bar-bottom space-y-2 p-3 sm:p-4">
+        <div className="flex items-end gap-2">
           <textarea
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Type a message... (Shift+Enter for new line)"
+            placeholder="Write a message… (Shift+Enter for a new line)"
             disabled={sending}
             rows="2"
-            className="flex-1 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none resize-none disabled:opacity-50"
+            className="cmms-classic-field flex-1 resize-none disabled:opacity-50"
           />
           <button
+            type="button"
             onClick={handleSendMessage}
             disabled={sending || !newMessage.trim()}
-            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-all flex items-center gap-2"
+            aria-label="Send"
+            className="cmms-classic-btn-primary flex h-11 w-11 flex-shrink-0 items-center justify-center !rounded-full"
           >
             {sending ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
             ) : (
-              <Send className="w-4 h-4" />
+              <Send className="h-4 w-4" />
             )}
           </button>
         </div>
 
         {/* Quick Actions */}
-        <div className="flex gap-2 justify-center">
-          <button className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-gray-400 hover:text-pink-400">
-            <Heart className="w-4 h-4" />
-          </button>
-          <button className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-gray-400 hover:text-blue-400">
-            <Share2 className="w-4 h-4" />
-          </button>
+        <div className="flex justify-center gap-2">
+          <button type="button" aria-label="Like" className="cmms-info-btn"><Heart className="h-3.5 w-3.5" /></button>
+          <button type="button" aria-label="Share" className="cmms-info-btn"><Share2 className="h-3.5 w-3.5" /></button>
         </div>
       </div>
     </div>
