@@ -5,77 +5,12 @@
  */
 
 import { supabase } from '../client';
-import { analyzeTransactionWithAI } from '../../../services/accountingAIService';
 
-// CMMS inventory spans spare parts, tools, consumables and equipment — not
-// just resale stock — so whether a purchase is a fixed asset, current-asset
-// stock, or a plain expense is decided by the AI accounting classifier
-// rather than assumed. "Inventory/Stock" accounts stay current-asset (COGS
-// bucket); any other Asset/Investment classification is a depreciable fixed
-// asset (Capital Investments bucket); everything else falls through as a
-// normal operating expense.
-const mapAccountingAnalysisToLedgerType = (analysis) => {
-  const a = analysis?.accountingAnalysis;
-  if (!a) return null;
-  const account = (a.account || '').toLowerCase();
-  const isStockAccount = account.includes('inventory') || account.includes('stock');
-  if (a.classification === 'Asset' && !isStockAccount) return 'asset';
-  if (a.classification === 'Investment' || (a.classification === 'Asset' && isStockAccount)) return 'cogs';
-  return null;
-};
-
-/**
- * Classify and record an ICAN ledger entry for a CMMS inventory purchase or
- * restock, so it flows into the shared Financial Summary report feed under
- * the right bucket (Capital Investments vs Stock Purchases vs plain expense).
- * Best-effort: never blocks or fails the inventory write it's called from.
- */
-const recordCmmsInventoryLedgerEntry = async (companyId, { itemName, category, amount, note }) => {
-  if (!amount || amount <= 0) return;
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: company } = await supabase
-      .from('cmms_company_profiles')
-      .select('pichin_business_profile_id')
-      .eq('id', companyId)
-      .maybeSingle();
-
-    const description = `${itemName || 'Inventory item'}${category ? ` (${category})` : ''} — CMMS inventory${note ? `: ${note}` : ''}`;
-    const analysis = await analyzeTransactionWithAI({
-      description,
-      amount,
-      type: 'expense',
-      accountingType: 'business',
-      productName: itemName
-    });
-    const accountingType = mapAccountingAnalysisToLedgerType(analysis);
-
-    const { error } = await supabase.from('ican_transactions').insert([{
-      user_id: user.id,
-      transaction_type: 'expense',
-      amount,
-      currency: 'UGX',
-      description,
-      status: 'completed',
-      business_profile_id: company?.pichin_business_profile_id || null,
-      metadata: {
-        category: 'cmms_inventory',
-        source_app: 'cmms',
-        record_category: 'business',
-        accounting_type: accountingType,
-        product_name: itemName,
-        cmms_company_id: companyId,
-        ai_classification: analysis?.accountingAnalysis?.classification || null,
-        ai_powered: Boolean(analysis?.accountingAnalysis?.aiPowered)
-      }
-    }]);
-    if (error) console.warn('⚠️ Could not record CMMS inventory ledger entry:', error.message);
-  } catch (err) {
-    console.warn('⚠️ CMMS inventory ledger entry failed:', err.message);
-  }
-};
+// MONEY FEED: purchases, paid restocks, depreciation and disposal proceeds are
+// written to ican_transactions BY THE DATABASE, in the same statement that writes
+// the stock ledger (see backend/CMMS_ASSETS_BRANCHES_LEDGER.sql, _cmms_feed_money).
+// The browser no longer records them, so every path (this screen, requisition
+// receipts, imports) feeds the transaction record and none can book it twice.
 
 // Best-effort write to the company-wide activity feed that powers the
 // home-screen "Business Activity" widget (see CMMS_ACTIVITY_DASHBOARD.sql).
@@ -209,6 +144,26 @@ const mapCmmsInventoryItem = (itemRow) => {
     minimum_stock_level: itemRow.reorder_level ?? itemRow.minimum_stock_level ?? 0,
     unit_cost: itemRow.unit_price ?? itemRow.unit_cost ?? 0
   };
+};
+
+// Asset / classification fields the client may send with an item. Only keys
+// that were actually provided are forwarded, so editing a consumable never
+// overwrites asset data and vice versa.
+const ITEM_DETAIL_KEYS = [
+  'item_kind', 'asset_tag', 'serial_number', 'manufacturer', 'model', 'manufacture_year',
+  'acquisition_date', 'acquisition_year', 'acquisition_cost', 'useful_life_years', 'salvage_value',
+  'depreciation_method', 'asset_condition', 'asset_status', 'warranty_expiry'
+];
+
+export const buildItemDetailsPayload = (itemData = {}) => {
+  const payload = {};
+  ITEM_DETAIL_KEYS.forEach((key) => {
+    const value = itemData[key];
+    if (value !== undefined && value !== null) payload[key] = value;   // '' clears the field (the RPC stores NULL)
+  });
+  // Consumables carry no asset fields.
+  if (payload.item_kind === 'consumable') return { item_kind: 'consumable' };
+  return payload;
 };
 
 // ============================================
@@ -1053,96 +1008,40 @@ export const getInventoryTransactions = async (companyId, limit = 50) => {
  */
 export const addInventoryItem = async (companyId, itemData) => {
   try {
-    console.log('ðŸ“ Adding inventory item via RPC function...');
-    console.log('ðŸ” Parameters:', { 
-      company_id: companyId,
-      department_id: itemData.department_id,
-      item_name: itemData.item_name,
-      item_code: itemData.item_code,
-      unit_price: parseFloat(itemData.unit_price ?? itemData.unit_cost),
-      quantity_in_stock: parseFloat(itemData.quantity_in_stock)
-    });
-    
-    // Use RPC function to bypass RLS
-    const { data, error } = await supabase.rpc('fn_create_cmms_inventory_item', {
-      p_company_id: companyId,
-      p_department_id: itemData.department_id || null,
-      p_item_name: itemData.item_name,
-      p_item_code: itemData.item_code || null,
-      p_category: itemData.category || 'Spare Parts',
-      p_supplier_name: itemData.supplier_name || '',
-      p_quantity_in_stock: parseFloat(itemData.quantity_in_stock) || 0,
-      p_reorder_level: parseFloat(itemData.reorder_level ?? itemData.minimum_stock_level) || 0,
-      p_unit_price: parseFloat(itemData.unit_price ?? itemData.unit_cost) || 0,
-      p_storage_location: itemData.storage_location || '',
-      p_bin_number: itemData.bin_number || '',
-      p_unit_of_measure: itemData.unit_of_measure || 'units',
-      p_description: itemData.description || '',
-      p_lead_time_days: parseInt(itemData.lead_time_days) || 0
-    });
-
-    if (error) {
-      console.error('âŒ RPC error:', error);
-      throw error;
-    }
-
-    if (!data || data.length === 0) {
-      console.error('âŒ Function returned no data');
-      throw new Error('No data returned from function');
-    }
-
-    const result = data[0];
-    console.log('ðŸ“¦ RPC Response:', result);
-
-    if (result.status === 'ERROR') {
-      const errorMsg = result.message || 'Unknown error';
-      console.error('âŒ Function returned error:', errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    // IMPORTANT: Map returned data to inventory item format with field mappings
     const unitPrice = parseFloat(itemData.unit_price ?? itemData.unit_cost) || 0;
-    const mappedItem = {
-      id: result.item_id,
-      cmms_company_id: companyId,
-      department_id: itemData.department_id,
-      item_code: result.item_code,
-      item_name: result.item_name,
-      category: itemData.category || 'Spare Parts',
-      quantity_in_stock: parseFloat(itemData.quantity_in_stock) || 0,
-      reorder_level: parseFloat(itemData.reorder_level ?? itemData.minimum_stock_level) || 0,
-      unit_price: unitPrice,
-      unit_cost: unitPrice,  // Ensure both are set for compatibility
-      minimum_stock_level: parseFloat(itemData.reorder_level ?? itemData.minimum_stock_level) || 0,
-      supplier_name: itemData.supplier_name || '',
-      storage_location: itemData.storage_location || '',
-      bin_number: itemData.bin_number || '',
-      unit_of_measure: itemData.unit_of_measure || 'units',
-      description: itemData.description || '',
-      lead_time_days: parseInt(itemData.lead_time_days) || 0,
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+    const reorderLevel = parseFloat(itemData.reorder_level ?? itemData.minimum_stock_level) || 0;
+    const kind = itemData.item_kind === 'asset' ? 'asset' : itemData.item_kind === 'consumable' ? 'consumable' : undefined;
 
-    console.log('âœ… Inventory item created via RPC:', {
-      item_code: result.item_code,
-      unit_price: mappedItem.unit_price,
-      is_active: mappedItem.is_active
+    // One call carries everything (kind, asset details, year acquired) so the
+    // ledger and the money record are written once, correctly, by the database.
+    const { data: row, error } = await supabase.rpc('fn_cmms_create_item', {
+      p_company_id: companyId,
+      p_payload: {
+        ...buildItemDetailsPayload({ ...itemData, item_kind: kind }),
+        department_id: itemData.department_id || null,
+        item_name: itemData.item_name,
+        item_code: itemData.item_code || null,
+        category: itemData.category || 'Spare Parts',
+        supplier_name: itemData.supplier_name || '',
+        quantity_in_stock: parseFloat(itemData.quantity_in_stock) || 0,
+        reorder_level: reorderLevel,
+        unit_price: unitPrice,
+        storage_location: itemData.storage_location || '',
+        bin_number: itemData.bin_number || '',
+        unit_of_measure: itemData.unit_of_measure || 'units',
+        description: itemData.description || '',
+        lead_time_days: parseInt(itemData.lead_time_days) || 0,
+        assigned_storeman_id: itemData.assigned_storeman_id || null
+      }
     });
+    if (error) throw error;
+    if (!row) throw new Error('No data returned from fn_cmms_create_item');
 
-    // Fire-and-forget: classify and record this purchase in the shared
-    // ledger so the Financial Summary report sees it. Never blocks item
-    // creation if classification or the ledger write fails.
-    recordCmmsInventoryLedgerEntry(companyId, {
-      itemName: mappedItem.item_name,
-      category: mappedItem.category,
-      amount: mappedItem.quantity_in_stock * unitPrice
-    });
+    const mappedItem = mapCmmsInventoryItem(row);
 
     logCmmsActivity(companyId, {
       activityType: 'inventory_item_added',
-      description: `Added "${mappedItem.item_name}" to inventory (${mappedItem.quantity_in_stock} ${mappedItem.unit_of_measure})`,
+      description: `Added "${mappedItem.item_name}" to ${mappedItem.item_kind === 'asset' ? 'the asset register' : 'inventory'} (${mappedItem.quantity_in_stock} ${mappedItem.unit_of_measure})`,
       icon: '📦',
       entityType: 'inventory_item',
       entityId: mappedItem.id
@@ -1150,7 +1049,7 @@ export const addInventoryItem = async (companyId, itemData) => {
 
     return { data: mappedItem, error: null };
   } catch (error) {
-    console.error('âŒ Error adding inventory item:', error);
+    console.error('❌ Error adding inventory item:', error);
     return { data: null, error };
   }
 };
@@ -1162,7 +1061,7 @@ export const addInventoryItem = async (companyId, itemData) => {
  * @param {Object} updates - Fields to update
  * @returns {Object} Updated item or error
  */
-export const updateInventoryItem = async (itemId, updates) => {
+const updateInventoryItemBase = async (itemId, updates) => {
   try {
     // Approach 1: RPC with SECURITY DEFINER (bypasses RLS)
     try {
@@ -1225,6 +1124,23 @@ export const updateInventoryItem = async (itemId, updates) => {
   }
 };
 
+export const updateInventoryItem = async (itemId, updates = {}) => {
+  const result = await updateInventoryItemBase(itemId, updates);
+  if (result.error) return result;
+
+  // Asset / classification fields live behind their own RPC (it also checks
+  // permission and keeps the stock ledger in step).
+  const details = buildItemDetailsPayload(updates);
+  if (Object.keys(details).length === 0) return result;
+
+  const { data: detailed, error: detailsError } = await supabase.rpc('fn_cmms_set_item_details', {
+    p_item_id: itemId,
+    p_details: details
+  });
+  if (detailsError) return { data: result.data, error: detailsError };
+  return { data: { ...result.data, ...mapCmmsInventoryItem(detailed) }, error: null };
+};
+
 /**
  * Delete (deactivate) inventory item
  * @param {string} itemId - Item UUID
@@ -1256,63 +1172,41 @@ export const deleteInventoryItem = async (itemId) => {
  * @param {string} reason - Reason for change
  * @returns {Object} Success or error
  */
-export const updateInventoryQuantity = async (itemId, newQuantity, reason = 'Quantity update') => {
+export const updateInventoryQuantity = async (itemId, newQuantity, reason = 'Quantity update', { isPurchase = true } = {}) => {
   try {
-    let cmmsUserId = null;
     const { data: { user } } = await supabase.auth.getUser();
     const { data: existingItem } = await supabase
       .from('cmms_inventory_items')
-      .select('cmms_company_id, quantity_in_stock, unit_price, item_name, category')
+      .select('cmms_company_id, quantity_in_stock, item_name')
       .eq('id', itemId)
       .maybeSingle();
-    if (user?.email) {
-      cmmsUserId = await resolveCmmsUserIdByEmail(existingItem?.cmms_company_id, user.email);
-    }
 
-    const { data, error } = await supabase
-      .from('cmms_inventory_items')
-      .update({
-        quantity_in_stock: parseFloat(newQuantity),
-        last_stock_check: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        ...(cmmsUserId && { last_updated_by: cmmsUserId })
-      })
-      .eq('id', itemId)
-      .select()
-      .single();
-
+    // An increase is a paid restock (money record + stock ledger); a decrease or
+    // isPurchase:false is a count correction (stock ledger only). The database
+    // decides and writes both, so nothing here can skip the transaction record.
+    const { data: row, error } = await supabase.rpc('fn_cmms_set_item_quantity', {
+      p_item_id: itemId,
+      p_new_quantity: parseFloat(newQuantity),
+      p_reason: reason,
+      p_is_purchase: isPurchase
+    });
     if (error) throw error;
 
-    // Quantity audit logging is handled by DB trigger on cmms_inventory_items.
-    void reason;
-
-    // A quantity increase is a restock purchase — classify and record it in
-    // the shared ledger so the report picks it up. Decreases (consumption)
-    // aren't new financial events since the stock was already capitalized.
-    const previousQuantity = parseFloat(existingItem?.quantity_in_stock) || 0;
-    const restockedQty = (parseFloat(newQuantity) || 0) - previousQuantity;
-    if (restockedQty > 0 && existingItem?.cmms_company_id) {
-      recordCmmsInventoryLedgerEntry(existingItem.cmms_company_id, {
-        itemName: existingItem.item_name,
-        category: existingItem.category,
-        amount: restockedQty * (parseFloat(existingItem.unit_price) || 0),
-        note: 'restock'
-      });
-    }
-
+    const restockedQty = (parseFloat(newQuantity) || 0) - (parseFloat(existingItem?.quantity_in_stock) || 0);
     if (existingItem?.cmms_company_id) {
+      const cmmsUserId = user?.email ? await resolveCmmsUserIdByEmail(existingItem.cmms_company_id, user.email) : null;
       logCmmsActivity(existingItem.cmms_company_id, {
         actorUserId: cmmsUserId,
         actorName: user?.user_metadata?.full_name || user?.email || 'Someone',
-        activityType: restockedQty > 0 ? 'inventory_restocked' : 'inventory_adjusted',
-        description: `${restockedQty > 0 ? 'Restocked' : 'Adjusted'} "${existingItem.item_name}" to ${newQuantity} units`,
+        activityType: restockedQty > 0 && isPurchase ? 'inventory_restocked' : 'inventory_adjusted',
+        description: `${restockedQty > 0 && isPurchase ? 'Restocked' : 'Adjusted'} "${existingItem.item_name}" to ${newQuantity} units`,
         icon: '🔄',
         entityType: 'inventory_item',
         entityId: itemId
       });
     }
 
-    return { data: mapCmmsInventoryItem(data), error: null };
+    return { data: mapCmmsInventoryItem(row), error: null };
   } catch (error) {
     console.error('Error updating quantity:', error);
     return { data: null, error };
@@ -2233,6 +2127,7 @@ export default {
   getCompanyWorkOrders,
   getCompanyInventory,
   getInventoryTransactions,
+  buildItemDetailsPayload,
   addInventoryItem,
   updateInventoryItem,
   updateInventoryQuantity,
