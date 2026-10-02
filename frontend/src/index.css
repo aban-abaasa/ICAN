@@ -1656,7 +1656,7 @@ html {
 .trade-page input:not(.tp-keep *), .trade-page select:not(.tp-keep *), .trade-page textarea:not(.tp-keep *) {
   background: var(--color-bg) !important; color: var(--color-text) !important; border: 1px solid rgba(196, 160, 82, 0.55) !important; border-radius: 10px !important;
 }
-.trade-page .trade-tab-content { background: transparent !important; border: 1px solid rgba(196, 160, 82, 0.4) !important; border-radius: 14px; padding: 1.25rem; }
+.trade-page .trade-tab-content { background: transparent !important; border: 0 !important; border-radius: 0; padding: 0; }
 
 /* ===================================================================
    Live Share Value — classic "share certificate" look.

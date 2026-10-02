@@ -7681,13 +7681,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       {activeTab === 'trade' && (
         <div className="pt-4 md:pt-6">
           <div className={`trade-page w-full ${activeTradeTab === 'chart' ? '' : 'max-w-6xl mx-auto'} flex flex-col`}>
-            {/* Classic page header */}
-            <div className="flex items-center justify-between gap-3 pb-4 mb-1" style={{ borderBottom: '1px solid rgba(196,160,82,0.45)' }}>
+            {/* Classic page header — slims to a single line on the chart so the chart gets the page */}
+            <div className={`flex items-center justify-between gap-3 ${activeTradeTab === 'chart' ? 'pb-1.5' : 'pb-4 mb-1'}`} style={{ borderBottom: '1px solid rgba(196,160,82,0.45)' }}>
               <div className="min-w-0">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-bold" style={{ color: '#c4a052' }}>
-                  Professional trading · real-time market data
-                </p>
-                <h2 className="text-2xl sm:text-3xl mt-1 break-words" style={{ color: 'var(--color-text)', fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}>
+                {activeTradeTab !== 'chart' && (
+                  <p className="text-[11px] uppercase tracking-[0.18em] font-bold" style={{ color: '#c4a052' }}>
+                    Professional trading · real-time market data
+                  </p>
+                )}
+                <h2 className={`${activeTradeTab === 'chart' ? 'text-base truncate' : 'text-2xl sm:text-3xl mt-1 break-words'}`} style={{ color: 'var(--color-text)', fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}>
                   IcanEra Trading Center
                 </h2>
               </div>
@@ -7710,7 +7712,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
             {/* Tab bar — underlined, scrolls sideways on any screen, stays pinned while the page scrolls */}
             <div
-              className="sticky top-0 z-20 -mx-1 px-1 mb-5 flex gap-1 overflow-x-auto"
+              className={`sticky top-0 z-20 -mx-1 px-1 ${activeTradeTab === 'chart' ? 'mb-0' : 'mb-5'} flex gap-1 overflow-x-auto`}
               style={{ background: 'var(--color-bg)', borderBottom: '1px solid rgba(196,160,82,0.35)' }}
               role="tablist"
             >
@@ -7730,7 +7732,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     role="tab"
                     aria-selected={on}
                     onClick={() => setActiveTradeTab(id)}
-                    className="inline-flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap transition"
+                    className={`inline-flex items-center gap-2 px-4 ${activeTradeTab === 'chart' ? 'py-2' : 'py-3'} text-sm whitespace-nowrap transition`}
                     style={{
                       background: on ? 'linear-gradient(180deg, transparent, rgba(196,160,82,0.16))' : 'transparent',
                       color: on ? 'var(--color-text)' : 'var(--color-textSecondary)',
@@ -7748,7 +7750,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             </div>
 
             {/* Tab Content — each tab is a full page */}
-            <div className="pb-10">
+            <div className={activeTradeTab === 'chart' ? 'pb-0' : 'pb-10'}>
               {/* Wallet Tab */}
               {activeTradeTab === 'wallet' && (() => {
                 const lastCandle = candleData && candleData.length > 0 ? candleData[candleData.length - 1] : null;
@@ -7804,9 +7806,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
               {/* 📊 CHART TAB - Just the chart */}
               {activeTradeTab === 'chart' && (
-                <div className="space-y-3">
+                <div className="space-y-0">
                   {chartOrderDraftOpen && (
-                    <div className="bg-slate-800 border border-amber-500/50 rounded-xl p-3 flex flex-wrap items-center gap-2">
+                    <div className="bg-slate-900 border-b border-amber-500/50 px-3 py-2 flex flex-wrap items-center gap-2">
                       <div className="flex gap-1.5">
                         <button
                           type="button"
@@ -7866,7 +7868,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   )}
 
                   {instantDraftOpen && (
-                    <div className="bg-slate-800 border border-sky-500/50 rounded-xl p-3 flex flex-wrap items-center gap-2">
+                    <div className="bg-slate-900 border-b border-sky-500/50 px-3 py-2 flex flex-wrap items-center gap-2">
                       <span className="text-xs font-semibold text-sky-400">⚡ Instant trade @ LIVE price</span>
                       <div className="flex gap-1.5">
                         <button
@@ -7918,7 +7920,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   )}
 
                   {manageOrderTarget && (
-                    <div className="bg-slate-800 border border-amber-500/50 rounded-xl p-3 flex flex-wrap items-center gap-2">
+                    <div className="bg-slate-900 border-b border-amber-500/50 px-3 py-2 flex flex-wrap items-center gap-2">
                       <span className="text-xs font-semibold text-amber-400">
                         📌 Booked {manageOrderTarget.order_type === 'buy' ? 'Buy' : 'Sell'}: {parseFloat(manageOrderTarget.ican_amount).toLocaleString()} ICAN @ UGX {parseFloat(manageOrderTarget.target_price_ugx).toLocaleString()}
                       </span>
@@ -7949,7 +7951,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     </div>
                   )}
 
-                  <div className="tp-keep h-[calc(100dvh-15rem)] min-h-[420px] bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
+                  <div className="tp-keep h-[calc(100dvh-11.5rem)] min-h-[420px] bg-slate-950 overflow-hidden">
                     {candleData && candleData.length > 0 ? (
                       <div className="h-full w-full">
                         <CandlestickChart
@@ -7995,14 +7997,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
               {/* Buy Tab */}
               {activeTradeTab === 'buy' && (
-                <div className="trade-tab-content bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                <div className="trade-tab-content">
                   <BuyIcan onSuccess={handleInstantBuySuccess} />
                 </div>
               )}
 
               {/* Sell Tab */}
               {activeTradeTab === 'sell' && (
-                <div className="trade-tab-content bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                <div className="trade-tab-content">
                   <SellIcan onSuccess={handleInstantSellSuccess} />
                 </div>
               )}
