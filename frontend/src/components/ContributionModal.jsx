@@ -24,6 +24,7 @@ import {
 import CountryService from '../services/countryService';
 import { supabase } from '../lib/supabase/client';
 import icanCoinService from '../services/icanCoinService';
+import { useIcanPrice } from '../hooks/useIcanPrice';
 
 const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
   const { user } = useAuth();
@@ -37,6 +38,10 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
   const [userCurrency, setUserCurrency] = useState('USD');
   const [currencySymbol, setCurrencySymbol] = useState('$');
   const [showBlockchainInfo, setShowBlockchainInfo] = useState(false);
+  // Live value of 1 IcanEra in the member's own currency.
+  const { price: liveIcanPrice } = useIcanPrice(userCurrency);
+  const liveRate = liveIcanPrice?.price_local != null ? Number(liveIcanPrice.price_local) : null;
+  const liveRateCurrency = liveIcanPrice?.currency_code || userCurrency;
 
   // Load user country and currency exactly like ICANWallet
   useEffect(() => {
@@ -195,7 +200,7 @@ const ContributionModal = ({ group, onClose, onContributionSuccess }) => {
                 IcanEra Coin
               </h3>
               <p className="text-sm text-amber-200/70">
-                <span className="font-semibold text-amber-300 text-base">1 IcanEra</span> = ~5,000 UGX
+                <span className="font-semibold text-amber-300 text-base">1 IcanEra</span> = {liveRate != null ? `${liveRate.toLocaleString(undefined, { maximumFractionDigits: liveRate >= 100 ? 0 : 2 })} ${liveRateCurrency}` : 'fetching live rate…'}
               </p>
               <p className="text-xs text-amber-200/50 mt-2">Your country: {userCountry || userCountryCode}</p>
             </div>
