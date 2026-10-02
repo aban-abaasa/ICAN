@@ -1949,3 +1949,56 @@ html {
 :root[data-theme="dark"] .bd-bubble:not(.bd-bubble-me), :root[data-theme="purple"] .bd-bubble:not(.bd-bubble-me), :root[data-theme="green"] .bd-bubble:not(.bd-bubble-me), :root[data-theme="ocean"] .bd-bubble:not(.bd-bubble-me), :root[data-theme="sienna"] .bd-bubble:not(.bd-bubble-me) { background: var(--color-bgSecondary); color: var(--color-text); border-color: var(--color-border); }
 .bd-chevron { flex: none; width: 0.6rem; height: 0.6rem; border-right: 2px solid var(--ac, #b8892b); border-top: 2px solid var(--ac, #b8892b); transform: rotate(45deg); transition: transform 0.2s ease; }
 button:hover > .bd-chevron { transform: translateX(3px) rotate(45deg); }
+
+/* ── Tithe Calculator: classic CMMS-payroll styling ─────────────────────────
+   Reuses the cmms-* surfaces; these only add the status tones and the printed
+   "ledger" figure strip (same look as the payroll run ledger) so the Tithe
+   page doesn't depend on the payroll panel being mounted. */
+.tithe-scope {
+  --tithe-ok: #047857;
+  --tithe-warn: #b45309;
+  --tithe-bad: #dc2626;
+  --tithe-info: #0369a1;
+  --tithe-ok-bg: rgba(16, 185, 129, 0.13);
+  --tithe-warn-bg: rgba(245, 158, 11, 0.14);
+  --tithe-bad-bg: rgba(239, 68, 68, 0.12);
+  --tithe-info-bg: rgba(14, 165, 233, 0.12);
+}
+:root[data-theme="dark"] .tithe-scope,
+:root[data-theme="purple"] .tithe-scope,
+:root[data-theme="green"] .tithe-scope,
+:root[data-theme="ocean"] .tithe-scope,
+:root[data-theme="sienna"] .tithe-scope {
+  --tithe-ok: #6ee7b7;
+  --tithe-warn: #fcd34d;
+  --tithe-bad: #fca5a5;
+  --tithe-info: #7dd3fc;
+  --tithe-ok-bg: rgba(16, 185, 129, 0.18);
+  --tithe-warn-bg: rgba(245, 158, 11, 0.18);
+  --tithe-bad-bg: rgba(239, 68, 68, 0.18);
+  --tithe-info-bg: rgba(14, 165, 233, 0.18);
+}
+.tithe-ok { color: var(--tithe-ok); }
+.tithe-warn { color: var(--tithe-warn); }
+.tithe-bad { color: var(--tithe-bad); }
+.tithe-info { color: var(--tithe-info); }
+.tithe-ledger { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid rgba(196, 160, 82, 0.5); border-bottom: 1px solid rgba(196, 160, 82, 0.5); position: relative; }
+.tithe-ledger::before, .tithe-ledger::after { content: ''; position: absolute; left: 0; right: 0; height: 1px; background: rgba(196, 160, 82, 0.25); }
+.tithe-ledger::before { top: 3px; } .tithe-ledger::after { bottom: 3px; }
+.tithe-figure { padding: .85rem .5rem .8rem; text-align: center; border-right: 1px solid rgba(196, 160, 82, 0.2); animation: cmms-rise .5s ease both; }
+.tithe-figure:nth-child(2n) { border-right: 0; }
+.tithe-figure-label { font-size: .64rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--color-textSecondary, #475569); }
+.tithe-figure-value { margin-top: .2rem; font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif; font-size: 1.15rem; line-height: 1.25; font-weight: 700; word-break: break-word; font-variant-numeric: tabular-nums; }
+.tithe-figure-sub { font-size: .68rem; color: var(--color-textSecondary, #475569); }
+.tithe-total { font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif; font-size: 1.9rem; line-height: 1.15; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tithe-row { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; padding: .45rem 0; border-bottom: 1px solid rgba(196, 160, 82, 0.2); font-size: .875rem; }
+.tithe-row:last-child { border-bottom: 0; }
+.tithe-row-total { font-weight: 700; border-top: 1px solid rgba(196, 160, 82, 0.5); }
+.tithe-notice { border-radius: 10px; padding: .6rem .9rem; font-size: .85rem; border: 1px solid; }
+.tithe-notice-ok { border-color: var(--tithe-ok); background: var(--tithe-ok-bg); color: var(--tithe-ok); }
+.tithe-notice-bad { border-color: var(--tithe-bad); background: var(--tithe-bad-bg); color: var(--tithe-bad); }
+.tithe-notice-info { border-color: var(--tithe-info); background: var(--tithe-info-bg); color: var(--tithe-info); }
+.tithe-notice-warn { border-color: var(--tithe-warn); background: var(--tithe-warn-bg); color: var(--tithe-warn); }
+.tithe-meter { height: 6px; border-radius: 999px; background: rgba(196, 160, 82, 0.2); overflow: hidden; }
+.tithe-meter > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #b8892b, #e6c980); transition: width .5s ease; }
+.tithe-scope input[type="range"] { accent-color: #b8892b; }

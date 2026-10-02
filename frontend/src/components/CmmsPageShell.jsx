@@ -5,7 +5,7 @@ import { ArrowLeft, Info, Maximize2 } from 'lucide-react';
 // a full-screen page, a slim header (medallion, title, live chips, (i) for the
 // long explanation) and optional pill tabs. Mirrors CMMSPayrollPanel's header.
 // tabs: [{ id, label, accent? }]; tab changes are the caller's job via onTab.
-export default function CmmsPageShell({ title, subtitle, icon, chips = [], info, actions, tabs, tab, onTab, fullPageOnTab = false, compactTabs = false, children }) {
+export default function CmmsPageShell({ title, subtitle, icon, chips = [], info, actions, tabs, tab, onTab, fullPageOnTab = false, compactTabs = false, hideFullPage = false, children }) {
   const [fullPage, setFullPage] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
 
@@ -36,7 +36,7 @@ export default function CmmsPageShell({ title, subtitle, icon, chips = [], info,
           {actions}
           {fullPage
             ? <button type="button" onClick={() => setFullPage(false)} className="cmms-classic-btn-secondary inline-flex !h-auto !min-h-0 flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs"><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back</button>
-            : <button type="button" onClick={() => setFullPage(true)} className="cmms-info-btn" title="Open this tab as a full page" aria-label="Open full page"><Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /></button>}
+            : hideFullPage ? null : <button type="button" onClick={() => setFullPage(true)} className="cmms-info-btn" title="Open this tab as a full page" aria-label="Open full page"><Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /></button>}
         </div>
         {shown.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
