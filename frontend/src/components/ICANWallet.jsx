@@ -70,6 +70,7 @@ import PayMoneyModal from './PayMoneyModal';
 import IcanPaymentReceiptModal from './IcanPaymentReceiptModal';
 import PINRecoveryModal from './PINRecoveryModal';
 import WalletAccessModal from './WalletAccessModal';
+import BusinessWalletAccessModal from './BusinessWalletAccessModal';
 import { usePinPrompt } from './PinPromptDialog';
 
 // Big balances (14,378,412 UGX) overflow the balance card, so the headline shows
@@ -2638,6 +2639,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     setEditingBusinessProfile(null);
     await loadBusinessAccountProfiles();
     onRefreshProfiles?.();
+  };
+
+  // Changing the business form's email invalidates any code/link sent for the old one.
+  const handleBusinessEmailChange = (value) => {
+    setAccountEditForm((prev) => ({ ...prev, email: value }));
+    if (businessOtp.sent || businessOtp.verified) {
+      setBusinessOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+    }
+    if (businessPinLink.sentTo || businessPinLink.error) {
+      setBusinessPinLink({ sentTo: null, loading: false, error: null });
+    }
   };
 
   // 🔗 Business wallet PIN via the emailed PIN reset link — the same email and
@@ -5539,6 +5551,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                             {Number(profile.ican_wallet.ican_balance || 0).toLocaleString()} IcanEra
                           </span>
                         </p>
+                        <button
+                          onClick={() => setEditingBusinessProfile(profile)}
+                          className="w-full mt-2 px-3 py-2 bg-gradient-to-r from-cyan-500/40 to-blue-500/40 hover:from-cyan-500/60 hover:to-blue-500/60 text-cyan-300 hover:text-cyan-200 rounded text-xs font-semibold transition-all border border-cyan-500/50 hover:border-cyan-500/80"
+                        >
+                          🔑 Wallet PIN &amp; access
+                        </button>
                       </div>
                     ) : profile.user_accounts && profile.user_accounts.length > 0 ? (
                       <div className="bg-slate-700/50 rounded-lg p-3 border border-cyan-500/20">
@@ -5712,228 +5730,38 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         </div>
       )}
 
-      {/* Edit Business Account Modal */}
+      {/* Business Wallet Access — enter the business PIN, or get the setup link */}
       {editingBusinessProfile && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[200] p-4 pt-20 sm:pt-4">
-          <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl border border-cyan-500/50 w-full max-w-md p-6 shadow-2xl">
-            <h2 className="text-2xl font-bold text-white mb-1">
-              {editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0 ? 'Update Wallet Account' : 'Create Wallet Account'}
-            </h2>
-            <p className="text-gray-400 text-sm mb-4">{editingBusinessProfile.business_name}</p>
-            
-            <div className="space-y-4">
-              {/* Account Holder Name */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Account Holder Name</label>
-                <input
-                  type="text"
-                  value={accountEditForm.accountHolderName}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, accountHolderName: e.target.value })}
-                  placeholder="Enter account holder name"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
-                />
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Email Address</label>
-                <input
-                  type="email"
-                  value={accountEditForm.email}
-                  disabled={businessOtp.verified}
-                  onChange={(e) => {
-                    setAccountEditForm({ ...accountEditForm, email: e.target.value });
-                    if (businessOtp.sent || businessOtp.verified) {
-                      setBusinessOtp({ sent: false, verified: false, code: '', loading: false, error: null });
-                    }
-                    if (businessPinLink.sentTo || businessPinLink.error) {
-                      setBusinessPinLink({ sentTo: null, loading: false, error: null });
-                    }
-                  }}
-                  placeholder="Enter email address"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-60"
-                />
-              </div>
-
-              {/* Phone Number */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Phone Number</label>
-                <input
-                  type="tel"
-                  value={accountEditForm.phoneNumber}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, phoneNumber: e.target.value })}
-                  placeholder="Enter phone number"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
-                />
-              </div>
-
-              {/* Preferred Currency */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Preferred Currency</label>
-                <input
-                  type="text"
-                  value={localCurrencyLabel}
-                  readOnly
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/60 border border-cyan-500/30 text-cyan-200 focus:outline-none"
-                />
-              </div>
-
-              {/* Email verification — only required the first time a wallet
-                  (and its PIN) is created for this business; not shown when
-                  just editing an existing business wallet's details. */}
-              {(!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0) && (
-                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
-                  <h3 className="text-purple-300 font-semibold mb-2 flex items-center gap-2 text-sm">
-                    📧 Verify Your Email {businessOtp.verified && <span className="text-green-400">✓ Verified</span>}
-                  </h3>
-                  {!businessOtp.verified && (
-                    <>
-                      <p className="text-gray-400 text-xs mb-3">
-                        We'll email a 6-digit code to confirm this address before you can set a PIN.
-                      </p>
-                      {businessOtp.error && <p className="text-red-400 text-xs mb-2">{businessOtp.error}</p>}
-                      {businessPinLink.error && <p className="text-red-400 text-xs mb-2">{businessPinLink.error}</p>}
-                      {businessPinLink.sentTo ? (
-                        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-xs text-green-300">
-                          <p className="font-semibold mb-1">📧 PIN setup link sent</p>
-                          <p className="text-gray-300">
-                            Open the link we emailed to <span className="text-white">{businessPinLink.sentTo}</span> to
-                            set the PIN for {editingBusinessProfile.business_name}. Only the business's highest-ownership
-                            shareholder can set it.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={handleContinueAfterBusinessPinLink}
-                            className="w-full mt-3 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-semibold transition-all"
-                          >
-                            ✅ I've set the PIN — continue
-                          </button>
-                          <div className="flex gap-3 mt-2">
-                            <button
-                              type="button"
-                              disabled={businessPinLink.loading}
-                              onClick={() => handleSendBusinessPinLink(editingBusinessProfile)}
-                              className="text-xs text-purple-300 hover:text-purple-200"
-                            >
-                              {businessPinLink.loading ? 'Sending...' : 'Resend link'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingBusinessProfile(null)}
-                              className="text-xs text-gray-300 hover:text-white"
-                            >
-                              Close
-                            </button>
-                          </div>
-                        </div>
-                      ) : !businessOtp.sent ? (
-                        <button
-                          type="button"
-                          disabled={businessOtp.loading || !accountEditForm.email}
-                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp, () => handleSendBusinessPinLink(editingBusinessProfile))}
-                          className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-all"
-                        >
-                          {businessOtp.loading ? 'Sending...' : 'Send Verification Code'}
-                        </button>
-                      ) : (
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={businessOtp.code}
-                            onChange={(e) => setBusinessOtp(prev => ({ ...prev, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
-                            placeholder="6-digit code"
-                            className="flex-1 px-4 py-2 bg-slate-700/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none tracking-widest text-center"
-                          />
-                          <button
-                            type="button"
-                            disabled={businessOtp.loading}
-                            onClick={() => verifyAccountEmailOtp(businessOtp.code, 'business', setBusinessOtp)}
-                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-all"
-                          >
-                            {businessOtp.loading ? 'Checking...' : 'Verify'}
-                          </button>
-                        </div>
-                      )}
-                      {businessOtp.sent && (
-                        <button
-                          type="button"
-                          disabled={businessOtp.loading}
-                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp, () => handleSendBusinessPinLink(editingBusinessProfile))}
-                          className="mt-2 text-xs text-purple-300 hover:text-purple-200"
-                        >
-                          Resend code
-                        </button>
-                      )}
-                      {!businessPinLink.sentTo && (
-                        <button
-                          type="button"
-                          disabled={businessPinLink.loading || businessOtp.loading}
-                          onClick={() => handleSendBusinessPinLink(editingBusinessProfile)}
-                          className="mt-3 w-full px-4 py-2 bg-slate-700/60 hover:bg-slate-700 border border-purple-500/30 disabled:opacity-50 text-purple-200 rounded-lg text-xs font-medium transition-all"
-                        >
-                          {businessPinLink.loading ? 'Sending link...' : '🔗 Email me a PIN setup link instead'}
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* PIN */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Create PIN (4-6 digits)</label>
-                <input
-                  type="password"
-                  value={accountEditForm.newPin}
-                  disabled={(!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0) && !businessOtp.verified}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, newPin: e.target.value })}
-                  placeholder="Enter 4-6 digit PIN"
-                  maxLength="6"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-60"
-                />
-              </div>
-
-              {/* Confirm PIN */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Confirm PIN</label>
-                <input
-                  type="password"
-                  value={accountEditForm.confirmNewPin}
-                  disabled={(!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0) && !businessOtp.verified}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, confirmNewPin: e.target.value })}
-                  placeholder="Confirm your PIN"
-                  maxLength="6"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-60"
-                />
-              </div>
-            </div>
-
-            {/* Buttons */}
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setEditingBusinessProfile(null)}
-                disabled={accountCreationLoading}
-                className="flex-1 px-4 py-2.5 rounded-lg border border-gray-500/50 text-gray-400 hover:text-gray-300 hover:border-gray-500 transition-all disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0) {
-                    handleUpdateBusinessWallet(editingBusinessProfile);
-                  } else {
-                    handleCreateBusinessWallet(editingBusinessProfile);
-                  }
-                }}
-                disabled={accountCreationLoading || !accountEditForm.accountHolderName || !accountEditForm.email || !accountEditForm.phoneNumber || (!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0 ? (!accountEditForm.newPin || !accountEditForm.confirmNewPin || !businessOtp.verified) : false)}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {accountCreationLoading ? 'Saving...' : (editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0 ? 'Update Account' : 'Create Account')}
-              </button>
-            </div>
-          </div>
-        </div>
+        <BusinessWalletAccessModal
+          profile={editingBusinessProfile}
+          userEmail={userEmail}
+          localCurrencyLabel={localCurrencyLabel}
+          form={accountEditForm}
+          setForm={setAccountEditForm}
+          onEmailChange={handleBusinessEmailChange}
+          otp={businessOtp}
+          setOtp={setBusinessOtp}
+          pinLink={businessPinLink}
+          creating={accountCreationLoading}
+          onClose={() => setEditingBusinessProfile(null)}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0) {
+              handleUpdateBusinessWallet(editingBusinessProfile);
+            } else {
+              handleCreateBusinessWallet(editingBusinessProfile);
+            }
+          }}
+          onSendCode={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp, () => handleSendBusinessPinLink(editingBusinessProfile))}
+          onVerifyCode={() => verifyAccountEmailOtp(businessOtp.code, 'business', setBusinessOtp)}
+          onSendLink={() => handleSendBusinessPinLink(editingBusinessProfile)}
+          onUnlocked={handleContinueAfterBusinessPinLink}
+          onForgotPin={() => {
+            setEditingBusinessProfile(null);
+            setPinRecoveryAccountType('business');
+            setShowPINRecovery(true);
+          }}
+        />
       )}
 
       {/* Settings Tab - Compact Collapsible */}
