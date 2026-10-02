@@ -41,7 +41,8 @@ AS $$
     COALESCE(NULLIF(pr.full_name, ''), split_part(u.email, '@', 1), 'Investor'),
     a.investment_type, a.shares_amount, a.share_price, a.total_investment,
     a.escrow_id, a.approval_deadline, a.created_at, a.sealed_at,
-    bd.mou_content,
+    (SELECT d.mou_content FROM public.business_documents d
+      WHERE d.business_profile_id = a.business_profile_id LIMIT 1),
     (SELECT count(*) FROM public.investment_signatures s
       WHERE s.agreement_id = a.id AND s.signature_status = 'signed'),
     (SELECT count(*) FROM public.business_co_owners c
@@ -52,7 +53,6 @@ AS $$
   LEFT JOIN public.pitches p ON p.id = a.pitch_id
   LEFT JOIN public.profiles pr ON pr.id = a.investor_id
   LEFT JOIN auth.users u ON u.id = a.investor_id
-  LEFT JOIN public.business_documents bd ON bd.business_profile_id = a.business_profile_id
   WHERE auth.uid() IS NOT NULL
     AND (
       bp.user_id = auth.uid()
@@ -60,6 +60,7 @@ AS $$
         SELECT 1 FROM public.business_co_owners c
          WHERE c.business_profile_id = a.business_profile_id
            AND c.user_id = auth.uid() AND c.ownership_share > 0
+           AND (c.status IS NULL OR c.status = 'active')
       )
     )
   ORDER BY a.created_at DESC;

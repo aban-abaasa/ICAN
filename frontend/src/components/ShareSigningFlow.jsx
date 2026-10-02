@@ -460,11 +460,12 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
       // Only real shareholders count: active (or unset) status AND actual equity (> 0%)
       const { data: coOwnersRaw, error: coOwnersError } = await supabase
         .from('business_co_owners')
-        .select('id, status, ownership_share')
+        .select('id, status, ownership_share, user_id')
         .eq('business_profile_id', businessProfileId)
         .gt('ownership_share', 0);
 
-      const coOwners = (coOwnersRaw || []).filter(o => !o.status || o.status === 'active');
+      // Only REAL registered members (with an account) can sign, so only they count.
+      const coOwners = (coOwnersRaw || []).filter(o => (!o.status || o.status === 'active') && o.user_id);
 
       if (coOwnersError) {
         console.warn('ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Error fetching co-owners:', coOwnersError?.message);
@@ -1773,11 +1774,12 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
         signature_pin_hash: walletPin.substring(0, 1) + '****' + walletPin.substring(walletPin.length - 1),
         signature_timestamp: new Date().toISOString(),
         device_id: 'web_platform',
-        device_location: 'in_app',
+        // Where the buyer signed (device time zone), printed on the agreement
+        device_location: (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'in_app'; } catch { return 'in_app'; } })(),
         is_business_owner: false,
         signature_status: 'signed'
       };
-      
+
       const { data: sigData, error: sigError } = await supabase
         .from('investment_signatures')
         .insert([investorSig])

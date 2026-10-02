@@ -1,547 +1,380 @@
-import React, { useEffect, useState } from 'react';
-import jsPDF from 'jspdf';
-import { Clock, FileText, Download } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { downloadInvestmentAgreementPdf } from '../services/investmentAgreementPdf';
+import { Clock, FileText, Download, CheckCircle, XCircle, ChevronDown, ChevronUp, Loader } from 'lucide-react';
+import { getSupabase } from '../services/pitchingService';
 
-const ShareholderPendingSignatures = ({ onApprovalComplete }) => {
-  const [pendingApprovals, setPendingApprovals] = useState([]);
-  const [sealedAgreements, setSealedAgreements] = useState([]);
+const money = (currency, value) => `${currency || ''} ${Number(value || 0).toLocaleString()}`.trim();
+
+const timeLeft = (deadline) => {
+  if (!deadline) return null;
+  const ms = new Date(deadline).getTime() - Date.now();
+  if (ms <= 0) return 'Deadline passed';
+  const d = Math.floor(ms / 86400000);
+  const h = Math.floor((ms % 86400000) / 3600000);
+  return d > 0 ? `${d}d ${h}h left` : `${h}h left`;
+};
+
+// Progress is always measured against REAL registered members (people with an
+// account who can actually approve), never expected/unregistered owners.
+const ProgressBar = ({ signed, total, percent, sealed }) => (
+  <div className="bg-slate-900/60 border border-slate-700 rounded-lg p-3">
+    <div className="flex justify-between text-sm text-slate-300 mb-2">
+      <span>{signed} of {total} registered {total === 1 ? 'member' : 'members'} approved</span>
+      <span className="font-bold text-white">{Math.round(sealed ? 100 : percent)}%</span>
+    </div>
+    <div className="relative w-full h-2.5 bg-slate-700 rounded-full overflow-hidden">
+      <div
+        className={`h-full transition-all ${sealed ? 'bg-green-500' : 'bg-amber-500'}`}
+        style={{ width: `${Math.min(100, sealed ? 100 : percent)}%` }}
+      />
+      <div className="absolute top-0 bottom-0 w-px bg-white/60" style={{ left: '60%' }} title="60% needed" />
+    </div>
+    <p className="text-[11px] text-slate-500 mt-1.5">60% of registered members must approve to release the funds.</p>
+  </div>
+);
+
+const ShareholderPendingSignatures = ({ onApprovalComplete, focusId = null }) => {
+  const [requests, setRequests] = useState([]);
   const [activeTab, setActiveTab] = useState('pending');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const [approvingId, setApprovingId] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [expanded, setExpanded] = useState({});
+  const [confirmDecline, setConfirmDecline] = useState(null);
+  const [banner, setBanner] = useState(null);
+  const focusRef = useRef(null);
+  const didFocus = useRef(false);
+
+  const pending = requests.filter((r) => !r.decided);
+  const sealed = requests.filter((r) => r.my_decision === 'approved' && r.agreement_status === 'sealed');
+  const history = requests.filter((r) => r.decided && !(r.my_decision === 'approved' && r.agreement_status === 'sealed'));
 
   useEffect(() => {
-    loadPendingApprovals(true);
-    loadSealedAgreements();
-    const interval = setInterval(() => {
-      loadPendingApprovals(false);
-      loadSealedAgreements();
-    }, 5000); // Refresh every 5 seconds
+    load(true);
+    const interval = setInterval(() => load(false), 8000);
     return () => clearInterval(interval);
   }, []);
 
-  // Shared 60% shareholder-approval math, used both right after an approval
-  // and when scanning past approvals for already-sealed agreements.
-  const getApprovalStats = async (supabase, businessProfileId) => {
-    const { data: approvedApprovals } = await supabase
-      .from('shareholder_notifications')
-      .select('id', { count: 'exact' })
-      .eq('business_profile_id', businessProfileId)
-      .eq('notification_type', 'investment_signed')
-      .not('read_at', 'is', null);
+  // Opened straight from a notification: scroll to that request and expand it.
+  useEffect(() => {
+    if (!focusId || didFocus.current || requests.length === 0) return;
+    const target = requests.find((r) => r.notification_id === focusId);
+    if (!target) return;
+    didFocus.current = true;
+    setActiveTab(target.decided ? (target.agreement_status === 'sealed' ? 'sealed' : 'history') : 'pending');
+    setExpanded((prev) => ({ ...prev, [focusId]: true }));
+    setTimeout(() => focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+  }, [focusId, requests]);
 
-    const { data: totalMembers } = await supabase
-      .from('business_co_owners')
-      .select('id', { count: 'exact' })
-      .eq('business_profile_id', businessProfileId)
-      .in('status', ['active', null])
-      .gt('ownership_share', 0);
-
-    const totalCount = totalMembers?.length || 1;
-    const approvedCount = approvedApprovals?.length || 0;
-    const percent = (approvedCount / totalCount) * 100;
-    return { approvedCount, totalCount, percent };
-  };
-
-  // Scan this shareholder's own already-approved notifications for
-  // investments that have crossed the 60% threshold, so the "Sealed" tab
-  // stays populated across reloads/sessions -- not just right after the
-  // approval action that pushed a given investment over the line.
-  const loadSealedAgreements = async () => {
+  const load = async (initial = false) => {
     try {
-      const { getSupabase } = await import('../services/pitchingService');
+      if (initial) setLoading(true);
       const supabase = getSupabase();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: approvedByMe, error: fetchError } = await supabase
-        .from('shareholder_notifications')
-        .select('*')
-        .eq('notification_type', 'investment_signed')
-        .not('read_at', 'is', null)
-        .or(`shareholder_id.eq.${user.id},shareholder_email.eq.${user.email}`)
-        .order('created_at', { ascending: false });
-
-      if (fetchError || !approvedByMe) return;
-
-      // Collapse the (possibly several) notification rows belonging to the
-      // same investment event down to one entry per event.
-      const groups = new Map();
-      for (const n of approvedByMe) {
-        const key = `${n.business_profile_id}|${n.investor_email}|${n.investment_amount}|${n.investment_shares}`;
-        if (!groups.has(key)) groups.set(key, n);
-      }
-
-      const sealed = [];
-      for (const notification of groups.values()) {
-        const stats = await getApprovalStats(supabase, notification.business_profile_id);
-        if (stats.percent >= 60) {
-          sealed.push({ ...notification, ...stats });
-        }
-      }
-
-      setSealedAgreements(sealed);
-    } catch (err) {
-      console.error('Error loading sealed agreements:', err);
-    }
-  };
-
-  const downloadMou = async (agreement) => {
-    try {
-      const { getSupabase } = await import('../services/pitchingService');
-      const supabase = getSupabase();
-
-      const { data: business } = await supabase
-        .from('business_profiles')
-        .select('business_name')
-        .eq('id', agreement.business_profile_id)
-        .maybeSingle();
-
-      const { data: docs } = await supabase
-        .from('business_documents')
-        .select('mou_content')
-        .eq('business_profile_id', agreement.business_profile_id)
-        .maybeSingle();
-
-      const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 18;
-      const contentWidth = pageWidth - margin * 2;
-      let y = 20;
-
-      const ensureSpace = (needed) => {
-        if (y + needed > pageHeight - margin) {
-          pdf.addPage();
-          y = 20;
-        }
-      };
-
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(18);
-      pdf.text('Investment Agreement (MOU)', pageWidth / 2, y, { align: 'center' });
-      y += 8;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(11);
-      pdf.setTextColor(90);
-      pdf.text(business?.business_name || 'Business', pageWidth / 2, y, { align: 'center' });
-      y += 10;
-      pdf.setDrawColor(200);
-      pdf.line(margin, y, pageWidth - margin, y);
-      y += 9;
-      pdf.setTextColor(30);
-
-      const addField = (label, value) => {
-        ensureSpace(7);
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(10);
-        pdf.text(`${label}:`, margin, y);
-        pdf.setFont('helvetica', 'normal');
-        const valueLines = pdf.splitTextToSize(String(value ?? 'N/A'), contentWidth - 50);
-        pdf.text(valueLines, margin + 50, y);
-        y += 7 * valueLines.length;
-      };
-
-      addField('Investor', agreement.investor_name || agreement.investor_email);
-      addField('Investment Amount', `${agreement.investment_currency} ${Number(agreement.investment_amount || 0).toLocaleString()}`);
-      addField('Equity Shares', agreement.investment_shares || 'N/A');
-      addField('Shareholder Approval', `${agreement.approvedCount}/${agreement.totalCount} shareholders - ${agreement.percent.toFixed(1)}% (60% required)`);
-      addField('Sealed On', new Date().toLocaleString());
-      y += 3;
-
-      ensureSpace(14);
-      pdf.setDrawColor(200);
-      pdf.line(margin, y, pageWidth - margin, y);
-      y += 9;
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(13);
-      pdf.text('Memorandum of Understanding', margin, y);
-      y += 8;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      const mouLines = pdf.splitTextToSize(String(docs?.mou_content || agreement.notification_message || 'No MOU text available.'), contentWidth);
-      mouLines.forEach((line) => {
-        ensureSpace(5.5);
-        pdf.text(line, margin, y);
-        y += 5.5;
-      });
-
-      const safeName = (business?.business_name || 'agreement').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'agreement';
-      pdf.save(`ican-mou-${safeName}.pdf`);
-    } catch (err) {
-      console.error('Error downloading MOU:', err);
-      alert('❌ Error downloading MOU: ' + (err?.message || 'Unknown error'));
-    }
-  };
-
-  const loadPendingApprovals = async (isInitialLoad = false) => {
-    try {
-      if (isInitialLoad) setLoading(true);
-      const { getSupabase } = await import('../services/pitchingService');
-      const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
-      
       if (!user) {
-        setError('Not authenticated');
+        setError('Please sign in to see your approvals.');
         return;
       }
-
       setCurrentUser(user);
-
-      console.log(`🔍 Looking for pending approvals for: ${user.email}`);
-
-      // Fetch pending shareholder approval notifications
-      // Try first by shareholder_id, then fallback to shareholder_email
-      let approvals;
-      let fetchError;
-
-      // First attempt: Query by shareholder_id
-      // Scoped to investment approvals only (notification_type: 'investment_signed') so
-      // unrelated member-roster-edit approval requests never show up in this list.
-      const { data: byId, error: errorById } = await supabase
-        .from('shareholder_notifications')
-        .select('*')
-        .eq('shareholder_id', user.id)
-        .eq('notification_type', 'investment_signed')
-        .is('read_at', null)
-        .order('created_at', { ascending: false });
-
-      if (!errorById && byId && byId.length > 0) {
-        console.log(`   ✅ Found ${byId.length} pending approvals by shareholder_id`);
-        approvals = byId;
-        fetchError = null;
-      } else {
-        // Fallback: Query by shareholder_email (in case shareholder_id is NULL)
-        console.log(`   ℹ️ No results by shareholder_id, trying by shareholder_email...`);
-        const { data: byEmail, error: errorByEmail } = await supabase
-          .from('shareholder_notifications')
-          .select('*')
-          .eq('shareholder_email', user.email)
-          .eq('notification_type', 'investment_signed')
-          .is('read_at', null)
-          .is('shareholder_id', null)  // Only fetch if shareholder_id is NULL
-          .order('created_at', { ascending: false });
-
-        approvals = byEmail;
-        fetchError = errorByEmail;
-        
-        if (!fetchError && byEmail && byEmail.length > 0) {
-          console.log(`   ✅ Found ${byEmail.length} pending approvals by shareholder_email`);
-        }
-      }
-
-      if (fetchError) throw fetchError;
-
-      console.log(`📬 Found ${approvals?.length || 0} pending approvals for shareholder ${user.email}`);
-      setPendingApprovals(approvals || []);
+      const { data, error: rpcError } = await supabase.rpc('fn_get_my_approval_requests');
+      if (rpcError) throw rpcError;
+      setRequests(data || []);
+      setError(null);
     } catch (err) {
-      console.error('Error loading pending approvals:', err);
-      setError(err?.message || 'Failed to load pending approvals');
+      console.error('Error loading approvals:', err);
+      setError(err?.message || 'Could not load your approvals');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleApprove = async (notificationId, notification) => {
+  const decide = async (request, approve) => {
     try {
-      setApprovingId(notificationId);
-      const { getSupabase } = await import('../services/pitchingService');
+      setBusyId(request.notification_id);
+      setBanner(null);
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error: rpcError } = await supabase.rpc('fn_shareholder_decide_investment', {
+        p_notification_id: request.notification_id,
+        p_approve: approve,
+        p_reason: approve ? null : 'Declined by shareholder',
+        // Where the signature was made (device time zone, no permission needed)
+        p_location: (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; } })(),
+      });
+      if (rpcError) throw rpcError;
+      const r = Array.isArray(data) ? data[0] : data;
 
-      console.log(`✅ Shareholder ${user.email} approved: ${notification.notification_title}`);
-
-      // Mark notification as read (approved)
-      // IMPORTANT: Filter by both ID and shareholder_id to match RLS policy
-      const { error: updateError } = await supabase
-        .from('shareholder_notifications')
-        .update({
-          read_at: new Date().toISOString()
-        })
-        .eq('id', notificationId)
-        .eq('shareholder_id', user.id);
-
-      if (updateError) throw updateError;
-
-      // Get shareholder approval progress -- only real shareholders (active,
-      // with equity) count towards the 60% threshold.
-      const { approvedCount, totalCount, percent: approvalPercent } = await getApprovalStats(supabase, notification.business_profile_id);
-
-      console.log(`📊 Approval Status: ${approvedCount}/${totalCount} shareholders (${approvalPercent.toFixed(0)}%)`);
-
-      // Check if 60% threshold reached
-      if (approvalPercent >= 60) {
-        console.log('🎉 60% shareholder approval threshold reached!');
-        console.log(`💰 Investment: ${notification.investment_amount} ${notification.investment_currency}`);
-        console.log(`👥 Approvals: ${approvedCount}/${totalCount} shareholders`);
-
-        alert(`✅ APPROVED!\n\n60% shareholder approval threshold reached!\n\n👥 ${approvedCount}/${totalCount} shareholders approved\n💰 ${notification.investment_amount} ${notification.investment_currency}\n\nFunds will be transferred to the business account.\n\nYou can download the MOU any time from the "Sealed Agreements" tab.`);
+      if (!approve) {
+        setBanner({ kind: 'info', text: 'Your decision to decline has been recorded.' });
+      } else if (r?.sealed) {
+        setBanner({ kind: 'success', text: `Approved. ${r.signed_count} of ${r.total_members} members have approved, so the agreement is sealed and the funds are released. Its MOU is now under Sealed.` });
+        setActiveTab('sealed');
       } else {
-        alert(`✅ You approved the investment!\n\n👥 Progress: ${approvedCount}/${totalCount} shareholders (${approvalPercent.toFixed(0)}%)\n\nWaiting for ${Math.ceil(totalCount * 0.6) - approvedCount} more approval${Math.ceil(totalCount * 0.6) - approvedCount !== 1 ? 's' : ''}`);
+        const need = Math.max(0, Math.ceil((r?.total_members || 0) * 0.6) - (r?.signed_count || 0));
+        setBanner({ kind: 'success', text: `Approved. ${r?.signed_count ?? 0} of ${r?.total_members ?? 0} members have approved${need > 0 ? `, ${need} more needed.` : '.'}` });
       }
 
-      // Reload notifications and refresh the sealed-agreements tab so a
-      // newly-crossed 60% threshold shows up immediately.
-      await loadPendingApprovals();
-      await loadSealedAgreements();
-      setApprovingId(null);
-      
-      // Notify parent component that approval is complete (so it can refresh)
-      if (onApprovalComplete) {
-        onApprovalComplete();
-      }
+      setConfirmDecline(null);
+      await load(false);
+      if (onApprovalComplete) onApprovalComplete();
     } catch (err) {
-      console.error('Error approving:', err);
-      alert('❌ Error approving: ' + err?.message);
-      setApprovingId(null);
+      console.error('Error recording decision:', err);
+      setBanner({ kind: 'error', text: err?.message || 'Could not record your decision. Please try again.' });
+    } finally {
+      setBusyId(null);
     }
   };
 
-  const handleReject = async (notificationId) => {
+  const downloadMou = async (request) => {
     try {
-      const { getSupabase } = await import('../services/pitchingService');
       const supabase = getSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: docs } = await supabase
+        .from('business_documents')
+        .select('mou_content')
+        .eq('business_profile_id', request.business_profile_id)
+        .maybeSingle();
 
-      console.log(`❌ Shareholder ${user.email} rejected approval`);
-
-      // Mark notification as read (rejected)
-      const { error: updateError } = await supabase
-        .from('shareholder_notifications')
-        .update({
-          read_at: new Date().toISOString(),
-          notification_type: 'approval_rejected'
-        })
-        .eq('id', notificationId);
-
-      if (updateError) throw updateError;
-
-      alert('✓ Your rejection has been recorded');
-      await loadPendingApprovals();
+      // Same sealed certificate everyone else gets: real signature list,
+      // SEALED stamp and verification QR.
+      await downloadInvestmentAgreementPdf({
+        agreementId: request.agreement_id,
+        businessName: request.business_name,
+        pitchTitle: null,
+        investorName: request.investor_name || request.investor_email,
+        investmentType: Number(request.investment_shares) > 0 ? 'equity' : 'partnership',
+        shares: Number(request.investment_shares) || 0,
+        totalInvestment: request.investment_amount,
+        status: request.agreement_status,
+        createdAt: request.created_at,
+        signedCount: request.signed_count,
+        totalShareholders: request.total_members,
+        mouContent: docs?.mou_content || request.notification_message,
+      });
     } catch (err) {
-      console.error('Error rejecting:', err);
-      alert('❌ Error recording rejection: ' + err?.message);
+      console.error('Error downloading MOU:', err);
+      setBanner({ kind: 'error', text: 'Could not download the MOU: ' + (err?.message || 'Unknown error') });
     }
   };
 
+  const renderCard = (r, mode) => {
+    const isOpen = !!expanded[r.notification_id];
+    const isBusy = busyId === r.notification_id;
+    const isSealed = r.agreement_status === 'sealed';
+    const left = mode === 'pending' ? timeLeft(r.approval_deadline) : null;
+    const isFocus = focusId === r.notification_id;
+
+    return (
+      <div
+        key={r.notification_id}
+        ref={isFocus ? focusRef : null}
+        className={`bg-slate-800/70 border rounded-xl overflow-hidden ${
+          isFocus ? 'border-amber-400 shadow-lg shadow-amber-500/10' : 'border-slate-700'
+        }`}
+      >
+        <div className="p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-wide text-slate-400">Investment in</p>
+              <h3 className="text-lg font-bold text-white truncate">{r.business_name || 'Business'}</h3>
+              <p className="text-sm text-slate-400 truncate">
+                From <span className="text-slate-200 font-medium">{r.investor_name || r.investor_email || 'Investor'}</span>
+              </p>
+            </div>
+            <span
+              className={`shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                mode === 'pending'
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                  : r.my_decision === 'rejected'
+                    ? 'bg-red-500/15 text-red-300 border-red-500/40'
+                    : isSealed
+                      ? 'bg-green-500/15 text-green-300 border-green-500/40'
+                      : 'bg-blue-500/15 text-blue-300 border-blue-500/40'
+              }`}
+            >
+              {mode === 'pending' ? 'Needs you' : r.my_decision === 'rejected' ? 'Declined' : isSealed ? 'Sealed' : 'You approved'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div className="bg-slate-900/60 rounded-lg p-3">
+              <p className="text-[11px] uppercase text-slate-400">Amount</p>
+              <p className="text-white font-bold">{money(r.investment_currency, r.investment_amount)}</p>
+            </div>
+            <div className="bg-slate-900/60 rounded-lg p-3">
+              <p className="text-[11px] uppercase text-slate-400">Shares</p>
+              <p className="text-white font-bold">{r.investment_shares || 'N/A'}</p>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <ProgressBar signed={r.signed_count} total={r.total_members} percent={Number(r.percent || 0)} sealed={isSealed} />
+            {left && <p className="text-xs text-amber-400 mt-2 font-semibold">{left} to reach 60%, or it is refunded.</p>}
+          </div>
+
+          <button
+            onClick={() => setExpanded((p) => ({ ...p, [r.notification_id]: !isOpen }))}
+            className="mt-3 flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-300"
+          >
+            {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            {isOpen ? 'Hide details' : 'View details'}
+          </button>
+
+          {isOpen && (
+            <div className="mt-3 text-sm text-slate-300 bg-slate-900/50 border border-slate-700 rounded-lg p-3 space-y-2">
+              <p className="whitespace-pre-wrap leading-relaxed">{r.notification_message}</p>
+              <p className="text-xs text-slate-500">Investor email: {r.investor_email || 'N/A'}</p>
+              <p className="text-xs text-slate-500">Received: {new Date(r.created_at).toLocaleString()}</p>
+            </div>
+          )}
+        </div>
+
+        {mode === 'pending' && (
+          <div className="border-t border-slate-700 bg-slate-900/40 p-3">
+            {confirmDecline === r.notification_id ? (
+              <div>
+                <p className="text-sm text-slate-300 mb-2">Decline this investment? Your decision is recorded.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setConfirmDecline(null)}
+                    className="flex-1 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-semibold"
+                  >
+                    Keep it open
+                  </button>
+                  <button
+                    onClick={() => decide(r, false)}
+                    disabled={isBusy}
+                    className="flex-1 py-3 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white font-semibold"
+                  >
+                    {isBusy ? 'Saving…' : 'Yes, decline'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmDecline(r.notification_id)}
+                  disabled={isBusy}
+                  className="flex-1 py-3 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-700 font-semibold flex items-center justify-center gap-1.5"
+                >
+                  <XCircle className="w-4 h-4" /> Decline
+                </button>
+                <button
+                  onClick={() => decide(r, true)}
+                  disabled={isBusy}
+                  className="flex-[2] py-3 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white font-bold flex items-center justify-center gap-1.5"
+                >
+                  {isBusy ? <Loader className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  {isBusy ? 'Approving…' : 'Approve'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {mode === 'sealed' && (
+          <div className="border-t border-slate-700 bg-slate-900/40 p-3">
+            <button
+              onClick={() => downloadMou(r)}
+              className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition"
+            >
+              <Download className="w-5 h-5" /> Download MOU (PDF)
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const Empty = ({ icon: Icon, title, text }) => (
+    <div className="bg-slate-800/60 border border-slate-700 text-slate-300 px-6 py-10 rounded-xl text-center">
+      <Icon className="w-10 h-10 mx-auto mb-3 opacity-50" />
+      <p className="font-semibold">{title}</p>
+      <p className="text-sm text-slate-400 mt-1">{text}</p>
+    </div>
+  );
 
   if (loading) {
     return (
       <div className="w-full max-w-3xl mx-auto p-4">
-        <div className="p-12 text-center bg-slate-800 border border-slate-700 rounded-lg">
-          <Clock className="w-16 h-16 animate-spin mx-auto mb-4 text-blue-400" />
-          <p className="text-slate-300 text-lg font-semibold">Loading your pending approvals...</p>
-          <p className="text-slate-400 text-sm mt-2">Please wait while we fetch your investment approvals</p>
+        <div className="p-10 text-center bg-slate-800/60 border border-slate-700 rounded-xl">
+          <Loader className="w-10 h-10 animate-spin mx-auto mb-3 text-blue-400" />
+          <p className="text-slate-300 font-semibold">Loading your approvals…</p>
         </div>
       </div>
     );
   }
 
+  const tabs = [
+    ['pending', 'To approve', pending.length],
+    ['sealed', 'Sealed', sealed.length],
+    ['history', 'History', history.length],
+  ];
+  const list = activeTab === 'pending' ? pending : activeTab === 'sealed' ? sealed : history;
+
   return (
-    <div className="w-full max-w-3xl mx-auto p-4">
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-3xl font-bold text-white mb-2">⏳ Pending Investment Approvals</h2>
-            <p className="text-slate-400">Your approval is needed for pending investments</p>
-          </div>
-          {pendingApprovals.length > 0 && !loading && (
-            <div className="bg-red-600/20 border border-red-500 rounded-lg px-4 py-3 text-center">
-              <div className="text-3xl font-bold text-red-400">{pendingApprovals.length}</div>
-              <div className="text-xs text-red-300 mt-1">Awaiting approval</div>
-            </div>
-          )}
-        </div>
+    <div className="w-full max-w-3xl mx-auto p-3 sm:p-4 pb-28 md:pb-4">
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold text-white">Investment approvals</h2>
+        <p className="text-sm text-slate-400">Approve or decline investments made in businesses you own shares in.</p>
       </div>
 
-      {/* Tabs - "Sealed Agreements" always shows once any investment has
-          crossed 60% shareholder approval, so the MOU download isn't just a
-          one-time alert that's gone after you dismiss it. */}
-      <div className="flex gap-2 mb-6 border-b border-slate-700">
-        <button
-          onClick={() => setActiveTab('pending')}
-          className={`px-4 py-2 font-semibold text-sm rounded-t-lg transition ${
-            activeTab === 'pending'
-              ? 'bg-slate-800 text-white border-b-2 border-yellow-500'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          ⏳ Pending Approvals {pendingApprovals.length > 0 && `(${pendingApprovals.length})`}
-        </button>
-        <button
-          onClick={() => setActiveTab('sealed')}
-          className={`px-4 py-2 font-semibold text-sm rounded-t-lg transition ${
-            activeTab === 'sealed'
-              ? 'bg-slate-800 text-white border-b-2 border-green-500'
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          📄 Sealed Agreements {sealedAgreements.length > 0 && `(${sealedAgreements.length})`}
-        </button>
+      <div className="flex gap-1 mb-4 border-b border-slate-700 overflow-x-auto">
+        {tabs.map(([key, label, count]) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key)}
+            className={`px-4 py-2.5 text-sm font-semibold whitespace-nowrap border-b-2 transition ${
+              activeTab === key ? 'text-white border-amber-500' : 'text-slate-400 border-transparent hover:text-slate-200'
+            }`}
+          >
+            {label}
+            {count > 0 && (
+              <span className={`ml-2 text-xs font-bold px-1.5 py-0.5 rounded-full ${key === 'pending' ? 'bg-red-600 text-white' : 'bg-slate-700 text-slate-200'}`}>
+                {count}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
+
+      {banner && (
+        <div
+          className={`mb-4 px-4 py-3 rounded-lg text-sm border flex justify-between gap-3 ${
+            banner.kind === 'success'
+              ? 'bg-green-500/10 border-green-500/40 text-green-300'
+              : banner.kind === 'error'
+                ? 'bg-red-500/10 border-red-500/40 text-red-300'
+                : 'bg-slate-700/50 border-slate-600 text-slate-200'
+          }`}
+        >
+          <span>{banner.text}</span>
+          <button onClick={() => setBanner(null)} className="opacity-70 hover:opacity-100" aria-label="Dismiss">✕</button>
+        </div>
+      )}
 
       {error && (
-        <div className="bg-red-900 border border-red-700 text-red-100 px-4 py-4 rounded-lg mb-4">
-          <p className="font-semibold">❌ Error</p>
-          <p className="text-sm">{error}</p>
+        <div className="bg-red-500/10 border border-red-500/40 text-red-300 px-4 py-3 rounded-lg mb-4 text-sm">
+          {error}
         </div>
       )}
 
-      {activeTab === 'sealed' ? (
-        sealedAgreements.length === 0 ? (
-          <div className="bg-slate-800 border border-slate-700 text-slate-300 px-6 py-8 rounded-lg text-center">
-            <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p className="font-semibold">No sealed agreements yet</p>
-            <p className="text-sm">Once an investment reaches 60% shareholder approval, its MOU will be downloadable here.</p>
-          </div>
+      {list.length === 0 ? (
+        activeTab === 'pending' ? (
+          <Empty icon={CheckCircle} title="You're all caught up" text="No investments need your approval right now." />
+        ) : activeTab === 'sealed' ? (
+          <Empty icon={FileText} title="No sealed agreements yet" text="Once an investment reaches 60% approval its MOU can be downloaded here." />
         ) : (
-          <div className="space-y-4">
-            {sealedAgreements.map((agreement) => (
-              <div
-                key={`${agreement.business_profile_id}-${agreement.investor_email}-${agreement.investment_amount}`}
-                className="bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-green-500/50 rounded-lg p-6"
-              >
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">✅</span>
-                    <div>
-                      <h3 className="font-bold text-xl text-white">{agreement.notification_title || 'Investment Sealed'}</h3>
-                      <p className="text-sm text-slate-400 mt-1">
-                        From: <span className="text-green-400 font-semibold">{agreement.investor_name || agreement.investor_email || 'Investor'}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <span className="bg-green-500/30 border border-green-500/60 text-green-300 px-3 py-1 rounded-full text-xs font-bold">
-                    ✅ SEALED
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                  <div>
-                    <p className="text-slate-400 text-xs uppercase">Amount Invested</p>
-                    <p className="text-white font-bold text-lg">
-                      {agreement.investment_currency} {Number(agreement.investment_amount || 0).toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-xs uppercase">Shareholder Approval</p>
-                    <p className="text-white font-bold text-lg">{agreement.approvedCount}/{agreement.totalCount} ({agreement.percent.toFixed(0)}%)</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => downloadMou(agreement)}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-br from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white font-bold py-3 px-4 rounded-lg transition shadow-lg"
-                >
-                  <Download className="w-5 h-5" />
-                  Download MOU (PDF)
-                </button>
-              </div>
-            ))}
-          </div>
+          <Empty icon={Clock} title="Nothing here yet" text="Investments you declined or that are still waiting on others appear here." />
         )
-      ) : pendingApprovals.length === 0 ? (
-        <div className="bg-slate-800 border border-slate-700 text-slate-300 px-6 py-8 rounded-lg text-center">
-          <Clock className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p className="font-semibold">✅ No pending approvals</p>
-          <p className="text-sm">You're all caught up! No investments need your approval right now.</p>
-        </div>
       ) : (
         <div className="space-y-4">
-          {pendingApprovals.map((approval, index) => (
-            <div
-              key={approval.id}
-              className="bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-yellow-500/50 rounded-lg p-6 hover:border-yellow-500 transition shadow-lg hover:shadow-yellow-500/20"
-            >
-              {/* Header with badge */}
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">💰</span>
-                    <div>
-                      <h3 className="font-bold text-xl text-white">{approval.notification_title || 'Investment Approval Required'}</h3>
-                      <p className="text-sm text-slate-400 mt-1">
-                        From: <span className="text-yellow-400 font-semibold">{approval.investor_name || approval.investor_email || 'Investor'}</span>
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <span className="bg-yellow-500/30 border border-yellow-500/60 text-yellow-300 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
-                    ⚠️ PENDING
-                  </span>
-                  <span className="text-xs text-slate-400">Item {index + 1} of {pendingApprovals.length}</span>
-                </div>
-              </div>
-
-              {/* Details */}
-              <div className="bg-slate-900/50 border border-slate-700 p-4 rounded mb-4 space-y-2">
-                <p className="text-slate-200 leading-relaxed whitespace-pre-wrap">{approval.notification_message}</p>
-                <div className="grid grid-cols-2 gap-4 mt-3 text-sm border-t border-slate-700 pt-3">
-                  <div>
-                    <p className="text-slate-400 text-xs uppercase">Amount to Invest</p>
-                    <p className="text-white font-bold text-lg">
-                      {approval.investment_currency} {approval.investment_amount?.toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400 text-xs uppercase">Equity Shares</p>
-                    <p className="text-white font-bold text-lg">{approval.investment_shares || 'N/A'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Important info */}
-              <div className="bg-blue-900/30 border border-blue-700/50 rounded p-3 mb-4">
-                <p className="text-blue-300 text-sm">
-                  <span className="font-bold">ℹ️ Action Required:</span> Your approval is essential. 60% of all shareholders must approve before funds are transferred.
-                </p>
-              </div>
-
-              {/* Metadata - collapsed */}
-              <div className="text-xs text-slate-500 mb-4 space-y-1 border-t border-slate-700 pt-3">
-                <p>📧 Investor Email: {approval.investor_email}</p>
-                <p>📅 Received: {new Date(approval.created_at).toLocaleString()}</p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2 mb-2">
-                <button
-                  onClick={() => handleApprove(approval.id, approval)}
-                  disabled={approvingId === approval.id}
-                  className="flex-1 bg-gradient-to-br from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 disabled:from-slate-600 disabled:to-slate-700 text-white font-bold py-3 px-4 rounded-lg transition shadow-lg hover:shadow-green-500/50 text-lg"
-                >
-                  {approvingId === approval.id ? '⏳ Approving...' : '✅ OK, Approve'}
-                </button>
-                <button
-                  onClick={() => handleReject(approval.id)}
-                  className="flex-1 bg-gradient-to-br from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-bold py-3 px-4 rounded-lg transition shadow-lg hover:shadow-red-500/50"
-                >
-                  ❌ Reject
-                </button>
-              </div>
-            </div>
-          ))}
+          {list.map((r) => renderCard(r, activeTab))}
         </div>
       )}
 
-      {/* Footer */}
-      <div className="mt-8 p-4 bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700 rounded-lg">
-        <p className="text-sm text-slate-300 font-semibold mb-2">
-          👤 Logged in as: <span className="text-blue-400">{currentUser?.email}</span>
-        </p>
-        <p className="text-sm text-slate-400">
-          ℹ️ You are a shareholder. Your approval is <span className="font-bold text-yellow-400">required</span> before investment funds can be transferred. 60% of shareholders must approve.
-        </p>
-        {pendingApprovals.length > 0 && (
-          <div className="mt-3 p-3 bg-yellow-900/30 border border-yellow-700/50 rounded">
-            <p className="text-yellow-300 text-sm font-semibold">
-              ⚠️ You have <span className="text-lg">{pendingApprovals.length}</span> pending {pendingApprovals.length === 1 ? 'approval' : 'approvals'} requiring your action.
-            </p>
-          </div>
-        )}
-      </div>
+      <p className="mt-6 text-xs text-slate-500 text-center">
+        Signed in as <span className="text-slate-300">{currentUser?.email}</span>
+      </p>
     </div>
   );
 };

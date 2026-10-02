@@ -1657,3 +1657,82 @@ html {
   background: var(--color-bg) !important; color: var(--color-text) !important; border: 1px solid rgba(196, 160, 82, 0.55) !important; border-radius: 10px !important;
 }
 .trade-page .trade-tab-content { background: transparent !important; border: 1px solid rgba(196, 160, 82, 0.4) !important; border-radius: 14px; padding: 1.25rem; }
+
+/* ===================================================================
+   Live Share Value — classic "share certificate" look.
+   Scoped to .ls-classic (PitchinLiveShareValue). Ivory parchment, ink
+   text, gold hairlines and Playfair headings. The component's existing
+   slate/colour utility classes are remapped here so every panel inside
+   (link sources, ledgers, editors) follows the same classic surface.
+   =================================================================== */
+.ls-classic.ls-classic {
+  position: relative;
+  background: linear-gradient(180deg, #fffdf6 0%, #f8f1de 100%);
+  border: 1px solid #c4a052; color: #1f2433;
+  box-shadow: 0 0 0 4px #fbf5e4, 0 0 0 5px rgba(196,160,82,.55), 0 18px 40px -18px rgba(70,50,10,.45);
+  backdrop-filter: none;
+}
+.ls-classic .ls-title { font-family: "Playfair Display", Georgia, "Times New Roman", serif; color: #1f2433; letter-spacing: .01em; margin: 0; }
+.ls-classic .ls-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: #8b6c26; margin: 0; }
+.ls-classic .ls-price { font-family: "Playfair Display", Georgia, serif; color: #1f2433; letter-spacing: -.01em; }
+.ls-classic .ls-muted { color: #8a7b58; font-weight: 400; }
+
+/* Remap the dark-slate utilities to the parchment palette */
+.ls-classic [class^="bg-slate-"], .ls-classic [class*=" bg-slate-"] { background-color: rgba(196,160,82,.10); }
+.ls-classic [class^="bg-amber-9"], .ls-classic [class*=" bg-amber-9"] { background-color: rgba(196,160,82,.14); }
+.ls-classic [class^="bg-emerald-9"], .ls-classic [class*=" bg-emerald-9"] { background-color: rgba(47,107,58,.09); }
+.ls-classic [class*="from-amber-950"] { background-image: linear-gradient(90deg, rgba(196,160,82,.2), rgba(255,253,246,.6)); }
+.ls-classic [class^="border-"], .ls-classic [class*=" border-"] { border-color: rgba(139,108,38,.30); }
+.ls-classic [class*="divide-slate-"] > * + * { border-color: rgba(139,108,38,.25); }
+.ls-classic .text-white:not([class*="bg-amber-"]):not([class*="bg-blue-"]):not([class*="bg-green-"]) { color: #1f2433; }
+.ls-classic [class*="text-slate-"] { color: #6b5d3e; }
+.ls-classic .text-slate-600 { color: #8a7b58; }
+.ls-classic [class*="text-amber-"], .ls-classic [class*="text-yellow-"] { color: #8b6c26; }
+.ls-classic [class*="text-green-"], .ls-classic [class*="text-emerald-"] { color: #2f6b3a; }
+.ls-classic [class*="text-red-"] { color: #a23b32; }
+.ls-classic [class*="text-cyan-"] { color: #1f6f7a; }
+.ls-classic [class*="text-purple-"] { color: #6b3fa0; }
+.ls-classic [class*="text-orange-"] { color: #b4581c; }
+.ls-classic [class*="text-blue-"] { color: #2d5aa6; }
+.ls-classic [class*="hover:text-white"]:hover { color: #1f2433; }
+.ls-classic [class*="hover:bg-slate-"]:hover { background-color: rgba(196,160,82,.18); }
+.ls-classic input { background: #fffdf6 !important; color: #1f2433 !important; border-color: rgba(139,108,38,.45) !important; }
+.ls-classic input::placeholder { color: #a99a74; }
+.ls-classic button[class*="bg-amber-6"] { background: #8b6c26; color: #fff; }
+.ls-classic button[class*="bg-amber-6"]:hover { background: #a37f2c; }
+
+/* Real value growth panel */
+.ls-growth { border: 1px solid rgba(139,108,38,.35); border-radius: 14px; padding: 1rem; background: rgba(255,253,246,.7); }
+.ls-growth__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .75rem; }
+.ls-growth__head h3 { font-size: 1.25rem; }
+.ls-tabs { display: inline-flex; border: 1px solid rgba(139,108,38,.45); border-radius: 999px; overflow: hidden; background: #fffdf6; }
+.ls-tab { padding: .3rem .8rem; font-size: .72rem; font-weight: 700; letter-spacing: .08em; color: #6b5d3e; transition: background .15s, color .15s; }
+.ls-tab:hover { background: rgba(196,160,82,.18); }
+.ls-tab.is-active { background: #8b6c26; color: #fff; }
+.ls-growth__empty { display: flex; gap: .75rem; align-items: flex-start; padding: 1.25rem .25rem; color: #6b5d3e; font-size: .85rem; line-height: 1.5; }
+.ls-growth__empty > svg { color: #2f6b3a; flex-shrink: 0; margin-top: 2px; }
+.ls-growth__empty strong { display: block; color: #1f2433; font-family: "Playfair Display", Georgia, serif; font-size: 1rem; }
+.ls-growth__hero { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.1rem; margin-top: .9rem; }
+.ls-growth__pct { display: inline-flex; align-items: center; gap: .35rem; font-family: "Playfair Display", Georgia, serif; font-weight: 800; font-size: 2rem; line-height: 1; }
+.ls-growth__pct.is-up, .ls-growth__stats dd.is-up { color: #2f6b3a; }
+.ls-growth__pct.is-down, .ls-growth__stats dd.is-down { color: #a23b32; }
+.ls-growth__sentence { flex: 1 1 15rem; margin: 0; font-size: .85rem; line-height: 1.55; color: #4a3f28; }
+.ls-growth__sentence strong { color: #1f2433; }
+.ls-chart { position: relative; margin-top: .75rem; touch-action: pan-y; }
+.ls-chart__svg { display: block; width: 100%; height: auto; cursor: crosshair; }
+.ls-chart__grid { stroke: rgba(139,108,38,.18); stroke-width: 1; }
+.ls-chart__declared { stroke: #8b6c26; stroke-width: 1.2; stroke-dasharray: 5 5; opacity: .75; }
+.ls-chart__line { fill: none; stroke: #8b6c26; stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+.ls-chart__cross { stroke: rgba(31,36,51,.35); stroke-width: 1; stroke-dasharray: 3 3; }
+.ls-chart__halo { fill: rgba(196,160,82,.28); }
+.ls-chart__dot { fill: #fffdf6; stroke: #8b6c26; stroke-width: 2.4; }
+.ls-chart__label { font-size: 11px; fill: #8a7b58; font-family: Inter, system-ui, sans-serif; letter-spacing: .04em; }
+.ls-chart__tip { position: absolute; top: 4px; transform: translateX(-50%); pointer-events: none; display: flex; flex-direction: column; align-items: center; padding: .35rem .7rem; border-radius: 10px; background: #1f2433; color: #f5e9c4; font-size: .68rem; line-height: 1.35; box-shadow: 0 8px 20px -8px rgba(0,0,0,.5); white-space: nowrap; }
+.ls-chart__tip strong { font-family: "Playfair Display", Georgia, serif; font-size: .95rem; color: #fff; }
+.ls-growth__stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin: .9rem 0 0; }
+@media (min-width: 640px) { .ls-growth__stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.ls-growth__stats > div { border: 1px solid rgba(139,108,38,.28); border-radius: 10px; padding: .55rem .7rem; background: #fffdf6; }
+.ls-growth__stats dt { font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; color: #8a7b58; font-weight: 700; }
+.ls-growth__stats dt em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .8; }
+.ls-growth__stats dd { margin: .2rem 0 0; font-family: "Playfair Display", Georgia, serif; font-weight: 700; font-size: 1.15rem; color: #1f2433; }
+.ls-growth__stats dd.ls-small { font-family: Inter, system-ui, sans-serif; font-size: .74rem; font-weight: 600; line-height: 1.4; }

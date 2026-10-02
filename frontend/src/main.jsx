@@ -70,6 +70,9 @@ const isCandidateDocumentPath = window.location.pathname === '/candidate-documen
 // fully public, no account, same reasoning as the report-share/attendance
 // QR pages below.
 const isDocumentVerifyPath = window.location.pathname === '/verify-document';
+// Scanning the QR seal on a printed investment agreement (Pitchin) -- public,
+// no login, shows the live signature record.
+const isAgreementVerifyPath = window.location.pathname === '/verify-agreement';
 // A service-provider contract link (CMMS_SERVICE_PROVIDER_CONTRACTS.sql) --
 // the ONE page an outside contractor with no CMMS/ICAN account ever opens:
 // their contract, task follow-ups, and payment history, time-limited and
@@ -157,6 +160,7 @@ const CandidateTestRunner = lazyWithReloadOnChunkFailure(() => import('./compone
 const CandidateInterviewRoom = lazyWithReloadOnChunkFailure(() => import('./components/CandidateInterviewRoom'));
 const CandidateDocumentViewer = lazyWithReloadOnChunkFailure(() => import('./components/CandidateDocumentViewer'));
 const PublicDocumentVerify = lazyWithReloadOnChunkFailure(() => import('./components/PublicDocumentVerify'));
+const PublicAgreementVerify = lazyWithReloadOnChunkFailure(() => import('./components/PublicAgreementVerify'));
 const PublicServiceProviderContract = lazyWithReloadOnChunkFailure(() => import('./components/PublicServiceProviderContract'));
 const PhoneAlertsPrompt = lazyWithReloadOnChunkFailure(() => import('./components/PhoneAlertsPrompt'));
 const Loading = () => <div className="min-h-screen bg-slate-950" />;
@@ -195,6 +199,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn />
           : isVisitorQrPath ? <PublicVisitorCheckIn />
           : isDocumentVerifyPath ? <PublicDocumentVerify />
+          : isAgreementVerifyPath ? <PublicAgreementVerify />
           : isServiceProviderContractPath ? <PublicServiceProviderContract />
           : reportShareMatch ? <PublicReportViewer shareToken={reportShareMatch[1]} />
           : reportExportShareMatch ? <PublicReportExportViewer shareToken={reportExportShareMatch[1]} />
