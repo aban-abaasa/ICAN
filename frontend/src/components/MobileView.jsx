@@ -391,7 +391,7 @@ const FeatureCardWithSlideshow = ({
       ? card.slideWords
       : [card.subtitle || card.title];
   const activeSlideWord = slideWords[currentImageIndex % slideWords.length];
-  const usePitchinLikeLayout = forcePitchinLayout || card.title === 'Pitchin';
+  const usePitchinLikeLayout = forcePitchinLayout || card.title === 'IcanEra';
 
   useEffect(() => {
     setCurrentImageIndex(0);
@@ -446,7 +446,7 @@ const FeatureCardWithSlideshow = ({
 
             </div>
 
-            {card.title === 'Pitchin' && card.actions && (
+            {card.title === 'IcanEra' && card.actions && (
               <div className="mt-3 flex items-center gap-2">
                 {card.actions.map((action, idx) => (
                   <button
@@ -463,13 +463,13 @@ const FeatureCardWithSlideshow = ({
             )}
           </div>
 
-          {card.title === 'Pitchin' && onExplore && (
+          {card.title === 'IcanEra' && onExplore && (
             <button
               onClick={() => onExplore(card.title, 'launch')}
               className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-purple-600/90 hover:bg-purple-500 backdrop-blur-md px-6 py-3 rounded-full flex items-center gap-2 transition-all active:scale-95 shadow-2xl shadow-purple-500/50"
             >
               <Play className="w-5 h-5 text-white" />
-              <span className="text-white font-bold text-sm">Launch Pitchin</span>
+              <span className="text-white font-bold text-sm">Launch IcanEra</span>
             </button>
           )}
 
@@ -528,7 +528,7 @@ const FeatureCardWithSlideshow = ({
           </div>
 
           {/* Action buttons for Pitchin card */}
-          {card.title === 'Pitchin' && card.actions && (
+          {card.title === 'IcanEra' && card.actions && (
             <div className="flex items-center gap-2">
               {card.actions.map((action, idx) => (
                 <button
@@ -577,13 +577,13 @@ const FeatureCardWithSlideshow = ({
           </div>
 
           {/* Quick action overlay for Pitchin */}
-          {card.title === 'Pitchin' && onExplore && (
+          {card.title === 'IcanEra' && onExplore && (
             <button
               onClick={() => onExplore(card.title, 'launch')}
               className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-purple-600/90 hover:bg-purple-500 backdrop-blur-md px-6 py-3 rounded-full flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-purple-500/50"
             >
               <Play className="w-5 h-5 text-white" />
-              <span className="text-white font-bold text-sm">Launch Pitchin</span>
+              <span className="text-white font-bold text-sm">Launch IcanEra</span>
             </button>
           )}
 
@@ -4751,7 +4751,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   // Carousel content with images
   const carouselCards = [
     {
-      title: 'Pitchin',
+      title: 'IcanEra',
       subtitle: 'Part 3: Invest in Businesses',
       color: 'from-purple-600 to-pink-600',
       icon: Briefcase,
@@ -4863,7 +4863,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   };
 
   const handleFeatureExplore = (title, action) => {
-    const tabMap = { Pitchin: 'pitchin', Wallet: 'wallet', Trust: 'trust', CMMS: 'cmms', Trade: 'wallet', Tithe: 'tithe', Reports: 'reports' };
+    const tabMap = { IcanEra: 'pitchin', Wallet: 'wallet', Trust: 'trust', CMMS: 'cmms', Trade: 'wallet', Tithe: 'tithe', Reports: 'reports' };
     if (tabMap[title]) {
       navigateTo(tabMap[title]);
     } else if (title === 'Expense & Income') {
@@ -4886,7 +4886,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   const showDashboardHeader = isWebDashboard ? true : !isOverlayPanelOpen;
   const headerNavTabs = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-    { id: 'pitchin', label: 'Pitchin', icon: Briefcase },
+    { id: 'pitchin', label: 'IcanEra', icon: Briefcase },
     { id: 'wallet', label: 'Wallet', icon: Wallet },
     { id: 'trust', label: 'Trust', icon: Lock },
     { id: 'cmms', label: 'CMMS', icon: Building },
@@ -7712,7 +7712,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         } style={isWebDashboard ? { border: '1px solid var(--color-border)', background: 'var(--color-bgSecondary)' } : undefined}>
           {[
             { id: 'home',   label: 'Home',   icon: Home,      go: 'dashboard' },
-            { id: 'pitchin',label: 'Pitchin',icon: Briefcase, go: 'pitchin'   },
+            { id: 'pitchin',label: 'IcanEra',icon: Briefcase, go: 'pitchin'   },
             { id: 'wallet', label: 'Wallet', icon: Wallet,    go: 'wallet'    },
             { id: 'trust',  label: 'Trust',  icon: Lock,      go: 'trust'     },
             { id: 'cmms',   label: 'CMMS',   icon: Settings,  go: 'cmms'      },

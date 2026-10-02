@@ -66,8 +66,8 @@ const normalizeNotifications = ({ rows, source }) => {
         : source === SOURCE.LEGACY
         ? 'Wallet/Trust'
         : source === SOURCE.SHAREHOLDER
-        ? 'Pitchin Trust'
-        : 'Pitchin';
+        ? 'IcanEra Trust'
+        : 'IcanEra';
 
     return {
       id: `${source}:${row.id}`,

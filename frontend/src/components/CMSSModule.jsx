@@ -5215,7 +5215,7 @@ const CMMSModule = ({
 
               {/* Website -- updateCompanyProfile has always written this column,
                   but no input for it existed anywhere in this form, so it could
-                  only ever be set by falling back to a linked Pitchin business
+                  only ever be set by falling back to a linked IcanEra business
                   profile's own website (CMMS_PUBLIC_BOARD_WEBSITE_FALLBACK.sql). */}
               <div className="space-y-1.5">
                 <label className="block text-gray-300 text-sm font-semibold">Website</label>

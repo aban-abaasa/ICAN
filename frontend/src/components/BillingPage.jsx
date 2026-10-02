@@ -138,7 +138,7 @@ const BillingPage = ({ onBack }) => {
                   <p className={`font-bold ${headingText}`}>{fmtDate(sub.status === 'trialing' ? sub.trial_ends_at : sub.next_billing_at)}</p>
                 </div>
                 <div>
-                  <p className={`text-xs ${mutedText}`}>Pitchin storage</p>
+                  <p className={`text-xs ${mutedText}`}>IcanEra storage</p>
                   <p className={`font-bold ${headingText}`}>{sub.storage_mb ? `${(sub.storage_mb / 1000).toFixed(1)} GB/mo` : 'Unlimited'}</p>
                 </div>
               </div>

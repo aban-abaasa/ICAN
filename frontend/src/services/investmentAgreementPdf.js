@@ -67,7 +67,7 @@ export const downloadInvestmentAgreementPdf = async (d) => {
   pdf.setTextColor(...GOLD);
   pdf.setFont('times', 'bold');
   pdf.setFontSize(11);
-  pdf.text('ICANERA  ·  PITCHIN', W / 2, y, { align: 'center' });
+  pdf.text('ICANERA', W / 2, y, { align: 'center' });
   y += 11;
   pdf.setTextColor(...INK);
   pdf.setFontSize(24);
@@ -202,7 +202,7 @@ export const downloadInvestmentAgreementPdf = async (d) => {
     pdf.circle(cx, cy, 17.2);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(7);
-    pdf.text('ICANERA · PITCHIN', cx, cy - 8, { align: 'center' });
+    pdf.text('ICANERA', cx, cy - 8, { align: 'center' });
     pdf.setFontSize(15);
     pdf.text('SEALED', cx, cy + 1.5, { align: 'center' });
     pdf.setFontSize(6.5);

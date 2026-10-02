@@ -3025,7 +3025,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Share2 className="w-6 h-6 text-pink-400" />
-                <span className="text-xl font-bold text-white">Pitchin</span>
+                <span className="text-xl font-bold text-white">IcanEra</span>
               </div>
               <p className="text-xs text-purple-200">Share your vision, connect with investors</p>
             </div>
