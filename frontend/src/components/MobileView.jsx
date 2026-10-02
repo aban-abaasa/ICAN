@@ -5836,41 +5836,49 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </button>
       </div>
 
-      {/* ====== DETAIL PAGE - SETTINGS ONLY ====== */}
-      {selectedDetail && (
+      {/* ====== DETAIL PAGE (avatar-menu destinations) — classic ebony & gold sheet ====== */}
+      {selectedDetail && (() => {
+        const isOwnProfilePage = selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile';
+        const detailEyebrow = {
+          profile: 'Account', security: 'Account', readiness: 'Career & growth',
+          growth: 'Career & growth', resume: 'Career & growth', settings: 'Settings',
+        }[selectedDetail.tab] || 'IcanEra';
+        return (
         <div
-          className={`fixed inset-0 bg-black/60 z-40 flex ${isWebDashboard ? 'items-center justify-center p-4' : 'items-end'}`}
+          className={`fixed inset-0 bg-black/70 backdrop-blur-[2px] z-40 flex ${isWebDashboard ? 'items-center justify-center p-4' : 'items-end'}`}
           onClick={() => setSelectedDetail(null)}
         >
           <div
-            className={`bg-gradient-to-br from-slate-900 to-purple-900 ${isWebDashboard
-              ? 'rounded-t-2xl rounded-2xl w-full max-w-3xl max-h-[85vh] pl-6 pr-8 pt-6'
-              : selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile'
-                ? 'w-full h-[100dvh] max-h-[100dvh] rounded-none p-0'
-                : 'w-full max-h-[calc(100dvh-env(safe-area-inset-top))] rounded-t-2xl pb-[calc(7rem+env(safe-area-inset-bottom))] pl-6 pr-8 pt-[calc(1.5rem+env(safe-area-inset-top))]'
+            role="dialog"
+            aria-modal="true"
+            aria-label={selectedDetail.item}
+            className={`icn-sheet icn-classic ${isWebDashboard
+              ? 'rounded-2xl w-full max-w-3xl max-h-[85vh]'
+              : isOwnProfilePage
+                ? 'w-full h-[100dvh] max-h-[100dvh] rounded-none'
+                : 'w-full max-h-[calc(100dvh-env(safe-area-inset-top))] rounded-t-2xl'
             } overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header - Settings Only */}
-            {!(selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile') && (
-              <div className="flex items-center justify-between mb-6 pb-4 border-b border-purple-500/20">
-              <div>
-                <h2 className="text-2xl font-bold text-purple-300">
-                   {selectedDetail.item}
-                </h2>
-              </div>
-              <button
-                onClick={() => setSelectedDetail(null)}
-                className="text-2xl leading-none text-gray-400 hover:text-white transition"
-                aria-label="Close details"
-              >
-                ×
-              </button>
+            {/* Classic masthead: eyebrow, serif title, gold rule with diamond */}
+            {!isOwnProfilePage && (
+              <div className="icn-page-head">
+                <div className="min-w-0">
+                  <p className="icn-page-eyebrow">{detailEyebrow}</p>
+                  <h2 className="icn-page-title">{selectedDetail.item}</h2>
+                </div>
+                <button
+                  onClick={() => setSelectedDetail(null)}
+                  className="icn-page-close"
+                  aria-label="Close details"
+                >
+                  <X />
+                </button>
               </div>
             )}
 
             {/* Content - Single Column */}
-            <div className="space-y-4">
+            <div className={isOwnProfilePage ? 'space-y-4' : `space-y-4 px-4 sm:px-6 pt-5 ${isWebDashboard ? 'pb-6' : 'pb-[calc(7rem+env(safe-area-inset-bottom))]'}`}>
               {/* MY PROFILE */}
               {selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile' && (
                 <div className="overflow-hidden rounded-lg">
@@ -7258,7 +7266,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ====== FINANCIAL TRENDS PANEL ======
           Inline, always-visible replacement for the old Progress/Analytics
@@ -8762,7 +8771,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Professionals Directory Panel */}
       {showProfessionalsPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-[#241511] to-slate-950 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
+          className={`icn-page-surface icn-classic fixed inset-x-0 z-30 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
           style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <ProfessionalsDirectory />
@@ -9313,18 +9322,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ── Security Modal ────────────────────────────────────────────────── */}
       {showSecurityPanel && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
-          <div className="bg-gradient-to-br from-slate-950 to-red-950 rounded-2xl w-full max-w-2xl shadow-2xl border border-red-500/30" style={{minHeight: '400px'}}>
+          <div className="icn-page-dialog icn-classic w-full max-w-2xl" role="dialog" aria-modal="true" aria-label="Security" style={{minHeight: '400px'}}>
             {/* Header */}
-            <div className="bg-gradient-to-r from-red-700 to-red-600 rounded-t-2xl px-5 py-4 flex items-center justify-between sticky top-0 z-10">
-              <div>
-                <h2 className="text-xl font-bold text-white">🔐 Security Settings</h2>
-                <p className="text-red-100 text-xs mt-0.5">Protect your account — Uganda verified</p>
+            <div className="icn-page-head">
+              <div className="min-w-0">
+                <p className="icn-page-eyebrow">Account</p>
+                <h2 className="icn-page-title">Security</h2>
+                <p className="icn-page-sub">Protect your account — Uganda verified</p>
               </div>
-              <button 
-                onClick={() => setShowSecurityPanel(false)} 
-                className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
+              <button
+                onClick={() => setShowSecurityPanel(false)}
+                className="icn-page-close"
+                aria-label="Close security"
               >
-                <X className="w-6 h-6" />
+                <X />
               </button>
             </div>
 
@@ -9396,18 +9407,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ── Settings Modal ────────────────────────────────────────────────── */}
       {showSettingsPanel && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl border border-slate-700/50" style={{minHeight: '400px'}}>
+          <div className="icn-page-dialog icn-classic w-full max-w-2xl" role="dialog" aria-modal="true" aria-label="Settings" style={{minHeight: '400px'}}>
             {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-t-2xl px-5 py-4 flex items-center justify-between sticky top-0 z-10">
-              <div>
-                <h2 className="text-xl font-bold text-white">⚙️ Settings</h2>
-                <p className="text-indigo-100 text-xs mt-0.5">Customize your IcanEra experience</p>
+            <div className="icn-page-head">
+              <div className="min-w-0">
+                <p className="icn-page-eyebrow">Preferences</p>
+                <h2 className="icn-page-title">Settings</h2>
+                <p className="icn-page-sub">Customize your IcanEra experience</p>
               </div>
-              <button 
-                onClick={() => setShowSettingsPanel(false)} 
-                className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
+              <button
+                onClick={() => setShowSettingsPanel(false)}
+                className="icn-page-close"
+                aria-label="Close settings"
               >
-                <X className="w-6 h-6" />
+                <X />
               </button>
             </div>
 
@@ -9526,15 +9539,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Reports Panel - always a real full page, same placement as Wallet/Trust/Pitchin */}
       {showReportingSystem && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-900 to-indigo-950 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
+          className={`icn-page-surface icn-classic fixed inset-x-0 z-30 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
           style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="flex flex-col min-h-full">
             {/* Header */}
-            <div className="bg-gradient-to-r from-rose-700 to-pink-600 px-5 py-4 flex items-center justify-between shrink-0">
-              <div>
-                <h2 className="text-xl font-bold text-white">📊 Financial Reports</h2>
-                <p className="text-rose-100 text-xs mt-0.5">AI-powered reports — Uganda compliant</p>
+            <div className="icn-page-head shrink-0">
+              <div className="min-w-0">
+                <p className="icn-page-eyebrow">Tools</p>
+                <h2 className="icn-page-title">Financial Reports</h2>
+                <p className="icn-page-sub">AI-powered reports — Uganda compliant</p>
               </div>
               <button
                 onClick={() => {
@@ -9542,9 +9556,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   setReportFilteredMetrics(null);
                   setGeneratedReportData(null);
                 }}
-                className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
+                className="icn-page-close"
+                aria-label="Close reports"
               >
-                <X className="w-6 h-6" />
+                <X />
               </button>
             </div>
 

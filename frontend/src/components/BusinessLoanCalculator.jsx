@@ -146,22 +146,23 @@ export const BusinessLoanCalculator = ({ isOpen, onClose, preFilledAmount = '', 
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto">
-      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl w-full max-w-4xl shadow-2xl my-4 mt-32 md:mt-28">
+      <div className="icn-page-ivory w-full max-w-4xl my-4 mt-32 md:mt-28" role="dialog" aria-modal="true" aria-label="Business Loan Calculator">
         {/* ── Header ── */}
-        <div className="bg-gradient-to-r from-blue-700 to-indigo-600 rounded-t-2xl px-5 py-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              💼 Business Loan Calculator
+        <div className="icn-page-head" style={{ position: 'relative' }}>
+          <div className="min-w-0">
+            <p className="icn-page-eyebrow">Tools</p>
+            <h2 className="icn-page-title flex items-center gap-2 flex-wrap">
+              Business Loan Calculator
               {preFilledAmount && (
-                <span className="text-xs bg-white/20 border border-white/30 text-white px-2 py-0.5 rounded-full">
-                  🎙 Auto-filled
+                <span className="text-[0.65rem] font-sans font-bold tracking-wider uppercase text-[#e6c980] bg-[#c4a052]/15 border border-[#c4a052]/40 px-2 py-0.5 rounded-full">
+                  Auto-filled
                 </span>
               )}
             </h2>
-            <p className="text-blue-100 text-xs mt-0.5">Smart business financing analysis — Uganda tax & tithe included</p>
+            <p className="icn-page-sub">Smart business financing analysis — Uganda tax &amp; tithe included</p>
           </div>
-          <button onClick={onClose} className="text-white/70 hover:text-white transition p-1">
-            <X className="w-6 h-6" />
+          <button onClick={onClose} className="icn-page-close" aria-label="Close calculator">
+            <X />
           </button>
         </div>
 
