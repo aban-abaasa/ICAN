@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Users2, ShieldCheck } from 'lucide-react';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme, isDarkFamilyTheme } from '../../context/ThemeContext';
 import { getPublicTrustGroups } from '../../services/trustService';
 
 const TrustGroupsPreview = ({ onGetStarted }) => {
   const { actualTheme } = useTheme();
-  const isDarkTheme = actualTheme === 'dark';
+  const isDarkTheme = isDarkFamilyTheme(actualTheme);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
 

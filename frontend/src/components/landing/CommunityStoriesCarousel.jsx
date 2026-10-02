@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Camera, ArrowRight, Play } from 'lucide-react';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme, isDarkFamilyTheme } from '../../context/ThemeContext';
 import { fetchPublicStatusStories } from '../../services/landingStatusService';
 import { fmtRelativeTime } from './relativeTime';
 
@@ -11,7 +11,7 @@ import { fmtRelativeTime } from './relativeTime';
 // src/services/landingStatusService.js.
 const CommunityStoriesCarousel = () => {
   const { actualTheme } = useTheme();
-  const isDarkTheme = actualTheme === 'dark';
+  const isDarkTheme = isDarkFamilyTheme(actualTheme);
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);

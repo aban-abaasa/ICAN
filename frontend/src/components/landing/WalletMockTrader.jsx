@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Wallet, ArrowLeftRight } from 'lucide-react';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme, isDarkFamilyTheme } from '../../context/ThemeContext';
 import { useMarketSnapshot } from '../../hooks/useIcanPrice';
 import { getOrCreateGuestLikeKey } from '../../services/landingMessagesService';
 import { recordMockTrade, fetchRecentMockTrades, subscribeToMockTrades } from '../../services/landingMockTradeService';
@@ -10,7 +10,7 @@ const FALLBACK_PRICE_UGX = 5000;
 
 const WalletMockTrader = ({ onGetStarted, authId = null }) => {
   const { actualTheme } = useTheme();
-  const isDarkTheme = actualTheme === 'dark';
+  const isDarkTheme = isDarkFamilyTheme(actualTheme);
   const { snapshot, loading } = useMarketSnapshot();
   const [mode, setMode] = useState('buy'); // buy | sell
   const [amount, setAmount] = useState('');

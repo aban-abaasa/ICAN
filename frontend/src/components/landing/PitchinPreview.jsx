@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Rocket, Sparkles, ArrowRight } from 'lucide-react';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme, isDarkFamilyTheme } from '../../context/ThemeContext';
 import { getAllPitches } from '../../services/pitchingService';
 import { getOrCreateGuestLikeKey } from '../../services/landingMessagesService';
 import { recordMockTrade, fetchRecentMockTrades, subscribeToMockTrades } from '../../services/landingMockTradeService';
@@ -11,7 +11,7 @@ const cleanPitchDescription = (value) => String(value || '').replace(/\bthe\s+th
 
 const PitchinPreview = ({ onGetStarted, authId = null }) => {
   const { actualTheme } = useTheme();
-  const isDarkTheme = actualTheme === 'dark';
+  const isDarkTheme = isDarkFamilyTheme(actualTheme);
   const [pitches, setPitches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);

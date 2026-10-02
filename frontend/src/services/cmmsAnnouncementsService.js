@@ -393,6 +393,24 @@ export const browsePublicNotices = async ({ postType = null, limit = 12, offset 
   return { success: true, data: resolved };
 };
 
+/** A business's own IcanEra website (its public board). */
+export const buildPublicBusinessLink = (companyId) => `${PUBLIC_SITE_ORIGIN}/notices/${companyId}`;
+
+/**
+ * Landing-page business directory: search every business on IcanEra by name
+ * (also matches industry/town/tagline). Empty query = the active businesses.
+ */
+export const searchPublicBusinesses = async ({ query = '', limit = 12, offset = 0 } = {}) => {
+  const { data, error } = await supabase.rpc('fn_search_public_cmms_businesses', {
+    p_query: query?.trim() || null,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error) return { success: false, error: error.message, data: [] };
+  const resolved = await resolveMediaValues(data || [], ['logo_url', 'cover_image_url']);
+  return { success: true, data: resolved };
+};
+
 /**
  * Cross-post a published public announcement/job into the ICAN "Updates"
  * feed (ican_statuses) so it reaches existing app users, not just people who
@@ -454,5 +472,7 @@ export default {
   uploadPublicResume,
   buildPublicNoticeLink,
   browsePublicNotices,
+  buildPublicBusinessLink,
+  searchPublicBusinesses,
   shareAnnouncementAsUpdate,
 };

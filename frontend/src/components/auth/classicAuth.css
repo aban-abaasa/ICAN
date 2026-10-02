@@ -1,0 +1,139 @@
+/* Classic edition for the IcanEra sign-in / create-account screens.
+   Ivory paper, ink rules, forest green (day) / amber (night), serif type.
+   Works on web and phone. Colours come from classicAuthTheme.js; this file
+   handles shape, type and motion. */
+.ican-auth-classic {
+  --ia-ink: #1f1a12;
+  --ia-green: #14532d;
+  --ia-amber: #fcd34d;
+  position: relative;
+  font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+  max-width: 100vw;
+  overflow-x: clip;
+}
+.ican-auth-classic::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image: radial-gradient(#3b2f1e 0.6px, transparent 0.6px);
+  background-size: 14px 14px;
+}
+.ican-auth-dark::before { background-image: radial-gradient(#fcd34d 0.6px, transparent 0.6px); opacity: 0.05; }
+.ican-auth-classic > * { position: relative; }
+
+/* masthead + headings */
+.ican-auth-classic :is(h1, h2, h3) {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.ican-auth-classic h2 { font-style: italic; font-size: 2rem; line-height: 1.15; }
+.ican-auth-classic .ia-kicker {
+  margin: 0.5rem auto 0;
+  width: fit-content;
+  border-top: 1px solid currentColor;
+  padding-top: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-variant: small-caps;
+  text-transform: none;
+}
+
+/* printed-card shapes: square corners, no blur, no zoom */
+.ican-auth-classic [class*="rounded"] { border-radius: 2px !important; }
+.ican-auth-classic [class*="backdrop-blur"] { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.ican-auth-classic [class*="scale-"] { transform: none !important; }
+.ican-auth-classic .max-w-md { border-width: 2px; outline: 1px solid currentColor; outline-offset: -7px; outline-color: rgba(138, 106, 31, 0.35); }
+
+/* logo seal: flat paper tile with a ruled frame instead of a glowing gradient */
+.ican-auth-classic :is([class*="from-purple-600"], [class*="from-blue-500"], [class*="from-green-500"]) {
+  background-image: none !important;
+  background-color: #fffdf6 !important;
+  border: 2px solid var(--ia-ink);
+  box-shadow: 3px 3px 0 0 rgba(31, 26, 18, 0.25) !important;
+}
+.ican-auth-dark :is([class*="from-purple-600"], [class*="from-blue-500"], [class*="from-green-500"]) {
+  background-color: #f6f1e4 !important;
+  border-color: var(--ia-amber);
+  box-shadow: 3px 3px 0 0 rgba(0, 0, 0, 0.5) !important;
+}
+.ican-auth-classic :is([class*="shadow-purple"], [class*="shadow-blue"], [class*="shadow-green"]) { box-shadow: 3px 3px 0 0 rgba(31, 26, 18, 0.25) !important; }
+.ican-auth-classic img { animation: none !important; filter: none !important; }
+/* only the decorative glow blobs (.blur-lg / .blur-xl), not backdrop-blur-* cards */
+.ican-auth-classic :is(.blur-lg, .blur-xl) { display: none; }
+
+/* printed buttons: ink rule, hard shadow, press-down */
+.ican-auth-classic button[type="submit"],
+.ican-auth-classic button[class*="w-full"] {
+  border: 2px solid var(--ia-ink);
+  min-height: 3rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.ican-auth-dark button[type="submit"],
+.ican-auth-dark button[class*="w-full"] { border-color: var(--ia-amber); }
+.ican-auth-classic button[type="submit"]:hover:not(:disabled),
+.ican-auth-classic button[class*="w-full"]:hover:not(:disabled) { transform: translate(-1px, -1px); filter: brightness(1.05); }
+.ican-auth-classic button[type="submit"]:active:not(:disabled),
+.ican-auth-classic button[class*="w-full"]:active:not(:disabled) { transform: translate(2px, 2px); }
+
+/* fields: ruled paper */
+.ican-auth-classic :is(input, select, textarea) { font-family: Georgia, 'Times New Roman', serif; border-width: 1px; }
+.ican-auth-classic :is(input, select, textarea):focus {
+  outline: 2px solid var(--ia-green);
+  outline-offset: 1px;
+  box-shadow: none !important;
+}
+.ican-auth-dark :is(input, select, textarea):focus { outline-color: var(--ia-amber); }
+.ican-auth-classic label { font-weight: 600; letter-spacing: 0.01em; }
+.ican-auth-classic input[type="checkbox"] { border-radius: 2px !important; }
+
+.ican-auth-classic a, .ican-auth-classic button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.ican-auth-classic :is(h1, h2, h3, p, label, button, span) { overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  .ican-auth-classic .max-w-md { padding: 1.25rem !important; }
+  /* 16px stops iOS Safari zooming the page when a field is focused */
+  .ican-auth-classic input { font-size: 16px !important; min-height: 3rem; }
+  .ican-auth-classic h2 { font-size: 1.75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ican-auth-classic * { animation: none !important; transition: none !important; }
+}
+
+/* ---- beat the app-wide theme sheet ----
+   ThemeContext injects `input, button { background/color/border-color: ... !important }`
+   for every theme, which was turning the primary button's label dark-on-green and
+   greying the fields. Higher-specificity !important rules here win over it. */
+.ican-auth-light { --ia-field: #fffdf6; --ia-field-line: rgba(31, 26, 18, 0.45); --ia-fg: #1f1a12; --ia-link: #14532d; --ia-btn: #14532d; --ia-btn-fg: #f6f1e4; --ia-alt: #fffdf6; }
+.ican-auth-dark  { --ia-field: #0f0d0a; --ia-field-line: rgba(252, 211, 77, 0.4); --ia-fg: #f6f1e4; --ia-link: #fcd34d; --ia-btn: #fcd34d; --ia-btn-fg: #1f1a12; --ia-alt: #17130d; }
+
+.ican-auth-classic input:not([type="checkbox"]) {
+  background-color: var(--ia-field) !important;
+  color: var(--ia-fg) !important;
+  border-color: var(--ia-field-line) !important;
+}
+.ican-auth-classic button[type="submit"] {
+  background-color: var(--ia-btn) !important;
+  color: var(--ia-btn-fg) !important;
+}
+.ican-auth-classic button[type="submit"] svg { color: var(--ia-btn-fg) !important; }
+.ican-auth-classic button[type="button"][class*="w-full"] {
+  color: var(--ia-fg) !important;
+  background-color: var(--ia-alt) !important;
+}
+/* text-style buttons: forgot password, show/hide, create account, cancel */
+.ican-auth-classic button:not([type="submit"]):not([class*="w-full"]) {
+  background-color: transparent !important;
+  color: var(--ia-link) !important;
+  border-color: transparent !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ican-auth-classic a { color: var(--ia-link) !important; }
+.ican-auth-classic label span { color: inherit; }

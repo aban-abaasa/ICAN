@@ -10,11 +10,22 @@ const supabase = getSupabaseClient();
 
 export const ORIGIN_APP = 'ican';
 
+// Public community privacy: a poster is shown by their user name, never by an
+// email address. New posts store the profile's real name; for older rows (or
+// accounts with no name) whose name field holds an email, only the user-name
+// part before the @ is shown -- the domain (gmail.com) is never exposed.
+export const publicDisplayName = (name) => {
+  const raw = String(name || '').trim();
+  if (!raw) return 'IcanEra user';
+  if (!raw.includes('@')) return raw;
+  return raw.split('@')[0].trim() || 'IcanEra user';
+};
+
 // authId = auth.uid(), obtained via supabase.auth.getUser() -> data.user.id.
 // NOT any local profiles.id — landing_messages.user_id references auth.users(id) directly.
 export const createLandingMessage = async ({ name, email, company, message, authId, isPublic, attachment, senderAvatarUrl }) => {
   const { data, error } = await supabase.from('landing_messages').insert({
-    name: name || null,
+    name: publicDisplayName(name),
     email: email || null,
     company: company || null,
     message,
@@ -34,7 +45,7 @@ export const createLandingMessage = async ({ name, email, company, message, auth
 export const replyToLandingMessage = async ({ parentId, name, email, authId, message, attachment, senderAvatarUrl }) => {
   const { data, error } = await supabase.from('landing_messages').insert({
     parent_id: parentId,
-    name: name || null,
+    name: publicDisplayName(name),
     email: email || null,
     message,
     user_id: authId || null,
@@ -135,7 +146,8 @@ export const fetchPublicThreads = async (limit = 50, viewer = {}) => {
     .limit(500);
   if (error) throw error;
 
-  const rows = data || [];
+  // The public feed never carries anyone's email: show the user name only.
+  const rows = (data || []).map((r) => ({ ...r, name: publicDisplayName(r.name), email: null }));
   const ids = rows.map((r) => r.id);
 
   let reactionsByMessage = {};

@@ -78,6 +78,13 @@ export const THEMES = {
   }
 };
 
+// Themes with a dark background. Light/dark-only UIs (the landing page and its
+// sections) branch on this instead of `actualTheme === 'dark'`, so Ocean Blue,
+// Forest Green, Purple Night and Sienna get the dark treatment rather than
+// being mistaken for light and showing dark text on a dark surface.
+export const DARK_FAMILY_THEMES = ['dark', 'purple', 'green', 'ocean', 'sienna'];
+export const isDarkFamilyTheme = (themeId) => DARK_FAMILY_THEMES.includes(themeId);
+
 // Color schemes for each theme
 const THEME_COLORS = {
   light: {

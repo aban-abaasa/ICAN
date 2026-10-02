@@ -10,7 +10,7 @@ import ContractPage from './components/ContractPage';
 import BillingPage from './components/BillingPage';
 import MobileView from './components/MobileView';
 import ActionQueue from './components/ActionQueue';
-import { SplashScreen } from './components/SplashScreen';
+import { SplashScreen, ClassicLoadingScreen } from './components/SplashScreen';
 import ICANDevPanel, { SESSION_KEY as ICAN_DEV_KEY } from './components/ICANDevPanel';
 import ResetPinPage from './components/ResetPinPage';
 import ConfirmDeleteAccountPage from './components/ConfirmDeleteAccountPage';
@@ -344,14 +344,7 @@ const App = () => {
 
   // Show loading screen while checking auth status
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading IcanEra...</p>
-        </div>
-      </div>
-    );
+    return <ClassicLoadingScreen />;
   }
 
   // Show error screen if there's an app error

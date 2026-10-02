@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Check } from 'lucide-react';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, isDarkFamilyTheme } from '../context/ThemeContext';
 import ThemeSwitcher from './ThemeSwitcher';
 import icanCoinBlockchainService from '../services/icanCoinBlockchainService';
 
@@ -103,7 +103,7 @@ const formatMB = (mb) => (mb >= 1000 ? `${(mb / 1000).toFixed(1)} GB` : `${mb.to
 
 const PricingPage = ({ onBack, onGetStarted }) => {
   const { actualTheme } = useTheme();
-  const isDarkTheme = actualTheme === 'dark';
+  const isDarkTheme = isDarkFamilyTheme(actualTheme);
   const [employees, setEmployees] = useState(5);
   const [livePrice, setLivePrice] = useState(null); // { priceUGX, source }
 

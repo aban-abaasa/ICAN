@@ -16,6 +16,7 @@ import {
   CreditCard,
   Banknote,
   ChevronDown,
+  ChevronLeft,
   Zap,
   Download,
   Upload,
@@ -66,6 +67,7 @@ import ReceiveMoneyModal from './ReceiveMoneyModal';
 import PayMoneyModal from './PayMoneyModal';
 import IcanPaymentReceiptModal from './IcanPaymentReceiptModal';
 import PINRecoveryModal from './PINRecoveryModal';
+import { usePinPrompt } from './PinPromptDialog';
 
 // Big balances (14,378,412 UGX) overflow the balance card, so the headline shows
 // them short: 1K, 14.38M, 5T. Under 1,000 it stays exact. Up to 2 decimals,
@@ -87,6 +89,7 @@ const formatCompactBalance = (value) => {
 };
 
 const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = null, onTabChange = null }) => {
+  const { askPin, pinDialog } = usePinPrompt();
   const [showBalance, setShowBalance] = useState(true);
   const [showExactBalance, setShowExactBalance] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
@@ -1647,7 +1650,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         );
         if (!businessConfirmed) return;
 
-        const businessPin = window.prompt('Enter your transaction PIN to send this IcanEra:');
+        const businessPin = await askPin({ title: 'Confirm transfer', message: 'Enter your transaction PIN to send this IcanEra.' });
         if (businessPin === null) return;
         const businessPinCheck = await walletAccountService.verifyUserPIN(currentUserId, businessPin);
         if (!businessPinCheck?.success) {
@@ -1821,7 +1824,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         );
         if (!businessConfirmed) return;
 
-        const businessPin = window.prompt('Enter your transaction PIN to send this IcanEra:');
+        const businessPin = await askPin({ title: 'Confirm transfer', message: 'Enter your transaction PIN to send this IcanEra.' });
         if (businessPin === null) return;
         const businessPinCheck = await walletAccountService.verifyUserPIN(currentUserId, businessPin);
         if (!businessPinCheck?.success) {
@@ -1903,7 +1906,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       );
       if (!confirmed) return;
 
-      const pin = window.prompt('Enter your transaction PIN to send this IcanEra:');
+      const pin = await askPin({ title: 'Confirm transfer', message: 'Enter your transaction PIN to send this IcanEra.' });
       if (pin === null) return;
       const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
       if (!pinCheck?.success) {
@@ -2027,7 +2030,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       // (mirrors topup: fill the form, then authorize). The PIN prompt below
       // is the actual authorization gate, same as every other real-money
       // send path in this component.
-      const pin = window.prompt(`Enter your transaction PIN to send ${parsedAmount} ${selectedCurrency} to ${trimmedPhone} (${network}):`);
+      const pin = await askPin({ title: 'Confirm transfer', message: `Send ${parsedAmount} ${selectedCurrency} to ${trimmedPhone} (${network})?` });
       if (pin === null) return;
       const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
       if (!pinCheck?.success) {
@@ -3529,230 +3532,161 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     });
   };
 
+  // CMMS classic look: open page, gold hairlines, serif headings, quiet jewel-tone buttons.
+  const GOLD = '#c4a052';
+  const GOLD_SOFT = 'rgba(196, 160, 82, 0.35)';
+  const HAIR = 'rgba(196, 160, 82, 0.28)';
+  const SERIF = '"Playfair Display", Georgia, "Times New Roman", serif';
+  const tabBase = { background: 'transparent', color: 'var(--color-textSecondary)', border: '1px solid transparent', borderBottom: `2px solid transparent`, borderRadius: 0, boxShadow: 'none' };
+  const tabOn = { background: 'linear-gradient(90deg, rgba(196,160,82,0.14), transparent)', color: 'var(--color-text)', border: '1px solid transparent', borderBottom: `2px solid ${GOLD}`, borderRadius: 0, boxShadow: 'none', fontWeight: 600 };
+  const flat = { background: 'transparent', border: 'none', borderBottom: `1px solid ${HAIR}`, borderRadius: 0, boxShadow: 'none' };
   const walletUi = {
-    headerCard: {
-      border: '2px solid transparent',
-      backgroundImage: 'linear-gradient(var(--color-bgSecondary), var(--color-bgSecondary)), linear-gradient(120deg, #22c55e, #f59e0b)',
-      backgroundOrigin: 'border-box',
-      backgroundClip: 'padding-box, border-box',
-      boxShadow: '0 10px 24px rgba(0, 0, 0, 0.16)'
-    },
-    headerIcon: {
-      background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
-      border: '1px solid var(--color-border)',
-      boxShadow: '0 10px 24px rgba(0, 0, 0, 0.25)'
-    },
-    title: {
-      background: 'linear-gradient(120deg, #16a34a, #f59e0b)',
-      WebkitBackgroundClip: 'text',
-      backgroundClip: 'text',
-      color: 'transparent'
-    },
-    subtitle: { color: '#15803d', fontWeight: 500 },
-    tabOverviewActive: {
-      background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))',
-      color: 'var(--color-bg)',
-      border: '2px solid #22c55e',
-      boxShadow: '0 8px 18px rgba(0, 0, 0, 0.22)'
-    },
-    tabOthersActive: {
-      background: 'linear-gradient(135deg, #10b981, #06b6d4)',
-      color: '#ffffff',
-      border: '2px solid #f59e0b',
-      boxShadow: '0 8px 18px rgba(16, 185, 129, 0.28)'
-    },
-    tabInactive: {
-      background: 'var(--color-bgSecondary)',
-      color: 'var(--color-textSecondary)',
-      border: '1px solid rgba(34, 197, 94, 0.35)',
-      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)'
-    },
-    tabOverviewInactive: {
-      background: 'var(--color-bgSecondary)',
-      color: '#15803d',
-      border: '1px solid rgba(34, 197, 94, 0.5)',
-      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)'
-    },
-    tabOthersInactive: {
-      background: 'var(--color-bgSecondary)',
-      color: '#c2410c',
-      border: '1px solid rgba(249, 115, 22, 0.45)',
-      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)'
-    },
-    dropdownMenu: {
-      background: 'var(--color-bgSecondary)',
-      border: '1px solid var(--color-border)',
-      boxShadow: '0 14px 28px rgba(0, 0, 0, 0.35)'
-    },
-    dropdownActiveItem: {
-      background: 'var(--color-primaryLight)',
-      color: 'var(--color-text)'
-    },
+    headerCard: { ...flat, paddingLeft: 0, paddingRight: 0 },
+    headerIcon: { background: 'transparent', border: `1px solid ${GOLD}`, boxShadow: 'none', color: GOLD },
+    title: { fontFamily: SERIF, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)' },
+    subtitle: { color: 'var(--color-textSecondary)', fontWeight: 400, fontStyle: 'italic', fontFamily: SERIF },
+    tabOverviewActive: tabOn,
+    tabOthersActive: tabOn,
+    tabInactive: tabBase,
+    tabOverviewInactive: tabBase,
+    tabOthersInactive: tabBase,
+    dropdownMenu: { background: 'var(--color-bgSecondary)', border: `1px solid ${GOLD_SOFT}`, boxShadow: '0 10px 24px rgba(0, 0, 0, 0.3)' },
+    dropdownActiveItem: { background: 'rgba(196, 160, 82, 0.14)', color: 'var(--color-text)' },
     dropdownItem: { color: 'var(--color-textSecondary)' },
-    balanceCard: {
-      background: 'linear-gradient(145deg, var(--color-bgSecondary), var(--color-primaryLight))',
-      border: '1px solid var(--color-border)'
-    },
-    balanceCardUnique: {
-      border: '3px solid transparent',
-      backgroundImage: 'linear-gradient(var(--color-bgSecondary), var(--color-bgSecondary)), linear-gradient(125deg, #0ea5e9, #22c55e, #f59e0b)',
-      backgroundOrigin: 'border-box',
-      backgroundClip: 'padding-box, border-box',
-      boxShadow: '0 14px 30px rgba(0, 0, 0, 0.18)'
-    },
-    balanceLabel: {
-      color: '#cbd5e1',
-      letterSpacing: '0.02em'
-    },
-    balanceAmount: {
-      background: 'linear-gradient(120deg, #38bdf8, #22c55e)',
-      WebkitBackgroundClip: 'text',
-      backgroundClip: 'text',
-      color: 'transparent'
-    },
-    balanceCurrency: {
-      color: '#16a34a',
-      fontWeight: 700
-    },
-    eyeButton: {
-      background: 'var(--color-bgSecondary)',
-      border: '2px dotted rgba(56, 189, 248, 0.75)'
-    },
-    actionButtonsWrap: {
-      border: '2px dotted rgba(245, 158, 11, 0.7)',
-      borderRadius: '14px',
-      padding: '10px',
-      background: 'linear-gradient(145deg, rgba(255,255,255,0.02), rgba(255,255,255,0.06))'
-    },
-    containerCard: {
-      border: '1px solid var(--color-border)',
-      background: 'linear-gradient(145deg, var(--color-bgSecondary), var(--color-bg))'
-    },
-    accountCardUnique: {
-      border: '3px solid transparent',
-      backgroundImage: 'linear-gradient(var(--color-bgSecondary), var(--color-bgSecondary)), linear-gradient(125deg, #22c55e, #f59e0b)',
-      backgroundOrigin: 'border-box',
-      backgroundClip: 'padding-box, border-box',
-      boxShadow: '0 14px 30px rgba(0, 0, 0, 0.18)'
-    },
-    accountHeading: {
-      background: 'linear-gradient(120deg, #16a34a, #f59e0b)',
-      WebkitBackgroundClip: 'text',
-      backgroundClip: 'text',
-      color: 'transparent'
-    },
-    editButton: {
-      background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-      color: '#ffffff',
-      border: '2px solid #fb923c',
-      boxShadow: '0 8px 16px rgba(245, 158, 11, 0.24)'
-    },
-    accountNumberContainer: {
-      background: 'var(--color-bgSecondary)',
-      border: '2px dotted rgba(249, 115, 22, 0.85)'
-    },
-    copyButton: {
-      background: 'linear-gradient(135deg, #16a34a, #15803d)',
-      color: '#ffffff',
-      border: '2px solid #4ade80'
-    },
-    subContainer: {
-      background: 'var(--color-bgSecondary)',
-      border: '2px dotted rgba(34, 197, 94, 0.7)'
-    },
-    securityContainer: {
-      background: 'linear-gradient(145deg, var(--color-primaryLight), var(--color-bgSecondary))',
-      border: '2px dotted rgba(245, 158, 11, 0.75)'
-    },
-    securityTitle: {
-      color: '#c2410c',
-      fontWeight: 700
-    },
-    securityLabel: {
-      color: 'var(--color-textSecondary)'
-    },
-    securityEnabled: {
-      color: '#16a34a',
-      fontWeight: 700
-    },
+    balanceCard: { ...flat },
+    balanceCardUnique: { ...flat, paddingLeft: 0, paddingRight: 0 },
+    balanceLabel: { color: GOLD, letterSpacing: '0.12em', textTransform: 'uppercase', fontSize: '0.72rem', fontWeight: 700 },
+    balanceAmount: { fontFamily: SERIF, color: 'var(--color-text)', fontWeight: 600 },
+    balanceCurrency: { color: GOLD, fontWeight: 600, letterSpacing: '0.1em' },
+    eyeButton: { background: 'transparent', border: `1px solid ${GOLD_SOFT}`, boxShadow: 'none' },
+    actionButtonsWrap: { border: 'none', borderTop: `1px solid ${HAIR}`, borderRadius: 0, padding: '14px 0 0', background: 'transparent' },
+    containerCard: { ...flat },
+    accountCardUnique: { ...flat, paddingLeft: 0, paddingRight: 0 },
+    accountHeading: { fontFamily: SERIF, fontWeight: 600, color: 'var(--color-text)' },
+    editButton: { background: 'linear-gradient(135deg, #b8862e, #8a6a1f)', color: '#ffffff', border: `1px solid ${GOLD}`, boxShadow: 'none' },
+    accountNumberContainer: { background: 'transparent', border: `1px solid ${GOLD_SOFT}` },
+    copyButton: { background: 'linear-gradient(135deg, #1f7a5a, #165c43)', color: '#ffffff', border: `1px solid ${GOLD_SOFT}` },
+    subContainer: { background: 'transparent', border: `1px solid ${HAIR}` },
+    securityContainer: { background: 'transparent', border: `1px solid ${GOLD_SOFT}` },
+    securityTitle: { color: GOLD, fontWeight: 700, fontFamily: SERIF },
+    securityLabel: { color: 'var(--color-textSecondary)' },
+    securityEnabled: { color: '#2f9e72', fontWeight: 700 },
     actionButtons: {
-      send: {
-        background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-        border: '1px solid #60a5fa',
-        boxShadow: '0 10px 18px rgba(37, 99, 235, 0.28)'
-      },
-      receive: {
-        background: 'linear-gradient(135deg, #0ea5e9, #0284c7)',
-        border: '1px solid #67e8f9',
-        boxShadow: '0 10px 18px rgba(14, 165, 233, 0.26)'
-      },
-      topUp: {
-        background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-        border: '1px solid #86efac',
-        boxShadow: '0 10px 18px rgba(34, 197, 94, 0.26)'
-      },
-      trade: {
-        background: 'linear-gradient(135deg, #f59e0b, #ea580c)',
-        border: '1px solid #fdba74',
-        boxShadow: '0 10px 18px rgba(245, 158, 11, 0.28)'
-      }
+      send: { background: 'linear-gradient(135deg, #2f4f8f, #243b6b)', border: `1px solid ${GOLD_SOFT}`, boxShadow: 'none' },
+      receive: { background: 'linear-gradient(135deg, #1f6f86, #17566a)', border: `1px solid ${GOLD_SOFT}`, boxShadow: 'none' },
+      topUp: { background: 'linear-gradient(135deg, #1f7a5a, #165c43)', border: `1px solid ${GOLD_SOFT}`, boxShadow: 'none' },
+      trade: { background: 'linear-gradient(135deg, #b8862e, #8a6a1f)', border: `1px solid ${GOLD_SOFT}`, boxShadow: 'none' }
     }
   };
 
   return (
-    <div ref={walletRootRef} className="wallet-creative-skin w-full space-y-6">
+    <div
+      ref={walletRootRef}
+      className={`wallet-creative-skin w-full space-y-6 ${activeTab !== 'overview' ? 'cmms-fullpage fixed inset-0 z-50 overflow-y-auto p-4 md:p-8' : ''}`}
+    >
       <div className="flex justify-end"><ICANWalletInbox /></div>
       <style>{`
+        /* CMMS classic skin: open page, gold hairlines, no rainbow boxes */
+        .wallet-creative-skin { font-family: "Georgia", "Iowan Old Style", "Palatino Linotype", serif; }
+        .wallet-creative-skin button, .wallet-creative-skin input,
+        .wallet-creative-skin select, .wallet-creative-skin textarea, .wallet-creative-skin table {
+          font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        }
+        .wallet-creative-skin :is(h1, h2, h3) { font-family: "Playfair Display", Georgia, serif; font-weight: 600; letter-spacing: .01em; }
+
         .wallet-creative-skin .solid-card,
         .wallet-creative-skin .glass-card {
-          border: 3px solid transparent !important;
-          background-image: linear-gradient(var(--color-bgSecondary), var(--color-bgSecondary)), linear-gradient(120deg, #22c55e, #f59e0b) !important;
-          background-origin: border-box;
-          background-clip: padding-box, border-box;
-          box-shadow: 0 14px 30px rgba(0, 0, 0, 0.16);
+          border: 0 !important;
+          border-bottom: 1px solid rgba(196, 160, 82, 0.28) !important;
+          background: transparent !important;
+          background-image: none !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
+          backdrop-filter: none !important;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
         }
-
         .wallet-creative-skin .solid-card h3,
-        .wallet-creative-skin .glass-card h3 {
-          color: var(--color-text);
-        }
+        .wallet-creative-skin .glass-card h3 { color: var(--color-text); }
 
-        .wallet-creative-skin .solid-card .rounded-lg,
-        .wallet-creative-skin .glass-card .rounded-lg {
-          border-width: 2px;
-          border-style: dotted;
-        }
-
-        .wallet-creative-skin .solid-card .rounded-lg:nth-of-type(odd),
-        .wallet-creative-skin .glass-card .rounded-lg:nth-of-type(odd) {
-          border-color: rgba(34, 197, 94, 0.7);
-        }
-
-        .wallet-creative-skin .solid-card .rounded-lg:nth-of-type(even),
-        .wallet-creative-skin .glass-card .rounded-lg:nth-of-type(even) {
-          border-color: rgba(249, 115, 22, 0.72);
+        /* inner boxes become hairline rows (modals live in .fixed and keep their panel) */
+        .wallet-creative-skin :not(.fixed):not(.fixed *) > .solid-card .rounded-lg,
+        .wallet-creative-skin :not(.fixed):not(.fixed *) > .glass-card .rounded-lg {
+          border-width: 1px;
+          border-style: solid;
+          border-color: rgba(196, 160, 82, 0.28);
         }
 
         .wallet-creative-skin .solid-card button,
         .wallet-creative-skin .glass-card button {
-          border-width: 2px;
+          border-width: 1px;
           border-style: solid;
-          border-color: rgba(34, 197, 94, 0.55);
-          box-shadow: 0 8px 16px rgba(0, 0, 0, 0.14);
+          border-color: rgba(196, 160, 82, 0.4);
+          box-shadow: none;
+          transition: background-color .2s ease, border-color .2s ease;
         }
-
         .wallet-creative-skin .solid-card button:hover,
         .wallet-creative-skin .glass-card button:hover {
-          border-color: rgba(249, 115, 22, 0.8);
-          transform: translateY(-1px);
+          border-color: #c4a052;
+          transform: none;
         }
 
         .wallet-creative-skin input,
         .wallet-creative-skin select,
         .wallet-creative-skin textarea {
-          border: 2px dotted rgba(56, 189, 248, 0.7) !important;
-          border-radius: 10px !important;
+          border: 1px solid rgba(196, 160, 82, 0.4) !important;
+          border-radius: 4px !important;
         }
+        .wallet-creative-skin input:focus,
+        .wallet-creative-skin select:focus,
+        .wallet-creative-skin textarea:focus {
+          outline: none;
+          border-color: #c4a052 !important;
+          box-shadow: 0 0 0 2px rgba(196, 160, 82, 0.2);
+        }
+
+        /* gold small-caps table headers, hairline rows */
+        .wallet-creative-skin table { border-collapse: collapse; }
+        .wallet-creative-skin table thead th {
+          color: #c4a052; font-size: .68rem; font-weight: 700; letter-spacing: .1em;
+          text-transform: uppercase; border-bottom: 1px solid rgba(196, 160, 82, 0.45);
+        }
+        .wallet-creative-skin table tbody tr + tr td { border-top: 1px solid rgba(196, 160, 82, 0.16); }
+        .wallet-creative-skin table tbody tr:hover > td { background: rgba(196, 160, 82, 0.09); }
+
+        /* header: gold hairline with a centred diamond, as in CMMS */
+        .wallet-creative-skin .wallet-top-header {
+          position: relative;
+          border-bottom: 0 !important;
+          background-image: linear-gradient(90deg, transparent, rgba(196, 160, 82, 0.85), transparent) !important;
+          background-repeat: no-repeat !important;
+          background-position: bottom !important;
+          background-size: 100% 1px !important;
+        }
+        .wallet-creative-skin .wallet-top-header::after {
+          content: ''; position: absolute; left: 50%; bottom: -3px; width: 7px; height: 7px;
+          background: #c4a052; transform: translateX(-50%) rotate(45deg);
+        }
+
+        /* readable on every theme: dark-theme utility colours follow the theme */
+        .wallet-creative-skin :is(.text-gray-300, .text-gray-400) { color: var(--color-textSecondary) !important; }
+        .wallet-creative-skin :is([class*="bg-slate-700"], [class*="bg-slate-800"]):not(.fixed *) {
+          background: transparent !important; border: 1px solid rgba(196, 160, 82, 0.28);
+        }
+        .wallet-creative-skin .wallet-field { background: transparent !important; border: 1px solid rgba(196, 160, 82, 0.28); }
+        .wallet-creative-skin .wallet-num { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; font-variant-numeric: lining-nums tabular-nums; color: var(--color-text); letter-spacing: .02em; }
+        .wallet-creative-skin { font-variant-numeric: lining-nums; }
+        .wallet-creative-skin .wallet-medallion { background: transparent; border: 1px solid #c4a052; }
+        .wallet-creative-skin .wallet-badge-ok { color: #2f9e72; border: 1px solid rgba(47,158,114,.55); background: rgba(47,158,114,.1); letter-spacing: .08em; }
+        .wallet-creative-skin .wallet-btn-classic { background: transparent !important; color: var(--color-text) !important; border: 1px solid rgba(196,160,82,.55) !important; }
+        .wallet-creative-skin .wallet-btn-classic:hover { background: rgba(196,160,82,.12) !important; border-color: #c4a052 !important; }
+
+        /* gentle rise on arrival */
+        @keyframes wallet-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        .wallet-creative-skin > .space-y-6 > *, .wallet-creative-skin > .space-y-4 > * { animation: wallet-rise .45s cubic-bezier(.2,.7,.2,1) both; }
+        .wallet-creative-skin > .space-y-6 > :nth-child(2) { animation-delay: 50ms; }
+        .wallet-creative-skin > .space-y-6 > :nth-child(3) { animation-delay: 100ms; }
+        @media (prefers-reduced-motion: reduce) { .wallet-creative-skin * { animation: none !important; } }
 
         /* Buy/Sell components in modal styling */
         .trade-tab-content .ican-trading-container {
@@ -4388,9 +4322,19 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           }
         }
       `}</style>{/* Header Card */}
-      <div className="solid-card p-4 md:p-6" style={walletUi.headerCard}>
+      <div className="solid-card wallet-top-header p-4 md:p-6" style={walletUi.headerCard}>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <div className="flex items-center gap-4">
+            {activeTab !== 'overview' && (
+              <button
+                onClick={() => setActiveTab('overview')}
+                className="px-3 py-2 text-sm flex items-center gap-1 rounded"
+                style={{ background: 'transparent', color: 'var(--color-text)', border: '1px solid rgba(196, 160, 82, 0.4)' }}
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Back
+              </button>
+            )}
             <div className="p-3 rounded-lg" style={walletUi.headerIcon}>
               <Wallet className="w-6 h-6 text-white" />
             </div>
@@ -5687,21 +5631,21 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       {activeTab === 'settings' && (
         <div className="space-y-4">
         {/* Compact Accounts Header with Toggle */}
-        <div className="glass-card p-4 border border-orange-500/30 cursor-pointer hover:border-orange-500/60 transition-all" onClick={() => setShowSettingsPanel(!showSettingsPanel)}>
+        <div className="glass-card p-4 cursor-pointer transition-all" onClick={() => setShowSettingsPanel(!showSettingsPanel)}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-orange-500/30">
-                <Settings className="w-5 h-5 text-orange-400" />
+              <div className="p-2 rounded-lg" style={{ border: '1px solid rgba(196,160,82,0.5)' }}>
+                <Settings className="w-5 h-5" style={{ color: '#c4a052' }} />
               </div>
               <div>
-                <h3 className="text-base font-semibold text-white">My Accounts</h3>
+                <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>My Accounts</h3>
                 <p className="text-gray-400 text-xs">
                   {userAccount && isAgent ? '2 accounts' : userAccount ? '1 account' : 'No accounts'}
                 </p>
               </div>
             </div>
-            <div className={`p-2 rounded-lg bg-white/10 transition-transform ${showSettingsPanel ? 'rotate-180' : ''}`}>
-              <ChevronDown className="w-5 h-5 text-gray-300" />
+            <div className={`p-2 transition-transform ${showSettingsPanel ? 'rotate-180' : ''}`}>
+              <ChevronDown className="w-5 h-5" style={{ color: 'var(--color-textSecondary)' }} />
             </div>
           </div>
         </div>
@@ -5711,22 +5655,22 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           <div className="space-y-4">
             {/* Wallet Account Card - Compact */}
             {userAccount && (
-            <div className="glass-card p-4 border border-purple-500/30 bg-gradient-to-br from-purple-900/20 to-slate-900/20">
+            <div className="glass-card p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3 flex-1">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full wallet-medallion flex items-center justify-center flex-shrink-0">
                     <span className="text-lg">💳</span>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{userAccount.account_holder_name}</p>
-                    <p className="text-xs text-purple-400">Wallet Account</p>
+                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{userAccount.account_holder_name}</p>
+                    <p className="text-xs" style={{ color: '#c4a052' }}>Wallet Account</p>
                   </div>
                 </div>
-                <span className="px-2 py-1 rounded-full bg-green-500/30 text-green-400 font-semibold text-xs border border-green-500/50 flex-shrink-0">ACTIVE</span>
+                <span className="px-2 py-1 rounded-full font-semibold text-xs flex-shrink-0 wallet-badge-ok">ACTIVE</span>
               </div>
 
               {/* Account Number - Clickable with Visibility Toggle */}
-              <div className="bg-slate-700/50 rounded-lg p-3 mb-3 border border-purple-500/20 group">
+              <div className="wallet-field rounded-lg p-3 mb-3 group">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-gray-400 text-xs">Account Number</p>
                   <button
@@ -5742,7 +5686,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   </button>
                 </div>
                 <p 
-                  className="text-white font-mono font-bold cursor-pointer hover:text-purple-300 transition-all select-all"
+                  className="wallet-num font-bold cursor-pointer hover:opacity-80 transition-all select-all"
                   onClick={() => { navigator.clipboard.writeText(userAccount.account_number); alert('Account number copied!'); }}
                 >
                   {showWalletAccountNumber ? userAccount.account_number : '••••••••••••••••'}
@@ -5751,13 +5695,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
               {/* Mini Info Grid */}
               <div className="grid grid-cols-2 gap-2 mb-3">
-                <div className="bg-slate-700/30 rounded p-2">
+                <div className="wallet-field rounded p-2">
                   <p className="text-gray-400 text-xs">Currency</p>
                   <p className="text-white text-sm font-semibold">{userAccount.preferred_currency}</p>
                 </div>
-                <div className="bg-slate-700/30 rounded p-2">
+                <div className="wallet-field rounded p-2">
                   <p className="text-gray-400 text-xs">Balance</p>
-                  <p className="text-green-400 text-sm font-semibold">${userAccount.usd_balance?.toLocaleString() || '0'}</p>
+                  <p className="wallet-num text-sm font-semibold" style={{ color: '#2f9e72' }}>${userAccount.usd_balance?.toLocaleString() || '0'}</p>
                 </div>
               </div>
 
@@ -5774,31 +5718,31 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   setEditEmailOtp({ sent: false, verified: false, code: '', loading: false, error: null });
                   setShowAccountEdit(true);
                 }}
-                className="w-full px-3 py-2 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 rounded-lg text-sm font-medium transition-all border border-purple-500/30"
+                className="w-full px-3 py-2 rounded text-sm font-medium transition-all wallet-btn-classic"
               >
-                ✏️ Edit
+                Edit
               </button>
             </div>
           )}
 
           {/* Agent Account Card - Compact (if user is agent) */}
           {isAgent && agentAccount && (
-            <div className="glass-card p-4 border border-blue-500/30 bg-gradient-to-br from-blue-900/20 to-slate-900/20">
+            <div className="glass-card p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3 flex-1">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full wallet-medallion flex items-center justify-center flex-shrink-0">
                     <span className="text-lg">🏪</span>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{agentAccount.agent_name}</p>
-                    <p className="text-xs text-blue-400">Agent Account</p>
+                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{agentAccount.agent_name}</p>
+                    <p className="text-xs" style={{ color: '#c4a052' }}>Agent Account</p>
                   </div>
                 </div>
-                <span className="px-2 py-1 rounded-full bg-green-500/30 text-green-400 font-semibold text-xs border border-green-500/50 flex-shrink-0">ACTIVE</span>
+                <span className="px-2 py-1 rounded-full font-semibold text-xs flex-shrink-0 wallet-badge-ok">ACTIVE</span>
               </div>
 
               {/* Agent Account Number - Clickable with Visibility Toggle */}
-              <div className="bg-slate-700/50 rounded-lg p-3 mb-3 border border-blue-500/20 group">
+              <div className="wallet-field rounded-lg p-3 mb-3 group">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-gray-400 text-xs">Agent ID</p>
                   <button
@@ -5814,7 +5758,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   </button>
                 </div>
                 <p 
-                  className="text-white font-mono font-bold cursor-pointer hover:text-blue-300 transition-all select-all"
+                  className="wallet-num font-bold cursor-pointer hover:opacity-80 transition-all select-all"
                    onClick={() => { navigator.clipboard.writeText(agentAccount.agent_id || agentAccount.agent_code); alert('Agent ID copied!'); }}
                 >
                    {showAgentAccountNumber ? (agentAccount.agent_id || agentAccount.agent_code) : '••••••••••••••••'}
@@ -5823,22 +5767,22 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
               {/* Mini Info Grid */}
               <div className="grid grid-cols-2 gap-2 mb-3">
-                <div className="bg-slate-700/30 rounded p-2">
+                <div className="wallet-field rounded p-2">
                   <p className="text-gray-400 text-xs">Location</p>
                   <p className="text-white text-sm font-semibold">{agentAccount.location_city || 'N/A'}</p>
                 </div>
-                <div className="bg-slate-700/30 rounded p-2">
+                <div className="wallet-field rounded p-2">
                   <p className="text-gray-400 text-xs">Commission</p>
-                  <p className="text-blue-400 text-sm font-semibold">{agentAccount.withdrawal_commission_percentage || '0'}%</p>
+                  <p className="wallet-num text-sm font-semibold" style={{ color: '#2f6fb0' }}>{agentAccount.withdrawal_commission_percentage || '0'}%</p>
                 </div>
               </div>
 
               {/* Edit Button */}
               <button
                 onClick={() => setActiveTab('agent')}
-                className="w-full px-3 py-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 rounded-lg text-sm font-medium transition-all border border-blue-500/30"
+                className="w-full px-3 py-2 rounded text-sm font-medium transition-all wallet-btn-classic"
               >
-                ✏️ Edit Profile
+                Edit profile
               </button>
             </div>
           )}
@@ -5849,9 +5793,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               href="https://supermartkera.icanera.space/business-local-server"
               target="_blank"
               rel="noopener noreferrer"
-              className="mb-3 block rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-3 transition-colors hover:bg-cyan-500/20"
+              className="wallet-field mb-3 block rounded-lg p-3 transition-colors"
             >
-              <span className="block text-sm font-semibold text-cyan-200">Optional business offline server</span>
+              <span className="block text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Optional business offline server</span>
               <span className="mt-1 block text-xs leading-5 text-gray-300">Open SupermartKera business settings to set up a local server for your team.</span>
             </a>
             <h4 className="text-sm font-semibold text-white mb-3">⚙️ Quick Settings</h4>
@@ -8318,7 +8262,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             // wallet PIN. ICAN-wallet transfers still require PIN approval.
             const request = await getIcanPaymentRequest(paymentCode);
             if (request.payment_method !== 'cash') {
-              const pin = window.prompt('Enter your transaction PIN to approve this payment:');
+              const pin = await askPin({ title: 'Approve payment', message: 'Enter your transaction PIN to approve this payment.' });
               if (pin === null) return;
               const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
               if (!pinCheck?.success) {
@@ -8345,6 +8289,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         }}
       />
       <IcanPaymentReceiptModal receipt={paymentReceipt} onClose={() => setPaymentReceipt(null)} />
+      {pinDialog}
     </div>
   );
 };

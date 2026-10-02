@@ -10,15 +10,24 @@ const escapeXml = (value) => String(value).replace(/[<>&"']/g, (character) => ({
   "'": '&apos;',
 }[character]));
 
-const rpcPage = async (supabaseUrl, anonKey, offset) => {
-  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/fn_browse_public_cmms_notices`, {
+// Two sources, same shape for the caller: the business directory (every
+// business listed on the landing search, with or without posts --
+// CMMS_PUBLIC_BUSINESS_DIRECTORY_SEARCH.sql) and, as a fallback if that SQL
+// hasn't been run yet, the notices feed (only businesses with a public post).
+const SOURCES = {
+  directory: { fn: 'fn_search_public_cmms_businesses', body: (offset) => ({ p_query: null, p_limit: PAGE_SIZE, p_offset: offset }) },
+  notices: { fn: 'fn_browse_public_cmms_notices', body: (offset) => ({ p_post_type: null, p_limit: PAGE_SIZE, p_offset: offset }) },
+};
+
+const rpcPage = async (supabaseUrl, anonKey, offset, source) => {
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${source.fn}`, {
     method: 'POST',
     headers: {
       apikey: anonKey,
       Authorization: `Bearer ${anonKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ p_post_type: null, p_limit: PAGE_SIZE, p_offset: offset }),
+    body: JSON.stringify(source.body(offset)),
   });
   if (!response.ok) throw new Error(`Public CMMS sitemap query failed (${response.status}).`);
   return response.json();
@@ -26,10 +35,12 @@ const rpcPage = async (supabaseUrl, anonKey, offset) => {
 
 const addPublicBusinesses = (posts, companies) => {
   for (const post of posts) {
-    if (!post.cmms_company_id) continue;
-    const previousDate = companies.get(post.cmms_company_id);
+    // directory rows carry `id` (the company); notice rows carry `cmms_company_id`
+    const companyId = post.cmms_company_id || post.id;
+    if (!companyId) continue;
+    const previousDate = companies.get(companyId);
     if (!previousDate || (post.published_at && post.published_at > previousDate)) {
-      companies.set(post.cmms_company_id, post.published_at || '');
+      companies.set(companyId, post.published_at || '');
     }
   }
 };
@@ -45,7 +56,15 @@ export default async function handler(_req, res) {
 
   try {
     const companies = new Map();
-    const firstPage = await rpcPage(supabaseUrl, anonKey, 0);
+    let source = SOURCES.directory;
+    let firstPage;
+    try {
+      firstPage = await rpcPage(supabaseUrl, anonKey, 0, source);
+    } catch (directoryError) {
+      console.warn('[sitemap] directory RPC unavailable, falling back to notices feed:', directoryError.message);
+      source = SOURCES.notices;
+      firstPage = await rpcPage(supabaseUrl, anonKey, 0, source);
+    }
     addPublicBusinesses(firstPage, companies);
 
     let offset = PAGE_SIZE;
@@ -55,7 +74,7 @@ export default async function handler(_req, res) {
         { length: Math.min(5, (MAX_POSTS - offset) / PAGE_SIZE) },
         (_, index) => offset + index * PAGE_SIZE,
       );
-      const pages = await Promise.all(offsets.map((pageOffset) => rpcPage(supabaseUrl, anonKey, pageOffset)));
+      const pages = await Promise.all(offsets.map((pageOffset) => rpcPage(supabaseUrl, anonKey, pageOffset, source)));
       for (let index = 0; index < pages.length; index += 1) {
         addPublicBusinesses(pages[index], companies);
         if (pages[index].length < PAGE_SIZE) {

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { getClassicAuthPalette, classicAuthClass } from './classicAuthTheme';
+import './classicAuth.css';
 import { CountryService } from '../../services/countryService';
 import IcanEraLogo from '../../IcanEra.png';
 import CanweFields from '../security/CanweFields';
@@ -32,105 +34,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
   const [selectedRegion, setSelectedRegion] = useState('East Africa');
   const [showCountrySelector, setShowCountrySelector] = useState(false);
 
-  const themeStyles = {
-    dark: {
-      pageBg: 'linear-gradient(135deg, #0b1020 0%, #111827 55%, #1f1147 100%)',
-      cardBg: 'rgba(17, 24, 39, 0.84)',
-      cardBorder: 'rgba(148, 163, 184, 0.30)',
-      cardShadow: '0 28px 64px rgba(2, 6, 23, 0.55)',
-      text: '#f8fafc',
-      muted: '#cbd5e1',
-      label: '#cbd5e1',
-      inputBg: 'rgba(30, 41, 59, 0.72)',
-      inputBorder: 'rgba(100, 116, 139, 0.70)',
-      inputText: '#f8fafc',
-      inputPlaceholder: 'placeholder-slate-400',
-      primaryGradient: 'linear-gradient(90deg, #8b5cf6 0%, #ec4899 100%)',
-      primaryShadow: '0 10px 28px rgba(168, 85, 247, 0.38)',
-      primaryText: '#ffffff',
-      link: '#a78bfa',
-      linkHover: '#c4b5fd',
-      divider: 'rgba(148, 163, 184, 0.45)'
-    },
-    light: {
-      pageBg: 'linear-gradient(135deg, #e2e8f0 0%, #f8fafc 50%, #dbeafe 100%)',
-      cardBg: 'rgba(255, 255, 255, 0.90)',
-      cardBorder: 'rgba(148, 163, 184, 0.65)',
-      cardShadow: '0 24px 54px rgba(148, 163, 184, 0.35)',
-      text: '#0f172a',
-      muted: '#475569',
-      label: '#334155',
-      inputBg: 'rgba(255, 255, 255, 0.96)',
-      inputBorder: 'rgba(148, 163, 184, 0.75)',
-      inputText: '#0f172a',
-      inputPlaceholder: 'placeholder-slate-500',
-      primaryGradient: 'linear-gradient(90deg, #2563eb 0%, #7c3aed 100%)',
-      primaryShadow: '0 10px 22px rgba(59, 130, 246, 0.32)',
-      primaryText: '#ffffff',
-      link: '#4f46e5',
-      linkHover: '#4338ca',
-      divider: 'rgba(148, 163, 184, 0.65)'
-    },
-    purple: {
-      pageBg: 'linear-gradient(135deg, #1e1b4b 0%, #4c1d95 55%, #581c87 100%)',
-      cardBg: 'rgba(45, 27, 94, 0.86)',
-      cardBorder: 'rgba(192, 132, 252, 0.45)',
-      cardShadow: '0 28px 64px rgba(45, 27, 94, 0.62)',
-      text: '#f8f7ff',
-      muted: '#ddd6fe',
-      label: '#e9d5ff',
-      inputBg: 'rgba(88, 28, 135, 0.45)',
-      inputBorder: 'rgba(192, 132, 252, 0.55)',
-      inputText: '#f8f7ff',
-      inputPlaceholder: 'placeholder-purple-200',
-      primaryGradient: 'linear-gradient(90deg, #c084fc 0%, #f472b6 100%)',
-      primaryShadow: '0 10px 28px rgba(192, 132, 252, 0.38)',
-      primaryText: '#1f1136',
-      link: '#f0abfc',
-      linkHover: '#f5d0fe',
-      divider: 'rgba(192, 132, 252, 0.45)'
-    },
-    green: {
-      pageBg: 'linear-gradient(135deg, #052e2b 0%, #14532d 50%, #064e3b 100%)',
-      cardBg: 'rgba(19, 78, 74, 0.86)',
-      cardBorder: 'rgba(110, 231, 183, 0.46)',
-      cardShadow: '0 28px 64px rgba(4, 47, 46, 0.60)',
-      text: '#f0fdf4',
-      muted: '#d1fae5',
-      label: '#bbf7d0',
-      inputBg: 'rgba(6, 78, 59, 0.52)',
-      inputBorder: 'rgba(110, 231, 183, 0.52)',
-      inputText: '#f0fdf4',
-      inputPlaceholder: 'placeholder-emerald-200',
-      primaryGradient: 'linear-gradient(90deg, #34d399 0%, #22d3ee 100%)',
-      primaryShadow: '0 10px 28px rgba(52, 211, 153, 0.34)',
-      primaryText: '#052e16',
-      link: '#6ee7b7',
-      linkHover: '#a7f3d0',
-      divider: 'rgba(110, 231, 183, 0.45)'
-    },
-    ocean: {
-      pageBg: 'linear-gradient(135deg, #082f49 0%, #0c4a6e 52%, #164e63 100%)',
-      cardBg: 'rgba(22, 78, 99, 0.86)',
-      cardBorder: 'rgba(125, 211, 252, 0.50)',
-      cardShadow: '0 28px 64px rgba(8, 47, 73, 0.62)',
-      text: '#f0f9ff',
-      muted: '#dbeafe',
-      label: '#bae6fd',
-      inputBg: 'rgba(8, 47, 73, 0.55)',
-      inputBorder: 'rgba(125, 211, 252, 0.52)',
-      inputText: '#f0f9ff',
-      inputPlaceholder: 'placeholder-sky-200',
-      primaryGradient: 'linear-gradient(90deg, #38bdf8 0%, #6366f1 100%)',
-      primaryShadow: '0 10px 28px rgba(56, 189, 248, 0.34)',
-      primaryText: '#082f49',
-      link: '#7dd3fc',
-      linkHover: '#bae6fd',
-      divider: 'rgba(125, 211, 252, 0.45)'
-    }
-  };
-
-  const palette = themeStyles[actualTheme] || themeStyles.dark;
+  const palette = getClassicAuthPalette(actualTheme);
   const inputClassName = `w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent transition-all ${palette.inputPlaceholder}`;
   const inputStyle = {
     backgroundColor: palette.inputBg,
@@ -216,7 +120,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundImage: palette.pageBg }}>
+      <div className={`${classicAuthClass(actualTheme)} min-h-screen flex items-center justify-center px-4 py-8`} style={{ backgroundImage: palette.pageBg }}>
         <div className="max-w-md w-full backdrop-blur-xl rounded-[30px] shadow-2xl p-8 border" style={{ backgroundColor: palette.cardBg, borderColor: palette.cardBorder, boxShadow: palette.cardShadow }}>
           <div className="text-center">
             <div className="w-20 h-20 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-500/30">
@@ -245,7 +149,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-8" style={{ backgroundImage: palette.pageBg }}>
+    <div className={`${classicAuthClass(actualTheme)} min-h-screen flex items-center justify-center px-4 py-8`} style={{ backgroundImage: palette.pageBg }}>
       <div className="max-w-md w-full backdrop-blur-xl rounded-[30px] shadow-2xl p-8 border" style={{ backgroundColor: palette.cardBg, borderColor: palette.cardBorder, boxShadow: palette.cardShadow }}>
         {/* Logo/Brand */}
         <div className="text-center mb-8">
@@ -280,7 +184,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
               </div>
             )}
           </h2>
-          <p className="text-sm mt-2" style={{ color: palette.muted }}>Transform volatility into global capital</p>
+          <p className="ia-kicker" style={{ color: palette.muted }}>Transform volatility into global capital</p>
           {loading && <p className="text-xs animate-pulse mt-2" style={{ color: palette.link }}>Creating your account...</p>}
         </div>
 

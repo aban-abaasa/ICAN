@@ -9,11 +9,12 @@ import TrustGroupsPreview from './landing/TrustGroupsPreview';
 import DropshipPreview from './landing/DropshipPreview';
 import CMMSNoticeBoardPreview from './landing/CMMSNoticeBoardPreview';
 import ProfessionalsCarousel from './landing/ProfessionalsCarousel';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, isDarkFamilyTheme } from '../context/ThemeContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import {
   createLandingMessage,
   fetchPublicThreads,
+  publicDisplayName,
   getLandingPlatformStats,
   getMyIcanBalance,
   getOrCreateGuestLikeKey,
@@ -68,7 +69,7 @@ const fmtBoardTime = (value) => {
 
 const LandingPage = ({ onGetStarted }) => {
   const { actualTheme } = useTheme();
-  const isDarkTheme = actualTheme === 'dark';
+  const isDarkTheme = isDarkFamilyTheme(actualTheme);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
   const [scrollPosition, setScrollPosition] = useState(0);
@@ -624,7 +625,7 @@ const LandingPage = ({ onGetStarted }) => {
       const { data: { user: authUser } = {} } = await supabase.auth.getUser();
       if (cancelled || !authUser) return;
 
-      let name = authUser.email || '';
+      let name = authUser.user_metadata?.full_name || authUser.user_metadata?.name || '';
       let email = authUser.email || '';
       try {
         const { data: profileRow } = await supabase
@@ -641,7 +642,7 @@ const LandingPage = ({ onGetStarted }) => {
       }
       if (cancelled) return;
 
-      const id = { authId: authUser.id, name: name || 'IcanEra user', email };
+      const id = { authId: authUser.id, name: publicDisplayName(name || email), email };
       setIdentity(id);
       setContactForm((prev) => ({
         ...prev,
@@ -902,23 +903,114 @@ const LandingPage = ({ onGetStarted }) => {
           border-image: none !important;
           animation: none !important;
         }
+
+        /* ICAN-CLASSIC-EDITION: ivory paper, ink, forest green & brass; serif type; ruled, square-cornered cards */
+        .ican-landing.ican-landing { font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif; }
+        .ican-landing.ican-landing :is(h1, h2, h3, h4) {
+          font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+          font-weight: 700;
+          letter-spacing: -0.01em;
+        }
+        .ican-landing.ican-landing :is(h2) { font-style: normal; }
+        /* gradient / rainbow headline text -> solid classic ink or green */
+        .ican-landing.ican-landing [class*="bg-clip-text"] {
+          background-image: none !important;
+          -webkit-text-fill-color: currentColor !important;
+          color: #14532d !important;
+          animation: none !important;
+        }
+        .ican-landing-dark.ican-landing-dark [class*="bg-clip-text"] { color: #fcd34d !important; }
+        /* square, printed edges instead of bubbly rounding (avatars / dots keep rounded-full) */
+        .ican-landing.ican-landing section :is(div, article, button, a, img, input, textarea, select)[class*="rounded-lg"],
+        .ican-landing.ican-landing section :is(div, article, button, a, img, input, textarea, select)[class*="rounded-xl"],
+        .ican-landing.ican-landing section :is(div, article, button, a, img, input, textarea, select)[class*="rounded-2xl"],
+        .ican-landing.ican-landing section :is(div, article, button, a, img, input, textarea, select)[class*="rounded-3xl"],
+        .ican-landing.ican-landing section :is(div, article, button, a)[class*="rounded-[2rem]"],
+        .ican-landing.ican-landing section :is(button, a)[class*="rounded-full"]:not([class*="h-"]):not([class*="w-"]),
+        .ican-landing.ican-landing footer :is(div, button, a)[class*="rounded-"]:not([class*="rounded-full"]) {
+          border-radius: 3px !important;
+        }
+        /* light mode: every pastel / coloured card becomes cream paper with an ink rule */
+        .ican-landing-light.ican-landing-light section :is(article, div)[class*="rounded"][class*="border"]:is(
+          [class*="bg-emerald-50"], [class*="bg-sky-50"], [class*="bg-violet-50"], [class*="bg-amber-50"], [class*="bg-rose-50"],
+          [class*="bg-cyan-50"], [class*="bg-blue-50"], [class*="bg-purple-50"], [class*="bg-pink-50"], [class*="bg-teal-50"],
+          [class*="bg-indigo-50"], [class*="bg-orange-50"], [class*="bg-green-50"], [class*="bg-red-50"], [class*="bg-yellow-50"],
+          [class*="bg-fuchsia-50"], [class*="bg-lime-50"], [class*="bg-slate-50"], [class*="bg-gray-50"], [class*="bg-white"]
+        ) {
+          background-color: #fffdf6 !important;
+          border-color: rgba(31, 26, 18, 0.35) !important;
+          box-shadow: 4px 4px 0 0 rgba(31, 26, 18, 0.12) !important;
+        }
+        .ican-landing-light.ican-landing-light section :is(article, div)[class*="rounded"][class*="border"]:is(
+          [class*="bg-emerald-50"], [class*="bg-sky-50"], [class*="bg-violet-50"], [class*="bg-amber-50"], [class*="bg-rose-50"],
+          [class*="bg-cyan-50"], [class*="bg-blue-50"], [class*="bg-purple-50"], [class*="bg-pink-50"], [class*="bg-teal-50"],
+          [class*="bg-white"]
+        ):hover {
+          border-color: #14532d !important;
+          box-shadow: 6px 6px 0 0 rgba(20, 83, 45, 0.2) !important;
+        }
+        /* section bands: warm paper, ruled with a double line, instead of flat white / blue-grey */
+        .ican-landing-light.ican-landing-light { background-color: #f7f3e8 !important; }
+        .ican-landing-light.ican-landing-light section[class*="bg-white"],
+        .ican-landing-light.ican-landing-light section[class*="bg-slate-50"],
+        .ican-landing-light.ican-landing-light section[class*="bg-stone-50"] { background-color: #fbf8ee !important; }
+        .ican-landing.ican-landing section + section { border-top: 4px double rgba(31, 26, 18, 0.28); }
+        .ican-landing-dark.ican-landing-dark section + section { border-top-color: rgba(252, 211, 77, 0.3); }
+        /* kickers: small caps, wide tracking, ornament either side */
+        .ican-landing.ican-landing section [class*="uppercase"][class*="tracking-"] { font-variant: small-caps; text-transform: none; letter-spacing: 0.2em; font-size: 0.95em; }
+        /* body copy in serif, tighter classic measure */
+        .ican-landing.ican-landing section p { font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif; }
+        /* printed buttons: solid, square, hard shadow */
+        .ican-landing-light.ican-landing-light section button[class*="bg-emerald-"],
+        .ican-landing-light.ican-landing-light section button[class*="bg-green-"],
+        .ican-landing-light.ican-landing-light section button[class*="bg-blue-"],
+        .ican-landing-light.ican-landing-light section button[class*="bg-purple-"],
+        .ican-landing-light.ican-landing-light section button[class*="bg-indigo-"] {
+          background-image: none !important;
+          border: 2px solid #1f1a12 !important;
+          box-shadow: 3px 3px 0 0 rgba(31, 26, 18, 0.28) !important;
+        }
+        .ican-landing.ican-landing section button:active { transform: translate(1px, 1px); }
+        /* neon glows / heavy blurred shadows -> flat print */
+        .ican-landing.ican-landing section [class*="shadow-purple"], .ican-landing.ican-landing section [class*="shadow-blue"],
+        .ican-landing.ican-landing section [class*="shadow-pink"], .ican-landing.ican-landing section [class*="shadow-emerald"] {
+          box-shadow: 4px 4px 0 0 rgba(31, 26, 18, 0.14) !important;
+        }
+        /* footer: ruled masthead-style colophon */
+        .ican-landing.ican-landing footer { border-top: 4px double rgba(31, 26, 18, 0.4) !important; font-family: Georgia, 'Times New Roman', serif; }
+        .ican-landing-light.ican-landing-light footer { background-color: #f1ebd9; }
+        .ican-landing-light.ican-landing-light footer :is(p, a, span, li) { color: #4a4132 !important; }
+        .ican-landing-light.ican-landing-light footer button { background: none !important; border: 0 !important; border-bottom: 2px solid rgba(31,26,18,0.35) !important; border-radius: 0 !important; color: #1f1a12 !important; font-family: 'Playfair Display', Georgia, serif; box-shadow: none !important; }
+        .ican-landing-light.ican-landing-light footer button:hover { border-bottom-color: #14532d !important; color: #14532d !important; }
+        /* nav text links: the global theme CSS paints every <button> with the
+           theme's surface colour (dark teal blocks in Ocean Blue etc.) --
+           keep these as plain text links in every mode */
+        .ican-landing nav button.ican-nav-link,
+        .ican-landing nav button.ican-nav-link:hover,
+        .ican-landing nav button.ican-nav-link:focus {
+          background: transparent !important;
+          border-color: transparent !important;
+          box-shadow: none !important;
+        }
+        .ican-landing-light nav button.ican-nav-link { color: #1f1a12 !important; }
+        .ican-landing-light nav button.ican-nav-link:hover { color: #14532d !important; }
+        .ican-landing-dark nav button.ican-nav-link { color: #e7e5e4 !important; }
+        .ican-landing-dark nav button.ican-nav-link:hover { color: #fcd34d !important; }
+        /* scrollbar-friendly selection colour */
+        .ican-landing ::selection { background: #14532d; color: #f7f3e8; }
       `}</style>
       {/* Navigation */}
-      <nav className={`fixed top-0 w-full z-50 backdrop-blur-md border-b ${isDarkTheme ? 'bg-slate-950/70 border-slate-700/40' : 'bg-white/70 border-slate-300/70'}`}>
+      <nav className={`fixed top-0 w-full z-50 backdrop-blur-md border-b ${isDarkTheme ? 'bg-slate-950/80 border-amber-300/20' : 'bg-[#f7f3e8]/90 border-[#1f1a12]/30 border-b-2'}`}>
         <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto px-3 sm:px-6 lg:px-8 2xl:px-12 py-3 md:py-4 2xl:py-5 flex justify-between items-center gap-2">
           <div className="flex items-center space-x-3">
-            <div
-              className="shrink-0 text-2xl sm:text-3xl md:text-4xl 2xl:text-5xl font-black tracking-tight"
-              style={{
-                color: 'var(--color-secondary)',
-                textShadow: isDarkTheme ? '0 0 14px rgba(129, 140, 248, 0.35)' : '0 1px 0 rgba(255,255,255,0.5)'
-              }}
-            >
-              IcanEra
-            </div>
-            <div className="hidden sm:flex flex-col">
-              <p className="text-xs md:text-sm 2xl:text-base font-semibold" style={{ color: isDarkTheme ? '#cbd5e1' : '#334155' }}>Global Money &amp; Business</p>
-              <p className="text-xs 2xl:text-sm" style={{ color: isDarkTheme ? '#93c5fd' : '#1d4ed8' }}>Blockchain-integrated ecosystem</p>
+            <div className="flex flex-col leading-none">
+              <div
+                className="shrink-0 font-serif text-3xl sm:text-4xl md:text-[2.6rem] 2xl:text-5xl font-bold italic tracking-tight"
+                style={{ color: isDarkTheme ? '#fcd34d' : '#14532d' }}
+              >
+                IcanEra
+              </div>
+              <p className={`hidden sm:block mt-1 border-t pt-1 text-[10px] md:text-[11px] font-semibold uppercase tracking-[0.22em] whitespace-nowrap ${isDarkTheme ? 'border-amber-300/40 text-slate-400' : 'border-emerald-900/50 text-[#6b5f49]'}`}>Global Money &amp; Business</p>
             </div>
           </div>
           {/* Small/medium PC widths (md-xl): squeeze the five tabs down to
@@ -966,45 +1058,26 @@ const LandingPage = ({ onGetStarted }) => {
               )}
             </div>
           </div>
-          <div className="hidden xl:flex items-center gap-2 2xl:gap-4">
-            <button
-              onClick={() => scrollToSection('platforms')}
-              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-amber-100 border-amber-300/55 bg-amber-900/25 hover:bg-amber-800/35 hover:border-amber-200/80' : 'text-amber-900 border-amber-400/55 bg-amber-100 hover:bg-amber-200/90 hover:border-amber-500/75'}`}
-            >
-              Features
-            </button>
-            <button
-              onClick={() => scrollToSection('platforms')}
-              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-cyan-100 border-cyan-300/55 bg-cyan-900/25 hover:bg-cyan-800/35 hover:border-cyan-200/80' : 'text-cyan-900 border-cyan-400/55 bg-cyan-100 hover:bg-cyan-200/90 hover:border-cyan-500/75'}`}
-            >
-              Platforms
-            </button>
-            <button
-              onClick={goToPricing}
-              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-purple-100 border-purple-300/55 bg-purple-900/25 hover:bg-purple-800/35 hover:border-purple-200/80' : 'text-purple-900 border-purple-400/55 bg-purple-100 hover:bg-purple-200/90 hover:border-purple-500/75'}`}
-            >
-              Pricing
-            </button>
-            <button
-              onClick={() => scrollToSection('testimonials')}
-              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-rose-100 border-rose-300/55 bg-rose-900/25 hover:bg-rose-800/35 hover:border-rose-200/80' : 'text-rose-900 border-rose-400/55 bg-rose-100 hover:bg-rose-200/90 hover:border-rose-500/75'}`}
-            >
-              Testimonials
-            </button>
-            <button
-              onClick={() => scrollToSection('community-board')}
-              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-teal-100 border-teal-300/55 bg-teal-900/25 hover:bg-teal-800/35 hover:border-teal-200/80' : 'text-teal-900 border-teal-400/55 bg-teal-100 hover:bg-teal-200/90 hover:border-teal-500/75'}`}
-            >
-              Community
-            </button>
-            <button
-              onClick={() => scrollToSection('live-explore')}
-              className={`px-4 py-2 ican-cove-tab border-2 text-sm md:text-base 2xl:text-lg font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-emerald-100 border-emerald-300/55 bg-emerald-900/25 hover:bg-emerald-800/35 hover:border-emerald-200/80' : 'text-emerald-900 border-emerald-400/55 bg-emerald-100 hover:bg-emerald-200/90 hover:border-emerald-500/75'}`}
-            >
-              Try It Live
-            </button>
+          <div className="hidden xl:flex items-center gap-5 2xl:gap-9 font-serif">
+            {[
+              { label: 'Features', go: () => scrollToSection('platforms') },
+              { label: 'Platforms', go: () => scrollToSection('platforms') },
+              { label: 'Pricing', go: goToPricing },
+              { label: 'Testimonials', go: () => scrollToSection('testimonials') },
+              { label: 'Community', go: () => scrollToSection('community-board') },
+              { label: 'Try It Live', go: () => scrollToSection('live-explore') }
+            ].map((item) => (
+              <button
+                key={item.label}
+                onClick={item.go}
+                className={`ican-nav-link group relative whitespace-nowrap px-1 py-1 text-base 2xl:text-lg font-semibold tracking-wide transition-colors ${isDarkTheme ? 'text-stone-200 hover:text-amber-300' : 'text-[#1f1a12] hover:text-emerald-900'}`}
+              >
+                {item.label}
+                <span className="absolute inset-x-0 -bottom-0.5 h-[2px] origin-center scale-x-0 bg-current transition-transform duration-300 group-hover:scale-x-100" />
+              </button>
+            ))}
           </div>
-          <div className="ml-auto min-w-0">
+          <div className="ml-auto min-w-0 pl-4 xl:pl-8">
             {/* Compact account actions keep the mobile header on one line. */}
             <div className="flex items-center justify-end gap-1 sm:gap-2 md:gap-3">
               <div className="hidden md:block"><ThemeSwitcher /></div>
@@ -1067,46 +1140,54 @@ const LandingPage = ({ onGetStarted }) => {
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className={`relative isolate pt-24 sm:pt-28 md:pt-36 pb-10 sm:pb-14 md:pb-20 px-4 sm:px-8 lg:px-12 ${isDarkTheme ? 'bg-slate-950' : 'bg-[#f7f5ef]'}`}>
-        <div className="absolute inset-0 -z-10 opacity-[0.035]" style={{ backgroundImage: 'radial-gradient(#1e293b 0.7px, transparent 0.7px)', backgroundSize: '18px 18px' }} />
-        <div className="max-w-7xl mx-auto grid lg:grid-cols-[0.95fr_1.05fr] gap-10 lg:gap-16 items-center">
+      {/* Hero Section — classic broadsheet front page */}
+      <section className={`relative isolate pt-24 sm:pt-28 md:pt-36 pb-12 sm:pb-16 md:pb-24 px-4 sm:px-8 lg:px-12 ${isDarkTheme ? 'bg-slate-950' : 'bg-[#f7f3e8]'}`}>
+        <div className="absolute inset-0 -z-10 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(#3b2f1e 0.6px, transparent 0.6px)', backgroundSize: '14px 14px' }} />
+        <div className="max-w-7xl mx-auto">
+          <div className={`flex items-center justify-between gap-3 border-y-[3px] border-double py-2 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.22em] ${isDarkTheme ? 'border-amber-300/40 text-amber-200/80' : 'border-emerald-900/60 text-emerald-900'}`}>
+            <span>Vol. I</span>
+            <span className="hidden sm:inline">&#10086;&nbsp; Global money &amp; business &nbsp;&#10086;</span>
+            <span>Est. on the blockchain</span>
+          </div>
+          <div className="mt-10 lg:mt-14 grid lg:grid-cols-[0.95fr_1.05fr] gap-12 lg:gap-16 items-center">
           <div className="max-w-2xl">
-            <div className={`inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] ${isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}`}>
-              <span className="w-8 h-px bg-current" /> Run your business. Find your people.
+            <div className={`inline-flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] ${isDarkTheme ? 'text-amber-300' : 'text-emerald-900'}`}>
+              <span className="w-8 h-px bg-current" /> Run your business. Find your people. <span className="w-8 h-px bg-current" />
             </div>
-            <h1 className={`mt-5 sm:mt-6 font-serif text-4xl sm:text-5xl lg:text-6xl xl:text-7xl leading-[1.04] tracking-tight ${isDarkTheme ? 'text-stone-100' : 'text-slate-900'}`}>
-              Your business, <span className={isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}>ready to grow.</span>
+            <h1 className={`mt-5 sm:mt-6 font-serif text-4xl sm:text-5xl lg:text-6xl xl:text-7xl leading-[1.04] tracking-tight ${isDarkTheme ? 'text-stone-100' : 'text-[#1f1a12]'}`}>
+              Your business, <span className={`italic ${isDarkTheme ? 'text-amber-300' : 'text-emerald-900'}`}>ready to grow.</span>
             </h1>
-            <p className={`mt-4 sm:mt-6 max-w-xl text-base md:text-lg leading-7 md:leading-8 ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>
+            <div className={`mt-6 flex items-center gap-3 ${isDarkTheme ? 'text-amber-300/70' : 'text-emerald-900/70'}`}><span className="h-px flex-1 bg-current" /><span aria-hidden="true">&#10070;</span><span className="h-px flex-1 bg-current" /></div>
+            <p className={`mt-5 max-w-xl font-serif text-base md:text-lg leading-7 md:leading-8 ${isDarkTheme ? 'text-slate-300' : 'text-[#4a4132]'}`}>
               IcanEra is a blockchain application that supports transactions across the globe with icaneracoin. Manage business and personal finances, employment, hiring and your complete business website in one place.
             </p>
-            <div className="mt-6 sm:mt-8 flex flex-row gap-2 sm:gap-3">
-              <button onClick={handleCreateAccount} className={`inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md px-3 sm:px-6 py-3 sm:py-3.5 text-sm sm:text-base font-semibold shadow-lg transition hover:-translate-y-0.5 ${isDarkTheme ? 'bg-amber-300 text-slate-950 hover:bg-amber-200' : 'bg-emerald-900 text-white hover:bg-emerald-800'}`}>
+            <div className="mt-7 sm:mt-9 flex flex-row gap-2 sm:gap-3">
+              <button onClick={handleCreateAccount} className={`inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 border-2 px-3 sm:px-7 py-3 sm:py-3.5 text-sm sm:text-base font-semibold tracking-wide shadow-[4px_4px_0_0_rgba(31,26,18,0.25)] transition hover:-translate-y-0.5 ${isDarkTheme ? 'border-amber-300 bg-amber-300 text-slate-950 hover:bg-amber-200' : 'border-emerald-950 bg-emerald-900 text-[#f7f3e8] hover:bg-emerald-800'}`}>
                 Get started <ArrowRight className="w-4 h-4" />
               </button>
-              <button onClick={() => scrollToSection('business-suite')} className={`inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-md border px-3 sm:px-6 py-3 sm:py-3.5 text-sm sm:text-base font-semibold transition ${isDarkTheme ? 'border-slate-600 text-slate-100 hover:bg-slate-800' : 'border-slate-300 text-slate-800 hover:bg-white'}`}>
+              <button onClick={() => scrollToSection('business-suite')} className={`inline-flex flex-1 sm:flex-none items-center justify-center gap-1.5 border-2 px-3 sm:px-7 py-3 sm:py-3.5 text-sm sm:text-base font-semibold tracking-wide transition ${isDarkTheme ? 'border-slate-500 text-slate-100 hover:bg-slate-800' : 'border-[#1f1a12] text-[#1f1a12] hover:bg-[#1f1a12] hover:text-[#f7f3e8]'}`}>
                 Explore business tools <ChevronRight className="w-4 h-4" />
               </button>
             </div>
-            <div className={`mt-5 flex items-center gap-2 text-xs sm:text-sm ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>
-              <Shield className={`w-4 h-4 shrink-0 ${isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}`} />
+            <div className={`mt-6 flex items-center gap-2 text-xs sm:text-sm italic font-serif ${isDarkTheme ? 'text-slate-400' : 'text-[#6b5f49]'}`}>
+              <Shield className={`w-4 h-4 shrink-0 ${isDarkTheme ? 'text-amber-300' : 'text-emerald-900'}`} />
               Global transactions · icaneracoin · Business and employment tools
             </div>
           </div>
           <div className="relative mx-auto w-full max-w-xl">
-            <div className={`absolute -inset-4 md:-inset-6 rounded-[2rem] rotate-2 ${isDarkTheme ? 'bg-emerald-950' : 'bg-[#e9e4d7]'}`} />
-            <div className={`relative overflow-hidden rounded-2xl border shadow-2xl ${isDarkTheme ? 'border-slate-700 bg-slate-900' : 'border-white bg-white'}`}>
-              <div className={`flex items-center justify-between px-5 py-4 border-b ${isDarkTheme ? 'border-slate-700 bg-slate-900' : 'border-slate-100 bg-white'}`}>
-                <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-700"/><span className={`font-serif text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>IcanEra</span></div>
-                <span className={`text-xs uppercase tracking-widest ${isDarkTheme ? 'text-slate-400' : 'text-slate-500'}`}>Your financial picture</span>
+            <div className={`absolute -inset-3 md:-inset-4 border ${isDarkTheme ? 'border-amber-300/30' : 'border-emerald-900/40'}`} />
+            <div className={`relative border-[6px] p-2 shadow-[10px_10px_0_0_rgba(31,26,18,0.18)] ${isDarkTheme ? 'border-slate-700 bg-slate-900' : 'border-[#1f1a12] bg-[#fffdf6]'}`}>
+              <div className={`flex items-center justify-between px-3 py-3 border-b-2 border-double ${isDarkTheme ? 'border-slate-600' : 'border-[#1f1a12]/70'}`}>
+                <span className={`font-serif text-lg font-bold italic ${isDarkTheme ? 'text-white' : 'text-[#1f1a12]'}`}>The IcanEra Gazette</span>
+                <span className={`text-[10px] sm:text-xs uppercase tracking-[0.2em] ${isDarkTheme ? 'text-slate-400' : 'text-[#6b5f49]'}`}>Your financial picture</span>
               </div>
-              <img src="/images/IcanEra CMMS.png" alt="IcanEra business management system" className="w-full aspect-[1.22] object-cover object-top" />
-              <div className={`grid grid-cols-3 divide-x border-t ${isDarkTheme ? 'divide-slate-700 border-slate-700 bg-slate-900' : 'divide-slate-100 border-slate-100 bg-white'}`}>
-                {[['01', 'Manage your team'], ['02', 'Find talent'], ['03', 'Reach customers']].map(([number, label]) => <div key={number} className="px-4 py-4"><span className={`block text-xs ${isDarkTheme ? 'text-amber-300' : 'text-emerald-800'}`}>{number}</span><span className={`mt-1 block text-sm font-medium ${isDarkTheme ? 'text-slate-100' : 'text-slate-800'}`}>{label}</span></div>)}
+              <img src="/images/IcanEra CMMS.png" alt="IcanEra business management system" className="w-full aspect-[1.22] object-cover object-top sepia-[.12]" />
+              <div className={`grid grid-cols-3 divide-x border-t-2 border-double ${isDarkTheme ? 'divide-slate-700 border-slate-600' : 'divide-[#1f1a12]/25 border-[#1f1a12]/70'}`}>
+                {[['I', 'Manage your team'], ['II', 'Find talent'], ['III', 'Reach customers']].map(([number, label]) => <div key={number} className="px-3 py-3"><span className={`block font-serif text-sm italic ${isDarkTheme ? 'text-amber-300' : 'text-emerald-900'}`}>{number}.</span><span className={`mt-0.5 block font-serif text-sm font-semibold ${isDarkTheme ? 'text-slate-100' : 'text-[#1f1a12]'}`}>{label}</span></div>)}
               </div>
             </div>
-            <div className={`absolute -bottom-5 -left-4 md:-left-8 rounded-lg border px-4 py-3 shadow-lg ${isDarkTheme ? 'border-slate-700 bg-slate-800 text-slate-100' : 'border-stone-200 bg-[#fffdf8] text-slate-800'}`}><span className="block text-xs text-slate-500">One platform for your business</span><span className="font-serif text-lg">From your team to your website.</span></div>
+            <div className={`absolute -bottom-6 -left-3 md:-left-8 border-2 px-4 py-3 shadow-lg ${isDarkTheme ? 'border-amber-300/60 bg-slate-800 text-slate-100' : 'border-[#1f1a12] bg-[#fffdf6] text-[#1f1a12]'}`}><span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">One platform for your business</span><span className="font-serif text-lg italic">From your team to your website.</span></div>
+          </div>
           </div>
         </div>
       </section>

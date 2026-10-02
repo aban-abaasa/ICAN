@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ShoppingBag, Truck, Store, X, Loader, ArrowRight } from 'lucide-react';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme, isDarkFamilyTheme } from '../../context/ThemeContext';
 import { getDropshipBrowseProducts, getDropshipProductOffers } from '../../services/dropshipService';
 
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
@@ -12,7 +12,7 @@ const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG',
 // same posture as DropshipBrowse.jsx inside the authenticated app.
 const DropshipPreview = () => {
   const { actualTheme } = useTheme();
-  const isDarkTheme = actualTheme === 'dark';
+  const isDarkTheme = isDarkFamilyTheme(actualTheme);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);

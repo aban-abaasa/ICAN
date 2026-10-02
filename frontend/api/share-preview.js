@@ -263,7 +263,9 @@ const buildNoticeMeta = async ({ url, anonKey, id }) => {
   ]);
   const image = resolvedCover || resolvedLogo || DEFAULT_IMAGE;
 
-  const sameAs = SOCIAL_URL_FIELDS.map((field) => normalizeExternalUrl(company[field])).filter(Boolean);
+  const sameAs = [company.website, ...SOCIAL_URL_FIELDS.map((field) => company[field])]
+    .map(normalizeExternalUrl)
+    .filter(Boolean);
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
