@@ -3905,6 +3905,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         /* full-page tabs: no spare band above the header, the tab owns the screen */
         .wallet-creative-skin.cmms-fullpage { padding-top: max(0.5rem, env(safe-area-inset-top, 0px)) !important; }
 
+        /* web: one sticky top bar (Back, title, tabs, bell) and content centred at a readable width */
+        @media (min-width: 768px) {
+          .wallet-creative-skin.cmms-fullpage { padding-top: 0 !important; }
+          .wallet-creative-skin.cmms-fullpage > :not(.fixed):not(style) {
+            width: 100%; max-width: 76rem; margin-left: auto; margin-right: auto;
+          }
+          .wallet-creative-skin.cmms-fullpage .wallet-top-header {
+            position: sticky; top: 0; z-index: 40;
+            background-color: var(--color-bg, #0a0f1c) !important;
+          }
+          .wallet-tabs-compact { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+          .wallet-tabs-compact button { flex-shrink: 0; white-space: nowrap; padding: 0.4rem 0.8rem; font-size: 0.875rem; }
+        }
+
         .wallet-creative-skin .wallet-top-header {
           position: relative;
           border-bottom: 0 !important;
@@ -4572,8 +4586,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           }
         }
       `}</style>{/* Header Card */}
-      <div className={`solid-card wallet-top-header ${activeTab !== 'overview' ? 'py-2 md:p-6' : 'p-4 md:p-6'}`} style={walletUi.headerCard}>
-        <div className={`flex ${activeTab !== 'overview' ? 'items-center' : 'items-start'} md:items-center justify-between gap-2 md:gap-3 ${activeTab !== 'overview' ? 'mb-0 md:mb-4' : 'mb-4'}`}>
+      <div className={`solid-card wallet-top-header ${activeTab !== 'overview' ? 'py-2 md:py-3 md:flex md:items-center md:gap-4' : 'p-4 md:p-6'}`} style={walletUi.headerCard}>
+        <div className={`flex ${activeTab !== 'overview' ? 'items-center' : 'items-start'} md:items-center justify-between gap-2 md:gap-3 ${activeTab !== 'overview' ? 'mb-0 md:contents' : 'mb-4'}`}>
           <div className="flex items-center gap-4 min-w-0">
             {activeTab !== 'overview' && (
               <button
@@ -4585,12 +4599,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 Back
               </button>
             )}
-            <div className={`p-3 rounded-lg ${activeTab !== 'overview' ? 'hidden md:block' : ''}`} style={walletUi.headerIcon}>
+            <div className={activeTab !== 'overview' ? 'hidden md:block p-2 rounded-lg' : 'p-3 rounded-lg'} style={walletUi.headerIcon}>
               <Wallet className="w-6 h-6 text-white" />
             </div>
             <div className={activeTab !== 'overview' ? 'hidden md:block' : ''}>
-              <h2 className="text-2xl md:text-3xl font-bold" style={walletUi.title}>IcanEra Wallet</h2>
-              <p className="text-sm md:text-base" style={walletUi.subtitle}>Manage global currency with confidence</p>
+              <h2 className={activeTab !== 'overview' ? 'text-xl font-bold whitespace-nowrap' : 'text-2xl md:text-3xl font-bold'} style={walletUi.title}>IcanEra Wallet</h2>
+              {activeTab === 'overview' && <p className="text-sm md:text-base" style={walletUi.subtitle}>Manage global currency with confidence</p>}
             </div>
           </div>
           {/* Full-page tabs on phones: the tab switcher shares the Back/bell row instead of taking its own */}
@@ -4607,13 +4621,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${showMobileNavMenu ? 'rotate-180' : ''}`} />
             </button>
           )}
-          <div className="flex-shrink-0"><ICANWalletInbox /></div>
+          <div className={`flex-shrink-0 ${activeTab !== 'overview' ? 'md:order-3' : ''}`}><ICANWalletInbox /></div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="relative">
+        <div className={`relative ${activeTab !== 'overview' ? 'md:order-2 md:flex-1 md:min-w-0' : ''}`}>
           {/* Desktop View - every tab visible in the header, nothing hidden behind a menu */}
-          <div className="hidden md:flex gap-2 flex-wrap items-center">
+          <div className={`hidden md:flex gap-2 flex-wrap items-center ${activeTab !== 'overview' ? 'wallet-tabs-compact' : ''}`}>
             <button
               onClick={() => setActiveTab('overview')}
               className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
