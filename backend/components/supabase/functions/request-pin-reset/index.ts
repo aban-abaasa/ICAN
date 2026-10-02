@@ -222,15 +222,23 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!supabaseUrl || !serviceRoleKey || !resendApiKey) {
-      return jsonResponse({
-        success: false,
-        message: "PIN reset email is not configured on the Supabase project.",
-      }, 500);
-    }
 
     const request = await req.json().catch(() => ({}));
     const action = typeof request?.action === "string" ? request.action : "";
+
+    if (!supabaseUrl || !serviceRoleKey || !resendApiKey) {
+      const missing = [
+        !supabaseUrl && "SUPABASE_URL",
+        !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
+        !resendApiKey && "RESEND_API_KEY",
+      ].filter(Boolean).join(", ");
+      console.error(`request-pin-reset is missing function secrets: ${missing}`);
+      const isNewAction = ["account-otp", "delete-account", "confirm-delete-account"].includes(action);
+      return jsonResponse({
+        success: false,
+        message: `Email is not configured on the Supabase project (missing secret: ${missing}).`,
+      }, isNewAction ? 200 : 500);
+    }
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
