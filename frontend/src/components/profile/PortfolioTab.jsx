@@ -819,15 +819,19 @@ export default function PortfolioTab() {
         {/* Messages — direct 1:1 chats started from the public resume page */}
         {activeTab === 'inbox' && (
           <>
-            <PortfolioMessagesInbox userId={user?.id} />
-            {/* Certificate requests — companies asking for your academic certificate from the public resume page */}
-            <CertificateRequestsInbox />
+            <div className="rz-dark space-y-4">
+              <PortfolioMessagesInbox userId={user?.id} />
+              {/* Certificate requests — companies asking for your academic certificate from the public resume page */}
+              <CertificateRequestsInbox />
+            </div>
           </>
         )}
 
         {/* Bid for Work — browse open business opportunities and bid as yourself */}
         {activeTab === 'work' && (
-          <ResumeOpportunityBidsPanel userId={user?.id} displayName={profile?.full_name || user?.email} />
+          <div className="rz-dark">
+            <ResumeOpportunityBidsPanel userId={user?.id} displayName={profile?.full_name || user?.email} />
+          </div>
         )}
       </div>
 
