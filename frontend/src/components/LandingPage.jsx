@@ -1858,30 +1858,6 @@ const LandingPage = ({ onGetStarted }) => {
               </button>
             </div>
           )}
-
-          {contributors.length > 0 && (
-            <div className="mt-8">
-              <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">Community members</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {contributors.map((c) => (
-                  <button
-                    key={c.authId || 'guests'}
-                    type="button"
-                    onClick={() => handleSelectContributor(c)}
-                    disabled={c.isGuestGroup}
-                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition disabled:cursor-default ${
-                      isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-300' : 'border-slate-300 bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    <User className="h-3 w-3" /> {c.name}
-                    <span className={isDarkTheme ? 'text-slate-500' : 'text-slate-400'}>
-                      · {c.count} {c.count === 1 ? 'message' : 'messages'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
