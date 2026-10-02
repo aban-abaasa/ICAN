@@ -103,7 +103,10 @@ files are in `supabase/migrations/` (do not re-run them against that database). 
 * Existing items were classified (assets from category) and each got an `opening` ledger row; no money rows
   were created for them.
 
-**Existing behaviour worth a look (not changed here).** Ordinary business-to-business payments
-(`pitchin_business_wallet_transfer_to_business`) also complete through the executor above without crediting the
-recipient business. Production has one completed payment of that kind with no recipient user, so its recipient
-may not have received the funds.
+**Existing behaviour worth a look (not changed here).** The business-wallet executor deployed in production
+is the older one from `PITCHIN_BUSINESS_PROFILE_ICAN_WALLET.sql`: it credits `recipient_user_id` only. The newer
+`ICAN_BUSINESS_WALLET_TRANSFERS.sql` version also credits a recipient business and writes both ledger entries. An
+August payment to a business was credited, so the newer one was live at some point. Until it is redeployed, an
+ordinary business-to-business payment approved today debits the sender without crediting the recipient (2 are
+pending). The branch-credit trigger switches itself off once the deployed executor mentions
+`recipient_business_profile_id`, so redeploying that file will not double-pay branch transfers.

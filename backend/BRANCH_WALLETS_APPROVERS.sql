@@ -253,14 +253,21 @@ DROP TRIGGER IF EXISTS trg_bwp_tx_guard_update ON public.ican_business_wallet_tr
 CREATE TRIGGER trg_bwp_tx_guard_update BEFORE UPDATE OF status ON public.ican_business_wallet_transactions
   FOR EACH ROW EXECUTE FUNCTION public._bwp_tx_guard_update();
 
--- The existing executor (pitchin_execute_business_wallet_transfer) debits the paying wallet and credits
--- recipient_user_id only; it never credits a recipient BUSINESS. Branch funding and sweeps are the
+-- The executor currently deployed (the older one in PITCHIN_BUSINESS_PROFILE_ICAN_WALLET.sql) debits the paying
+-- wallet and credits recipient_user_id only; it never credits a recipient BUSINESS. Branch funding and sweeps are the
 -- only transfers this layer creates between business wallets, so complete them here: when one of them
 -- turns 'completed', credit the recipient business wallet in the same transaction. Other transfer
 -- kinds are left exactly as they were.
 CREATE OR REPLACE FUNCTION public._bwp_credit_branch_recipient()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
+  -- If the deployed executor already credits recipient businesses (ICAN_BUSINESS_WALLET_TRANSFERS.sql),
+  -- do nothing: crediting here as well would pay the branch twice.
+  IF EXISTS (SELECT 1 FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
+               AND p.proname = 'pitchin_execute_business_wallet_transfer'
+               AND p.prosrc LIKE '%recipient_business_profile_id%') THEN
+    RETURN NULL;
+  END IF;
   IF NEW.status = 'completed' AND OLD.status IS DISTINCT FROM 'completed'
      AND NEW.recipient_business_profile_id IS NOT NULL
      AND COALESCE(to_jsonb(NEW)->>'operation_type', '') IN ('branch_funding', 'branch_sweep') THEN
