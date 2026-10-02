@@ -1,5 +1,5 @@
 /**
- * Vercel Serverless Function — emails a one-time "delete my account" link.
+ * Vercel Serverless Function — emails a one-time "delete" link.
  *
  * Ports ICAN/backend/routes/emailRoutes.js's POST /api/email/
  * request-account-deletion (the Express dev server) to this project's
@@ -118,8 +118,8 @@ export default async function handler(req, res) {
     if (confirmEmail !== currentUser.email.trim().toLowerCase()) {
       return res.status(400).json({ success: false, message: "That email does not match your account email." });
     }
-    if (confirmPhrase !== 'delete my account') {
-      return res.status(400).json({ success: false, message: 'Please type "delete my account" exactly to confirm.' });
+    if (confirmPhrase !== 'delete') {
+      return res.status(400).json({ success: false, message: 'Please type "delete" to confirm.' });
     }
 
     // Cooldown: don't send another email if a live token was already issued
