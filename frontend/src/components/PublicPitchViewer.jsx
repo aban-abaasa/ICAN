@@ -1,3 +1,4 @@
+import './pitchin-classic.css';
 import React, { useState, useEffect, useRef } from 'react';
 import { Heart, MessageCircle, Share2, Briefcase, X, Send, AlertCircle, Loader, Check, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -359,7 +360,7 @@ const PublicPitchViewer = ({ pitchId }) => {
 
   if (notFound) {
     return (
-      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center gap-4 p-6 text-center">
+      <div className="pitchin-classic fixed inset-0 bg-black flex flex-col items-center justify-center gap-4 p-6 text-center">
         <AlertCircle className="w-14 h-14 text-slate-500" />
         <p className="text-white text-lg font-semibold">This pitch isn't available anymore</p>
         <button
@@ -395,7 +396,7 @@ const PublicPitchViewer = ({ pitchId }) => {
 
   return (
     <div
-      className={plan ? 'pp-root fixed inset-0 w-screen h-screen overflow-y-auto' : 'fixed inset-0 bg-black w-screen h-screen overflow-hidden'}
+      className={plan ? 'pp-root fixed inset-0 w-screen h-screen overflow-y-auto' : 'pitchin-classic fixed inset-0 bg-black w-screen h-screen overflow-hidden'}
       data-mode={plan ? planMode : undefined}
       onScroll={plan ? (e) => { const el = e.currentTarget; const max = el.scrollHeight - el.clientHeight; setPlanProgress(max > 0 ? el.scrollTop / max : 0); } : undefined}
     >

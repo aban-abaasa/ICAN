@@ -1,3 +1,4 @@
+import './pitchin-classic.css';
 import React, { useState, useRef } from 'react';
 import { ChevronUp, X, AlertCircle } from 'lucide-react';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
@@ -60,7 +61,7 @@ const PitchDetailsForm = ({ isOpen, onClose, onSubmit, currentBusinessProfile })
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-end sm:items-center justify-center">
+    <div className="pitchin-classic fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-end sm:items-center justify-center">
       <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 w-full sm:w-full sm:max-w-2xl sm:rounded-2xl rounded-t-3xl border border-pink-500/30 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-slate-900/80 backdrop-blur-md border-b border-pink-500/30 p-4 sm:p-6 flex items-center justify-between">

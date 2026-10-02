@@ -1,3 +1,4 @@
+import './pitchin-classic.css';
 import React, { useState, useEffect } from 'react';
 import { 
   Upload, CheckCircle, AlertCircle, Clock, Zap, TrendingUp, Share2, Eye, 
@@ -81,7 +82,7 @@ const PitchStatusViewer = ({ pitch, onClose }) => {
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+    <div className="pitchin-classic fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
       <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full border-2 border-purple-500/30 overflow-hidden">
         
         {/* Header */}

@@ -1,3 +1,4 @@
+import './pitchin-classic.css';
 import React, { useEffect, useState } from 'react';
 import { Lock, X, Copy, Check, Clock, Loader, AlertCircle, Eye, EyeOff, Trash2, Sparkles, Send } from 'lucide-react';
 import {
@@ -153,7 +154,7 @@ const PrivatePitchInviteModal = ({ pitch, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+    <div className="pitchin-classic fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-slate-800 rounded-2xl w-full max-w-md max-h-[88vh] flex flex-col border border-amber-500/20">
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <h3 className="text-lg font-bold text-white flex items-center gap-2">

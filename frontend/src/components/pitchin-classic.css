@@ -1,0 +1,553 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   PITCHIN · "Ebony & Gold" classic skin
+   ──────────────────────────────────────────────────────────────────────────
+   Pitchin is an immersive, video-first space, so its classic look is the
+   evening edition of the CMMS ivory-and-gold language: warm ebony surfaces,
+   antique-gold hairlines, ivory type, serif headings and a little ceremony
+   (a rising entrance, a gold focus ring, a diamond ornament).
+
+   Everything is scoped to .pitchin-classic. The root element of each Pitchin
+   screen carries that class, so nothing here can leak into the rest of the
+   app. Selectors are class + attribute (specificity 0,2,0) with !important
+   where the app-wide ThemeContext override (single-class, !important) would
+   otherwise repaint these utilities to the active theme.
+
+   Semantic colours are deliberately LEFT ALONE: red (danger), green/emerald
+   (success), blue (information) and amber (already gold) keep their meaning.
+   Only the decorative purple/pink/indigo/violet/fuchsia + slate greys are
+   re-tuned. Video, black letterbox areas and white-on-video controls are
+   never recoloured.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.pitchin-classic {
+  --pc-ebony-0: #0e0c08;
+  --pc-ebony-1: #15120c;
+  --pc-ebony-2: #1c1810;
+  --pc-ebony-3: #261f14;
+  --pc-ebony-4: #342b1b;
+  --pc-gold: #c4a052;
+  --pc-gold-hi: #e6c980;
+  --pc-gold-deep: #8a6a1f;
+  --pc-gold-mid: #a8832a;
+  --pc-ivory: #faf3e0;
+  --pc-text: #e9dfc6;
+  --pc-muted: #b3a688;
+  --pc-faint: #8b7f63;
+  --pc-line: rgba(196, 160, 82, 0.24);
+  --pc-line-strong: rgba(196, 160, 82, 0.42);
+  --pc-panel: rgba(28, 24, 16, 0.94);
+  --pc-panel-2: rgba(38, 31, 20, 0.92);
+  --pc-veil-5: rgba(196, 160, 82, 0.06);
+  --pc-veil-10: rgba(196, 160, 82, 0.11);
+  --pc-veil-20: rgba(196, 160, 82, 0.19);
+  --pc-veil-hover: rgba(196, 160, 82, 0.22);
+  --pc-text-soft: #d9cfb4;
+  --pc-text-dim: rgba(250, 243, 224, 0.7);
+  --pc-input-bg: rgba(255, 244, 214, 0.04);
+  --pc-backdrop: rgba(10, 8, 5, 0.8);
+  --pc-card-shadow: rgba(0, 0, 0, 0.85);
+  --pc-serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  color: var(--pc-text);
+  accent-color: var(--pc-gold);
+}
+
+.pitchin-classic ::selection { background: rgba(196, 160, 82, 0.4); color: #fff; }
+
+/* ── Type ─────────────────────────────────────────────────────────────── */
+.pitchin-classic :is(h1, h2, h3, h4) {
+  font-family: var(--pc-serif);
+  letter-spacing: 0.01em;
+  color: var(--pc-ivory);
+}
+.pitchin-classic h1 { letter-spacing: 0.015em; }
+.pitchin-classic :is(button, input, select, textarea, label, table) {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+/* Small caps "eyebrow" feel for the tiny uppercase labels */
+.pitchin-classic [class*="uppercase"][class*="tracking"] { letter-spacing: 0.16em; color: var(--pc-gold-hi); }
+.pitchin-classic [class~="text-white"] { color: var(--pc-ivory) !important; }
+.pitchin-classic :is([class*="text-slate-3"], [class*="text-gray-3"], [class*="text-slate-2"], [class*="text-gray-2"]) { color: var(--pc-text-soft) !important; }
+.pitchin-classic :is([class*="text-slate-4"], [class*="text-gray-4"]) { color: var(--pc-muted) !important; }
+.pitchin-classic :is([class*="text-slate-5"], [class*="text-gray-5"], [class*="text-slate-6"], [class*="text-gray-6"]) { color: var(--pc-faint) !important; }
+.pitchin-classic [class*="text-white/"] { color: var(--pc-text-dim) !important; }
+.pitchin-classic :is(
+  [class*="text-purple-"], [class*="text-pink-"], [class*="text-indigo-"],
+  [class*="text-violet-"], [class*="text-fuchsia-"]
+) { color: var(--pc-gold-hi) !important; }
+.pitchin-classic :is([class*="placeholder-slate"], [class*="placeholder-gray"])::placeholder,
+.pitchin-classic ::placeholder { color: var(--pc-faint); opacity: 1; }
+
+/* ── Page + panel surfaces ────────────────────────────────────────────── */
+/* Full-screen gradients (feed shell, modals, recorder shell) */
+.pitchin-classic:is([class*="from-slate-9"], [class*="from-slate-8"]),
+.pitchin-classic :is([class*="from-slate-9"], [class*="from-slate-8"]) {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(196, 160, 82, 0.09), transparent 70%),
+    linear-gradient(165deg, var(--pc-ebony-2) 0%, var(--pc-ebony-1) 48%, var(--pc-ebony-0) 100%) !important;
+}
+/* Solid and translucent slate panels */
+.pitchin-classic :is([class*="bg-slate-9"], [class*="bg-slate-8"], [class*="bg-gray-9"], [class*="bg-gray-8"], [class*="bg-zinc-9"], [class*="bg-zinc-8"]) {
+  background-color: var(--pc-panel) !important;
+  background-image: none !important;
+}
+.pitchin-classic :is([class*="bg-slate-7"], [class*="bg-slate-6"], [class*="bg-gray-7"], [class*="bg-gray-6"]) {
+  background-color: var(--pc-ebony-3) !important;
+  background-image: none !important;
+}
+.pitchin-classic :is([class*="hover:bg-slate-7"]:hover, [class*="hover:bg-slate-6"]:hover, [class*="hover:bg-slate-8"]:hover, [class*="hover:bg-gray-7"]:hover) {
+  background-color: var(--pc-ebony-4) !important;
+}
+/* Dark-purple modal skins collapse into the same ebony */
+.pitchin-classic :is([class*="bg-purple-9"], [class*="bg-purple-8"], [class*="bg-indigo-9"], [class*="bg-violet-9"], [class*="bg-fuchsia-9"]) {
+  background-color: var(--pc-panel-2) !important;
+  background-image: none !important;
+}
+/* Frosted white / black veils pick up a little warmth */
+.pitchin-classic [class*="bg-white/5"]  { background-color: var(--pc-veil-5) !important; }
+.pitchin-classic [class*="bg-white/10"] { background-color: var(--pc-veil-10) !important; }
+.pitchin-classic [class*="bg-white/20"] { background-color: var(--pc-veil-20) !important; }
+.pitchin-classic :is([class*="hover:bg-white/10"]:hover, [class*="hover:bg-white/20"]:hover) { background-color: var(--pc-veil-hover) !important; }
+.pitchin-classic :is([class*="bg-black/5"], [class*="bg-black/6"], [class*="bg-black/7"], [class*="bg-black/8"]) { background-color: var(--pc-backdrop) !important; }
+
+/* ── Hairlines ────────────────────────────────────────────────────────── */
+.pitchin-classic :is(
+  [class*="border-slate-"], [class*="border-gray-"], [class*="border-zinc-"],
+  [class*="border-white/"], [class*="divide-slate-"] > *
+) { border-color: var(--pc-line) !important; }
+.pitchin-classic :is([class*="border-purple-"], [class*="border-pink-"], [class*="border-indigo-"], [class*="border-violet-"], [class*="border-fuchsia-"], [class*="border-amber-"]) {
+  border-color: var(--pc-line-strong) !important;
+}
+.pitchin-classic :is([class*="hover:border-pink-"]:hover, [class*="hover:border-purple-"]:hover) { border-color: var(--pc-gold) !important; }
+
+/* ── Accents: every decorative purple / pink / indigo becomes antique gold ─ */
+.pitchin-classic :is(
+  [class*="bg-purple-4"], [class*="bg-purple-5"], [class*="bg-purple-6"], [class*="bg-purple-7"],
+  [class*="bg-pink-4"], [class*="bg-pink-5"], [class*="bg-pink-6"], [class*="bg-pink-7"],
+  [class*="bg-indigo-5"], [class*="bg-indigo-6"], [class*="bg-violet-5"], [class*="bg-violet-6"],
+  [class*="bg-fuchsia-5"], [class*="bg-fuchsia-6"],
+  [class*="from-purple-4"], [class*="from-purple-5"], [class*="from-purple-6"], [class*="from-purple-7"],
+  [class*="from-pink-4"], [class*="from-pink-5"], [class*="from-pink-6"], [class*="from-pink-7"],
+  [class*="from-indigo-5"], [class*="from-indigo-6"], [class*="from-violet-5"], [class*="from-violet-6"],
+  [class*="to-purple-4"], [class*="to-purple-5"], [class*="to-purple-6"], [class*="to-purple-7"],
+  [class*="to-pink-4"], [class*="to-pink-5"], [class*="to-pink-6"], [class*="to-pink-7"],
+  [class*="to-indigo-5"], [class*="to-indigo-6"], [class*="to-violet-5"], [class*="to-violet-6"],
+  [class*="via-pink-5"], [class*="via-purple-5"], [class*="via-purple-6"]
+) {
+  background-image: linear-gradient(135deg, var(--pc-gold-mid) 0%, var(--pc-gold-deep) 100%) !important;
+  background-color: var(--pc-gold-deep) !important;
+  color: #fffaf0;
+  border-color: rgba(230, 201, 128, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 244, 214, 0.28), 0 6px 16px -8px rgba(138, 106, 31, 0.9);
+}
+/* Translucent accent pills (bg-purple-500/20 ...) become gold tints; these
+   come AFTER the solid rule and win on order at equal specificity. */
+.pitchin-classic :is(
+  [class*="bg-purple-200/"],
+  [class*="bg-purple-300/"],
+  [class*="bg-purple-400/"],
+  [class*="bg-purple-500/"],
+  [class*="bg-purple-600/"],
+  [class*="bg-purple-700/"],
+  [class*="bg-purple-800/"],
+  [class*="bg-purple-900/"],
+  [class*="bg-pink-200/"],
+  [class*="bg-pink-300/"],
+  [class*="bg-pink-400/"],
+  [class*="bg-pink-500/"],
+  [class*="bg-pink-600/"],
+  [class*="bg-pink-700/"],
+  [class*="bg-pink-800/"],
+  [class*="bg-pink-900/"],
+  [class*="bg-indigo-200/"],
+  [class*="bg-indigo-300/"],
+  [class*="bg-indigo-400/"],
+  [class*="bg-indigo-500/"],
+  [class*="bg-indigo-600/"],
+  [class*="bg-indigo-700/"],
+  [class*="bg-indigo-800/"],
+  [class*="bg-indigo-900/"],
+  [class*="bg-violet-200/"],
+  [class*="bg-violet-300/"],
+  [class*="bg-violet-400/"],
+  [class*="bg-violet-500/"],
+  [class*="bg-violet-600/"],
+  [class*="bg-violet-700/"],
+  [class*="bg-violet-800/"],
+  [class*="bg-violet-900/"],
+  [class*="bg-fuchsia-200/"],
+  [class*="bg-fuchsia-300/"],
+  [class*="bg-fuchsia-400/"],
+  [class*="bg-fuchsia-500/"],
+  [class*="bg-fuchsia-600/"],
+  [class*="bg-fuchsia-700/"],
+  [class*="bg-fuchsia-800/"],
+  [class*="bg-fuchsia-900/"]
+) {
+  background-color: rgba(196, 160, 82, 0.14) !important;
+  background-image: none !important;
+  color: var(--pc-gold-hi);
+  box-shadow: none;
+}
+/* Gradient fades with alpha stops stay soft, never a solid gold slab */
+.pitchin-classic :is(
+  [class*="from-purple-200/"],
+  [class*="from-purple-300/"],
+  [class*="from-purple-400/"],
+  [class*="from-purple-500/"],
+  [class*="from-purple-600/"],
+  [class*="from-purple-700/"],
+  [class*="from-purple-800/"],
+  [class*="from-purple-900/"],
+  [class*="from-pink-200/"],
+  [class*="from-pink-300/"],
+  [class*="from-pink-400/"],
+  [class*="from-pink-500/"],
+  [class*="from-pink-600/"],
+  [class*="from-pink-700/"],
+  [class*="from-pink-800/"],
+  [class*="from-pink-900/"],
+  [class*="from-indigo-200/"],
+  [class*="from-indigo-300/"],
+  [class*="from-indigo-400/"],
+  [class*="from-indigo-500/"],
+  [class*="from-indigo-600/"],
+  [class*="from-indigo-700/"],
+  [class*="from-indigo-800/"],
+  [class*="from-indigo-900/"],
+  [class*="from-violet-200/"],
+  [class*="from-violet-300/"],
+  [class*="from-violet-400/"],
+  [class*="from-violet-500/"],
+  [class*="from-violet-600/"],
+  [class*="from-violet-700/"],
+  [class*="from-violet-800/"],
+  [class*="from-violet-900/"],
+  [class*="from-fuchsia-200/"],
+  [class*="from-fuchsia-300/"],
+  [class*="from-fuchsia-400/"],
+  [class*="from-fuchsia-500/"],
+  [class*="from-fuchsia-600/"],
+  [class*="from-fuchsia-700/"],
+  [class*="from-fuchsia-800/"],
+  [class*="from-fuchsia-900/"],
+  [class*="via-purple-200/"],
+  [class*="via-purple-300/"],
+  [class*="via-purple-400/"],
+  [class*="via-purple-500/"],
+  [class*="via-purple-600/"],
+  [class*="via-purple-700/"],
+  [class*="via-purple-800/"],
+  [class*="via-purple-900/"],
+  [class*="via-pink-200/"],
+  [class*="via-pink-300/"],
+  [class*="via-pink-400/"],
+  [class*="via-pink-500/"],
+  [class*="via-pink-600/"],
+  [class*="via-pink-700/"],
+  [class*="via-pink-800/"],
+  [class*="via-pink-900/"],
+  [class*="via-indigo-200/"],
+  [class*="via-indigo-300/"],
+  [class*="via-indigo-400/"],
+  [class*="via-indigo-500/"],
+  [class*="via-indigo-600/"],
+  [class*="via-indigo-700/"],
+  [class*="via-indigo-800/"],
+  [class*="via-indigo-900/"],
+  [class*="via-violet-200/"],
+  [class*="via-violet-300/"],
+  [class*="via-violet-400/"],
+  [class*="via-violet-500/"],
+  [class*="via-violet-600/"],
+  [class*="via-violet-700/"],
+  [class*="via-violet-800/"],
+  [class*="via-violet-900/"],
+  [class*="via-fuchsia-200/"],
+  [class*="via-fuchsia-300/"],
+  [class*="via-fuchsia-400/"],
+  [class*="via-fuchsia-500/"],
+  [class*="via-fuchsia-600/"],
+  [class*="via-fuchsia-700/"],
+  [class*="via-fuchsia-800/"],
+  [class*="via-fuchsia-900/"],
+  [class*="to-purple-200/"],
+  [class*="to-purple-300/"],
+  [class*="to-purple-400/"],
+  [class*="to-purple-500/"],
+  [class*="to-purple-600/"],
+  [class*="to-purple-700/"],
+  [class*="to-purple-800/"],
+  [class*="to-purple-900/"],
+  [class*="to-pink-200/"],
+  [class*="to-pink-300/"],
+  [class*="to-pink-400/"],
+  [class*="to-pink-500/"],
+  [class*="to-pink-600/"],
+  [class*="to-pink-700/"],
+  [class*="to-pink-800/"],
+  [class*="to-pink-900/"],
+  [class*="to-indigo-200/"],
+  [class*="to-indigo-300/"],
+  [class*="to-indigo-400/"],
+  [class*="to-indigo-500/"],
+  [class*="to-indigo-600/"],
+  [class*="to-indigo-700/"],
+  [class*="to-indigo-800/"],
+  [class*="to-indigo-900/"],
+  [class*="to-violet-200/"],
+  [class*="to-violet-300/"],
+  [class*="to-violet-400/"],
+  [class*="to-violet-500/"],
+  [class*="to-violet-600/"],
+  [class*="to-violet-700/"],
+  [class*="to-violet-800/"],
+  [class*="to-violet-900/"],
+  [class*="to-fuchsia-200/"],
+  [class*="to-fuchsia-300/"],
+  [class*="to-fuchsia-400/"],
+  [class*="to-fuchsia-500/"],
+  [class*="to-fuchsia-600/"],
+  [class*="to-fuchsia-700/"],
+  [class*="to-fuchsia-800/"],
+  [class*="to-fuchsia-900/"]
+) {
+  background-image: linear-gradient(135deg, rgba(196, 160, 82, 0.2), rgba(196, 160, 82, 0.03)) !important;
+  background-color: transparent !important;
+  box-shadow: none;
+}
+.pitchin-classic :is([class*="hover:bg-purple-"]:hover, [class*="hover:bg-pink-"]:hover, [class*="hover:bg-indigo-"]:hover) {
+  background-color: var(--pc-gold-mid) !important;
+  filter: brightness(1.08);
+}
+.pitchin-classic :is([class*="shadow-purple"], [class*="shadow-pink"], [class*="shadow-indigo"]) {
+  --tw-shadow-color: rgba(196, 160, 82, 0.28) !important;
+  --tw-shadow: var(--tw-shadow-colored) !important;
+}
+.pitchin-classic :is([class*="ring-purple-"], [class*="ring-pink-"], [class*="ring-indigo-"], [class*="focus:ring-purple"], [class*="focus:ring-pink"]) {
+  --tw-ring-color: rgba(196, 160, 82, 0.55) !important;
+}
+
+/* ── Pills & tabs: inactive = hairline outline, active = gold ─────────── */
+.pitchin-classic [class*="rounded-full"]:is([class*="bg-slate-7"], [class*="bg-slate-8"], [class*="bg-gray-7"]) {
+  background-color: transparent !important;
+  border: 1px solid var(--pc-line-strong);
+  color: var(--pc-muted);
+}
+.pitchin-classic [class*="rounded-full"]:is([class*="bg-slate-7"], [class*="bg-slate-8"], [class*="bg-gray-7"]):hover {
+  border-color: var(--pc-gold);
+  color: var(--pc-gold-hi);
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────── */
+.pitchin-classic :is([class*="bg-slate-8"], [class*="bg-slate-9"])[class*="rounded"] {
+  border-radius: 14px;
+  border: 1px solid var(--pc-line);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 200, 0.05), 0 16px 32px -20px var(--pc-card-shadow);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+.pitchin-classic :is([class*="bg-slate-8"], [class*="bg-slate-9"])[class*="rounded"]:hover {
+  border-color: var(--pc-line-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 200, 0.08), 0 20px 38px -20px var(--pc-card-shadow), 0 0 0 1px rgba(196, 160, 82, 0.12);
+}
+/* Modal sheets: a double rule, like the border of a certificate */
+.pitchin-classic [class*="fixed"][class*="inset-0"] > :is([class*="rounded-2xl"], [class*="rounded-3xl"], [class*="rounded-t-3xl"]) {
+  border: 1px solid var(--pc-line-strong);
+  box-shadow: 0 0 0 4px rgba(14, 12, 8, 0.9), 0 0 0 5px var(--pc-line), 0 40px 80px -30px rgba(0, 0, 0, 0.95);
+}
+/* Entrance */
+@keyframes pc-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes pc-sheen { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+.pitchin-classic [class*="fixed"][class*="inset-0"] > :is([class*="rounded-2xl"], [class*="rounded-3xl"], [class*="rounded-t-3xl"], [class*="rounded-xl"]) {
+  animation: pc-rise 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.pitchin-classic :is([class*="grid"], [class*="space-y-"]) > :is([class*="bg-slate-8"], [class*="bg-slate-9"])[class*="rounded"] {
+  animation: pc-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.pitchin-classic :is([class*="grid"], [class*="space-y-"]) > :nth-child(2) { animation-delay: 60ms; }
+.pitchin-classic :is([class*="grid"], [class*="space-y-"]) > :nth-child(3) { animation-delay: 120ms; }
+.pitchin-classic :is([class*="grid"], [class*="space-y-"]) > :nth-child(4) { animation-delay: 180ms; }
+.pitchin-classic :is([class*="grid"], [class*="space-y-"]) > :nth-child(n+5) { animation-delay: 240ms; }
+
+/* Skeleton shimmer in gold instead of blue-grey */
+.pitchin-classic :is([class*="from-slate-7"], [class*="to-slate-8"]):is([class*="animate-pulse"], [class*="bg-gradient"]) {
+  background-image: linear-gradient(100deg, var(--pc-ebony-3) 30%, rgba(196, 160, 82, 0.16) 50%, var(--pc-ebony-3) 70%) !important;
+  background-size: 200% 100% !important;
+  animation: pc-sheen 2.2s linear infinite;
+}
+
+/* ── Form controls ────────────────────────────────────────────────────── */
+.pitchin-classic :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select) {
+  color: var(--pc-ivory) !important;
+  caret-color: var(--pc-gold-hi);
+}
+.pitchin-classic :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select)[class*="bg-slate"],
+.pitchin-classic :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select)[class*="bg-gray"] {
+  background-color: var(--pc-input-bg) !important;
+  border: 1px solid var(--pc-line-strong);
+  border-radius: 10px;
+}
+.pitchin-classic :is(input, textarea, select):focus {
+  outline: none;
+  border-color: var(--pc-gold) !important;
+  box-shadow: 0 0 0 3px rgba(196, 160, 82, 0.2);
+}
+.pitchin-classic select option { background-color: var(--pc-ebony-2); color: var(--pc-ivory); }
+.pitchin-classic :is(button, a, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--pc-gold);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ── Ornament utilities (used by the JSX where a flourish earns its place) ─ */
+.pc-ornament { position: relative; height: 1px; margin: 0.9rem 0; background: linear-gradient(90deg, transparent, rgba(196, 160, 82, 0.8), transparent); }
+.pc-ornament::after { content: ''; position: absolute; left: 50%; top: -3px; width: 7px; height: 7px; background: var(--pc-gold, #c4a052); transform: translateX(-50%) rotate(45deg); box-shadow: 0 0 0 3px #15120c; }
+.pc-eyebrow { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: var(--pc-gold-hi, #e6c980); }
+.pc-masthead { font-family: var(--pc-serif, Georgia, serif); font-weight: 600; letter-spacing: 0.04em; color: var(--pc-ivory, #faf3e0); }
+
+/* ── Scrollbars ───────────────────────────────────────────────────────── */
+.pitchin-classic ::-webkit-scrollbar { width: 8px; height: 8px; }
+.pitchin-classic ::-webkit-scrollbar-track { background: var(--pc-ebony-1); }
+.pitchin-classic ::-webkit-scrollbar-thumb { background: rgba(196, 160, 82, 0.45); border-radius: 8px; }
+.pitchin-classic ::-webkit-scrollbar-thumb:hover { background: rgba(196, 160, 82, 0.7); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pitchin-classic *:not([class*="animate-spin"]):not([class*="animate-pulse"]) { animation: none !important; transition: none !important; }
+}
+
+/* Private-invitation + public viewers use a bespoke near-black violet; bring
+   it onto the same ebony so the invitation feels part of one house. */
+.pitchin-classic[class*="0a0710"] { background-color: var(--pc-ebony-0) !important; }
+.pitchin-classic[class*="0a0710"] [class*="rgba(212,175,120"] { background-image: radial-gradient(ellipse 60% 45% at 50% 25%, rgba(196, 160, 82, 0.16), transparent 70%) !important; }
+
+/* Feed masthead: serif tab labels, a gold hairline under the sticky header */
+.pitchin-classic [class*="sticky"][class*="top-0"][class*="z-40"] { box-shadow: 0 1px 0 var(--pc-line), 0 14px 18px -16px rgba(0, 0, 0, 0.9); }
+.pitchin-classic [class*="sticky"][class*="top-0"][class*="z-40"] button.icon-btn-transparent {
+  font-family: var(--pc-serif);
+  letter-spacing: 0.06em;
+}
+
+/* Never cut off at the top: full-screen Pitchin screens clear the notch / status bar,
+   and the sticky feed header keeps its own top inset. */
+.pitchin-classic[class*="fixed"][class*="inset-0"] { padding-top: env(safe-area-inset-top, 0px); }
+.pitchin-classic [class*="sticky"][class*="top-0"][class*="z-40"] { padding-top: env(safe-area-inset-top, 0px); }
+.pitchin-classic [class*="fixed"][class*="inset-0"] > [class*="max-h-"] { max-height: calc(100dvh - 2rem - env(safe-area-inset-top, 0px)); }
+.pitchin-classic [class*="fixed"][class*="inset-0"][class*="overflow-y-auto"] { scroll-padding-top: 4rem; }
+
+/* Inside the web dashboard the nav header is fixed on top (z-70). Every Pitchin
+   full-screen overlay must start BELOW it, otherwise its top is hidden under the
+   header (--icn-header-h is published by MobileView; unset = 0, so standalone
+   pages and the phone layout are untouched). The video recorder is deliberately
+   full-screen and keeps covering everything. */
+.pitchin-classic[class*="fixed"][class*="inset-0"]:not([class*="z-[9999]"]),
+.pitchin-classic [class*="fixed"][class*="inset-0"]:not([class*="z-[9999]"]) {
+  top: var(--icn-header-h, 0px);
+}
+.pitchin-classic [class*="fixed"][class*="inset-0"] > [class*="max-h-"] {
+  max-height: calc(100dvh - var(--icn-header-h, 0px) - 2rem - env(safe-area-inset-top, 0px));
+}
+
+/* ── Full-page Pitchin screens ───────────────────────────────────────────
+   Page-like Pitchin screens (business profiles, business details, investment
+   progress, forms, invites) used to open as a small centred card with dead
+   margins on both sides. They now open as a real page: edge to edge below the
+   header, content held to a comfortable reading width, with a hairline either
+   side like a ruled page. Small confirmations (max-w-md and below) keep their
+   compact card. */
+.pitchin-classic [class*="fixed"][class*="inset-0"]:has(> :is([class*="max-w-lg"], [class*="max-w-xl"], [class*="max-w-2xl"], [class*="max-w-3xl"], [class*="max-w-4xl"], [class*="max-w-5xl"])) {
+  padding: 0 !important;
+  align-items: stretch;
+  justify-content: center;
+  background-color: var(--pc-ebony-0) !important;
+  backdrop-filter: none !important;
+}
+.pitchin-classic [class*="fixed"][class*="inset-0"] > :is([class*="max-w-lg"], [class*="max-w-xl"], [class*="max-w-2xl"], [class*="max-w-3xl"], [class*="max-w-4xl"], [class*="max-w-5xl"]) {
+  width: 100%;
+  max-width: 72rem;
+  height: 100%;
+  max-height: 100% !important;
+  border-radius: 0 !important;
+  border-width: 0 1px !important;
+  border-style: solid;
+  border-color: var(--pc-line) !important;
+  box-shadow: none !important;
+  animation: pc-rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (min-width: 1280px) {
+  .pitchin-classic [class*="fixed"][class*="inset-0"] > :is([class*="max-w-lg"], [class*="max-w-xl"], [class*="max-w-2xl"], [class*="max-w-3xl"], [class*="max-w-4xl"], [class*="max-w-5xl"]) { padding-left: 1rem; padding-right: 1rem; }
+}
+
+/* Panels sized to the whole window (h-screen / min-h-screen) must size to the
+   space BELOW the web header instead, or their own top bar (title, step, back
+   arrow) stays hidden underneath it. */
+.pitchin-classic [class*="fixed"][class*="inset-0"] > [class*="h-screen"] { height: 100% !important; }
+.pitchin-classic [class*="fixed"][class*="inset-0"] [class*="min-h-screen"] { min-height: 100%; }
+.pitchin-classic [class*="fixed"][class*="inset-0"] [class*="sticky"][class*="top-0"] { top: 0; }
+
+
+/* ══ LIGHT MODE ═════════════════════════════════════════════════════════
+   The video feed stays dark in every theme (video-first, like any player).
+   Page-like screens and dialogs (full-screen layers) switch to an ivory and
+   gold "daylight" palette when the app theme is Light. Everything above reads
+   these variables, so only the variables change here. */
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"]:not([class*="z-[9999]"]),
+:root[data-theme="light"] .pitchin-classic[class*="fixed"][class*="inset-0"]:not([class*="z-[9999]"]) {
+  --pc-ebony-0: #f6efde;
+  --pc-ebony-1: #faf5e8;
+  --pc-ebony-2: #fffdf8;
+  --pc-ebony-3: #f4ecd8;
+  --pc-ebony-4: #eadfc3;
+  --pc-gold: #b8892b;
+  --pc-gold-hi: #8a6a1f;
+  --pc-ivory: #2a2216;
+  --pc-text: #3b3222;
+  --pc-muted: #6f6446;
+  --pc-faint: #8d815f;
+  --pc-line: rgba(160, 125, 45, 0.3);
+  --pc-line-strong: rgba(160, 125, 45, 0.5);
+  --pc-panel: rgba(255, 253, 248, 0.98);
+  --pc-panel-2: #f6efde;
+  --pc-veil-5: rgba(160, 125, 45, 0.07);
+  --pc-veil-10: rgba(160, 125, 45, 0.12);
+  --pc-veil-20: rgba(160, 125, 45, 0.2);
+  --pc-veil-hover: rgba(160, 125, 45, 0.24);
+  --pc-text-soft: #4d4330;
+  --pc-text-dim: rgba(42, 34, 22, 0.7);
+  --pc-input-bg: rgba(160, 125, 45, 0.06);
+  --pc-backdrop: rgba(60, 45, 15, 0.45);
+  --pc-card-shadow: rgba(60, 45, 15, 0.28);
+  color: var(--pc-text);
+}
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"]:not([class*="z-[9999]"]) {
+  background-image: none;
+}
+/* Page background of full-page screens */
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"]:has(> :is([class*="max-w-lg"], [class*="max-w-xl"], [class*="max-w-2xl"], [class*="max-w-3xl"], [class*="max-w-4xl"], [class*="max-w-5xl"])) {
+  background-color: var(--pc-ebony-0) !important;
+}
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"] :is(h1, h2, h3, h4) { color: var(--pc-ivory); }
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"] ::-webkit-scrollbar-track { background: var(--pc-ebony-1); }
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"] .pc-ornament::after { box-shadow: 0 0 0 3px #fffdf8; }
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"] select option { background-color: #fffdf8; color: #2a2216; }
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"] ::selection { color: #2a2216; }
+
+/* Text that sits on video, black media boxes or coloured buttons stays light */
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"] :is(
+  [class*="bg-black"], [class*="aspect-video"], [class*="drop-shadow"],
+  [class*="bg-purple-5"], [class*="bg-purple-6"], [class*="bg-pink-5"], [class*="bg-pink-6"],
+  [class*="from-purple-5"], [class*="from-purple-6"], [class*="from-pink-5"], [class*="from-pink-6"],
+  [class*="bg-blue-5"], [class*="bg-blue-6"], [class*="bg-green-5"], [class*="bg-green-6"],
+  [class*="bg-emerald-5"], [class*="bg-emerald-6"], [class*="bg-red-5"], [class*="bg-red-6"], [class*="bg-amber-5"], [class*="bg-amber-6"]
+) :is([class~="text-white"], [class*="text-white/"]),
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"] :is(
+  [class*="drop-shadow"], [class*="bg-purple-5"], [class*="bg-purple-6"], [class*="bg-pink-5"], [class*="bg-pink-6"],
+  [class*="bg-blue-5"], [class*="bg-blue-6"], [class*="bg-green-5"], [class*="bg-green-6"],
+  [class*="bg-emerald-5"], [class*="bg-emerald-6"], [class*="bg-red-5"], [class*="bg-red-6"]
+)[class~="text-white"] {
+  color: #fffaf0 !important;
+}
+/* Gold text on light surfaces needs the darker gold for contrast */
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"] :is([class*="text-amber-2"], [class*="text-amber-3"], [class*="text-yellow-2"], [class*="text-yellow-3"]) { color: #7a5a14 !important; }
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"] :is([class*="text-green-3"], [class*="text-green-4"], [class*="text-emerald-3"], [class*="text-emerald-4"]) { color: #1f7a5a !important; }
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"] :is([class*="text-red-3"], [class*="text-red-4"]) { color: #b4232a !important; }
+:root[data-theme="light"] .pitchin-classic [class*="fixed"][class*="inset-0"] :is([class*="text-blue-3"], [class*="text-blue-4"], [class*="text-sky-3"], [class*="text-sky-4"]) { color: #2f5f9a !important; }
+

@@ -1,3 +1,4 @@
+import './pitchin-classic.css';
 import React, { useEffect, useRef, useState } from 'react';
 import { Lock, X, AlertCircle, Loader, ShieldOff, Clock as ClockIcon, TrendingUp, FileText, ExternalLink } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -194,7 +195,7 @@ const PrivatePitchInviteViewer = ({ token }) => {
 
   if (checking) {
     return (
-      <div className="fixed inset-0 bg-[#0a0710] flex items-center justify-center">
+      <div className="pitchin-classic fixed inset-0 bg-[#0a0710] flex items-center justify-center">
         <Loader className="w-8 h-8 text-amber-300 animate-spin" />
       </div>
     );
@@ -202,7 +203,7 @@ const PrivatePitchInviteViewer = ({ token }) => {
 
   if (!content && probe?.status !== 'active') {
     return (
-      <div className="fixed inset-0 bg-[#0a0710] flex flex-col items-center justify-center gap-4 p-6 text-center">
+      <div className="pitchin-classic fixed inset-0 bg-[#0a0710] flex flex-col items-center justify-center gap-4 p-6 text-center">
         <ShieldOff className="w-14 h-14 text-slate-500" />
         <p className="text-white text-lg font-semibold">{DEAD_MESSAGES[probe?.status] || DEAD_MESSAGES.error}</p>
         <button onClick={goToApp} className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black rounded-lg font-semibold transition">
@@ -215,13 +216,14 @@ const PrivatePitchInviteViewer = ({ token }) => {
   if (!content) {
     // Locked -- PIN entry.
     return (
-      <div className="fixed inset-0 bg-[#0a0710] overflow-y-auto">
+      <div className="pitchin-classic fixed inset-0 bg-[#0a0710] overflow-y-auto">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_45%_at_50%_25%,rgba(212,175,120,0.12),transparent_70%)] pointer-events-none" />
         <div className="relative min-h-screen flex flex-col items-center justify-center px-6 py-16 text-center">
           <div className="w-16 h-16 rounded-full border border-amber-300/30 flex items-center justify-center mb-6">
             <Lock className="w-7 h-7 text-amber-300" />
           </div>
-          <p className="text-[11px] tracking-[0.4em] text-amber-200/70 uppercase mb-2">Exclusive Invitation</p>
+          <p className="pc-eyebrow mb-1">Exclusive Invitation</p>
+          <div className="pc-ornament w-44 mb-4" aria-hidden="true" />
           <h1 className="text-white text-xl font-bold mb-1">
             {probe?.investor_name ? `Prepared exclusively for ${probe.investor_name}` : 'A private investment opportunity'}
           </h1>
@@ -242,7 +244,7 @@ const PrivatePitchInviteViewer = ({ token }) => {
   // Unlocked.
   const offerKnown = Boolean(ownerUserId);
   return (
-    <div className="fixed inset-0 bg-[#0a0710] overflow-y-auto">
+    <div className="pitchin-classic fixed inset-0 bg-[#0a0710] overflow-y-auto">
       <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/60 to-transparent">
         <span className="text-amber-200 font-bold text-sm tracking-wide">IcanEra · Private Invitation</span>
         <button onClick={goToApp} className="p-1 text-white/70 hover:text-white"><X className="w-6 h-6" /></button>
@@ -252,7 +254,8 @@ const PrivatePitchInviteViewer = ({ token }) => {
         {content.investorName && (
           <p className="text-amber-200/80 text-sm font-semibold mb-1">Prepared exclusively for {content.investorName}</p>
         )}
-        <h1 className="text-white text-2xl font-bold mb-2">{content.title}</h1>
+        <h1 className="text-white text-2xl font-bold mb-2" style={{ fontFamily: "var(--pc-serif)" }}>{content.title}</h1>
+        <div className="pc-ornament my-3" aria-hidden="true" />
         {businessName && <p className="text-white/50 text-sm mb-4">{businessName}</p>}
 
         {content.customMessage && (

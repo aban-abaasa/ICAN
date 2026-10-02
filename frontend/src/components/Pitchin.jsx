@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search, ShoppingBag, Download, Gem, Eye } from 'lucide-react';
+import './pitchin-classic.css';
 import DiamondLoader from './DiamondLoader';
 import PitchVideoRecorder from './PitchVideoRecorder';
 import SmartContractGenerator from './SmartContractGenerator';
@@ -13,6 +14,8 @@ import BusinessCategorySelector from './BusinessCategorySelector';
 import BusinessProfileCard from './BusinessProfileCard';
 import SHAREHub from './SHAREHub';
 import PitchinLiveShareValue from './PitchinLiveShareValue';
+import PitchLiveFunding from './PitchLiveFunding';
+import { useCountry } from '../hooks/useCountry';
 import BusinessWalletModal from './BusinessWalletModal';
 import { 
   getAllPitches, 
@@ -195,6 +198,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   const [viewingPitcher, setViewingPitcher] = useState(null); // { name, business_profile_id, user_id } | null
   const [businessDetailsPitch, setBusinessDetailsPitch] = useState(null); // pitch whose business details modal is open (Pitcher icon tap)
   const [businessOwnerProfile, setBusinessOwnerProfile] = useState(null); // { full_name, avatar_url } for businessDetailsPitch's owner
+  const { country: userCountry } = useCountry();
   const [businessLiveOffer, setBusinessLiveOffer] = useState(null); // live getLiveShareOffer() result for businessDetailsPitch
   const [invitePitch, setInvitePitch] = useState(null); // pitch whose "Invite investor" modal (PrivatePitchInviteModal) is open
   const [businessLiveOfferLoading, setBusinessLiveOfferLoading] = useState(false);
@@ -1829,20 +1833,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                   </div>
 
                   <div className="mt-4 bg-white/5 border border-white/10 rounded-xl p-4">
-                    <div className="grid grid-cols-3 gap-3 mb-3 pb-3 border-b border-white/10">
-                      <div className="text-center">
-                        <p className="text-[11px] text-slate-500 uppercase tracking-wide">Raised</p>
-                        <p className="text-sm font-bold text-white">{formatCurrency(activePitch.raised_amount)}</p>
-                      </div>
-                      <div className="text-center border-x border-white/10">
-                        <p className="text-[11px] text-slate-500 uppercase tracking-wide">Goal</p>
-                        <p className="text-sm font-bold text-white">{formatCurrency(activePitch.target_funding)}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-[11px] text-slate-500 uppercase tracking-wide">Equity</p>
-                        <p className="text-sm font-bold text-white">{activePitch.equity_offering || 0}%</p>
-                      </div>
-                    </div>
+                    <PitchLiveFunding pitch={activePitch} country={userCountry} variant="detail" />
                     <p className="text-slate-300 text-sm whitespace-pre-wrap">
                       {activePitch.description || 'No description provided.'}
                     </p>
@@ -1909,7 +1900,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
+    <div className="pitchin-classic min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 overflow-hidden">
       {/* Demo Mode Banner */}
       {!supabaseReady && (
         <div className="bg-amber-500/20 border-b border-amber-500/50 text-amber-200 px-6 py-3">
@@ -1934,7 +1925,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
         // ancestor above would otherwise clip the recorder's bottom control bar
         // (Back/Upload/⋮/Next) — which is exactly what was hiding the upload icon.
         createPortal(
-          <div className="fixed inset-0 z-[9999] w-screen h-screen bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 overflow-hidden">
+          <div className="pitchin-classic fixed inset-0 z-[9999] w-screen h-screen bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 overflow-hidden">
             <PitchVideoRecorder
               onPitchCreated={handleCreatePitch}
               onClose={() => {
@@ -3194,21 +3185,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                         {pitch.description}
                       </p>
 
-                      {/* Funding Info */}
-                      <div className="grid grid-cols-3 gap-2 bg-white/5 p-2 rounded mb-3">
-                        <div className="text-center">
-                          <p className="text-xs text-slate-400">Raised</p>
-                          <p className="text-xs font-bold text-white">{formatCurrency(pitch.raised_amount)}</p>
-                        </div>
-                        <div className="text-center border-x border-white/10">
-                          <p className="text-xs text-slate-400">Goal</p>
-                          <p className="text-xs font-bold text-white">{formatCurrency(pitch.target_funding)}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-slate-400">Equity</p>
-                          <p className="text-xs font-bold text-white">{pitch.equity_offering || 0}%</p>
-                        </div>
-                      </div>
+                      {/* Funding Info: live share value, shown in the viewer's currency */}
+                      <PitchLiveFunding pitch={pitch} country={userCountry} variant="card" />
 
                       {/* Action Buttons with Icons and Live Counts */}
                       <div className="flex gap-2">

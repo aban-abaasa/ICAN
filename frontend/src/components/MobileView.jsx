@@ -658,6 +658,19 @@ const STAGE_STYLES = {
 // CMMS module row in CMSSModule.jsx.
 const MAX_VISIBLE_HEADER_TABS = 6;
 
+// Avatar that never renders a broken-image icon or overflowing alt text: if the
+// picture fails to load it falls back to a gold monogram of the person's name.
+const HeaderAvatar = ({ url, name }) => {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [url]);
+  const initial = (name || '').trim().charAt(0).toUpperCase() || 'U';
+  return url && !failed ? (
+    <img src={url} alt="" aria-hidden="true" onError={() => setFailed(true)} className="block w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover" />
+  ) : (
+    <span className="icn-monogram flex w-8 h-8 sm:w-9 sm:h-9 items-center justify-center rounded-full text-xs font-bold" aria-label={name || 'Account'}>{initial}</span>
+  );
+};
+
 const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack }) => {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef(null);
@@ -669,13 +682,10 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack 
       <button
         key={tab.id}
         onClick={() => onTabClick(tab.id)}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 2xl:px-5 2xl:py-2.5 rounded-lg text-xs md:text-sm 2xl:text-base font-semibold whitespace-nowrap border transition-all duration-200 ${
-          isActive
-            ? 'bg-indigo-500/25 text-indigo-100 border-indigo-300/50 shadow-[0_8px_16px_rgba(99,102,241,0.22)]'
-            : 'bg-transparent text-slate-300 border-slate-600/60 hover:text-white hover:bg-slate-700/35 hover:border-slate-400/70'
-        }`}
+        className={`icn-navtab ${isActive ? 'is-active' : ''}`}
+        aria-current={isActive ? 'page' : undefined}
       >
-        <TabIcon className={`w-3.5 h-3.5 md:w-4 md:h-4 ${isActive ? 'text-indigo-300' : 'text-slate-500'}`} />
+        <TabIcon className="icn-navtab-icon w-3.5 h-3.5 md:w-4 md:h-4" />
         {tab.label}
       </button>
     );
@@ -701,7 +711,7 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack 
   const activeOverflowTab = overflowTabs.find(t => t.id === activeTab);
 
   return (
-    <div className="mt-2 border-t border-slate-700/60 pt-2">
+    <div className="icn-rule mt-2.5 pt-3">
       <div className="relative flex flex-nowrap items-center gap-1.5 md:gap-2 pb-1">
         {/* Back button — visible only when there is history to go back to */}
         {showBack && (
@@ -725,11 +735,11 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack 
           <div className="relative flex-shrink-0" ref={moreRef}>
             <button
               onClick={() => setMoreOpen(o => !o)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 2xl:px-5 2xl:py-2.5 rounded-lg text-xs md:text-sm 2xl:text-base font-semibold whitespace-nowrap border transition-all duration-200 bg-transparent text-slate-300 border-slate-600/60 hover:text-white hover:bg-slate-700/35 hover:border-slate-400/70"
+              className={`icn-navtab ${moreOpen ? 'is-open' : ''}`}
               title="More sections"
             >
               <span>More</span>
-              {activeOverflowTab && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" title={`${activeOverflowTab.label} is active`} />}
+              {activeOverflowTab && <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#e6c980' }} title={`${activeOverflowTab.label} is active`} />}
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
             </button>
 
@@ -4892,12 +4902,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const el = dashboardHeaderRef.current;
     if (!el) return undefined;
 
-    const updateHeight = () => setDashboardHeaderHeight(el.offsetHeight);
+    const updateHeight = () => {
+      setDashboardHeaderHeight(el.offsetHeight);
+      // Full-screen overlays (Pitchin modals/pages) read this so they start BELOW the fixed header.
+      document.documentElement.style.setProperty('--icn-header-h', `${el.offsetHeight}px`);
+    };
     updateHeight();
 
     const resizeObserver = new ResizeObserver(updateHeight);
     resizeObserver.observe(el);
-    return () => resizeObserver.disconnect();
+    return () => { resizeObserver.disconnect(); document.documentElement.style.removeProperty('--icn-header-h'); };
   }, [isWebDashboard, showDashboardHeader]);
 
   const closeHeaderPanels = () => {
@@ -5396,7 +5410,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {showDashboardHeader && (
       <div
         ref={dashboardHeaderRef}
-        className={`${isWebDashboard ? 'fixed top-0 left-0 right-0 z-[70]' : 'sticky top-0 z-40'} border-b ${
+        className={`${isWebDashboard ? 'icn-masthead fixed top-0 left-0 right-0 z-[70]' : 'sticky top-0 z-40'} border-b ${
         isWebDashboard
           ? 'bg-gradient-to-r from-slate-950/92 via-slate-900/88 to-slate-950/92 backdrop-blur-xl border-slate-700/60 shadow-[0_10px_30px_rgba(2,6,23,0.45)]'
           : 'bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-purple-500/20'
@@ -5407,10 +5421,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           <div className={`flex items-center w-full gap-3 ${isWebDashboard ? 'min-h-[48px]' : ''}`}>
             {/* IcanEra Branding - Left aligned */}
             <h1
-              className={`${isWebDashboard ? 'text-2xl md:text-3xl 2xl:text-4xl' : 'text-xl min-[360px]:text-2xl sm:text-3xl'} font-serif font-bold tracking-wide sm:tracking-wider leading-tight flex-shrink-0`}
+              className={`${isWebDashboard ? 'text-2xl md:text-3xl 2xl:text-4xl' : 'text-xl min-[360px]:text-2xl sm:text-3xl'} font-serif font-bold tracking-wide sm:tracking-wider leading-tight flex-shrink-0 ${isWebDashboard ? 'icn-wordmark' : ''}`}
               style={{
-                color: isWebDashboard ? '#818cf8' : 'var(--color-secondary)',
-                textShadow: isWebDashboard ? '0 2px 12px rgba(129, 140, 248, 0.32)' : '0 0 10px rgba(129, 140, 248, 0.35)'
+                color: isWebDashboard ? '#e6c980' : 'var(--color-secondary)',
+                textShadow: isWebDashboard ? '0 1px 0 rgba(0,0,0,.5), 0 0 22px rgba(196, 160, 82, 0.28)' : '0 0 10px rgba(129, 140, 248, 0.35)'
               }}
             >
               IcanEra
@@ -5444,7 +5458,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               const displayName = getDisplayName?.() || '';
               return (
               <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-              <div className={isWebDashboard ? 'rounded-full border border-slate-600/70 bg-transparent px-2 py-1' : 'scale-90'}>
+              <div className={isWebDashboard ? 'icn-chip rounded-full px-2 py-1' : 'scale-90'}>
                 <ThemeSwitcher />
               </div>
 
@@ -5452,20 +5466,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {/* Avatar — now the single trigger for the full menu (no more kebab) */}
               <button
                 onClick={() => setShowMenuDropdown(!showMenuDropdown)}
-                className="flex-shrink-0 rounded-full ring-2 ring-purple-500/40 hover:ring-purple-400/70 transition"
+                className="icn-avatar flex-shrink-0 rounded-full overflow-hidden transition"
                 title="Menu"
               >
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt={displayName}
-                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-amber-700 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                    {displayName.charAt(0) || 'U'}
-                  </div>
-                )}
+                <HeaderAvatar url={avatarUrl} name={displayName} />
               </button>
 
               {/* Dropdown Menu - Exact Image Layout */}

@@ -84,6 +84,71 @@ const PAYROLL_STYLES = `
 :root[data-theme="sienna"] .payroll-scope .pay-table td { border-bottom-color: var(--color-border); }
 .pay-field { margin-top: .25rem; width: 100%; }
 .pay-row { border-radius: 10px; border: 1px solid rgba(196, 160, 82, 0.26); padding: .75rem; }
+.pay-num { font-variant-numeric: tabular-nums; font-feature-settings: "lnum" 1, "tnum" 1; }
+
+/* Run ledger: the four figures an approver actually decides on, set like the
+   foot of a printed pay register, with a meter for how much is paid out. */
+.pay-ledger { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid rgba(196, 160, 82, 0.5); border-bottom: 1px solid rgba(196, 160, 82, 0.5); position: relative; }
+.pay-ledger::before, .pay-ledger::after { content: ''; position: absolute; left: 0; right: 0; height: 1px; background: rgba(196, 160, 82, 0.25); }
+.pay-ledger::before { top: 3px; } .pay-ledger::after { bottom: 3px; }
+@media (min-width: 640px) { .pay-ledger { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.pay-figure { padding: .85rem .5rem .8rem; text-align: center; border-right: 1px solid rgba(196, 160, 82, 0.2); animation: cmms-rise .5s ease both; }
+.pay-figure:nth-child(2n) { border-right: 0; }
+@media (min-width: 640px) { .pay-figure:nth-child(2n) { border-right: 1px solid rgba(196, 160, 82, 0.2); } .pay-figure:last-child { border-right: 0; } }
+.pay-figure-label { font-size: .64rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--pay-neutral-text); }
+.pay-figure-value { margin-top: .2rem; font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif; font-size: 1.15rem; line-height: 1.25; font-weight: 700; word-break: break-word; }
+.pay-figure-sub { font-size: .68rem; color: var(--pay-neutral-text); }
+.pay-meter { height: 6px; border-radius: 999px; background: rgba(196, 160, 82, 0.18); overflow: hidden; }
+.pay-meter > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #1f7a5a, #34b27f); transition: width .7s cubic-bezier(.2,.8,.2,1); }
+
+/* Run progress: Draft -> Approved -> Paid, derived from the entries. */
+.pay-steps { display: flex; align-items: flex-start; }
+.pay-step { flex: 1; text-align: center; position: relative; font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--pay-neutral-text); }
+.pay-step::before { content: ''; position: absolute; top: 11px; right: 50%; width: 100%; height: 2px; background: rgba(196, 160, 82, 0.3); }
+.pay-step:first-child::before { display: none; }
+.pay-step-dot { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; margin-bottom: .3rem; border: 2px solid rgba(196, 160, 82, 0.5); background: #fffdf8; font-size: .7rem; }
+.pay-step[data-state="done"] { color: var(--pay-success-text); }
+.pay-step[data-state="done"]::before { background: #1f7a5a; }
+.pay-step[data-state="done"] .pay-step-dot { background: #1f7a5a; border-color: #1f7a5a; color: #fff; }
+.pay-step[data-state="now"] { color: #8a6a1f; }
+.pay-step[data-state="now"] .pay-step-dot { border-color: #b8892b; box-shadow: 0 0 0 4px rgba(184, 137, 43, 0.18); }
+:root[data-theme="dark"] .payroll-scope .pay-step-dot,
+:root[data-theme="purple"] .payroll-scope .pay-step-dot,
+:root[data-theme="green"] .payroll-scope .pay-step-dot,
+:root[data-theme="ocean"] .payroll-scope .pay-step-dot,
+:root[data-theme="sienna"] .payroll-scope .pay-step-dot { background: var(--color-bg); }
+:root[data-theme="dark"] .payroll-scope .pay-step[data-state="now"],
+:root[data-theme="purple"] .payroll-scope .pay-step[data-state="now"],
+:root[data-theme="green"] .payroll-scope .pay-step[data-state="now"],
+:root[data-theme="ocean"] .payroll-scope .pay-step[data-state="now"],
+:root[data-theme="sienna"] .payroll-scope .pay-step[data-state="now"] { color: #e6c980; }
+:root[data-theme="dark"] .payroll-scope .pay-step[data-state="done"] .pay-step-dot,
+:root[data-theme="purple"] .payroll-scope .pay-step[data-state="done"] .pay-step-dot,
+:root[data-theme="green"] .payroll-scope .pay-step[data-state="done"] .pay-step-dot,
+:root[data-theme="ocean"] .payroll-scope .pay-step[data-state="done"] .pay-step-dot,
+:root[data-theme="sienna"] .payroll-scope .pay-step[data-state="done"] .pay-step-dot { background: #1f7a5a; }
+
+/* Payslip row: one person's pay for the run, tappable to pay. */
+.pay-slip { border-radius: 12px; border: 1px solid rgba(196, 160, 82, 0.28); padding: .8rem .9rem .8rem 1.05rem; position: relative; animation: cmms-rise .45s ease both; transition: border-color .2s ease, box-shadow .2s ease; }
+.pay-slip::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--slip-accent, #b8892b); }
+.pay-slip[data-status="paid"] { --slip-accent: #1f7a5a; }
+.pay-slip[data-status="approved"] { --slip-accent: #2f6fa5; }
+.pay-slip[data-selected="true"] { border-color: #b8892b; box-shadow: 0 0 0 3px rgba(184, 137, 43, 0.16); }
+:root[data-theme="dark"] .payroll-scope .pay-slip,
+:root[data-theme="purple"] .payroll-scope .pay-slip,
+:root[data-theme="green"] .payroll-scope .pay-slip,
+:root[data-theme="ocean"] .payroll-scope .pay-slip,
+:root[data-theme="sienna"] .payroll-scope .pay-slip { border-color: var(--color-border); }
+.pay-slip-lines { display: grid; grid-template-columns: 1fr auto; row-gap: .15rem; margin-top: .6rem; padding-top: .55rem; font-size: .8rem; border-top: 1px dashed rgba(196, 160, 82, 0.4); }
+.pay-slip-lines dt { color: var(--pay-neutral-text); }
+.pay-slip-lines dd { text-align: right; margin: 0; }
+.pay-table tr[data-selected="true"] td { background: rgba(184, 137, 43, 0.1); }
+.pay-table tfoot td { font-weight: 700; border-top: 2px solid rgba(196, 160, 82, 0.5); border-bottom: 0; }
+.pay-attention { display: flex; flex-wrap: wrap; gap: .5rem; }
+.pay-attention button { display: inline-flex; align-items: center; gap: .4rem; border-radius: 999px; padding: .35rem .8rem; font-size: .76rem; font-weight: 700; border: 1px solid; cursor: pointer; animation: cmms-rise .45s ease both; }
+.pay-attention button[data-tone="warning"] { background: var(--pay-warning-bg); color: var(--pay-warning-text); border-color: var(--pay-warning-text); }
+.pay-attention button[data-tone="info"] { background: var(--pay-info-bg); color: var(--pay-info-text); border-color: var(--pay-info-text); }
+@media (prefers-reduced-motion: reduce) { .pay-figure, .pay-slip, .pay-attention button { animation: none; } .pay-meter > span { transition: none; } }
 :root[data-theme="dark"] .payroll-scope .pay-row,
 :root[data-theme="purple"] .payroll-scope .pay-row,
 :root[data-theme="green"] .payroll-scope .pay-row,
@@ -117,13 +182,25 @@ const SECTION_ACCENTS = {
   'Reward redemptions': 'plum',
   'Salary advance requests': 'teal'
 };
-function CollapsibleSection({ title, subtitle, icon, badge, accent, defaultOpen = false, children }) {
+function CollapsibleSection({ id, title, subtitle, icon, badge, accent, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
   const [info, setInfo] = useState(false);
+  const touched = useRef(false);
   const bodyId = useRef(`sec-${Math.random().toString(36).slice(2)}`).current;
-  const toggle = () => setOpen(o => !o);
+  const toggle = () => { touched.current = true; setOpen(o => !o); };
+  // defaultOpen often depends on data that arrives after first paint (pending
+  // advances, queued rewards). Open once it turns true unless the person has
+  // already opened or closed the section themselves.
+  useEffect(() => { if (defaultOpen && !touched.current) setOpen(true); }, [defaultOpen]);
+  // Jumps from the "needs attention" chips open the section too.
+  useEffect(() => {
+    if (!id) return undefined;
+    const onJump = e => { if (e.detail === id) { touched.current = true; setOpen(true); } };
+    window.addEventListener('payroll-open-section', onJump);
+    return () => window.removeEventListener('payroll-open-section', onJump);
+  }, [id]);
   return (
-    <section className={`cmms-sec cmms-accent-${accent || SECTION_ACCENTS[title] || 'gold'}`} data-open={open}>
+    <section id={id} className={`cmms-sec cmms-accent-${accent || SECTION_ACCENTS[title] || 'gold'}`} data-open={open}>
       <div className="flex items-center gap-2">
         <button type="button" onClick={toggle} aria-expanded={open} aria-controls={bodyId}
           className="flex min-w-0 flex-1 items-center gap-3 text-left !bg-transparent"
@@ -155,6 +232,72 @@ function InfoTip({ label = 'More information', children }) {
       <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open} aria-label={label} title={label} className="cmms-info-btn"><Info className="h-3.5 w-3.5" aria-hidden="true" /></button>
       {open && <div className="cmms-info cmms-classic-muted basis-full">{children}</div>}
     </>
+  );
+}
+
+// Totals for one payroll run, set like the foot of a printed pay register.
+// Only meaningful in a single currency; a mixed-currency run shows counts only
+// rather than adding UGX to USD.
+function RunLedger({ entries }) {
+  const currencies = new Set(entries.map(e => e.metadata?.currency || 'UGX'));
+  const currency = [...currencies][0] || 'UGX';
+  const single = currencies.size <= 1;
+  const sum = list => list.reduce((t, e) => t + Number(e.net_amount || 0), 0);
+  const gross = entries.reduce((t, e) => t + Number(e.base_amount || 0), 0);
+  const net = sum(entries);
+  const paidEntries = entries.filter(e => e.status === 'paid');
+  const paid = sum(paidEntries);
+  const percent = entries.length ? Math.round((paidEntries.length / entries.length) * 100) : 0;
+  const figures = single ? [
+    { label: 'Gross pay', value: amount(gross, currency), tone: 'inherit' },
+    { label: 'Deductions', value: `-${amount(Math.max(gross - net, 0), currency)}`, tone: 'var(--pay-warning-text)' },
+    { label: 'Net payable', value: amount(net, currency), tone: 'var(--pay-success-text)' },
+    { label: 'Still to pay', value: amount(Math.max(net - paid, 0), currency), tone: net - paid > 0 ? 'var(--pay-info-text)' : 'var(--pay-success-text)' },
+  ] : [
+    { label: 'Staff in run', value: String(entries.length), tone: 'inherit' },
+    { label: 'Paid', value: String(paidEntries.length), tone: 'var(--pay-success-text)' },
+    { label: 'Still to pay', value: String(entries.length - paidEntries.length), tone: 'var(--pay-info-text)' },
+    { label: 'Currencies', value: [...currencies].join(' · '), tone: 'inherit' },
+  ];
+  return (
+    <div className="space-y-2.5">
+      <div className="pay-ledger">
+        {figures.map((f, i) => (
+          <div key={f.label} className="pay-figure" style={{ animationDelay: `${i * 70}ms` }}>
+            <p className="pay-figure-label">{f.label}</p>
+            <p className="pay-figure-value pay-num" style={{ color: f.tone }}>{f.value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="pay-meter flex-1" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label="Share of staff paid"><span style={{ width: `${percent}%` }} /></div>
+        <p className="flex-shrink-0 text-xs cmms-classic-muted pay-num">{paidEntries.length} of {entries.length} paid</p>
+      </div>
+    </div>
+  );
+}
+
+// Draft -> Approved -> Paid, read off the entries so it can never disagree with
+// the table beneath it.
+function RunSteps({ entries }) {
+  if (!entries.length) return null;
+  const allPaid = entries.every(e => e.status === 'paid');
+  const anyApproved = entries.some(e => e.status === 'approved' || e.status === 'paid');
+  const now = allPaid ? 3 : anyApproved ? 2 : 1;
+  const steps = ['Draft', 'Approved', 'Paid'];
+  return (
+    <ol className="pay-steps" aria-label="Payroll run progress">
+      {steps.map((label, i) => {
+        const n = i + 1;
+        const state = allPaid || n < now ? 'done' : n === now ? 'now' : 'todo';
+        return (
+          <li key={label} className="pay-step" data-state={state} aria-current={state === 'now' ? 'step' : undefined}>
+            <span className="pay-step-dot">{state === 'done' ? '✓' : n}</span>
+            <span className="block">{label}</span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -243,6 +386,7 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], currentUs
   const [dates, setDates] = useState({ start: `${today.slice(0, 8)}01`, end: today }); const [payment, setPayment] = useState({ entry: '', method: 'cash', pin: '' });
   const [busy, setBusy] = useState(false); const [notice, setNotice] = useState(''); const [error, setError] = useState('');
   const automaticRunRef = useRef(new Set());
+  const payFormRef = useRef(null);
   const [dailyConfirmations, setDailyConfirmations] = useState([]);
   const [rewardRedemptions, setRewardRedemptions] = useState([]);
   const [rewardPayment, setRewardPayment] = useState({ redemption: '', method: 'cash', pin: '' });
@@ -334,6 +478,8 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], currentUs
       contract_total: existing.contract_total != null ? String(existing.contract_total) : ''
     } : { employee: employeeId, pay_type: 'monthly', pay_frequency: 'monthly', base_salary: '', currency: 'UGX', payroll_status: 'on_pay', contract_start: '', contract_end: '', contract_total: '' });
   };
+  const choosePayEntry = entryId => { setPayment(v => ({ ...v, entry: entryId })); window.requestAnimationFrame(() => payFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })); };
+  const jumpToSection = sectionId => { window.dispatchEvent(new CustomEvent('payroll-open-section', { detail: sectionId })); window.requestAnimationFrame(() => document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })); };
   const say = (text, bad = false) => { setNotice(bad ? '' : text); setError(bad ? text : ''); };
   const load = async () => { if (!businessProfileId || !companyProfile?.id) return; setBusy(true); const settingsRequest = supabase.from('cmms_attendance_payroll_settings').select('*').eq('cmms_company_id', companyProfile.id).maybeSingle(); if (attendancePayrollOnly) { const settings = await settingsRequest; if (settings.data) setAttendanceSettings(current => ({ ...current, ...settings.data })); if (settings.error) say(settings.error.message, true); setBusy(false); return; } const now = new Date(); const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`; const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`; const [c, m, u, p, settings, dailyPay, rewards, rewardSettings, advanceRequests] = await Promise.all([getBusinessCompensation(businessProfileId), getBusinessAccessMembers(businessProfileId), resolveEmployeeAuthIds(users), getBusinessPayrollPeriods(businessProfileId), settingsRequest, getAttendanceCheckoutPayConfirmations({ cmmsCompanyId: companyProfile.id, periodStart: monthStart, periodEnd: monthEnd }), getPendingRewardRedemptions(companyProfile.id), getRewardsSettings(companyProfile.id), getCompanySalaryAdvances(companyProfile.id)]); setCompensation(c.data || []); setMembers(m.data || []); setExtraUsers(u || []); setPeriods(p.data || []); if (settings.data) setAttendanceSettings(current => ({ ...current, ...settings.data })); setDailyConfirmations(dailyPay.data || []); setRewardRedemptions(rewards.data || []); setRewardsSettings(rewardSettings.data || { cmms_company_id: companyProfile.id, enabled: false, points_per_checkin: 1, points_per_early_checkin: 2, early_checkin_minutes: 10, points_per_report: 3, points_per_task_completed: 5, points_per_message: 0, message_daily_cap: 5, ican_coins_per_point: 0, auto_redeem_enabled: false, auto_redeem_threshold_points: 100 }); setAdvances(advanceRequests.data || []); if (c.error || m.error || p.error || settings.error || dailyPay.error) say(c.error?.message || m.error?.message || p.error?.message || settings.error?.message || dailyPay.error?.message, true); setBusy(false); };
   const payReward = async e => { e.preventDefault(); if (!canApprove) return say('Your role cannot approve or pay payroll entries.', true); const redemption = rewardRedemptions.find(x => x.id === rewardPayment.redemption); if (!redemption) return say('Choose a reward redemption to pay.', true); setBusy(true); try { let walletTransactionId = null; if (rewardPayment.method === 'ican') { if (!rewardPayment.pin) throw new Error('Enter the business-wallet PIN.'); const transfer = await transferFromBusinessWallet({ businessProfileId, recipientUserId: redemption.employee_user_id, amount: Number(redemption.ican_amount), note: `Reward points redeemed (${redemption.user_name})`, referenceId: redemption.id, pin: rewardPayment.pin }); walletTransactionId = transfer.transaction_id || transfer.id || null; } const result = await payRewardRedemption({ redemptionId: redemption.id, paymentMethod: rewardPayment.method, walletTransactionId }); if (!result.success) throw new Error(result.error); say(rewardPayment.method === 'ican' ? 'Reward points paid through the IcanEra business wallet.' : 'Reward points recorded as paid in cash.'); setRewardPayment({ redemption: '', method: 'cash', pin: '' }); await load(); } catch (err) { say(err.message || 'Payment failed.', true); } setBusy(false); };
@@ -612,38 +758,256 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], currentUs
       <Banner error={error} notice={notice} />
       {busy && <p className="flex items-center gap-2 text-sm cmms-classic-muted" role="status"><Loader size={16} className="animate-spin" aria-hidden="true" /> Updating payroll…</p>}
 
+      {(() => {
+        const toPay = entries.filter(x => x.status !== 'paid').length;
+        const pendingAdvances = canApprove ? advances.filter(a => a.status === 'pending').length : 0;
+        const approvedAdvances = canApprove ? advances.filter(a => a.status === 'approved').length : 0;
+        const items = [
+          !periods.length && compensation.length > 0 && { id: 'pay-newrun', tone: 'info', text: 'Create your first payroll run' },
+          toPay > 0 && { id: 'pay-review', tone: 'info', text: `${toPay} salar${toPay === 1 ? 'y' : 'ies'} to pay` },
+          pendingAdvances > 0 && { id: 'pay-advances', tone: 'warning', text: `${pendingAdvances} advance request${pendingAdvances === 1 ? '' : 's'} waiting` },
+          approvedAdvances > 0 && { id: 'pay-advances', tone: 'info', text: `${approvedAdvances} approved advance${approvedAdvances === 1 ? '' : 's'} to pay out` },
+          rewardRedemptions.length > 0 && { id: 'pay-rewards', tone: 'info', text: `${rewardRedemptions.length} reward payout${rewardRedemptions.length === 1 ? '' : 's'} queued` },
+        ].filter(Boolean);
+        if (!items.length) return null;
+        return (
+          <div>
+            <p className="cmms-classic-eyebrow mb-1.5">Needs your attention</p>
+            <div className="pay-attention">
+              {items.map((item, i) => <button key={item.text} type="button" data-tone={item.tone} style={{ animationDelay: `${i * 70}ms` }} onClick={() => jumpToSection(item.id)}>{item.text} →</button>)}
+            </div>
+          </div>
+        );
+      })()}
+
       <CollapsibleSection
-        title="Attendance deductions and work time"
-        subtitle="Normal work hours used to calculate late-arrival and early-departure deductions. Must be enabled before calculating attendance in a payroll run."
+        id="pay-review"
+        title="Review and pay"
+        subtitle="Totals for the selected run, then each person's payslip. Tap Pay on a payslip to set them up for payment."
+        icon={<WalletCards size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
+        defaultOpen={true}
+        badge={entries.length > 0 ? <StatusBadge tone={entries.every(x => x.status === 'paid') ? 'success' : 'info'}>{entries.filter(x => x.status === 'paid').length}/{entries.length} paid</StatusBadge> : null}
+      >
+        <label className="text-sm cmms-classic-muted">
+          <span className="sr-only">Select payroll period</span>
+          <select value={periodId} onChange={e => loadEntries(e.target.value)} className="pay-field !mt-0 max-w-sm" aria-label="Select payroll period">
+            <option value="">Select period</option>
+            {periods.map(p => <option key={p.id} value={p.id}>{p.period_start} to {p.period_end} — {p.status}</option>)}
+          </select>
+        </label>
+        {!periodId && <p className="mt-3 text-sm cmms-classic-muted">{periods.length ? 'Choose a period to see its payslips.' : 'No payroll run yet. Save salary profiles, then create a draft run below.'}</p>}
+        {periodId && entries.length === 0 && <p className="mt-3 text-sm cmms-classic-muted">This run has no staff in it yet. Save a salary profile (status On pay) and reselect the period.</p>}
+        {periodId && entries.length > 0 && <>
+          <div className="mt-4 space-y-4">
+            <RunSteps entries={entries} />
+            <RunLedger entries={entries} />
+          </div>
+
+          <ul className="mt-4 space-y-2.5 md:hidden">
+            {entries.map((entry, i) => {
+              const employee = employees.find(x => x.authUserId === entry.employee_user_id); const currency = entry.metadata?.currency || 'UGX';
+              const name = employee?.name || 'Staff member';
+              const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+              const attendanceDeduction = Number(entry.metadata?.attendance_deduction || 0);
+              const otherDeductions = Math.max(Number(entry.base_amount || 0) - Number(entry.net_amount || 0) - attendanceDeduction, 0);
+              return (
+                <li key={entry.id} className="pay-slip" data-status={entry.status} data-selected={payment.entry === entry.id} style={{ animationDelay: `${Math.min(i, 8) * 60}ms` }}>
+                  <div className="flex items-start gap-3">
+                    <span className="cmms-monogram" aria-hidden="true">{initials}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words cmms-classic-heading leading-tight">{name}</p>
+                      <p className="text-xs cmms-classic-muted">{employee?.role || 'Employee'}</p>
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <p className="pay-num text-base font-bold" style={{ color: 'var(--pay-success-text)', fontFamily: 'Georgia, serif' }}>{amount(entry.net_amount, currency)}</p>
+                      <StatusBadge tone={progressTone(entry.status)}>{entry.status === 'approved' ? 'ready to pay' : entry.status}</StatusBadge>
+                    </div>
+                  </div>
+                  <dl className="pay-slip-lines pay-num">
+                    <dt>Base pay</dt><dd>{amount(entry.base_amount, currency)}</dd>
+                    <dt>Attendance</dt><dd style={{ color: attendanceDeduction ? 'var(--pay-warning-text)' : undefined }}>{attendanceDeduction ? '-' : ''}{amount(attendanceDeduction, currency)}</dd>
+                    {otherDeductions > 0.004 && <><dt>Advances, leave &amp; other</dt><dd style={{ color: 'var(--pay-warning-text)' }}>-{amount(otherDeductions, currency)}</dd></>}
+                  </dl>
+                  {canApprove && entry.status !== 'paid' && (
+                    <button type="button" onClick={() => choosePayEntry(entry.id)} className="cmms-classic-btn-secondary mt-3 w-full !h-auto !min-h-0 !py-1.5 text-xs" aria-label={`Pay ${name}`}>{payment.entry === entry.id ? 'Selected — complete payment below' : 'Pay this salary'}</button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="mt-4 hidden overflow-x-auto md:block">
+            <table className="pay-table pay-num w-full text-left text-sm">
+              <thead><tr><th>Employee</th><th>Base</th><th>Attendance</th><th>Advances, leave &amp; other</th><th>Net salary</th><th>Status</th><th aria-label="Actions"></th></tr></thead>
+              <tbody>
+                {entries.map(entry => {
+                  const employee = employees.find(x => x.authUserId === entry.employee_user_id); const currency = entry.metadata?.currency || 'UGX';
+                  const attendanceDeduction = Number(entry.metadata?.attendance_deduction || 0);
+                  const otherDeductions = Math.max(Number(entry.base_amount || 0) - Number(entry.net_amount || 0) - attendanceDeduction, 0);
+                  return (
+                    <tr key={entry.id} data-selected={payment.entry === entry.id}>
+                      <td className="cmms-classic-heading font-medium">{employee?.name || 'Staff member'}<span className="block text-xs font-normal cmms-classic-muted">{employee?.role || 'Employee'}</span></td>
+                      <td>{amount(entry.base_amount, currency)}</td>
+                      <td style={{ color: attendanceDeduction ? 'var(--pay-warning-text)' : undefined }}>{attendanceDeduction ? '-' : ''}{amount(attendanceDeduction, currency)}</td>
+                      <td style={{ color: otherDeductions > 0.004 ? 'var(--pay-warning-text)' : undefined }}>{otherDeductions > 0.004 ? '-' : ''}{amount(otherDeductions, currency)}</td>
+                      <td className="font-semibold" style={{ color: 'var(--pay-success-text)' }}>{amount(entry.net_amount, currency)}</td>
+                      <td><StatusBadge tone={progressTone(entry.status)}>{entry.status === 'approved' ? 'ready to pay' : entry.status}</StatusBadge></td>
+                      <td className="text-right">{canApprove && entry.status !== 'paid' && <button type="button" onClick={() => choosePayEntry(entry.id)} className="cmms-classic-btn-secondary px-2 py-1 text-xs" aria-label={`Pay ${employee?.name || 'this person'}`}>Pay</button>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <form ref={payFormRef} onSubmit={pay} className="mt-4 grid gap-3 cmms-classic-divider md:grid-cols-4">
+            <label className="text-sm cmms-classic-muted md:col-span-2">Employee to pay
+              <select required value={payment.entry} onChange={e => setPayment(v => ({ ...v, entry: e.target.value }))} className="pay-field">
+                <option value="">Select staff and view payment status</option>
+                {entries.map(x => <option key={x.id} value={x.id} disabled={x.status === 'paid'}>{employees.find(e => e.authUserId === x.employee_user_id)?.name || 'Staff member'} — {amount(x.net_amount, x.metadata?.currency)} — {x.status === 'paid' ? 'Paid' : x.status === 'approved' ? 'Ready to pay' : x.status === 'draft' ? 'Draft / unpaid' : x.status}</option>)}
+              </select>
+            </label>
+            <p className="self-end pb-2 text-xs cmms-classic-muted">All staff in this payroll period are listed. Paid staff are shown but cannot be selected again.</p>
+            <label className="text-sm cmms-classic-muted">Method
+              <select value={payment.method} onChange={e => setPayment(v => ({ ...v, method: e.target.value }))} className="pay-field">
+                <option value="cash">Cash</option><option value="ican">IcanEra wallet</option>
+              </select>
+            </label>
+            {payment.method === 'ican' && <label className="text-sm cmms-classic-muted">Wallet PIN
+              <input required type="password" value={payment.pin} onChange={e => setPayment(v => ({ ...v, pin: e.target.value }))} className="pay-field" />
+            </label>}
+            <button disabled={busy || !entries.some(x => x.status !== 'paid')} className="cmms-classic-btn-primary flex items-center justify-center gap-2 px-4 py-2"><WalletCards size={16} aria-hidden="true" />{payment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button>
+          </form>
+        </>}
+      </CollapsibleSection>
+
+      {canApprove && (
+        <CollapsibleSection
+          id="pay-advances"
+          title="Salary advance requests"
+          subtitle="Employees request these from their own My Salary tab. Approve, then pay by cash or the IcanEra wallet (on-chain icaneracoin) — the employee still has to confirm receipt before it is deducted from a future payroll run."
+          icon={<DollarSign size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
+          defaultOpen={advances.some(a => a.status === 'pending')}
+          badge={<StatusBadge tone="warning">{advances.filter(a => a.status === 'pending').length} pending</StatusBadge>}
+        >
+          {advances.filter(a => ['pending', 'approved', 'paid', 'confirmed'].includes(a.status)).length === 0 ? (
+            <p className="cmms-classic-muted text-sm">No open salary advance requests.</p>
+          ) : (
+            <div className="space-y-2">
+              {advances.filter(a => ['pending', 'approved', 'paid', 'confirmed'].includes(a.status)).map(a => {
+                const employee = employees.find(x => x.authUserId === a.employee_user_id);
+                return (
+                  <div key={a.id} className="pay-row flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <div>
+                      <p className="cmms-classic-heading font-medium">{employee?.name || a.employee_user_id}</p>
+                      <p className="cmms-classic-muted text-xs">{amount(a.amount, a.currency)}{a.reason ? ` — ${a.reason}` : ''}{(a.repayment_installments || 1) > 1 ? ` · Repay in ${a.repayment_installments} parts of ${amount(Math.ceil(Number(a.amount) / a.repayment_installments * 100) / 100, a.currency)}` : ' · Repay all from next pay'}{a.repayment_note ? ` · “${a.repayment_note}”` : ''}{a.status === 'confirmed' ? ` · ${amount(a.recovered_amount, a.currency)} recovered so far` : ''}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <StatusBadge tone={advanceTone(a.status)}>{a.status}</StatusBadge>
+                      {a.status === 'pending' && <>
+                        <button type="button" disabled={busy} onClick={() => decideAdvance(a.id, 'approved')} className="pay-btn-approve px-2 py-1 text-xs" aria-label={`Approve ${employee?.name || 'this'} advance`}>Approve</button>
+                        <button type="button" disabled={busy} onClick={() => decideAdvance(a.id, 'rejected')} className="pay-btn-reject px-2 py-1 text-xs" aria-label={`Reject ${employee?.name || 'this'} advance`}>Reject</button>
+                      </>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {advances.some(a => a.status === 'approved') && (
+            <form onSubmit={payAdvance} className="mt-4 grid gap-3 cmms-classic-divider md:grid-cols-4">
+              <label className="text-sm cmms-classic-muted md:col-span-2">Advance to pay
+                <select required value={advancePayment.advance} onChange={e => setAdvancePayment(v => ({ ...v, advance: e.target.value }))} className="pay-field">
+                  <option value="">Select an approved advance</option>
+                  {advances.filter(a => a.status === 'approved').map(a => <option key={a.id} value={a.id}>{employees.find(x => x.authUserId === a.employee_user_id)?.name || a.employee_user_id} — {amount(a.amount, a.currency)}</option>)}
+                </select>
+              </label>
+              <label className="text-sm cmms-classic-muted">Method
+                <select value={advancePayment.method} onChange={e => setAdvancePayment(v => ({ ...v, method: e.target.value }))} className="pay-field">
+                  <option value="cash">Cash</option><option value="ican">IcanEra wallet</option>
+                </select>
+              </label>
+              {advancePayment.method === 'ican' && <label className="text-sm cmms-classic-muted">Wallet PIN
+                <input required type="password" value={advancePayment.pin} onChange={e => setAdvancePayment(v => ({ ...v, pin: e.target.value }))} className="pay-field" />
+              </label>}
+              <button disabled={busy || !advancePayment.advance} className="cmms-classic-btn-primary flex items-center justify-center gap-2 px-4 py-2"><WalletCards size={16} aria-hidden="true" />{advancePayment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button>
+            </form>
+          )}
+        </CollapsibleSection>
+      )}
+
+      <CollapsibleSection
+        id="pay-rewards"
+        title="Reward redemptions"
+        subtitle="Points earned for attendance, reports, messages and completed tasks (Attendance → Rewards) queue up here once redeemed, ready to pay the same way as any other payroll payment."
+        icon={<WalletCards size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
+        defaultOpen={rewardRedemptions.length > 0}
+        badge={<StatusBadge tone="info">{rewardRedemptions.length} pending</StatusBadge>}
+      >
+        {rewardsSettings && (
+          <form onSubmit={saveRewardRate} className="mb-4 flex flex-wrap items-end gap-3 cmms-classic-callout p-3">
+            <label className="text-sm cmms-classic-muted">IcanEra coins per point
+              <input type="number" min="0" step="0.00000001" value={rewardsSettings.ican_coins_per_point} onChange={e => setRewardsSettings(v => ({ ...v, ican_coins_per_point: e.target.value }))} className="pay-field w-40" />
+            </label>
+            <button disabled={rewardRateSaving} className="cmms-classic-btn-primary px-4 py-2 text-sm">{rewardRateSaving ? 'Saving…' : 'Save rate'}</button>
+            <p className="text-xs cmms-classic-muted">Sets how many icaneracoins each point is worth when redeemed. Other point values live in Attendance → Rewards.</p>
+          </form>
+        )}
+        {rewardRedemptions.length === 0 ? <p className="cmms-classic-muted text-sm">Nothing queued for reward payout right now.</p> : <>
+          <div className="overflow-x-auto">
+            <table className="pay-table w-full text-left text-sm">
+              <thead><tr><th>Staff</th><th>Points</th><th>Amount</th><th>Queued</th></tr></thead>
+              <tbody>
+                {rewardRedemptions.map(row => (
+                  <tr key={row.id}>
+                    <td className="cmms-classic-muted">{row.user_name}</td>
+                    <td>{row.points_redeemed}</td>
+                    <td className="font-semibold" style={{ color: 'var(--pay-success-text)' }}>{Number(row.ican_amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN</td>
+                    <td className="cmms-classic-muted capitalize">{row.triggered_by}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <form onSubmit={payReward} className="mt-4 grid gap-3 cmms-classic-divider md:grid-cols-4">
+            <label className="text-sm cmms-classic-muted md:col-span-2">Redemption to pay
+              <select required value={rewardPayment.redemption} onChange={e => setRewardPayment(v => ({ ...v, redemption: e.target.value }))} className="pay-field">
+                <option value="">Select a queued redemption</option>
+                {rewardRedemptions.map(x => <option key={x.id} value={x.id}>{x.user_name} — {Number(x.ican_amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN ({x.points_redeemed} pts)</option>)}
+              </select>
+            </label>
+            <label className="text-sm cmms-classic-muted">Method
+              <select value={rewardPayment.method} onChange={e => setRewardPayment(v => ({ ...v, method: e.target.value }))} className="pay-field">
+                <option value="cash">Cash</option><option value="ican">IcanEra wallet</option>
+              </select>
+            </label>
+            {rewardPayment.method === 'ican' && <label className="text-sm cmms-classic-muted">Wallet PIN
+              <input required type="password" value={rewardPayment.pin} onChange={e => setRewardPayment(v => ({ ...v, pin: e.target.value }))} className="pay-field" />
+            </label>}
+            <button disabled={busy || !rewardPayment.redemption} className="cmms-classic-btn-primary flex items-center justify-center gap-2 px-4 py-2"><WalletCards size={16} aria-hidden="true" />{rewardPayment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button>
+          </form>
+        </>}
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        id="pay-newrun"
+        title="New attendance payroll run"
+        subtitle="Create a draft period from saved salary profiles, then calculate deductions."
         icon={<Clock3 size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
         defaultOpen={false}
       >
-        <form onSubmit={saveAttendanceSettings} className="grid gap-3 md:grid-cols-3">
-          <label className="flex items-center gap-2 text-sm cmms-classic-muted md:col-span-3">
-            <input type="checkbox" checked={attendanceSettings.enabled} onChange={e => setAttendanceSettings(v => ({ ...v, enabled: e.target.checked }))} /> Enable attendance deductions
+        <form onSubmit={createRun} className="grid gap-3 md:grid-cols-2">
+          <label className="text-sm cmms-classic-muted">Start
+            <input required type="date" value={dates.start} onChange={e => setDates(v => ({ ...v, start: e.target.value }))} className="pay-field" />
           </label>
-          <label className="text-sm cmms-classic-muted">Time zone
-            <TimeZoneSelect value={attendanceSettings.timezone} onChange={(timezone) => setAttendanceSettings(v => ({ ...v, timezone }))} className="pay-field" />
+          <label className="text-sm cmms-classic-muted">End
+            <input required type="date" value={dates.end} onChange={e => setDates(v => ({ ...v, end: e.target.value }))} className="pay-field" />
           </label>
-          <label className="text-sm cmms-classic-muted">Grace minutes
-            <input required min="0" max="240" type="number" value={attendanceSettings.grace_minutes} onChange={e => setAttendanceSettings(v => ({ ...v, grace_minutes: e.target.value }))} className="pay-field" />
-          </label>
-          <label className="text-sm cmms-classic-muted">Work start
-            <input required type="time" value={attendanceSettings.scheduled_start} onChange={e => setAttendanceSettings(v => ({ ...v, scheduled_start: e.target.value }))} className="pay-field" />
-          </label>
-          <label className="text-sm cmms-classic-muted">Work end
-            <input required type="time" value={attendanceSettings.scheduled_end} onChange={e => setAttendanceSettings(v => ({ ...v, scheduled_end: e.target.value }))} className="pay-field" />
-          </label>
-          <label className="text-sm cmms-classic-muted">Monthly work days
-            <input required min="1" step="0.5" type="number" value={attendanceSettings.monthly_work_days} onChange={e => setAttendanceSettings(v => ({ ...v, monthly_work_days: e.target.value }))} className="pay-field" />
-          </label>
-          <label className="flex items-center gap-2 text-sm cmms-classic-muted">
-            <input type="checkbox" checked={attendanceSettings.deduct_late_arrivals} onChange={e => setAttendanceSettings(v => ({ ...v, deduct_late_arrivals: e.target.checked }))} /> Deduct late arrivals
-          </label>
-          <label className="flex items-center gap-2 text-sm cmms-classic-muted">
-            <input type="checkbox" checked={attendanceSettings.deduct_early_departures} onChange={e => setAttendanceSettings(v => ({ ...v, deduct_early_departures: e.target.checked }))} /> Deduct early departures
-          </label>
-          <button disabled={busy} className="cmms-classic-btn-primary px-4 py-2 md:col-span-3">Save work schedule</button>
+          <button disabled={busy || !compensation.length} className="cmms-classic-btn-primary px-4 py-2">Create draft</button>
+          <button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={calculate} className="cmms-classic-btn-secondary px-4 py-2">Calculate attendance</button>
+          <button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={recoverAdvances} className="cmms-classic-btn-secondary px-4 py-2">Recover advances</button>
+          <button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={applyLeave} className="cmms-classic-btn-secondary px-4 py-2">Apply leave deductions</button>
+          <p className="cmms-classic-muted text-xs md:col-span-2">The calculation uses the company's existing attendance-payroll settings and remains reviewable in the draft. Recover advances deducts any confirmed, unpaid salary advance balance for staff in this run. Apply leave deductions prorates a deduction for approved unpaid leave overlapping this period — approved paid leave never needs a deduction here, and a daily-paid employee's approved paid leave already gets its own draft entry the moment HR approves it.</p>
         </form>
       </CollapsibleSection>
 
@@ -698,184 +1062,39 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], currentUs
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="New attendance payroll run"
-        subtitle="Create a draft period from saved salary profiles, then calculate deductions."
+        title="Attendance deductions and work time"
+        subtitle="Normal work hours used to calculate late-arrival and early-departure deductions. Must be enabled before calculating attendance in a payroll run."
         icon={<Clock3 size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
         defaultOpen={false}
       >
-        <form onSubmit={createRun} className="grid gap-3 md:grid-cols-2">
-          <label className="text-sm cmms-classic-muted">Start
-            <input required type="date" value={dates.start} onChange={e => setDates(v => ({ ...v, start: e.target.value }))} className="pay-field" />
+        <form onSubmit={saveAttendanceSettings} className="grid gap-3 md:grid-cols-3">
+          <label className="flex items-center gap-2 text-sm cmms-classic-muted md:col-span-3">
+            <input type="checkbox" checked={attendanceSettings.enabled} onChange={e => setAttendanceSettings(v => ({ ...v, enabled: e.target.checked }))} /> Enable attendance deductions
           </label>
-          <label className="text-sm cmms-classic-muted">End
-            <input required type="date" value={dates.end} onChange={e => setDates(v => ({ ...v, end: e.target.value }))} className="pay-field" />
+          <label className="text-sm cmms-classic-muted">Time zone
+            <TimeZoneSelect value={attendanceSettings.timezone} onChange={(timezone) => setAttendanceSettings(v => ({ ...v, timezone }))} className="pay-field" />
           </label>
-          <button disabled={busy || !compensation.length} className="cmms-classic-btn-primary px-4 py-2">Create draft</button>
-          <button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={calculate} className="cmms-classic-btn-secondary px-4 py-2">Calculate attendance</button>
-          <button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={recoverAdvances} className="cmms-classic-btn-secondary px-4 py-2">Recover advances</button>
-          <button type="button" disabled={busy || !periodId || !['draft', 'pending_approval'].includes(period?.status)} onClick={applyLeave} className="cmms-classic-btn-secondary px-4 py-2">Apply leave deductions</button>
-          <p className="cmms-classic-muted text-xs md:col-span-2">The calculation uses the company's existing attendance-payroll settings and remains reviewable in the draft. Recover advances deducts any confirmed, unpaid salary advance balance for staff in this run. Apply leave deductions prorates a deduction for approved unpaid leave overlapping this period — approved paid leave never needs a deduction here, and a daily-paid employee's approved paid leave already gets its own draft entry the moment HR approves it.</p>
+          <label className="text-sm cmms-classic-muted">Grace minutes
+            <input required min="0" max="240" type="number" value={attendanceSettings.grace_minutes} onChange={e => setAttendanceSettings(v => ({ ...v, grace_minutes: e.target.value }))} className="pay-field" />
+          </label>
+          <label className="text-sm cmms-classic-muted">Work start
+            <input required type="time" value={attendanceSettings.scheduled_start} onChange={e => setAttendanceSettings(v => ({ ...v, scheduled_start: e.target.value }))} className="pay-field" />
+          </label>
+          <label className="text-sm cmms-classic-muted">Work end
+            <input required type="time" value={attendanceSettings.scheduled_end} onChange={e => setAttendanceSettings(v => ({ ...v, scheduled_end: e.target.value }))} className="pay-field" />
+          </label>
+          <label className="text-sm cmms-classic-muted">Monthly work days
+            <input required min="1" step="0.5" type="number" value={attendanceSettings.monthly_work_days} onChange={e => setAttendanceSettings(v => ({ ...v, monthly_work_days: e.target.value }))} className="pay-field" />
+          </label>
+          <label className="flex items-center gap-2 text-sm cmms-classic-muted">
+            <input type="checkbox" checked={attendanceSettings.deduct_late_arrivals} onChange={e => setAttendanceSettings(v => ({ ...v, deduct_late_arrivals: e.target.checked }))} /> Deduct late arrivals
+          </label>
+          <label className="flex items-center gap-2 text-sm cmms-classic-muted">
+            <input type="checkbox" checked={attendanceSettings.deduct_early_departures} onChange={e => setAttendanceSettings(v => ({ ...v, deduct_early_departures: e.target.checked }))} /> Deduct early departures
+          </label>
+          <button disabled={busy} className="cmms-classic-btn-primary px-4 py-2 md:col-span-3">Save work schedule</button>
         </form>
       </CollapsibleSection>
-
-      <CollapsibleSection
-        title="Review and pay"
-        icon={<WalletCards size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
-        defaultOpen={true}
-      >
-        <label className="text-sm cmms-classic-muted">
-          <span className="sr-only">Select payroll period</span>
-          <select value={periodId} onChange={e => loadEntries(e.target.value)} className="pay-field !mt-0 max-w-sm" aria-label="Select payroll period">
-            <option value="">Select period</option>
-            {periods.map(p => <option key={p.id} value={p.id}>{p.period_start} to {p.period_end} — {p.status}</option>)}
-          </select>
-        </label>
-        {periodId && <>
-          <div className="mt-3 overflow-x-auto">
-            <table className="pay-table w-full text-left text-sm">
-              <thead><tr><th>Employee</th><th>Base</th><th>Attendance deduction</th><th>Net salary</th><th>Status</th></tr></thead>
-              <tbody>
-                {entries.map(entry => {
-                  const employee = employees.find(x => x.authUserId === entry.employee_user_id); const currency = entry.metadata?.currency || 'UGX';
-                  return (
-                    <tr key={entry.id}>
-                      <td className="cmms-classic-muted">{employee?.name || entry.employee_user_id}</td>
-                      <td>{amount(entry.base_amount, currency)}</td>
-                      <td style={{ color: 'var(--pay-warning-text)' }}>-{amount(entry.metadata?.attendance_deduction, currency)}</td>
-                      <td className="font-semibold" style={{ color: 'var(--pay-success-text)' }}>{amount(entry.net_amount, currency)}</td>
-                      <td><StatusBadge tone={progressTone(entry.status)}>{entry.status}</StatusBadge></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <form onSubmit={pay} className="mt-4 grid gap-3 cmms-classic-divider md:grid-cols-4">
-            <label className="text-sm cmms-classic-muted md:col-span-2">Employee to pay
-              <select required value={payment.entry} onChange={e => setPayment(v => ({ ...v, entry: e.target.value }))} className="pay-field">
-                <option value="">Select staff and view payment status</option>
-                {entries.map(x => <option key={x.id} value={x.id} disabled={x.status === 'paid'}>{employees.find(e => e.authUserId === x.employee_user_id)?.name || x.employee_user_id} — {amount(x.net_amount, x.metadata?.currency)} — {x.status === 'paid' ? 'Paid' : x.status === 'approved' ? 'Ready to pay' : x.status === 'draft' ? 'Draft / unpaid' : x.status}</option>)}
-              </select>
-            </label>
-            <p className="self-end pb-2 text-xs cmms-classic-muted">All staff in this payroll period are listed. Paid staff are shown but cannot be selected again.</p>
-            <label className="text-sm cmms-classic-muted">Method
-              <select value={payment.method} onChange={e => setPayment(v => ({ ...v, method: e.target.value }))} className="pay-field">
-                <option value="cash">Cash</option><option value="ican">IcanEra wallet</option>
-              </select>
-            </label>
-            {payment.method === 'ican' && <label className="text-sm cmms-classic-muted">Wallet PIN
-              <input required type="password" value={payment.pin} onChange={e => setPayment(v => ({ ...v, pin: e.target.value }))} className="pay-field" />
-            </label>}
-            <button disabled={busy || !entries.some(x => x.status !== 'paid')} className="cmms-classic-btn-primary flex items-center justify-center gap-2 px-4 py-2"><WalletCards size={16} aria-hidden="true" />{payment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button>
-          </form>
-        </>}
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        title="Reward redemptions"
-        subtitle="Points earned for attendance, reports, messages and completed tasks (Attendance → Rewards) queue up here once redeemed, ready to pay the same way as any other payroll payment."
-        icon={<WalletCards size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
-        defaultOpen={rewardRedemptions.length > 0}
-        badge={<StatusBadge tone="info">{rewardRedemptions.length} pending</StatusBadge>}
-      >
-        {rewardsSettings && (
-          <form onSubmit={saveRewardRate} className="mb-4 flex flex-wrap items-end gap-3 cmms-classic-callout p-3">
-            <label className="text-sm cmms-classic-muted">IcanEra coins per point
-              <input type="number" min="0" step="0.00000001" value={rewardsSettings.ican_coins_per_point} onChange={e => setRewardsSettings(v => ({ ...v, ican_coins_per_point: e.target.value }))} className="pay-field w-40" />
-            </label>
-            <button disabled={rewardRateSaving} className="cmms-classic-btn-primary px-4 py-2 text-sm">{rewardRateSaving ? 'Saving…' : 'Save rate'}</button>
-            <p className="text-xs cmms-classic-muted">Sets how many icaneracoins each point is worth when redeemed. Other point values live in Attendance → Rewards.</p>
-          </form>
-        )}
-        {rewardRedemptions.length === 0 ? <p className="cmms-classic-muted text-sm">Nothing queued for reward payout right now.</p> : <>
-          <div className="overflow-x-auto">
-            <table className="pay-table w-full text-left text-sm">
-              <thead><tr><th>Staff</th><th>Points</th><th>Amount</th><th>Queued</th></tr></thead>
-              <tbody>
-                {rewardRedemptions.map(row => (
-                  <tr key={row.id}>
-                    <td className="cmms-classic-muted">{row.user_name}</td>
-                    <td>{row.points_redeemed}</td>
-                    <td className="font-semibold" style={{ color: 'var(--pay-success-text)' }}>{Number(row.ican_amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN</td>
-                    <td className="cmms-classic-muted capitalize">{row.triggered_by}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <form onSubmit={payReward} className="mt-4 grid gap-3 cmms-classic-divider md:grid-cols-4">
-            <label className="text-sm cmms-classic-muted md:col-span-2">Redemption to pay
-              <select required value={rewardPayment.redemption} onChange={e => setRewardPayment(v => ({ ...v, redemption: e.target.value }))} className="pay-field">
-                <option value="">Select a queued redemption</option>
-                {rewardRedemptions.map(x => <option key={x.id} value={x.id}>{x.user_name} — {Number(x.ican_amount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ICAN ({x.points_redeemed} pts)</option>)}
-              </select>
-            </label>
-            <label className="text-sm cmms-classic-muted">Method
-              <select value={rewardPayment.method} onChange={e => setRewardPayment(v => ({ ...v, method: e.target.value }))} className="pay-field">
-                <option value="cash">Cash</option><option value="ican">IcanEra wallet</option>
-              </select>
-            </label>
-            {rewardPayment.method === 'ican' && <label className="text-sm cmms-classic-muted">Wallet PIN
-              <input required type="password" value={rewardPayment.pin} onChange={e => setRewardPayment(v => ({ ...v, pin: e.target.value }))} className="pay-field" />
-            </label>}
-            <button disabled={busy || !rewardPayment.redemption} className="cmms-classic-btn-primary flex items-center justify-center gap-2 px-4 py-2"><WalletCards size={16} aria-hidden="true" />{rewardPayment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button>
-          </form>
-        </>}
-      </CollapsibleSection>
-
-      {canApprove && (
-        <CollapsibleSection
-          title="Salary advance requests"
-          subtitle="Employees request these from their own My Salary tab. Approve, then pay by cash or the IcanEra wallet (on-chain icaneracoin) — the employee still has to confirm receipt before it is deducted from a future payroll run."
-          icon={<DollarSign size={17} style={{ color: 'var(--color-primary)' }} aria-hidden="true" />}
-          defaultOpen={advances.some(a => a.status === 'pending')}
-          badge={<StatusBadge tone="warning">{advances.filter(a => a.status === 'pending').length} pending</StatusBadge>}
-        >
-          {advances.filter(a => ['pending', 'approved', 'paid', 'confirmed'].includes(a.status)).length === 0 ? (
-            <p className="cmms-classic-muted text-sm">No open salary advance requests.</p>
-          ) : (
-            <div className="space-y-2">
-              {advances.filter(a => ['pending', 'approved', 'paid', 'confirmed'].includes(a.status)).map(a => {
-                const employee = employees.find(x => x.authUserId === a.employee_user_id);
-                return (
-                  <div key={a.id} className="pay-row flex flex-wrap items-center justify-between gap-3 text-sm">
-                    <div>
-                      <p className="cmms-classic-heading font-medium">{employee?.name || a.employee_user_id}</p>
-                      <p className="cmms-classic-muted text-xs">{amount(a.amount, a.currency)}{a.reason ? ` — ${a.reason}` : ''}{(a.repayment_installments || 1) > 1 ? ` · Repay in ${a.repayment_installments} parts of ${amount(Math.ceil(Number(a.amount) / a.repayment_installments * 100) / 100, a.currency)}` : ' · Repay all from next pay'}{a.repayment_note ? ` · “${a.repayment_note}”` : ''}{a.status === 'confirmed' ? ` · ${amount(a.recovered_amount, a.currency)} recovered so far` : ''}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <StatusBadge tone={advanceTone(a.status)}>{a.status}</StatusBadge>
-                      {a.status === 'pending' && <>
-                        <button type="button" disabled={busy} onClick={() => decideAdvance(a.id, 'approved')} className="pay-btn-approve px-2 py-1 text-xs" aria-label={`Approve ${employee?.name || 'this'} advance`}>Approve</button>
-                        <button type="button" disabled={busy} onClick={() => decideAdvance(a.id, 'rejected')} className="pay-btn-reject px-2 py-1 text-xs" aria-label={`Reject ${employee?.name || 'this'} advance`}>Reject</button>
-                      </>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {advances.some(a => a.status === 'approved') && (
-            <form onSubmit={payAdvance} className="mt-4 grid gap-3 cmms-classic-divider md:grid-cols-4">
-              <label className="text-sm cmms-classic-muted md:col-span-2">Advance to pay
-                <select required value={advancePayment.advance} onChange={e => setAdvancePayment(v => ({ ...v, advance: e.target.value }))} className="pay-field">
-                  <option value="">Select an approved advance</option>
-                  {advances.filter(a => a.status === 'approved').map(a => <option key={a.id} value={a.id}>{employees.find(x => x.authUserId === a.employee_user_id)?.name || a.employee_user_id} — {amount(a.amount, a.currency)}</option>)}
-                </select>
-              </label>
-              <label className="text-sm cmms-classic-muted">Method
-                <select value={advancePayment.method} onChange={e => setAdvancePayment(v => ({ ...v, method: e.target.value }))} className="pay-field">
-                  <option value="cash">Cash</option><option value="ican">IcanEra wallet</option>
-                </select>
-              </label>
-              {advancePayment.method === 'ican' && <label className="text-sm cmms-classic-muted">Wallet PIN
-                <input required type="password" value={advancePayment.pin} onChange={e => setAdvancePayment(v => ({ ...v, pin: e.target.value }))} className="pay-field" />
-              </label>}
-              <button disabled={busy || !advancePayment.advance} className="cmms-classic-btn-primary flex items-center justify-center gap-2 px-4 py-2"><WalletCards size={16} aria-hidden="true" />{advancePayment.method === 'ican' ? 'Pay with IcanEra wallet' : 'Record cash payment'}</button>
-            </form>
-          )}
-        </CollapsibleSection>
-      )}
     </div>
   );
 }

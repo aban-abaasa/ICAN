@@ -1481,3 +1481,70 @@ html {
 .icanera-nb .nb-row { padding: 0.8rem 0.25rem; border-bottom: 1px solid var(--nb-border); background: transparent; transition: background-color 0.2s ease, padding-left 0.2s ease; }
 .icanera-nb .nb-row:last-child { border-bottom: 0; }
 .icanera-nb .nb-row:hover { background: color-mix(in srgb, var(--nb-border) 35%, transparent); padding-left: 0.6rem; }
+
+/* Full-page CMMS views start below the notch / status bar so the header is never cut off at the top. */
+.cmms-fullpage { padding-top: max(1rem, calc(env(safe-area-inset-top, 0px) + 0.75rem)) !important; scroll-padding-top: 4rem; }
+
+/* ── IcanEra web masthead: classic "ebony & gold" navigation ───────────────
+   Gold serif wordmark, a hairline rule with a diamond between brand row and
+   section tabs, and tabs that read like a book's running heads: quiet when
+   idle, a gold underline + tint when current. Safe-area aware so the top is
+   never cut off. */
+.icn-masthead {
+  padding-top: env(safe-area-inset-top, 0px);
+  background-image: linear-gradient(180deg, rgba(20, 17, 11, 0.96), rgba(12, 11, 9, 0.94)) !important;
+  border-bottom: 1px solid rgba(196, 160, 82, 0.34) !important;
+  box-shadow: 0 1px 0 rgba(196, 160, 82, 0.08), 0 14px 30px -14px rgba(0, 0, 0, 0.8) !important;
+}
+.icn-masthead .icn-wordmark { letter-spacing: 0.06em; font-variant-caps: small-caps; font-weight: 700; }
+.icn-masthead .icn-chip { border: 1px solid rgba(196, 160, 82, 0.35) !important; background: rgba(196, 160, 82, 0.05) !important; transition: border-color .2s ease, background .2s ease; }
+.icn-masthead .icn-chip:hover { border-color: rgba(196, 160, 82, 0.7) !important; background: rgba(196, 160, 82, 0.1) !important; }
+.icn-masthead .icn-avatar { box-shadow: 0 0 0 2px #15120c, 0 0 0 3px rgba(196, 160, 82, 0.7); line-height: 0; }
+.icn-masthead .icn-avatar:hover { box-shadow: 0 0 0 2px #15120c, 0 0 0 3px #e6c980, 0 0 14px rgba(196, 160, 82, 0.35); }
+.icn-monogram { background: linear-gradient(135deg, #a8832a, #6f5418); color: #fff7e0; font-family: Georgia, "Iowan Old Style", serif; }
+
+.icn-rule { position: relative; border-top: 0 !important; }
+.icn-rule::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(196, 160, 82, 0.7) 15%, rgba(196, 160, 82, 0.7) 85%, transparent); }
+.icn-rule::after { content: ''; position: absolute; left: 50%; top: -3px; width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg); background: #c4a052; box-shadow: 0 0 0 3px #12100b; }
+
+.icn-masthead .icn-navtab {
+  position: relative; display: inline-flex; align-items: center; gap: 0.45rem;
+  padding: 0.5rem 0.9rem 0.6rem; background: transparent; border: 0; border-radius: 8px 8px 0 0;
+  font-size: 0.8rem; font-weight: 600; letter-spacing: 0.04em; white-space: nowrap; color: #b3a688;
+  transition: color .2s ease, background .2s ease;
+}
+@media (min-width: 768px) { .icn-masthead .icn-navtab { font-size: 0.875rem; padding: 0.55rem 1.05rem 0.65rem; } }
+@media (min-width: 1536px) { .icn-masthead .icn-navtab { font-size: 0.95rem; padding: 0.6rem 1.2rem 0.7rem; } }
+.icn-masthead .icn-navtab-icon { color: #8b7f63; transition: color .2s ease; }
+.icn-masthead .icn-navtab::after {
+  content: ''; position: absolute; left: 14%; right: 14%; bottom: 0; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #e6c980, transparent); transform: scaleX(0); transition: transform .3s cubic-bezier(.2,.8,.2,1);
+}
+.icn-masthead .icn-navtab:hover { color: #f3e6c4; background: rgba(196, 160, 82, 0.07); }
+.icn-masthead .icn-navtab:hover .icn-navtab-icon { color: #c4a052; }
+.icn-masthead .icn-navtab:hover::after { transform: scaleX(0.6); }
+.icn-masthead .icn-navtab.is-active, .icn-masthead .icn-navtab.is-open { color: #faf3e0; background: linear-gradient(180deg, rgba(196, 160, 82, 0.2), rgba(196, 160, 82, 0.05)); }
+.icn-masthead .icn-navtab.is-active .icn-navtab-icon, .icn-masthead .icn-navtab.is-open .icn-navtab-icon { color: #e6c980; }
+.icn-masthead .icn-navtab.is-active::after { transform: scaleX(1); }
+.icn-masthead .icn-navtab:focus-visible { outline: 2px solid #c4a052; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .icn-masthead .icn-navtab, .icn-masthead .icn-navtab::after { transition: none; } }
+
+/* ══ Header (web dashboard masthead) in Light mode ═══════════════════════ */
+:root[data-theme="light"] .icn-masthead {
+  background-image: linear-gradient(180deg, #fffdf8, #f6efde) !important;
+  background-color: #fffdf8 !important;
+  border-bottom-color: rgba(160, 125, 45, 0.45) !important;
+  box-shadow: 0 1px 0 rgba(160, 125, 45, 0.1), 0 14px 28px -16px rgba(60, 45, 15, 0.35) !important;
+}
+:root[data-theme="light"] .icn-masthead .icn-wordmark { color: #8a6a1f !important; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) !important; }
+:root[data-theme="light"] .icn-masthead .icn-chip { border-color: rgba(160, 125, 45, 0.45) !important; background: rgba(160, 125, 45, 0.06) !important; }
+:root[data-theme="light"] .icn-masthead .icn-avatar { box-shadow: 0 0 0 2px #fffdf8, 0 0 0 3px rgba(160, 125, 45, 0.8); }
+:root[data-theme="light"] .icn-masthead .icn-navtab { color: #6f6446; }
+:root[data-theme="light"] .icn-masthead .icn-navtab-icon { color: #8d815f; }
+:root[data-theme="light"] .icn-masthead .icn-navtab:hover { color: #2a2216; background: rgba(160, 125, 45, 0.09); }
+:root[data-theme="light"] .icn-masthead .icn-navtab:hover .icn-navtab-icon { color: #8a6a1f; }
+:root[data-theme="light"] .icn-masthead .icn-navtab::after { background: linear-gradient(90deg, transparent, #b8892b, transparent); }
+:root[data-theme="light"] .icn-masthead .icn-navtab.is-active, :root[data-theme="light"] .icn-masthead .icn-navtab.is-open { color: #2a2216; background: linear-gradient(180deg, rgba(184, 137, 43, 0.22), rgba(184, 137, 43, 0.05)); }
+:root[data-theme="light"] .icn-masthead .icn-navtab.is-active .icn-navtab-icon, :root[data-theme="light"] .icn-masthead .icn-navtab.is-open .icn-navtab-icon { color: #8a6a1f; }
+:root[data-theme="light"] .icn-rule::before { background: linear-gradient(90deg, transparent, rgba(160, 125, 45, 0.8) 15%, rgba(160, 125, 45, 0.8) 85%, transparent); }
+:root[data-theme="light"] .icn-rule::after { background: #b8892b; box-shadow: 0 0 0 3px #fffdf8; }

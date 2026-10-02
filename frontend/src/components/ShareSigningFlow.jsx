@@ -1,3 +1,4 @@
+import './pitchin-classic.css';
 import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronRight, ChevronDown, ChevronUp, CheckCircle, Clock, Lock, Fingerprint, QrCode, Download, AlertCircle, Users, TrendingUp, Shield, FileText, DollarSign, Printer, ArrowLeft } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -2714,7 +2715,7 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+    <div className="pitchin-classic fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
       <div className="bg-slate-900 rounded-2xl w-full h-screen overflow-y-auto">
         
         {/* Header */}
