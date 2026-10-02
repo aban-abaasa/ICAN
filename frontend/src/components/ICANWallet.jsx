@@ -48,7 +48,6 @@ import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFiatToMobileMoney,
 import { listUgandaBanks } from '../services/digitalCardService';
 import { payIcanRequest, parseIcanPayCode, getIcanPaymentRequest } from '../services/icanPaymentRequestService';
 import { getSupabaseClient } from '../lib/supabase/client';
-import { getBackendUrl } from '../lib/backendUrl';
 import { getUserTrustGroups } from '../services/trustService';
 import { CountryService } from '../services/countryService';
 import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
@@ -2481,14 +2480,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error('Your session expired — please sign in again.');
 
-      const backendUrl = getBackendUrl();
-      const response = await fetch(`${backendUrl}/api/email/request-account-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ email, accountType })
+      // Reuses the request-pin-reset Edge Function (Resend) — no extra Vercel function.
+      const { data, error: invokeError } = await supabase.functions.invoke('request-pin-reset', {
+        body: { action: 'account-otp', email, accountType }
       });
-      const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'Failed to send verification code');
+      if (invokeError && !data) throw new Error(invokeError.message || 'Failed to send verification code');
+      if (!data?.success) throw new Error(data?.message || 'Failed to send verification code');
 
       setOtpState(prev => ({ ...prev, sent: true, loading: false }));
     } catch (error) {
