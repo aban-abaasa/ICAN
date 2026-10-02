@@ -354,6 +354,37 @@ export async function sendFiatToMobileMoney({
   return data;
 }
 
+/**
+ * Send money from the caller's IcanEra fiat wallet to a BANK account via the
+ * same flutterwave-momo-send function (channel: 'bank'). Debited atomically
+ * server-side and refunded automatically if Flutterwave rejects or fails it.
+ * Flutterwave cannot verify a Ugandan bank account name in advance, so the
+ * caller must have the sender double-check the number and name.
+ */
+export async function sendFiatToBank({
+  amount,
+  currency = 'UGX',
+  accountNumber,
+  bankCode,
+  beneficiaryName,
+  note = '',
+}) {
+  const { data, error } = await supabase.functions.invoke('flutterwave-momo-send', {
+    body: {
+      channel: 'bank',
+      amount,
+      currency,
+      account_number: accountNumber,
+      bank_code: bankCode,
+      beneficiary_name: beneficiaryName,
+      note,
+    },
+  });
+  if (error) throw new Error(await functionErrorMessage(error, 'Transfer failed'));
+  if (!data?.success) throw new Error(data?.error ?? 'Transfer failed');
+  return data;
+}
+
 // Uganda mobile number prefixes, so the sender doesn't have to manually pick
 // MTN vs Airtel every time (mirrors what Flutterwave itself uses to route
 // mobilemoneyuganda transfers) — see
@@ -413,6 +444,7 @@ export default {
   sellICAN,
   requestIcanPayout,
   sendFiatToMobileMoney,
+  sendFiatToBank,
   detectUgandaMobileNetwork,
   ugxToICAN,
   icanToUGX,

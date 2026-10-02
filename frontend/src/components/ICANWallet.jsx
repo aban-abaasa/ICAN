@@ -44,7 +44,8 @@ import paymentMethodDetector from '../services/paymentMethodDetector';
 import agentService from '../services/agentService';
 import { walletAccountService, hashPIN } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
-import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFiatToMobileMoney, detectUgandaMobileNetwork } from '../services/icanWalletService';
+import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFiatToMobileMoney, sendFiatToBank, detectUgandaMobileNetwork } from '../services/icanWalletService';
+import { listUgandaBanks } from '../services/digitalCardService';
 import { payIcanRequest, parseIcanPayCode, getIcanPaymentRequest } from '../services/icanPaymentRequestService';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getBackendUrl } from '../lib/backendUrl';
@@ -120,6 +121,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [sendForm, setSendForm] = useState({ recipient: '', amount: '', description: '' });
   const [sendMethod, setSendMethod] = useState('ican'); // 'ican' | 'mobile' | 'icaneracoin' — explicit choice, replaces the old recipient-string heuristic
   const [recipientAccountKind, setRecipientAccountKind] = useState('ican'); // 'ican' | 'biz' — explicit choice, replaces relying on the sender remembering to type a "BIZ-" prefix themselves
+  const [sendBankCode, setSendBankCode] = useState('');
+  const [sendBeneficiary, setSendBeneficiary] = useState('');
+  const [bankList, setBankList] = useState([]);
   const [sendNetwork, setSendNetwork] = useState(null); // 'MTN' | 'AIRTEL' | null — null means auto-detect from the phone number; only set explicitly when detection can't tell (see detectUgandaMobileNetwork)
   const [receiveForm, setReceiveForm] = useState({ amount: '', description: '' });
   const [topupForm, setTopupForm] = useState({ amount: '', paymentInput: '', method: null, detectedMethod: null });
@@ -1540,6 +1544,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   }, [editingBusinessProfile]);
 
+  // Bank list for the Send -> Bank method (loaded once, on first use)
+  useEffect(() => {
+    if (sendMethod !== 'bank' || bankList.length) return;
+    listUgandaBanks().then(setBankList).catch(() => setTransactionResult({ type: 'send', success: false, message: 'Could not load the bank list. Check your connection and try again.' }));
+  }, [sendMethod, bankList.length]);
+
   // � Load pending cash-in requests when withdraw tab is opened or user is loaded
   useEffect(() => {
     if (activeTab === 'withdraw' && currentUserId && pendingCashInRequests.length === 0) {
@@ -1577,6 +1587,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           return;
         }
         await handleSendViaMOMO(sendForm.recipient, sendForm.amount, sendForm.description, network);
+      } else if (sendMethod === 'bank') {
+        await handleSendViaBank(sendForm.recipient, sendForm.amount, sendForm.description);
       } else if (sendMethod === 'icaneracoin') {
         // Send icaneracoin (ICAN coin) — separate balance from local currency
         const recipient = normalizeRecipientForKind(sendForm.recipient, recipientAccountKind);
@@ -1600,6 +1612,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     setSendMethod('ican');
     setRecipientAccountKind('ican');
     setSendNetwork(null);
+    setSendBankCode('');
+    setSendBeneficiary('');
     setTransactionInProgress(false);
 
     // Auto close after 3 seconds
@@ -2071,6 +2085,83 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         type: 'send',
         success: false,
         message: error.message || 'An error occurred during the mobile money transfer.',
+      });
+    }
+  };
+
+  // 🏦 Send to a BANK account — same flutterwave-momo-send Edge Function
+  // (channel: 'bank'): wallet debited atomically, refunded automatically if
+  // Flutterwave rejects/fails it. Flutterwave cannot verify a Ugandan bank
+  // account name beforehand, so the PIN prompt spells out bank, number and
+  // name for the sender to double-check.
+  const handleSendViaBank = async (accountNumber, amount, description) => {
+    try {
+      const acct = String(accountNumber || '').replace(/\s/g, '');
+      const bank = bankList.find((b) => b.code === sendBankCode);
+      if (!/^\d{5,20}$/.test(acct)) {
+        setTransactionResult({ type: 'send', success: false, message: 'Enter a valid bank account number' });
+        return;
+      }
+      if (!bank) {
+        setTransactionResult({ type: 'send', success: false, message: 'Choose the bank' });
+        return;
+      }
+      if (sendBeneficiary.trim().length < 2) {
+        setTransactionResult({ type: 'send', success: false, message: "Enter the account holder's name" });
+        return;
+      }
+      if (selectedCurrency !== 'UGX') {
+        setTransactionResult({ type: 'send', success: false, message: 'Bank sends currently only support UGX.' });
+        return;
+      }
+      const parsedAmount = parseFloat(amount);
+      if (!(parsedAmount > 0)) {
+        setTransactionResult({ type: 'send', success: false, message: 'Enter a valid amount' });
+        return;
+      }
+      if (parsedAmount > parseFloat(currentWallet.balance)) {
+        setTransactionResult({ type: 'send', success: false, message: `Insufficient balance. You have ${currentWallet.balance} ${currentWallet.currency}` });
+        return;
+      }
+
+      const pin = await askPin({
+        title: 'Confirm bank transfer',
+        message: `Send ${parsedAmount} ${selectedCurrency} to ${sendBeneficiary.trim()}, ${bank.name}, account ${acct}? Bank account names cannot be checked in advance.`,
+      });
+      if (pin === null) return;
+      const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
+      if (!pinCheck?.success) {
+        setTransactionResult({ type: 'send', success: false, message: pinCheck?.error || 'Incorrect transaction PIN. Transfer cancelled.' });
+        return;
+      }
+
+      const result = await sendFiatToBank({
+        amount: parsedAmount,
+        currency: selectedCurrency,
+        accountNumber: acct,
+        bankCode: bank.code,
+        beneficiaryName: sendBeneficiary.trim(),
+        note: description || `Send to ${sendBeneficiary.trim()}`,
+      });
+
+      if (currentUserId) {
+        await loadWalletBalances(currentUserId);
+      }
+
+      setTransactionResult({
+        type: 'send',
+        success: true,
+        message: `✅ Submitted: ${parsedAmount} ${selectedCurrency} to ${sendBeneficiary.trim()} (${bank.name}). Confirming with the bank network now — you'll be refunded automatically if it fails.`,
+        amount: parsedAmount,
+        recipient: sendBeneficiary.trim(),
+        transactionId: result.reference
+      });
+    } catch (error) {
+      console.error('❌ Bank transfer failed:', error);
+      setTransactionResult({
+        type: 'send',
+        success: false,
+        message: error.message || 'An error occurred during the bank transfer.',
       });
     }
   };
@@ -6167,6 +6258,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             setSendMethod('ican');
             setRecipientAccountKind('ican');
             setSendNetwork(null);
+            setSendBankCode('');
+            setSendBeneficiary('');
           } else {
             setReceiveForm({ amount: '', description: '' });
           }
@@ -6192,6 +6285,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
         const isCoin = sendMethod === 'icaneracoin';
         const isMobile = sendMethod === 'mobile';
+        const isBankSend = sendMethod === 'bank';
         const isBiz = recipientAccountKind === 'biz';
         const amountStr = isSend ? sendForm.amount : receiveForm.amount;
         const amountNum = parseFloat(amountStr);
@@ -6210,6 +6304,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         const sendMethods = [
           { key: 'ican', label: 'IcanEra', sub: 'Account', Icon: Users },
           { key: 'mobile', label: 'Mobile', sub: 'Money', Icon: Phone },
+          { key: 'bank', label: 'Bank', sub: 'Account', Icon: Banknote },
           { key: 'icaneracoin', label: 'IcanEra', sub: 'Coin', Icon: Send }
         ];
         const result = transactionResult && transactionResult.type === (isSend ? 'send' : 'receive')
@@ -6262,7 +6357,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     <>
                       <div>
                         <label className={labelCls} style={{ color: T2 }}>Send to</label>
-                        <div className="grid grid-cols-3 gap-2.5">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                           {sendMethods.map(({ key, label, sub, Icon }) => (
                             <button
                               key={key}
@@ -6280,7 +6375,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                         </div>
                       </div>
 
-                      {!isMobile && (
+                      {!isMobile && !isBankSend && (
                         <div>
                           <label className={labelCls} style={{ color: T2 }}>Recipient type</label>
                           <div className="grid grid-cols-2 gap-2.5">
@@ -6306,7 +6401,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
                       <div>
                         <label className={labelCls} style={{ color: T2 }}>
-                          {isMobile ? 'Recipient phone number' : isBiz ? 'Business wallet number' : 'Account, phone or email'}
+                          {isMobile ? 'Recipient phone number' : isBankSend ? 'Bank account number' : isBiz ? 'Business wallet number' : 'Account, phone or email'}
                         </label>
                         <div className="relative">
                           <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: GOLD_C }}>
@@ -6314,9 +6409,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                           </span>
                           <input
                             type="text"
-                            inputMode={isMobile ? 'tel' : isBiz ? 'numeric' : 'text'}
+                            inputMode={isMobile ? 'tel' : (isBankSend || isBiz) ? 'numeric' : 'text'}
                             autoComplete="off"
-                            placeholder={isMobile ? '+256701234567' : isBiz ? '3002345678901234' : 'Account no., phone or email'}
+                            placeholder={isMobile ? '+256701234567' : isBankSend ? 'Bank account number' : isBiz ? '3002345678901234' : 'Account no., phone or email'}
                             value={sendForm.recipient}
                             onChange={(e) => setSendForm({ ...sendForm, recipient: e.target.value })}
                             className="w-full pl-10 pr-3 py-3 text-base placeholder-gray-400 focus:outline-none"
@@ -6324,7 +6419,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                           />
                         </div>
                         <p className="mt-1.5 text-xs leading-relaxed" style={{ color: T2 }}>
-                          {isMobile
+                          {isBankSend
+                            ? 'Sent to this bank account. Bank account names cannot be checked in advance, so double-check the number and name. This cannot be reversed once accepted.'
+                            : isMobile
                             ? 'Sent straight to this mobile money number — double-check it, this cannot be reversed once accepted.'
                             : isBiz
                               ? "Enter the business's 16-digit wallet number (from its PitchIn profile)."
@@ -6336,6 +6433,36 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                           </p>
                         )}
                       </div>
+
+                      {isBankSend && (
+                        <>
+                          <div>
+                            <label className={labelCls} style={{ color: T2 }}>Bank</label>
+                            <select
+                              value={sendBankCode}
+                              onChange={(e) => setSendBankCode(e.target.value)}
+                              className="w-full px-3 py-3 text-base focus:outline-none"
+                              style={field}
+                            >
+                              <option value="">{bankList.length ? 'Choose bank' : 'Loading banks…'}</option>
+                              {bankList.map((b) => <option key={b.code} value={b.code}>{b.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className={labelCls} style={{ color: T2 }}>Account holder name</label>
+                            <input
+                              type="text"
+                              autoComplete="off"
+                              maxLength={80}
+                              placeholder="Name on the bank account"
+                              value={sendBeneficiary}
+                              onChange={(e) => setSendBeneficiary(e.target.value)}
+                              className="w-full px-3 py-3 text-base placeholder-gray-400 focus:outline-none"
+                              style={field}
+                            />
+                          </div>
+                        </>
+                      )}
 
                       {isMobile && sendForm.recipient.trim() && !detectedNetwork && (
                         <div>
