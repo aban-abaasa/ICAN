@@ -3631,7 +3631,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const tabOn = { background: 'linear-gradient(90deg, rgba(196,160,82,0.14), transparent)', color: 'var(--color-text)', border: '1px solid transparent', borderBottom: `2px solid ${GOLD}`, borderRadius: 0, boxShadow: 'none', fontWeight: 600 };
   const flat = { background: 'transparent', border: 'none', borderBottom: `1px solid ${HAIR}`, borderRadius: 0, boxShadow: 'none' };
   const walletUi = {
-    headerCard: { ...flat, paddingLeft: 0, paddingRight: 0 },
+    // marginTop 0: the <style> tag above is the first child, so space-y-6 would otherwise push the header down
+    headerCard: { ...flat, paddingLeft: 0, paddingRight: 0, marginTop: 0 },
     headerIcon: { background: 'transparent', border: `1px solid ${GOLD}`, boxShadow: 'none', color: GOLD },
     title: { fontFamily: SERIF, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)' },
     subtitle: { color: 'var(--color-textSecondary)', fontWeight: 400, fontStyle: 'italic', fontFamily: SERIF },
@@ -3674,7 +3675,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       ref={walletRootRef}
       className={`wallet-creative-skin w-full space-y-6 ${activeTab !== 'overview' ? 'cmms-fullpage fixed inset-0 z-50 overflow-y-auto p-4 md:p-8' : ''}`}
     >
-      <div className="flex justify-end"><ICANWalletInbox /></div>
       <style>{`
         /* CMMS classic skin: open page, gold hairlines, no rainbow boxes */
         .wallet-creative-skin { font-family: "Georgia", "Iowan Old Style", "Palatino Linotype", serif; }
@@ -4413,8 +4413,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         }
       `}</style>{/* Header Card */}
       <div className="solid-card wallet-top-header p-4 md:p-6" style={walletUi.headerCard}>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-          <div className="flex items-center gap-4">
+        <div className="flex items-start md:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-4 min-w-0">
             {activeTab !== 'overview' && (
               <button
                 onClick={() => setActiveTab('overview')}
@@ -4433,6 +4433,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               <p className="text-sm md:text-base" style={walletUi.subtitle}>Manage global currency with confidence</p>
             </div>
           </div>
+          <div className="flex-shrink-0"><ICANWalletInbox /></div>
         </div>
 
         {/* Tab Navigation */}
