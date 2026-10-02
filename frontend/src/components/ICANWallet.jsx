@@ -3814,10 +3814,23 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   };
 
+  const mobileTabLabel = {
+    overview: 'Overview',
+    trade: 'Trade',
+    transactions: 'Transactions',
+    withdraw: 'Withdraw',
+    agent: '🏪 Agent Terminal',
+    cards: 'Cards',
+    shop: 'Shop',
+    business: 'Business Accounts',
+    trust: 'Trust Account',
+    settings: 'Settings'
+  }[activeTab];
+
   return (
     <div
       ref={walletRootRef}
-      className={`wallet-creative-skin w-full space-y-6 ${activeTab !== 'overview' ? 'cmms-fullpage fixed inset-0 z-50 overflow-y-auto p-4 md:p-8' : ''}`}
+      className={`wallet-creative-skin w-full ${activeTab !== 'overview' ? 'cmms-fullpage fixed inset-0 z-50 overflow-y-auto space-y-3 md:space-y-6 p-3 md:p-8' : 'space-y-6'}`}
     >
       <style>{`
         /* CMMS classic skin: open page, gold hairlines, no rainbow boxes */
@@ -3889,6 +3902,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         .wallet-creative-skin table tbody tr:hover > td { background: rgba(196, 160, 82, 0.09); }
 
         /* header: gold hairline with a centred diamond, as in CMMS */
+        /* full-page tabs: no spare band above the header, the tab owns the screen */
+        .wallet-creative-skin.cmms-fullpage { padding-top: max(0.5rem, env(safe-area-inset-top, 0px)) !important; }
+
         .wallet-creative-skin .wallet-top-header {
           position: relative;
           border-bottom: 0 !important;
@@ -4556,8 +4572,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           }
         }
       `}</style>{/* Header Card */}
-      <div className="solid-card wallet-top-header p-4 md:p-6" style={walletUi.headerCard}>
-        <div className="flex items-start md:items-center justify-between gap-3 mb-4">
+      <div className={`solid-card wallet-top-header ${activeTab !== 'overview' ? 'py-2 md:p-6' : 'p-4 md:p-6'}`} style={walletUi.headerCard}>
+        <div className={`flex ${activeTab !== 'overview' ? 'items-center' : 'items-start'} md:items-center justify-between gap-2 md:gap-3 ${activeTab !== 'overview' ? 'mb-0 md:mb-4' : 'mb-4'}`}>
           <div className="flex items-center gap-4 min-w-0">
             {activeTab !== 'overview' && (
               <button
@@ -4569,14 +4585,28 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 Back
               </button>
             )}
-            <div className="p-3 rounded-lg" style={walletUi.headerIcon}>
+            <div className={`p-3 rounded-lg ${activeTab !== 'overview' ? 'hidden md:block' : ''}`} style={walletUi.headerIcon}>
               <Wallet className="w-6 h-6 text-white" />
             </div>
-            <div>
+            <div className={activeTab !== 'overview' ? 'hidden md:block' : ''}>
               <h2 className="text-2xl md:text-3xl font-bold" style={walletUi.title}>IcanEra Wallet</h2>
               <p className="text-sm md:text-base" style={walletUi.subtitle}>Manage global currency with confidence</p>
             </div>
           </div>
+          {/* Full-page tabs on phones: the tab switcher shares the Back/bell row instead of taking its own */}
+          {activeTab !== 'overview' && (
+            <button
+              onClick={() => setShowMobileNavMenu(!showMobileNavMenu)}
+              className="md:hidden flex-1 min-w-0 px-3 py-2 rounded-lg flex items-center justify-between gap-2 text-white"
+              style={walletUi.tabOverviewActive}
+            >
+              <span className="flex items-center gap-2 truncate">
+                <Menu className="w-4 h-4 flex-shrink-0" />
+                {mobileTabLabel}
+              </span>
+              <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${showMobileNavMenu ? 'rotate-180' : ''}`} />
+            </button>
+          )}
           <div className="flex-shrink-0"><ICANWalletInbox /></div>
         </div>
 
@@ -4709,7 +4739,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           </div>
 
           {/* Mobile View - collapses to the current tab + a toggle menu */}
-          <div className="flex md:hidden items-center gap-2">
+          <div className={activeTab === 'overview' ? 'flex md:hidden items-center gap-2' : 'hidden'}>
             <button
               onClick={() => setShowMobileNavMenu(!showMobileNavMenu)}
               className="flex-1 px-4 py-2 rounded-lg flex items-center justify-between gap-2 text-white"
@@ -4717,16 +4747,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             >
               <span className="flex items-center gap-2 truncate">
                 <Menu className="w-4 h-4 flex-shrink-0" />
-                {activeTab === 'overview' && 'Overview'}
-                {activeTab === 'trade' && 'Trade'}
-                {activeTab === 'transactions' && 'Transactions'}
-                {activeTab === 'withdraw' && 'Withdraw'}
-                {activeTab === 'agent' && '🏪 Agent Terminal'}
-                {activeTab === 'cards' && 'Cards'}
-                {activeTab === 'shop' && 'Shop'}
-                {activeTab === 'business' && 'Business Accounts'}
-                {activeTab === 'trust' && 'Trust Account'}
-                {activeTab === 'settings' && 'Settings'}
+                {mobileTabLabel}
               </span>
               <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${showMobileNavMenu ? 'rotate-180' : ''}`} />
             </button>
