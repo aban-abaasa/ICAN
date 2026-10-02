@@ -139,11 +139,25 @@ GRANT EXECUTE ON FUNCTION public.card_pin_send_to_account(UUID, TEXT, DECIMAL) T
 CREATE OR REPLACE FUNCTION public.get_card_qr_account_name(p_token TEXT, p_account_number TEXT)
 RETURNS TEXT
 LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
-  SELECT initcap(split_part(ua.account_holder_name, ' ', 1)) ||
-         CASE WHEN position(' ' in trim(ua.account_holder_name)) > 0
-              THEN ' ' || upper(left(split_part(trim(ua.account_holder_name), ' ', 2), 1)) || '.' ELSE '' END
+  -- Most accounts have no account_holder_name stored, so fall back to the
+  -- sign-up name, then a generic label (never NULL for a real account).
+  SELECT CASE
+           WHEN n.full_name IS NULL THEN 'ICANera member'
+           ELSE initcap(split_part(n.full_name, ' ', 1)) ||
+                CASE WHEN position(' ' in n.full_name) > 0
+                     THEN ' ' || upper(left(split_part(n.full_name, ' ', 2), 1)) || '.' ELSE '' END
+         END
     FROM public.user_accounts ua
+    LEFT JOIN auth.users au ON au.id = ua.user_id
+    CROSS JOIN LATERAL (
+      SELECT coalesce(
+               nullif(trim(ua.account_holder_name), ''),
+               nullif(trim(au.raw_user_meta_data->>'full_name'), ''),
+               nullif(trim(au.raw_user_meta_data->>'name'), '')
+             ) AS full_name
+    ) n
    WHERE ua.account_number = p_account_number AND ua.business_id IS NULL
+     AND coalesce(ua.status, 'active') = 'active'
      AND EXISTS (SELECT 1 FROM public.ican_digital_cards c
                   WHERE c.qr_token = p_token AND c.qr_enabled AND c.status = 'active')
    LIMIT 1;
