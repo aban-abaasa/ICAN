@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { ArrowDownLeft, Copy, X, Download, Loader } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ArrowLeft, Copy, Download, Loader } from 'lucide-react';
 import { QRCodeCanvas as QRCode } from 'qrcode.react';
 import paymentRequestService from '../services/paymentRequestService';
 import { getSupabaseClient } from '../lib/supabase/client';
@@ -195,133 +196,175 @@ const ReceiveMoneyModal = ({
 
   if (!isOpen) return null;
 
-  return (
+  const GOLD_C = '#c4a052';
+  const T = 'var(--color-text)';
+  const T2 = 'var(--color-textSecondary)';
+  const labelCls = 'block text-[11px] uppercase tracking-[0.16em] font-semibold mb-2';
+  const field = {
+    background: 'var(--color-bg)',
+    border: '1px solid rgba(196,160,82,0.55)',
+    color: T,
+    borderRadius: 10
+  };
+  const pill = (on) => ({
+    background: on ? 'rgba(196,160,82,0.16)' : 'transparent',
+    border: on ? `1.5px solid ${GOLD_C}` : '1px solid rgba(196,160,82,0.35)',
+    color: T,
+    boxShadow: on ? '0 0 0 3px rgba(196,160,82,0.14)' : 'none'
+  });
+  const stepTitle = step === 'qrcode' ? 'Your QR Code' : step === 'active' ? 'Active Requests' : step === 'receipt' ? 'Cash Receipt' : 'Receive Money';
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4"
       onClick={handleCloseModal}
     >
       <div
-        className="glass-card mb-[calc(5.5rem+env(safe-area-inset-bottom))] max-h-[calc(100dvh-6.5rem)] w-full max-w-md overflow-y-auto rounded-b-none rounded-t-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:mb-0 sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
+        className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[calc(100dvh-3rem)] flex flex-col sm:rounded-2xl overflow-hidden shadow-2xl"
+        style={{ background: 'var(--color-bg)', border: '1px solid rgba(196,160,82,0.45)', color: T }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <ArrowDownLeft className="w-5 h-5 text-cyan-400" />
-            Receive Money
-          </h3>
+        {/* Header (always visible) */}
+        <div
+          className="flex items-center gap-3 px-4 py-3.5 shrink-0"
+          style={{ background: 'var(--color-bgSecondary)', borderBottom: '1px solid rgba(196,160,82,0.45)' }}
+        >
           <button
+            type="button"
             onClick={handleCloseModal}
-            className="text-gray-400 hover:text-white transition-colors"
+            aria-label="Back"
+            className="p-2 -ml-2 rounded-lg shrink-0 hover:bg-black/5 active:bg-black/10"
+            style={{ color: T }}
           >
-            <X className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5" />
           </button>
+          <div className="min-w-0">
+            <h3 className="text-lg leading-tight" style={{ color: T, fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}>
+              {stepTitle}
+            </h3>
+            <p className="text-[11px] uppercase tracking-[0.16em]" style={{ color: GOLD_C }}>Get paid by QR or link</p>
+          </div>
         </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="p-4 sm:p-5">
 
         {/* Step 1: Generate Form (for Receive) */}
         {step === 'form' && (
-          <form onSubmit={handleGenerateQR} className="space-y-4">
-            <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-3">
-              <p className="text-cyan-400 text-xs font-semibold">📌 RECEIVE MONEY</p>
-              <p className="text-gray-300 text-sm mt-1">Enter amount for others to pay you</p>
-            </div>
-
+          <form onSubmit={handleGenerateQR} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Receiving as</label>
-              <div className="grid grid-cols-2 gap-2">
+              <label className={labelCls} style={{ color: T2 }}>Receiving as</label>
+              <div className="grid grid-cols-2 gap-2.5">
                 {[{ value: 'personal', label: 'Personal' }, { value: 'business', label: 'Business' }].map(option => (
                   <button key={option.value} type="button" onClick={() => setRecipientClassification(option.value)}
-                    className={`px-3 py-3 rounded-lg border text-sm font-semibold transition-all ${recipientClassification === option.value ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200' : 'bg-white/5 border-white/10 text-gray-400'}`}>
+                    aria-pressed={recipientClassification === option.value}
+                    className="py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]"
+                    style={pill(recipientClassification === option.value)}>
                     {option.label}
                   </button>
                 ))}
               </div>
               {recipientClassification === 'business' && (
-                loadingBusinesses ? <p className="mt-2 text-xs text-gray-300">Loading your businesses…</p> : businessProfiles.length ? (
+                loadingBusinesses ? <p className="mt-2 text-xs" style={{ color: T2 }}>Loading your businesses…</p> : businessProfiles.length ? (
                   <select value={recipientBusinessProfileId} onChange={(e) => setRecipientBusinessProfileId(e.target.value)}
-                    className="mt-2 w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-cyan-400 focus:outline-none">
-                    <option value="" className="text-slate-900">Select receiving business</option>
-                    {businessProfiles.map((business) => <option key={business.id} value={business.id} className="text-slate-900">{business.business_name}</option>)}
+                    className="mt-2 w-full px-3.5 py-3 text-base focus:outline-none" style={field}>
+                    <option value="">Select receiving business</option>
+                    {businessProfiles.map((business) => <option key={business.id} value={business.id}>{business.business_name}</option>)}
                   </select>
-                ) : <p className="mt-2 text-xs text-amber-300">No accessible business profile was found.</p>
+                ) : <p className="mt-2 text-xs" style={{ color: '#b45309' }}>No accessible business profile was found.</p>
               )}
-              <p className="text-xs text-gray-400 mt-2">The QR records a verified {recipientClassification} receiving destination.</p>
+              <p className="text-xs mt-1.5" style={{ color: T2 }}>The QR records a verified {recipientClassification} receiving destination.</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Receive method</label>
-              <div className="grid grid-cols-2 gap-2">
+              <label className={labelCls} style={{ color: T2 }}>Receive method</label>
+              <div className="grid grid-cols-2 gap-2.5">
                 {[{ value: 'ican', label: '💠 IcanEra Wallet' }, { value: 'cash', label: '💵 Cash' }].map(option => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => setPaymentMethod(option.value)}
-                    className={`px-3 py-3 rounded-lg border text-sm font-semibold transition-all ${paymentMethod === option.value ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200' : 'bg-white/5 border-white/10 text-gray-400'}`}
+                    aria-pressed={paymentMethod === option.value}
+                    className="py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]"
+                    style={pill(paymentMethod === option.value)}
                   >
                     {option.label}
                   </button>
                 ))}
               </div>
-              {paymentMethod === 'cash' && <p className="text-xs text-amber-300 mt-2">Show this QR to the payer. They scan it to record the cash payment and download their proof receipt. No IcanEra balance changes.</p>}
+              {paymentMethod === 'cash' && <p className="text-xs mt-2" style={{ color: '#b45309' }}>Show this QR to the payer. They scan it to record the cash payment and download their proof receipt. No IcanEra balance changes.</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Amount ({selectedCurrency})
-              </label>
-              <input
-                type="number"
-                placeholder="1000"
-                step="0.01"
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-cyan-400 focus:outline-none transition-all"
-              />
+              <label className={labelCls} style={{ color: T2 }}>Amount</label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: '#8a6a1f' }}>
+                  {selectedCurrency}
+                </span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  step="0.01"
+                  min="0"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  className="w-full pl-16 pr-3 py-3 text-2xl font-semibold text-right placeholder-gray-400 focus:outline-none"
+                  style={field}
+                />
+              </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Description (Optional)
+              <label className={labelCls} style={{ color: T2 }}>
+                Note <span className="normal-case tracking-normal font-normal">(optional)</span>
               </label>
               <input
                 type="text"
                 placeholder="Invoice #123 - Product delivery"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-cyan-400 focus:outline-none transition-all"
+                className="w-full px-3.5 py-3 text-base placeholder-gray-400 focus:outline-none"
+                style={field}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs mt-1.5" style={{ color: T2 }}>
                 Help the payer understand what this payment is for
               </p>
             </div>
 
             {error && (
-              <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
-                <p className="text-sm text-red-400">❌ {error}</p>
+              <div className="p-3 rounded-xl" style={{ background: 'rgba(220,38,38,0.10)', border: '1px solid rgba(220,38,38,0.5)' }}>
+                <p className="text-sm font-medium" style={{ color: '#b91c1c' }}>❌ {error}</p>
               </div>
             )}
 
             {successMessage && (
-              <div className="p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
-                <p className="text-sm text-green-400">✅ {successMessage}</p>
+              <div className="p-3 rounded-xl" style={{ background: 'rgba(47,158,114,0.12)', border: '1px solid rgba(47,158,114,0.55)' }}>
+                <p className="text-sm font-medium" style={{ color: '#1f7a5a' }}>✅ {successMessage}</p>
               </div>
             )}
 
-            <div className="flex gap-3 pt-4">
+            {/* Action bar sticks to the bottom of the scroll area so it is never cut off */}
+            <div
+              className="sticky bottom-0 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 flex gap-3 px-4 sm:px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+              style={{ background: 'var(--color-bgSecondary)', borderTop: '1px solid rgba(196,160,82,0.45)' }}
+            >
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
+                className="flex-1 py-3 rounded-xl font-medium"
+                style={{ border: '1px solid rgba(196,160,82,0.55)', color: T, background: 'transparent' }}
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-lg hover:shadow-lg hover:shadow-cyan-500/30 disabled:opacity-50 transition-all font-semibold flex items-center justify-center gap-2"
+                className="flex-[1.6] py-3 rounded-xl font-semibold tracking-wide disabled:opacity-50 hover:brightness-110 flex items-center justify-center gap-2"
+                style={{ background: 'linear-gradient(135deg, #b8862e, #8a6a1f)', color: '#ffffff', boxShadow: '0 8px 22px rgba(138,106,31,0.30)' }}
               >
                 {loading && <Loader className="w-4 h-4 animate-spin" />}
-                {loading ? 'Generating...' : '🔗 Generate QR Code'}
+                {loading ? 'Generating…' : 'Generate QR Code'}
               </button>
             </div>
           </form>
@@ -533,8 +576,11 @@ const ReceiveMoneyModal = ({
             </div>
           </div>
         )}
+        </div>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

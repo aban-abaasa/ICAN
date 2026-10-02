@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Wallet,
   Send,
@@ -59,6 +60,7 @@ import UnifiedApprovalModal from './UnifiedApprovalModal';
 import CandlestickChart from './CandlestickChart';
 import BuyIcan from './ICAN/BuyIcan';
 import ReferralCard from './ReferralCard';
+import DigitalCardPanel from './DigitalCardPanel';
 import SellIcan from './ICAN/SellIcan';
 import icanOrderService from '../services/icanOrderService';
 import icanCoinService from '../services/icanCoinService';
@@ -4955,6 +4957,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           Payment Cards
         </h3>
 
+        <DigitalCardPanel
+          userId={currentUserId}
+          askPin={askPin}
+          onPaidOut={() => currentUserId && loadWalletBalances(currentUserId)}
+        />
+
         {cardMessage && (
           <div className={`mb-4 p-4 rounded-lg border ${
             cardMessage.type === 'success' 
@@ -6144,280 +6152,335 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         </div>
       )}
 
-      {/* SEND MODAL */}
-      {activeModal === 'send' && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="glass-card mb-[calc(5.5rem+env(safe-area-inset-bottom))] max-h-[calc(100dvh-6.5rem)] w-full max-w-md overflow-y-auto rounded-b-none rounded-t-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:mb-0 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Send className="w-5 h-5 text-blue-400" />
-              Send Money
-            </h3>
+      {/* SEND + RECEIVE sheets — portaled to <body> so the app's top nav / animated
+          page wrapper can never cover or clip them; theme-aware (ivory + dark),
+          gold-hairline "classic" look. Full-screen on phones, dialog from sm:. */}
+      {(activeModal === 'send' || activeModal === 'receive') && (() => {
+        const isSend = activeModal === 'send';
+        const GOLD_C = '#c4a052';
+        const T = 'var(--color-text)';
+        const T2 = 'var(--color-textSecondary)';
+        const closeSheet = () => {
+          setActiveModal(null);
+          if (isSend) {
+            setSendForm({ recipient: '', amount: '', description: '' });
+            setSendMethod('ican');
+            setRecipientAccountKind('ican');
+            setSendNetwork(null);
+          } else {
+            setReceiveForm({ amount: '', description: '' });
+          }
+        };
+        const labelCls = 'block text-[11px] uppercase tracking-[0.16em] font-semibold mb-2';
+        const field = {
+          background: 'var(--color-bg)',
+          border: '1px solid rgba(196,160,82,0.55)',
+          color: T,
+          borderRadius: 10
+        };
+        const pill = (on) => ({
+          background: on ? 'rgba(196,160,82,0.16)' : 'transparent',
+          border: on ? `1.5px solid ${GOLD_C}` : '1px solid rgba(196,160,82,0.35)',
+          color: T,
+          boxShadow: on ? '0 0 0 3px rgba(196,160,82,0.14)' : 'none'
+        });
+        const primaryBtn = {
+          background: 'linear-gradient(135deg, #b8862e, #8a6a1f)',
+          color: '#ffffff',
+          boxShadow: '0 8px 22px rgba(138,106,31,0.30)'
+        };
 
-            <form onSubmit={handleSendMoney} className="space-y-4">
-              <div className="bg-white/5 border border-white/10 rounded-lg p-3 mb-4">
-                <p className="text-xs text-gray-400">Your Country Currency</p>
-                <p className="text-lg font-semibold text-yellow-400">{userCountry} ({selectedCurrency})</p>
-              </div>
+        const isCoin = sendMethod === 'icaneracoin';
+        const isMobile = sendMethod === 'mobile';
+        const isBiz = recipientAccountKind === 'biz';
+        const amountStr = isSend ? sendForm.amount : receiveForm.amount;
+        const amountNum = parseFloat(amountStr);
+        const unit = isSend && isCoin ? 'ICAN' : selectedCurrency;
+        const quick = isSend && isCoin
+          ? [1, 5, 10, 50]
+          : selectedCurrency === 'UGX'
+            ? [5000, 10000, 20000, 50000]
+            : [5, 10, 25, 50];
+        const setAmount = (v) => (isSend
+          ? setSendForm({ ...sendForm, amount: v })
+          : setReceiveForm({ ...receiveForm, amount: v }));
+        const detectedNetwork = isSend && isMobile && sendForm.recipient.trim()
+          ? detectUgandaMobileNetwork(sendForm.recipient)
+          : null;
+        const sendMethods = [
+          { key: 'ican', label: 'IcanEra', sub: 'Account', Icon: Users },
+          { key: 'mobile', label: 'Mobile', sub: 'Money', Icon: Phone },
+          { key: 'icaneracoin', label: 'IcanEra', sub: 'Coin', Icon: Send }
+        ];
+        const result = transactionResult && transactionResult.type === (isSend ? 'send' : 'receive')
+          ? transactionResult
+          : null;
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Send To</label>
-                <div className="flex gap-2">
-                  {[
-                    { key: 'ican', label: '👤 IcanEra Account' },
-                    { key: 'mobile', label: '📱 Mobile Money' },
-                    { key: 'icaneracoin', label: '💎 IcanEra' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      onClick={() => setSendMethod(opt.key)}
-                      className={`flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium border transition-all ${
-                        sendMethod === opt.key
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'bg-white/10 border-white/20 text-gray-300'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+        return createPortal(
+          <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4">
+            <div
+              className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[calc(100dvh-3rem)] flex flex-col sm:rounded-2xl overflow-hidden shadow-2xl"
+              style={{ background: 'var(--color-bg)', border: '1px solid rgba(196,160,82,0.45)', color: T }}
+            >
+              {/* Header (always visible) */}
+              <div
+                className="flex items-center gap-3 px-4 py-3.5 shrink-0"
+                style={{ background: 'var(--color-bgSecondary)', borderBottom: '1px solid rgba(196,160,82,0.45)' }}
+              >
+                <button
+                  type="button"
+                  onClick={closeSheet}
+                  aria-label="Back"
+                  className="p-2 -ml-2 rounded-lg shrink-0 hover:bg-black/5 active:bg-black/10"
+                  style={{ color: T }}
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div className="min-w-0">
+                  <h3 className="text-lg leading-tight" style={{ color: T, fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}>
+                    {isSend ? 'Send Money' : 'Receive Payment'}
+                  </h3>
+                  <p className="text-[11px] uppercase tracking-[0.16em]" style={{ color: GOLD_C }}>
+                    {isSend ? 'Fast, safe transfer' : 'Create a payment link'}
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Cards can only receive top-ups, not payouts — send to a card isn't supported by any provider we integrate with.
-                </p>
-              </div>
-
-              {sendMethod !== 'mobile' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Recipient Type</label>
-                  <div className="flex gap-2">
-                    {[
-                      { key: 'ican', label: '👤 IcanEra' },
-                      { key: 'biz', label: '🏢 BIZ' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.key}
-                        type="button"
-                        onClick={() => setRecipientAccountKind(opt.key)}
-                        className={`flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium border transition-all ${
-                          recipientAccountKind === opt.key
-                            ? 'bg-purple-600 border-purple-600 text-white'
-                            : 'bg-white/10 border-white/20 text-gray-300'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                {isSend && (
+                  <div className="ml-auto text-right shrink-0">
+                    <p className="text-[10px] uppercase tracking-[0.14em]" style={{ color: T2 }}>Currency</p>
+                    <p className="text-sm font-semibold" style={{ color: '#8a6a1f' }}>{userCountry} · {selectedCurrency}</p>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    IcanEra = a personal or business wallet account number, phone, or email. BIZ = a PitchIn business wallet number (from that business's profile).
-                  </p>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {sendMethod === 'mobile'
-                    ? '📱 Recipient Phone Number'
-                    : recipientAccountKind === 'biz'
-                      ? '🏢 Recipient (PitchIn Business Wallet Number)'
-                      : '👤 Recipient (IcanEra Account, Phone, or Email)'}
-                </label>
-                <input
-                  type="text"
-                  placeholder={
-                    sendMethod === 'mobile'
-                      ? '+256701234567'
-                      : recipientAccountKind === 'biz'
-                        ? '3002345678901234'
-                        : '1002345678901234 | +256701234567 | user@example.com'
-                  }
-                  value={sendForm.recipient}
-                  onChange={(e) => setSendForm({ ...sendForm, recipient: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  {sendMethod === 'mobile'
-                    ? 'Sent directly to this mobile money number via Flutterwave — double-check it before confirming, this cannot be reversed once accepted'
-                    : recipientAccountKind === 'biz'
-                      ? "Enter the business's 16-digit wallet number (starts with 3)"
-                      : 'Send to IcanEra account number, phone number, or email address'}
-                </p>
+                )}
               </div>
 
-              {sendMethod === 'mobile' && sendForm.recipient.trim() && (
-                detectUgandaMobileNetwork(sendForm.recipient) ? (
-                  <p className="text-xs text-gray-400 -mt-2">
-                    📡 Detected network: <span className="text-white font-medium">{detectUgandaMobileNetwork(sendForm.recipient)}</span>
-                  </p>
-                ) : (
+              {/* Scrollable body + pinned action bar */}
+              <form
+                onSubmit={isSend ? handleSendMoney : handleReceiveMoney}
+                className="flex flex-col flex-1 min-h-0"
+              >
+                <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+                  {isSend && (
+                    <>
+                      <div>
+                        <label className={labelCls} style={{ color: T2 }}>Send to</label>
+                        <div className="grid grid-cols-3 gap-2.5">
+                          {sendMethods.map(({ key, label, sub, Icon }) => (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setSendMethod(key)}
+                              aria-pressed={sendMethod === key}
+                              className="flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl text-center transition-all active:scale-[0.98]"
+                              style={pill(sendMethod === key)}
+                            >
+                              <Icon style={{ width: 22, height: 22, color: GOLD_C }} />
+                              <span className="block text-sm font-semibold leading-tight" style={{ color: T }}>{label}</span>
+                              <span className="block text-[11px] -mt-1" style={{ color: T2 }}>{sub}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {!isMobile && (
+                        <div>
+                          <label className={labelCls} style={{ color: T2 }}>Recipient type</label>
+                          <div className="grid grid-cols-2 gap-2.5">
+                            {[
+                              { key: 'ican', label: 'Personal / Business', Icon: Users },
+                              { key: 'biz', label: 'PitchIn BIZ', Icon: Store }
+                            ].map(({ key, label, Icon }) => (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => setRecipientAccountKind(key)}
+                                aria-pressed={recipientAccountKind === key}
+                                className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]"
+                                style={pill(recipientAccountKind === key)}
+                              >
+                                <Icon style={{ width: 16, height: 16, color: GOLD_C }} />
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className={labelCls} style={{ color: T2 }}>
+                          {isMobile ? 'Recipient phone number' : isBiz ? 'Business wallet number' : 'Account, phone or email'}
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: GOLD_C }}>
+                            {isMobile ? <Phone className="w-4 h-4" /> : isBiz ? <Store className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+                          </span>
+                          <input
+                            type="text"
+                            inputMode={isMobile ? 'tel' : isBiz ? 'numeric' : 'text'}
+                            autoComplete="off"
+                            placeholder={isMobile ? '+256701234567' : isBiz ? '3002345678901234' : 'Account no., phone or email'}
+                            value={sendForm.recipient}
+                            onChange={(e) => setSendForm({ ...sendForm, recipient: e.target.value })}
+                            className="w-full pl-10 pr-3 py-3 text-base placeholder-gray-400 focus:outline-none"
+                            style={field}
+                          />
+                        </div>
+                        <p className="mt-1.5 text-xs leading-relaxed" style={{ color: T2 }}>
+                          {isMobile
+                            ? 'Sent straight to this mobile money number — double-check it, this cannot be reversed once accepted.'
+                            : isBiz
+                              ? "Enter the business's 16-digit wallet number (from its PitchIn profile)."
+                              : 'A 16-digit IcanEra account number, a phone number or an email address.'}
+                        </p>
+                        {detectedNetwork && (
+                          <p className="mt-1.5 text-xs font-medium" style={{ color: '#2f9e72' }}>
+                            ● Detected network: {detectedNetwork}
+                          </p>
+                        )}
+                      </div>
+
+                      {isMobile && sendForm.recipient.trim() && !detectedNetwork && (
+                        <div>
+                          <label className={labelCls} style={{ color: T2 }}>Mobile money network</label>
+                          <div className="grid grid-cols-2 gap-2.5">
+                            {[{ key: 'MTN', label: 'MTN' }, { key: 'AIRTEL', label: 'Airtel' }].map(({ key, label }) => (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => setSendNetwork(key)}
+                                aria-pressed={sendNetwork === key}
+                                className="py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]"
+                                style={pill(sendNetwork === key)}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="mt-1.5 text-xs" style={{ color: T2 }}>
+                            We couldn't tell the network from this number — pick which one it's on.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Amount */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Mobile Money Network</label>
-                    <div className="flex gap-2">
-                      {[
-                        { key: 'MTN', label: 'MTN' },
-                        { key: 'AIRTEL', label: 'Airtel' },
-                      ].map((opt) => (
+                    <label className={labelCls} style={{ color: T2 }}>Amount</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: '#8a6a1f' }}>
+                        {unit}
+                      </span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step={isSend && isCoin ? '0.0001' : undefined}
+                        placeholder={isSend && isCoin ? '0.0000' : '0.00'}
+                        value={amountStr}
+                        onChange={(e) => setAmount(e.target.value)}
+                        className="w-full pl-16 pr-3 py-3 text-2xl font-semibold text-right placeholder-gray-400 focus:outline-none"
+                        style={field}
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-2.5">
+                      {quick.map((q) => (
                         <button
-                          key={opt.key}
+                          key={q}
                           type="button"
-                          onClick={() => setSendNetwork(opt.key)}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium border transition-all ${
-                            sendNetwork === opt.key
-                              ? 'bg-purple-600 border-purple-600 text-white'
-                              : 'bg-white/10 border-white/20 text-gray-300'
-                          }`}
+                          onClick={() => setAmount(String(q))}
+                          className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95"
+                          style={pill(amountNum === q)}
                         >
-                          {opt.label}
+                          {q.toLocaleString()}
                         </button>
                       ))}
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Couldn't tell the network from this number — pick which one it's on.
-                    </p>
+                    {isSend && (
+                      <p className="mt-1.5 text-xs" style={{ color: T2 }}>
+                        {isCoin
+                          ? 'Amount in IcanEra coins — no fee, the recipient receives the full amount.'
+                          : `Amount in ${selectedCurrency} (${userCountry}).`}
+                      </p>
+                    )}
                   </div>
-                )
-              )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  💰 Amount ({sendMethod === 'icaneracoin' ? 'IcanEra' : selectedCurrency})
-                </label>
-                <input
-                  type="number"
-                  step={sendMethod === 'icaneracoin' ? '0.0001' : undefined}
-                  placeholder={sendMethod === 'icaneracoin' ? '0.0000' : '500'}
-                  value={sendForm.amount}
-                  onChange={(e) => setSendForm({ ...sendForm, amount: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  {sendMethod === 'icaneracoin'
-                    ? 'Amount in IcanEra coins — no fee, the recipient receives the full amount'
-                    : `Amount in ${selectedCurrency} (${userCountry})`}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Description (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="Payment for services"
-                  value={sendForm.description}
-                  onChange={(e) => setSendForm({ ...sendForm, description: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-blue-400 focus:outline-none transition-all"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveModal(null);
-                    setSendForm({ recipient: '', amount: '', description: '' });
-                    setSendMethod('ican');
-                    setRecipientAccountKind('ican');
-                    setSendNetwork(null);
-                  }}
-                  className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={transactionInProgress}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:shadow-lg hover:shadow-blue-500/30 disabled:opacity-50 transition-all font-semibold"
-                >
-                  {transactionInProgress ? 'Processing...' : '💰 Send'}
-                </button>
-              </div>
-            </form>
-
-            {transactionResult && transactionResult.type === 'send' && (
-              <div className={`mt-4 p-4 rounded-lg ${transactionResult.success ? 'bg-green-500/20 border border-green-500/50' : 'bg-red-500/20 border border-red-500/50'}`}>
-                <p className={`text-sm font-medium ${transactionResult.success ? 'text-green-400' : 'text-red-400'}`}>
-                  {transactionResult.message}
-                </p>
-                {transactionResult.transactionId && (
-                  <p className="text-xs text-gray-400 mt-2">ID: {transactionResult.transactionId}</p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* RECEIVE MODAL */}
-      {activeModal === 'receive' && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="glass-card mb-[calc(5.5rem+env(safe-area-inset-bottom))] max-h-[calc(100dvh-6.5rem)] w-full max-w-md overflow-y-auto rounded-b-none rounded-t-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:mb-0 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <ArrowDownLeft className="w-5 h-5 text-cyan-400" />
-              Receive Payment
-            </h3>
-
-            <form onSubmit={handleReceiveMoney} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Amount ({selectedCurrency})</label>
-                <input
-                  type="number"
-                  placeholder="1000"
-                  value={receiveForm.amount}
-                  onChange={(e) => setReceiveForm({ ...receiveForm, amount: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-cyan-400 focus:outline-none transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Description (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="Invoice payment"
-                  value={receiveForm.description}
-                  onChange={(e) => setReceiveForm({ ...receiveForm, description: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-cyan-400 focus:outline-none transition-all"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveModal(null);
-                    setReceiveForm({ amount: '', description: '' });
-                  }}
-                  className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={transactionInProgress}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 text-white rounded-lg hover:shadow-lg hover:shadow-cyan-500/30 disabled:opacity-50 transition-all font-semibold"
-                >
-                  {transactionInProgress ? 'Generating...' : '🔗 Create Link'}
-                </button>
-              </div>
-            </form>
-
-            {transactionResult && transactionResult.type === 'receive' && (
-              <div className={`mt-4 p-4 rounded-lg ${transactionResult.success ? 'bg-green-500/20 border border-green-500/50' : 'bg-red-500/20 border border-red-500/50'}`}>
-                <p className={`text-sm font-medium ${transactionResult.success ? 'text-green-400' : 'text-red-400'}`}>
-                  {transactionResult.success ? '✅ ' : '❌ '}{transactionResult.message}
-                </p>
-                {transactionResult.paymentLink && (
-                  <div className="mt-2 p-2 bg-black/30 rounded text-xs text-gray-300 break-all">
-                    {transactionResult.paymentLink}
+                  {/* Note */}
+                  <div>
+                    <label className={labelCls} style={{ color: T2 }}>
+                      Note <span className="normal-case tracking-normal font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={isSend ? 'Payment for services' : 'Invoice payment'}
+                      value={isSend ? sendForm.description : receiveForm.description}
+                      onChange={(e) => (isSend
+                        ? setSendForm({ ...sendForm, description: e.target.value })
+                        : setReceiveForm({ ...receiveForm, description: e.target.value }))}
+                      className="w-full px-3.5 py-3 text-base placeholder-gray-400 focus:outline-none"
+                      style={field}
+                    />
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* TOP UP MODAL — full-screen sheet on mobile (proper "fitability" +
-          a real back arrow), centered dialog from sm: up */}
+                  {result && (
+                    <div
+                      className="p-3.5 rounded-xl"
+                      style={{
+                        background: result.success ? 'rgba(47,158,114,0.12)' : 'rgba(220,38,38,0.10)',
+                        border: `1px solid ${result.success ? 'rgba(47,158,114,0.55)' : 'rgba(220,38,38,0.5)'}`
+                      }}
+                    >
+                      <p className="text-sm font-medium" style={{ color: result.success ? '#1f7a5a' : '#b91c1c' }}>
+                        {result.message}
+                      </p>
+                      {result.transactionId && (
+                        <p className="text-xs mt-1.5 break-all" style={{ color: T2 }}>Ref: {result.transactionId}</p>
+                      )}
+                      {result.paymentLink && (
+                        <div className="mt-2 p-2 rounded text-xs break-all" style={{ background: 'rgba(0,0,0,0.06)', color: T }}>
+                          {result.paymentLink}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Pinned action bar — never cut off */}
+                <div
+                  className="shrink-0 flex gap-3 px-4 sm:px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+                  style={{ background: 'var(--color-bgSecondary)', borderTop: '1px solid rgba(196,160,82,0.45)' }}
+                >
+                  <button
+                    type="button"
+                    onClick={closeSheet}
+                    className="flex-1 py-3 rounded-xl font-medium"
+                    style={{ border: '1px solid rgba(196,160,82,0.55)', color: T, background: 'transparent' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={transactionInProgress}
+                    className="flex-[1.6] py-3 rounded-xl font-semibold tracking-wide disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.99]"
+                    style={primaryBtn}
+                  >
+                    {transactionInProgress
+                      ? 'Processing…'
+                      : isSend
+                        ? `Send${amountNum > 0 ? ` ${unit} ${amountNum.toLocaleString()}` : ''}`
+                        : '🔗 Create Link'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        );
+      })()}
+
+      {/* TOP UP MODAL — same portaled, theme-aware gold-classic sheet as Send /
+          Receive: header always visible, pinned action bar, never clipped. */}
       {activeModal === 'topup' && (() => {
+        const GOLD_C = '#c4a052';
+        const T = 'var(--color-text)';
+        const T2 = 'var(--color-textSecondary)';
         const isCardMethod = ['visa', 'mastercard', 'verve', 'card'].includes(topupForm.method);
         const topupMethods = [
           { id: 'mtn', label: 'MTN', sub: 'Mobile Money', Icon: Phone },
@@ -6429,167 +6492,182 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           ? [10000, 20000, 50000, 100000]
           : [10, 25, 50, 100];
         const amountNum = parseFloat(topupForm.amount);
-        const fieldStyle = {
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.14)'
+        const labelCls = 'block text-[11px] uppercase tracking-[0.16em] font-semibold mb-2';
+        const field = {
+          background: 'var(--color-bg)',
+          border: '1px solid rgba(196,160,82,0.55)',
+          color: T,
+          borderRadius: 10
         };
-        return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 sm:flex sm:items-center sm:justify-center sm:p-4">
-          <div
-            className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[calc(100vh-4rem)] overflow-y-auto flex flex-col sm:rounded-2xl sm:shadow-2xl"
-            style={{
-              background: 'linear-gradient(180deg, var(--color-bgSecondary), var(--color-bg))',
-              border: '1px solid rgba(245,158,11,0.28)'
-            }}
-          >
-            {/* Header */}
+        const pill = (on) => ({
+          background: on ? 'rgba(196,160,82,0.16)' : 'transparent',
+          border: on ? `1.5px solid ${GOLD_C}` : '1px solid rgba(196,160,82,0.35)',
+          color: T,
+          boxShadow: on ? '0 0 0 3px rgba(196,160,82,0.14)' : 'none'
+        });
+        return createPortal(
+          <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4">
             <div
-              className="sticky top-0 z-10 flex items-center gap-3 px-4 py-4 sm:rounded-t-2xl"
-              style={{ background: 'var(--color-bgSecondary)', borderBottom: '1px solid rgba(245,158,11,0.22)' }}
+              className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[calc(100dvh-3rem)] flex flex-col sm:rounded-2xl overflow-hidden shadow-2xl"
+              style={{ background: 'var(--color-bg)', border: '1px solid rgba(196,160,82,0.45)', color: T }}
             >
-              <button
-                type="button"
-                onClick={closeTopUpModal}
-                aria-label="Back"
-                className="p-2 -ml-2 rounded-lg hover:bg-white/10 active:bg-white/20 transition-all shrink-0"
+              {/* Header */}
+              <div
+                className="flex items-center gap-3 px-4 py-3.5 shrink-0"
+                style={{ background: 'var(--color-bgSecondary)', borderBottom: '1px solid rgba(196,160,82,0.45)' }}
               >
-                <ArrowLeft className="w-5 h-5 text-white" />
-              </button>
-              <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-white tracking-wide leading-tight">Top Up Wallet</h3>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-amber-400/80">Add funds securely</p>
+                <button
+                  type="button"
+                  onClick={closeTopUpModal}
+                  aria-label="Back"
+                  className="p-2 -ml-2 rounded-lg shrink-0 hover:bg-black/5 active:bg-black/10"
+                  style={{ color: T }}
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div className="min-w-0">
+                  <h3 className="text-lg leading-tight" style={{ color: T, fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}>
+                    Top Up Wallet
+                  </h3>
+                  <p className="text-[11px] uppercase tracking-[0.16em]" style={{ color: GOLD_C }}>Add funds securely</p>
+                </div>
+                <div className="ml-auto flex items-center gap-1.5 text-[11px] shrink-0" style={{ color: '#2f9e72' }}>
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Secured</span>
+                </div>
               </div>
-              <div className="ml-auto flex items-center gap-1.5 text-[11px] text-emerald-300/90 shrink-0">
-                <Lock className="w-3.5 h-3.5" />
-                <span>Secured</span>
-              </div>
-            </div>
 
-            <div className="p-4 sm:p-6 flex-1">
-              <form onSubmit={handleTopUp} className="space-y-6">
-                {/* 1 · Method */}
-                <div>
-                  <label className="block text-[11px] uppercase tracking-[0.18em] text-gray-400 mb-3">
-                    Payment method
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {topupMethods.map(({ id, label, sub, Icon }) => {
-                      const active = topupForm.method === id;
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => setTopupForm({ ...topupForm, method: id })}
-                          aria-pressed={active}
-                          className="flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all active:scale-[0.98]"
-                          style={{
-                            background: active ? 'rgba(245,158,11,0.10)' : 'rgba(255,255,255,0.04)',
-                            border: active ? '1px solid rgba(245,158,11,0.75)' : '1px solid rgba(255,255,255,0.12)',
-                            boxShadow: active ? '0 0 0 3px rgba(245,158,11,0.10)' : 'none'
-                          }}
-                        >
-                          <span
-                            className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                            style={{ background: active ? 'rgba(245,158,11,0.18)' : 'rgba(255,255,255,0.06)' }}
+              <form onSubmit={handleTopUp} className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+                  {/* Method */}
+                  <div>
+                    <label className={labelCls} style={{ color: T2 }}>Payment method</label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {topupMethods.map(({ id, label, sub, Icon }) => {
+                        const active = topupForm.method === id;
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setTopupForm({ ...topupForm, method: id })}
+                            aria-pressed={active}
+                            className="flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all active:scale-[0.98]"
+                            style={pill(active)}
                           >
-                            <Icon className={`w-4.5 h-4.5 ${active ? 'text-amber-300' : 'text-gray-300'}`} style={{ width: 18, height: 18 }} />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block text-sm font-semibold text-white leading-tight">{label}</span>
-                            <span className="block text-[11px] text-gray-400">{sub}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
+                            <Icon style={{ width: 20, height: 20, color: GOLD_C }} className="shrink-0" />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-semibold leading-tight" style={{ color: T }}>{label}</span>
+                              <span className="block text-[11px]" style={{ color: T2 }}>{sub}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
 
-                {/* 2 · Account */}
-                <div>
-                  <label className="block text-[11px] uppercase tracking-[0.18em] text-gray-400 mb-2">
-                    {isCardMethod ? 'Card number' : 'Mobile money number'}
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                      {isCardMethod ? <CreditCard className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
-                    </span>
-                    <input
-                      type="text"
-                      inputMode={isCardMethod ? 'numeric' : 'tel'}
-                      autoComplete={isCardMethod ? 'cc-number' : 'tel'}
-                      placeholder={isCardMethod ? '4532 0151 1283 0366' : '256701234567'}
-                      value={topupForm.paymentInput}
-                      onChange={handlePaymentInputChange}
-                      className="w-full pl-11 pr-4 py-3.5 rounded-xl text-white text-base tracking-wide placeholder-gray-500 focus:outline-none focus:border-amber-400 transition-all"
-                      style={fieldStyle}
-                    />
+                  {/* Account */}
+                  <div>
+                    <label className={labelCls} style={{ color: T2 }}>
+                      {isCardMethod ? 'Card number' : 'Mobile money number'}
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: GOLD_C }}>
+                        {isCardMethod ? <CreditCard className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
+                      </span>
+                      <input
+                        type="text"
+                        inputMode={isCardMethod ? 'numeric' : 'tel'}
+                        autoComplete={isCardMethod ? 'cc-number' : 'tel'}
+                        placeholder={isCardMethod ? '4532 0151 1283 0366' : '256701234567'}
+                        value={topupForm.paymentInput}
+                        onChange={handlePaymentInputChange}
+                        className="w-full pl-10 pr-3 py-3 text-base tracking-wide placeholder-gray-400 focus:outline-none"
+                        style={field}
+                      />
+                    </div>
+                    {detectedPaymentMethod && (
+                      <p className="mt-1.5 text-xs font-medium" style={{ color: '#2f9e72' }}>
+                        ● Detected: {detectedPaymentMethod.name} {detectedPaymentMethod.icon}
+                      </p>
+                    )}
                   </div>
-                  {detectedPaymentMethod && (
-                    <p className="mt-2 text-xs text-emerald-400 flex items-center gap-1.5">
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      Detected: {detectedPaymentMethod.name} {detectedPaymentMethod.icon}
-                    </p>
-                  )}
-                </div>
 
-                {/* 3 · Amount */}
-                <div>
-                  <label className="block text-[11px] uppercase tracking-[0.18em] text-gray-400 mb-2">
-                    Amount
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-amber-300 pointer-events-none">
-                      {selectedCurrency}
-                    </span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      value={topupForm.amount}
-                      onChange={(e) => setTopupForm({ ...topupForm, amount: e.target.value })}
-                      className="w-full pl-16 pr-4 py-3.5 rounded-xl text-white text-2xl font-semibold text-right placeholder-gray-600 focus:outline-none focus:border-amber-400 transition-all"
-                      style={fieldStyle}
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {quickAmounts.map((q) => {
-                      const active = amountNum === q;
-                      return (
+                  {/* Amount */}
+                  <div>
+                    <label className={labelCls} style={{ color: T2 }}>Amount</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold pointer-events-none" style={{ color: '#8a6a1f' }}>
+                        {selectedCurrency}
+                      </span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={topupForm.amount}
+                        onChange={(e) => setTopupForm({ ...topupForm, amount: e.target.value })}
+                        className="w-full pl-16 pr-3 py-3 text-2xl font-semibold text-right placeholder-gray-400 focus:outline-none"
+                        style={field}
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-2.5">
+                      {quickAmounts.map((q) => (
                         <button
                           key={q}
                           type="button"
                           onClick={() => setTopupForm({ ...topupForm, amount: String(q) })}
-                          className="px-3 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95"
-                          style={{
-                            background: active ? 'rgba(245,158,11,0.16)' : 'rgba(255,255,255,0.05)',
-                            border: active ? '1px solid rgba(245,158,11,0.7)' : '1px solid rgba(255,255,255,0.12)',
-                            color: active ? '#fcd34d' : '#d1d5db'
-                          }}
+                          className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95"
+                          style={pill(amountNum === q)}
                         >
                           {q.toLocaleString()}
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
+
+                  {transactionResult && transactionResult.type === 'topup' && (
+                    <div
+                      className="p-3.5 rounded-xl"
+                      style={{
+                        background: transactionResult.success ? 'rgba(47,158,114,0.12)' : 'rgba(220,38,38,0.10)',
+                        border: `1px solid ${transactionResult.success ? 'rgba(47,158,114,0.55)' : 'rgba(220,38,38,0.5)'}`
+                      }}
+                    >
+                      <p className="text-sm font-medium" style={{ color: transactionResult.success ? '#1f7a5a' : '#b91c1c' }}>
+                        {transactionResult.message}
+                      </p>
+                      {transactionResult.transactionId && (
+                        <p className="text-xs mt-1.5 break-all" style={{ color: T2 }}>Ref: {transactionResult.transactionId}</p>
+                      )}
+                    </div>
+                  )}
+
+                  <p className="text-center text-[11px] flex items-center justify-center gap-1.5" style={{ color: T2 }}>
+                    <Lock className="w-3 h-3" />
+                    Payments are encrypted and processed by Flutterwave
+                  </p>
                 </div>
 
-                {/* Actions */}
-                <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+                {/* Pinned action bar */}
+                <div
+                  className="shrink-0 flex gap-3 px-4 sm:px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+                  style={{ background: 'var(--color-bgSecondary)', borderTop: '1px solid rgba(196,160,82,0.45)' }}
+                >
                   <button
                     type="button"
                     onClick={closeTopUpModal}
-                    className="flex-1 px-4 py-3.5 text-gray-200 rounded-xl hover:bg-white/10 active:bg-white/20 transition-all"
-                    style={{ border: '1px solid rgba(255,255,255,0.16)' }}
+                    className="flex-1 py-3 rounded-xl font-medium"
+                    style={{ border: '1px solid rgba(196,160,82,0.55)', color: T, background: 'transparent' }}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={transactionInProgress}
-                    className="flex-[1.4] px-4 py-3.5 rounded-xl font-semibold tracking-wide text-black disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.99]"
+                    className="flex-[1.6] py-3 rounded-xl font-semibold tracking-wide disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.99]"
                     style={{
-                      background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
-                      boxShadow: '0 8px 24px rgba(245,158,11,0.25)'
+                      background: 'linear-gradient(135deg, #b8862e, #8a6a1f)',
+                      color: '#ffffff',
+                      boxShadow: '0 8px 22px rgba(138,106,31,0.30)'
                     }}
                   >
                     {transactionInProgress
@@ -6597,32 +6675,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                       : `Top Up${amountNum > 0 ? ` ${selectedCurrency} ${amountNum.toLocaleString()}` : ''}`}
                   </button>
                 </div>
-
-                <p className="text-center text-[11px] text-gray-500 flex items-center justify-center gap-1.5">
-                  <Lock className="w-3 h-3" />
-                  Payments are encrypted and processed by Flutterwave
-                </p>
               </form>
-
-              {transactionResult && transactionResult.type === 'topup' && (
-                <div
-                  className="mt-5 p-4 rounded-xl"
-                  style={{
-                    background: transactionResult.success ? 'rgba(16,185,129,0.10)' : 'rgba(239,68,68,0.10)',
-                    border: `1px solid ${transactionResult.success ? 'rgba(16,185,129,0.45)' : 'rgba(239,68,68,0.45)'}`
-                  }}
-                >
-                  <p className={`text-sm font-medium ${transactionResult.success ? 'text-emerald-300' : 'text-red-300'}`}>
-                    {transactionResult.message}
-                  </p>
-                  {transactionResult.transactionId && (
-                    <p className="text-xs text-gray-400 mt-2 break-all">Ref: {transactionResult.transactionId}</p>
-                  )}
-                </div>
-              )}
             </div>
-          </div>
-        </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -7497,254 +7553,127 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       {/* TRADE TAB - Tabbed Interface with Chart, Buy, Sell, History */}
       {activeTab === 'trade' && (
         <div className="pt-4 md:pt-6">
-          <div className={`solid-card border border-slate-600 rounded-xl w-full ${activeTradeTab === 'chart' ? '' : 'max-w-6xl mx-auto'} overflow-hidden flex flex-col transition-all duration-300`}>
-            {/* Trade Header - Professional Trading Platform Style with Mobile Optimization */}
-            <div className="flex items-center justify-between p-3 sm:p-4 md:p-6 border-b border-slate-700 bg-gradient-to-r from-slate-800 to-slate-900">
-              <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
-                <div className="w-10 sm:w-12 h-10 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/30 flex-shrink-0">
-                  <span className="text-lg sm:text-2xl">💰</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-base sm:text-lg md:text-2xl font-bold text-white tracking-tight break-words">IcanEra Trading Center</h2>
-                  <p className="text-xs sm:text-sm text-slate-400 hidden sm:block truncate">Professional Trading Platform • Real-time Market Data</p>
-                </div>
+          <div className={`trade-page w-full ${activeTradeTab === 'chart' ? '' : 'max-w-6xl mx-auto'} flex flex-col`}>
+            {/* Classic page header */}
+            <div className="flex items-center justify-between gap-3 pb-4 mb-1" style={{ borderBottom: '1px solid rgba(196,160,82,0.45)' }}>
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold" style={{ color: '#c4a052' }}>
+                  Professional trading · real-time market data
+                </p>
+                <h2 className="text-2xl sm:text-3xl mt-1 break-words" style={{ color: 'var(--color-text)', fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}>
+                  IcanEra Trading Center
+                </h2>
               </div>
-              <div className="flex items-center gap-2 sm:gap-3 ml-2 flex-shrink-0">
-                {/* Live Indicator */}
-                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-500/20 border border-green-500/50 rounded-full">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-xs font-medium text-green-400">LIVE</span>
-                </div>
+              <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                <span className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold" style={{ border: '1px solid rgba(47,158,114,0.55)', background: 'rgba(47,158,114,0.12)', color: '#2f9e72' }}>
+                  <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#2f9e72' }} />
+                  LIVE
+                </span>
                 <button
                   onClick={() => setActiveTab('overview')}
-                  className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center bg-slate-700 hover:bg-red-600 text-slate-300 hover:text-white rounded-lg font-semibold transition-all flex-shrink-0"
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold"
+                  style={{ border: '1px solid rgba(196,160,82,0.6)', color: 'var(--color-text)', background: 'transparent' }}
                   title="Back to overview"
                 >
-                  ✕
+                  <X className="w-4 h-4" style={{ color: '#c4a052' }} />
+                  <span className="hidden sm:inline">Close</span>
                 </button>
               </div>
             </div>
 
-            {/* Tab Navigation - Premium Style with Mobile Menu */}
-            <div className="relative flex items-center justify-between px-3 md:px-6 py-3 bg-slate-800/50 border-b border-slate-700">
-              {/* Desktop View - Full Navigation */}
-              <div className="hidden md:flex gap-2 overflow-x-auto flex-1">
-                <button
-                  onClick={() => setActiveTradeTab('wallet')}
-                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    activeTradeTab === 'wallet'
-                      ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg shadow-purple-600/30'
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                  }`}
-                >
-                  💎 My Wallet
-                </button>
-
-                <button
-                  onClick={() => setActiveTradeTab('chart')}
-                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    activeTradeTab === 'chart'
-                      ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-amber-600/30'
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                  }`}
-                >
-                  📊 Chart & Analysis
-                </button>
-                
-                <button
-                  onClick={() => setActiveTradeTab('buy')}
-                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    activeTradeTab === 'buy'
-                      ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg shadow-emerald-600/30'
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                  }`}
-                >
-                  💳 Buy IcanEra
-                </button>
-
-                <button
-                  onClick={() => setActiveTradeTab('sell')}
-                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    activeTradeTab === 'sell'
-                      ? 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-lg shadow-rose-600/30'
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                  }`}
-                >
-                  💰 Sell IcanEra
-                </button>
-
-                <button
-                  onClick={() => setActiveTradeTab('book')}
-                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    activeTradeTab === 'book'
-                      ? 'bg-gradient-to-r from-yellow-600 to-amber-600 text-white shadow-lg shadow-amber-600/30'
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                  }`}
-                >
-                  📌 Book Order
-                </button>
-
-                <button
-                  onClick={() => setActiveTradeTab('history')}
-                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    activeTradeTab === 'history'
-                      ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-600/30'
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                  }`}
-                >
-                  📜 History
-                </button>
-
-                <button
-                  onClick={() => setActiveTradeTab('dropship')}
-                  className={`px-4 py-2.5 rounded-lg font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    activeTradeTab === 'dropship'
-                      ? 'bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-lg shadow-cyan-600/30'
-                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white'
-                  }`}
-                >
-                  🛍️ Dropship
-                </button>
-              </div>
-
-              {/* Mobile View - Current Tab + Menu Button */}
-              <div className="flex md:hidden items-center justify-between w-full">
-                {/* Current Tab Display */}
-                <div className="flex-1 px-3 py-2 bg-slate-700 rounded-lg text-white font-medium text-sm">
-                  {activeTradeTab === 'wallet' && '💎 My Wallet'}
-                  {activeTradeTab === 'chart' && '📊 Chart'}
-                  {activeTradeTab === 'buy' && '💳 Buy IcanEra'}
-                  {activeTradeTab === 'sell' && '💰 Sell IcanEra'}
-                  {activeTradeTab === 'book' && '📌 Book Order'}
-                  {activeTradeTab === 'history' && '📜 History'}
-                  {activeTradeTab === 'dropship' && '🛍️ Dropship'}
-                </div>
-
-                {/* Three Dots Menu Button */}
-                <button
-                  onClick={() => setShowMobileTradeMenu(!showMobileTradeMenu)}
-                  className="ml-2 w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg transition-all"
-                  title="More options"
-                >
-                  <span className="text-xl leading-none">⋯</span>
-                </button>
-
-                {/* Mobile Dropdown Menu */}
-                {showMobileTradeMenu && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-slate-600 rounded-lg shadow-2xl z-50">
-                    <button
-                      onClick={() => {
-                        setActiveTradeTab('wallet');
-                        setShowMobileTradeMenu(false);
-                      }}
-                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
-                        activeTradeTab === 'wallet'
-                          ? 'bg-purple-600/30 text-purple-300'
-                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
-                      }`}
-                    >
-                      💎 My Wallet
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTradeTab('chart');
-                        setShowMobileTradeMenu(false);
-                      }}
-                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
-                        activeTradeTab === 'chart'
-                          ? 'bg-amber-600/30 text-amber-300'
-                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
-                      }`}
-                    >
-                      📊 Chart & Analysis
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTradeTab('buy');
-                        setShowMobileTradeMenu(false);
-                      }}
-                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
-                        activeTradeTab === 'buy'
-                          ? 'bg-emerald-600/30 text-emerald-300'
-                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
-                      }`}
-                    >
-                      💳 Buy IcanEra
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTradeTab('sell');
-                        setShowMobileTradeMenu(false);
-                      }}
-                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
-                        activeTradeTab === 'sell'
-                          ? 'bg-rose-600/30 text-rose-300'
-                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
-                      }`}
-                    >
-                      💰 Sell IcanEra
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTradeTab('book');
-                        setShowMobileTradeMenu(false);
-                      }}
-                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
-                        activeTradeTab === 'book'
-                          ? 'bg-amber-600/30 text-amber-300'
-                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
-                      }`}
-                    >
-                      📌 Book Order
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTradeTab('history');
-                        setShowMobileTradeMenu(false);
-                      }}
-                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 border-b border-slate-600 ${
-                        activeTradeTab === 'history'
-                          ? 'bg-blue-600/30 text-blue-300'
-                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
-                      }`}
-                    >
-                      📜 History
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTradeTab('dropship');
-                        setShowMobileTradeMenu(false);
-                      }}
-                      className={`w-full px-4 py-3 text-left font-medium transition-colors flex items-center gap-2 ${
-                        activeTradeTab === 'dropship'
-                          ? 'bg-cyan-600/30 text-cyan-300'
-                          : 'text-slate-300 hover:bg-slate-600 hover:text-white'
-                      }`}
-                    >
-                      🛍️ Dropship
-                    </button>
-                  </div>
-                )}
-              </div>
+            {/* Tab bar — underlined, scrolls sideways on any screen, stays pinned while the page scrolls */}
+            <div
+              className="sticky top-0 z-20 -mx-1 px-1 mb-5 flex gap-1 overflow-x-auto"
+              style={{ background: 'var(--color-bg)', borderBottom: '1px solid rgba(196,160,82,0.35)' }}
+              role="tablist"
+            >
+              {[
+                { id: 'wallet', label: 'My Wallet', Icon: Wallet },
+                { id: 'chart', label: 'Chart & Analysis', Icon: TrendingUp },
+                { id: 'buy', label: 'Buy IcanEra', Icon: CreditCard },
+                { id: 'sell', label: 'Sell IcanEra', Icon: Upload },
+                { id: 'book', label: 'Book Order', Icon: Bookmark },
+                { id: 'history', label: 'History', Icon: History },
+                { id: 'dropship', label: 'Dropship', Icon: ShoppingBag }
+              ].map(({ id, label, Icon }) => {
+                const on = activeTradeTab === id;
+                return (
+                  <button
+                    key={id}
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => setActiveTradeTab(id)}
+                    className="inline-flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap transition"
+                    style={{
+                      background: on ? 'linear-gradient(180deg, transparent, rgba(196,160,82,0.16))' : 'transparent',
+                      color: on ? 'var(--color-text)' : 'var(--color-textSecondary)',
+                      fontWeight: on ? 700 : 500,
+                      border: 'none',
+                      borderBottom: on ? '2px solid #c4a052' : '2px solid transparent',
+                      marginBottom: -1
+                    }}
+                  >
+                    <Icon className="w-4 h-4" style={{ color: on ? '#c4a052' : undefined }} />
+                    {label}
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Tab Content */}
-            <div className="p-4 md:p-6 pt-6">
+            {/* Tab Content — each tab is a full page */}
+            <div className="pb-10">
               {/* Wallet Tab */}
-              {activeTradeTab === 'wallet' && (
-                <div className="space-y-4">
-                  {balanceLoading ? (
-                    <div className="flex items-center justify-center py-16">
-                      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
-                    </div>
-                  ) : (
-                    <div className="bg-gradient-to-br from-purple-900 to-purple-800 border border-purple-500/50 rounded-xl p-12 text-center shadow-2xl">
-                      <p className="text-purple-300 text-sm font-medium mb-4">💎 Total IcanEra Coins</p>
-                      <h2 className="text-6xl font-bold text-white">{icanBalance.toFixed(2)}</h2>
-                    </div>
-                  )}
-                </div>
-              )}
+              {activeTradeTab === 'wallet' && (() => {
+                const lastCandle = candleData && candleData.length > 0 ? candleData[candleData.length - 1] : null;
+                const latestPrice = lastCandle ? Number(lastCandle.close) : null;
+                const worth = latestPrice ? icanBalance * latestPrice : null;
+                return (
+                  <div className="space-y-6">
+                    {balanceLoading ? (
+                      <div className="flex items-center justify-center py-24">
+                        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: '#c4a052' }}></div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="rounded-2xl text-center px-6 py-12 sm:py-16" style={{ border: '1px solid rgba(196,160,82,0.55)', background: 'rgba(196,160,82,0.07)' }}>
+                          <p className="text-[11px] uppercase tracking-[0.2em] font-bold" style={{ color: '#c4a052' }}>Total IcanEra coins</p>
+                          <p
+                            className="mt-3 break-all"
+                            style={{ color: 'var(--color-text)', fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600, fontSize: 'clamp(2.75rem, 9vw, 5rem)', lineHeight: 1.05, fontVariantNumeric: 'lining-nums' }}
+                          >
+                            {icanBalance.toFixed(2)}
+                          </p>
+                          {worth !== null && (
+                            <p className="mt-3 text-sm" style={{ color: 'var(--color-textSecondary)' }}>
+                              ≈ UGX {Math.round(worth).toLocaleString()} at the latest price of UGX {latestPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                          {[
+                            { id: 'buy', label: 'Buy IcanEra', sub: 'At the live price', Icon: CreditCard },
+                            { id: 'sell', label: 'Sell IcanEra', sub: 'Into your wallet', Icon: Upload },
+                            { id: 'book', label: 'Book an order', sub: 'At your target price', Icon: Bookmark },
+                            { id: 'chart', label: 'Open the chart', sub: 'Candles & analysis', Icon: TrendingUp }
+                          ].map(({ id, label, sub, Icon }) => (
+                            <button
+                              key={id}
+                              onClick={() => setActiveTradeTab(id)}
+                              className="text-left p-4 rounded-xl transition active:scale-[0.98] hover:brightness-110"
+                              style={{ border: '1px solid rgba(196,160,82,0.45)', background: 'transparent' }}
+                            >
+                              <Icon className="w-5 h-5 mb-2" style={{ color: '#c4a052' }} />
+                              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{label}</p>
+                              <p className="text-xs mt-0.5" style={{ color: 'var(--color-textSecondary)' }}>{sub}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* 📊 CHART TAB - Just the chart */}
               {activeTradeTab === 'chart' && (
@@ -7893,7 +7822,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     </div>
                   )}
 
-                  <div className="h-[360px] sm:h-[480px] bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
+                  <div className="tp-keep h-[calc(100dvh-15rem)] min-h-[420px] bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
                     {candleData && candleData.length > 0 ? (
                       <div className="h-full w-full">
                         <CandlestickChart

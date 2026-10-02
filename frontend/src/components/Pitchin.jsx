@@ -8,6 +8,7 @@ import SmartContractGenerator from './SmartContractGenerator';
 import PrivatePitchInviteModal from './PrivatePitchInviteModal';
 import ShareSigningFlow from './ShareSigningFlow';
 import InvestmentProgressView from './InvestmentProgressView';
+import MyInvestmentsList from './MyInvestmentsList';
 import BusinessProfileForm from './BusinessProfileForm';
 import BusinessProfileSelector from './BusinessProfileSelector';
 import BusinessCategorySelector from './BusinessCategorySelector';
@@ -176,6 +177,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   const [selectedForContract, setSelectedForContract] = useState(null);
   const [selectedForInvestment, setSelectedForInvestment] = useState(null); // For ShareSigningFlow
   const [selectedForProgress, setSelectedForProgress] = useState(null); // { pitch, agreement } - for InvestmentProgressView
+  const [showMyInvestments, setShowMyInvestments] = useState(false);
   // My existing investment agreement (if any) against the business profile
   // currently being viewed via viewingPitcher -- drives the "View My
   // Investment Progress" button in the viewing-pitcher banner below.
@@ -1949,12 +1951,12 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
         <>
       {/* Single-row Header */}
       <div className="sticky top-0 z-40 bg-transparent">
-        <div className="px-4 py-3 flex items-center gap-3">
+        <div className="px-2 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3">
 
           {/* Left - "For You" tab (replaces Pitchin branding) */}
           <button
             onClick={() => { setActiveTab('feed'); setSelectedCategory('all'); }}
-            className={`icon-btn-transparent text-sm font-bold whitespace-nowrap transition-colors ${
+            className={`icon-btn-transparent text-xs sm:text-sm font-bold whitespace-nowrap tracking-tight transition-colors ${
               activeTab === 'feed'
                 ? 'text-white border-b-2 border-pink-500 pb-0.5'
                 : 'text-slate-400 hover:text-white'
@@ -2056,10 +2058,10 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
           </div>
 
           {/* Right - My Pitches + Profile */}
-          <div className="flex items-center gap-4 min-w-max">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-max">
             <button
               onClick={() => { setActiveTab('myPitches'); setSelectedCategory('all'); }}
-              className={`icon-btn-transparent text-sm font-semibold whitespace-nowrap transition-colors ${
+              className={`icon-btn-transparent text-xs sm:text-sm font-semibold whitespace-nowrap tracking-tight transition-colors ${
                 activeTab === 'myPitches'
                   ? 'text-white border-b-2 border-purple-500 pb-0.5'
                   : 'text-slate-400 hover:text-white'
@@ -2068,6 +2070,15 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
               My Pitches
             </button>
 
+            {currentUser && (
+              <button
+                onClick={() => setShowMyInvestments(true)}
+                className="icon-btn-transparent text-xs sm:text-sm font-semibold whitespace-nowrap tracking-tight text-slate-400 hover:text-white transition-colors"
+              >
+                <span className="sm:hidden">Invested</span><span className="hidden sm:inline">My Investments</span>
+              </button>
+            )}
+
             {/* Current User avatar — shows logged-in user's initials */}
             <button
               onClick={() => setShowProfileSelector(true)}
@@ -2075,7 +2086,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
               className="icon-btn-transparent flex items-center gap-2 hover:opacity-80 transition-opacity"
             >
               {currentUser ? (
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-[11px] sm:text-xs font-bold flex-shrink-0">
                   {(currentUser.user_metadata?.full_name || currentUser.email || 'U').charAt(0).toUpperCase()}
                 </div>
               ) : (
@@ -2800,6 +2811,14 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
           }}
           businessProfile={currentBusinessProfile}
           currentUser={currentUser}
+        />
+      )}
+
+      {showMyInvestments && (
+        <MyInvestmentsList
+          currentUser={currentUser}
+          onClose={() => setShowMyInvestments(false)}
+          onSelect={(payload) => { setShowMyInvestments(false); setSelectedForProgress(payload); }}
         />
       )}
 

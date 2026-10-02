@@ -208,19 +208,20 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
       : 'bg-emerald-100 text-emerald-700 border-emerald-200';
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-slate-950 via-purple-950 to-slate-950">
+    <div className="icn-pg">
       <div className="p-3 sm:p-3 md:p-8 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:pb-3 md:pb-8 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <div className="max-w-5xl mx-auto w-full">
           {/* Header - Mobile Optimized */}
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white truncate">My Profile</h1>
-              <p className="text-xs sm:text-sm text-slate-600 mt-0.5 sm:mt-1 truncate">Manage your account, settings, and financial profile.</p>
+              <p className="icn-pg-eyebrow">Account</p>
+              <h1 className="icn-pg-title text-2xl sm:text-3xl truncate">My Profile</h1>
+              <p className="icn-pg-sub text-xs sm:text-sm mt-0.5 sm:mt-1 truncate">Manage your account, settings, and financial profile.</p>
             </div>
             {onClose && (
               <button
                 onClick={onClose}
-                className="p-1.5 sm:p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 rounded-lg transition-colors flex-shrink-0 ml-2"
+                className="icn-pg-closebtn p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0 ml-2"
               >
                 <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
@@ -229,20 +230,20 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
         {/* Alerts - Compact on Mobile */}
         {error && (
-          <div className="mb-3 sm:mb-4 md:mb-6 p-2.5 sm:p-3 md:p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs sm:text-sm md:text-base">
+          <div className="icn-pg-alert-err mb-3 sm:mb-4 md:mb-6 p-3 text-sm">
             {error}
           </div>
         )}
         {success && (
-          <div className="mb-3 sm:mb-4 md:mb-6 p-2.5 sm:p-3 md:p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-xs sm:text-sm md:text-base">
+          <div className="icn-pg-alert-ok mb-3 sm:mb-4 md:mb-6 p-3 text-sm">
             {success}
           </div>
         )}
 
         {/* Main Profile Card - Mobile Optimized */}
-        <div className="bg-white border border-slate-700 rounded-xl sm:rounded-2xl overflow-hidden mb-3 sm:mb-4 md:mb-6 shadow-lg">
+        <div className="icn-pg-card mb-3 sm:mb-4 md:mb-6">
           {/* Profile Header Background - Responsive Height */}
-          <div className="h-20 sm:h-24 md:h-32 bg-gradient-to-r from-amber-700 via-orange-700 to-purple-700"></div>
+          <div className="icn-pg-banner h-20 sm:h-24 md:h-32"></div>
 
           {/* Profile Content - Better Mobile Padding */}
           <div className="relative px-3 sm:px-4 md:px-6 pb-4 sm:pb-5 md:pb-6 pt-0">
@@ -258,7 +259,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <img
                         src={avatarUrl}
                         alt={getDisplayName()}
-                        className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full object-cover ring-4 ring-slate-800 hover:ring-purple-500/50 transition-all"
+                        className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full object-cover icn-pg-avatar transition-all"
                         onError={(e) => {
                           console.error('❌ Image failed to load:', avatarUrl, e);
                           setImageError(true);
@@ -266,13 +267,13 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                         onLoad={() => console.log('✅ Image loaded successfully:', avatarUrl)}
                       />
                     ) : (
-                      <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center ring-4 ring-slate-800 text-white text-2xl sm:text-3xl md:text-4xl font-bold">
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full icn-pg-monogram flex items-center justify-center icn-pg-avatar text-2xl sm:text-3xl md:text-4xl font-bold">
                         {profile?.first_name?.charAt(0) || ''}
                         {profile?.last_name?.charAt(0) || 'U'}
                       </div>
                     )}
                     {isEditing && (
-                      <div className="absolute bottom-0 right-0 bg-purple-600 rounded-full p-1 sm:p-1.5 md:p-2 hover:bg-purple-700 transition-colors">
+                      <div className="absolute bottom-0 right-0 icn-pg-btn-primary rounded-full p-1 sm:p-1.5 md:p-2 transition-colors">
                         <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-white" />
                       </div>
                     )}
@@ -281,7 +282,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                   {/* Status Upload Button - Responsive Size */}
                   <button
                     onClick={() => setShowStatusUploader(true)}
-                    className="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full p-1.5 sm:p-2 md:p-2.5 hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg text-white"
+                    className="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 icn-pg-btn-primary rounded-full p-1.5 sm:p-2 md:p-2.5 transition-all"
                     title="Add status"
                   >
                     <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
@@ -296,12 +297,12 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       placeholder="Full name"
                       value={formData.full_name}
                       onChange={handleInputChange}
-                      className="w-full px-2 sm:px-3 py-1 sm:py-1.5 bg-white border border-slate-300 rounded-lg text-white placeholder-slate-400 text-sm sm:text-base"
+                      className="icn-pg-input w-full px-3 py-2 placeholder-gray-400 text-sm sm:text-base"
                     />
                   ) : (
                     <div>
-                      <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white break-words">{getDisplayName()}</h2>
-                      <p className="text-slate-500 text-xs sm:text-sm break-all">{user?.email}</p>
+                      <h2 className="icn-pg-title text-xl sm:text-2xl break-words">{getDisplayName()}</h2>
+                      <p className="icn-pg-sub text-xs sm:text-sm break-all">{user?.email}</p>
                     </div>
                   )}
                 </div>
@@ -313,12 +314,12 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
             {/* Verification + Completion - Mobile Responsive */}
             <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-5 md:mb-6">
               {profile?.blockchain_verified && (
-                <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-green-100 text-green-700 rounded-lg inline-flex w-fit">
+                <div className="icn-pg-chip icn-pg-chip-ok px-3 py-1.5 w-fit">
                   <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span className="text-xs sm:text-sm font-medium">Blockchain Verified</span>
                 </div>
               )}
-              <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-indigo-100 text-indigo-700 rounded-lg border border-indigo-200">
+              <div className="icn-pg-chip px-3 py-1.5">
                 <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="text-xs sm:text-sm font-medium">Profile completion: {profileCompletionPercent}%</span>
               </div>
@@ -327,19 +328,19 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
             {/* Profile Details Grid - Mobile Optimized */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {/* Email */}
-              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-800 rounded-lg border border-slate-700">
-                <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
+              <div className="flex items-center gap-2 sm:gap-3 p-3 icn-pg-row">
+                <Mail className="w-4 h-4 sm:w-5 sm:h-5 icn-pg-icon flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] sm:text-xs text-slate-600">Email</p>
-                  <p className="text-white text-xs sm:text-sm md:text-base break-all">{user?.email}</p>
+                  <p className="icn-pg-label">Email</p>
+                  <p className="icn-pg-value text-sm break-all">{user?.email}</p>
                 </div>
               </div>
 
               {/* Phone */}
-              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-800 rounded-lg border border-slate-700">
-                <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
+              <div className="flex items-center gap-2 sm:gap-3 p-3 icn-pg-row">
+                <Phone className="w-4 h-4 sm:w-5 sm:h-5 icn-pg-icon flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] sm:text-xs text-slate-600">Phone</p>
+                  <p className="icn-pg-label">Phone</p>
                   {isEditing ? (
                     <input
                       type="tel"
@@ -347,25 +348,25 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       placeholder="Add phone number"
                       value={formData.phone}
                       onChange={handleInputChange}
-                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-white placeholder-slate-400 text-xs sm:text-sm"
+                      className="icn-pg-input w-full px-2.5 py-1.5 placeholder-gray-400 text-sm"
                     />
                   ) : (
-                    <p className="text-white text-xs sm:text-sm md:text-base">{formData.phone || 'Not provided'}</p>
+                    <p className="icn-pg-value text-sm">{formData.phone || 'Not provided'}</p>
                   )}
                 </div>
               </div>
 
               {/* Income Level */}
-              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-800 rounded-lg border border-slate-700">
-                <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
+              <div className="flex items-center gap-2 sm:gap-3 p-3 icn-pg-row">
+                <Wallet className="w-4 h-4 sm:w-5 sm:h-5 icn-pg-icon flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] sm:text-xs text-slate-600">Income Level</p>
+                  <p className="icn-pg-label">Income Level</p>
                   {isEditing ? (
                     <select
                       name="income_level"
                       value={formData.income_level}
                       onChange={handleInputChange}
-                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-white text-xs sm:text-sm"
+                      className="icn-pg-input w-full px-2.5 py-1.5 text-sm"
                     >
                       <option value="">Select income level</option>
                       <option value="low">Low (&lt; 500k UGX/month)</option>
@@ -374,22 +375,22 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <option value="very_high">Very High (&gt; 5M UGX/month)</option>
                     </select>
                   ) : (
-                    <p className="text-white text-xs sm:text-sm md:text-base">{formData.income_level ? toTitleCase(formData.income_level) : 'Not provided'}</p>
+                    <p className="icn-pg-value text-sm">{formData.income_level ? toTitleCase(formData.income_level) : 'Not provided'}</p>
                   )}
                 </div>
               </div>
 
               {/* Financial Goal */}
-              <div className="flex items-start gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-800 rounded-lg border border-slate-700">
-                <Key className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 mt-0.5 sm:mt-1 flex-shrink-0" />
+              <div className="flex items-start gap-2 sm:gap-3 p-3 icn-pg-row">
+                <Key className="w-4 h-4 sm:w-5 sm:h-5 icn-pg-icon mt-0.5 sm:mt-1 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] sm:text-xs text-slate-600">Primary Financial Goal</p>
+                  <p className="icn-pg-label">Primary Financial Goal</p>
                   {isEditing ? (
                     <select
                       name="financial_goal"
                       value={formData.financial_goal}
                       onChange={handleInputChange}
-                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-white text-xs sm:text-sm"
+                      className="icn-pg-input w-full px-2.5 py-1.5 text-sm"
                     >
                       <option value="">Select a goal</option>
                       <option value="save_emergency_fund">Save Emergency Fund</option>
@@ -401,22 +402,22 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       <option value="build_wealth">Build Long-term Wealth</option>
                     </select>
                   ) : (
-                    <p className="text-white text-xs sm:text-sm md:text-base">{formData.financial_goal ? toTitleCase(formData.financial_goal) : 'Not provided'}</p>
+                    <p className="icn-pg-value text-sm">{formData.financial_goal ? toTitleCase(formData.financial_goal) : 'Not provided'}</p>
                   )}
                 </div>
               </div>
 
               {/* Risk Tolerance */}
-              <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 md:p-3 bg-slate-800 rounded-lg border border-slate-700 sm:col-span-2">
-                <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" />
+              <div className="flex items-center gap-2 sm:gap-3 p-3 icn-pg-row sm:col-span-2">
+                <Shield className="w-4 h-4 sm:w-5 sm:h-5 icn-pg-icon flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] sm:text-xs text-slate-600">Risk Tolerance</p>
+                  <p className="icn-pg-label">Risk Tolerance</p>
                   {isEditing ? (
                     <select
                       name="risk_tolerance"
                       value={formData.risk_tolerance}
                       onChange={handleInputChange}
-                      className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-white text-xs sm:text-sm"
+                      className="icn-pg-input w-full px-2.5 py-1.5 text-sm"
                     >
                       <option value="low">Conservative (Low Risk)</option>
                       <option value="medium">Moderate (Medium Risk)</option>
@@ -444,11 +445,11 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
         {/* Account Info + Actions - Mobile Optimized */}
         <div className="mt-4 sm:mt-5 md:mt-6 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-3 items-stretch">
-          <div className="p-2.5 sm:p-3 md:p-4 bg-white border border-slate-700 rounded-lg text-left">
-            <p className="text-[10px] sm:text-xs md:text-sm text-slate-600">
-              Account ID: <span className="font-mono text-slate-700 break-all text-[10px] sm:text-xs">{user?.id}</span>
+          <div className="icn-pg-row p-3 sm:p-4 text-left">
+            <p className="icn-pg-label" style={{ textTransform: "none", letterSpacing: "normal" }}>
+              Account ID: <span className="icn-pg-value font-mono break-all text-[10px] sm:text-xs">{user?.id}</span>
             </p>
-            <p className="text-[10px] sm:text-xs text-slate-500 mt-1 sm:mt-2">
+            <p className="icn-pg-sub text-[11px] mt-1 sm:mt-2">
               Member since {new Date(user?.created_at).toLocaleDateString()}
             </p>
           </div>
@@ -458,7 +459,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
             {!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 border border-purple-600 text-white rounded-lg font-medium transition-colors text-sm sm:text-base"
+                className="icn-pg-btn icn-pg-btn-primary flex-1 sm:flex-none px-5 py-3 text-sm sm:text-base"
               >
                 <Edit2 className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span>Edit Profile</span>
@@ -467,7 +468,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
               <>
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-200 hover:bg-slate-300 border border-slate-300 text-slate-700 rounded-lg font-medium transition-colors text-sm sm:text-base"
+                  className="icn-pg-btn icn-pg-btn-ghost flex-1 sm:flex-none px-4 py-3 text-sm sm:text-base"
                 >
                   <X className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span>Cancel</span>
@@ -475,7 +476,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 border border-green-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 text-sm sm:text-base"
+                  className="icn-pg-btn icn-pg-btn-primary flex-1 sm:flex-none px-4 py-3 text-sm sm:text-base"
                 >
                   <Save className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span>{isSaving ? 'Saving...' : 'Save'}</span>
@@ -488,7 +489,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
           <button
             onClick={handleLogout}
             disabled={isLoggingOut}
-            className="sm:col-span-2 w-full flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-red-600 hover:bg-red-700 border border-red-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 text-sm sm:text-base"
+            className="icn-pg-btn icn-pg-btn-danger sm:col-span-2 w-full px-5 py-3 text-sm sm:text-base"
           >
             <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
@@ -498,13 +499,13 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
         {/* Avatar Change Modal - Mobile Optimized */}
         {showAvatarModal && (
           <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-            <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl p-4 sm:p-6 max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom sm:slide-in-from-bottom-0">
+            <div className="icn-pg-sheet w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-4 sm:p-6 max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom sm:slide-in-from-bottom-0">
               {/* Header */}
               <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white">Change Profile Picture</h2>
+                <h2 className="icn-pg-title text-xl">Change Profile Picture</h2>
                 <button
                   onClick={() => setShowAvatarModal(false)}
-                  className="p-1.5 sm:p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-800 rounded-lg transition-colors"
+                  className="icn-pg-closebtn p-1.5 sm:p-2 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
@@ -514,7 +515,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
               <div className="mb-4 sm:mb-6">
                 {previewUrl ? (
                   <div>
-                    <p className="text-xs text-slate-600 text-center mb-2">Preview</p>
+                    <p className="icn-pg-label text-center mb-2">Preview</p>
                     <div className="flex justify-center">
                       <img
                         src={previewUrl}
@@ -525,17 +526,17 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                   </div>
                 ) : (
                   <div>
-                    <p className="text-xs text-slate-600 text-center mb-2">Current Avatar</p>
+                    <p className="icn-pg-label text-center mb-2">Current Avatar</p>
                     <div className="flex justify-center">
                       <div className="relative">
                         {avatarUrl && !imageError ? (
                           <img
                             src={avatarUrl}
                             alt={getDisplayName()}
-                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover ring-4 ring-purple-500/50"
+                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover icn-pg-avatar"
                           />
                         ) : (
-                          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center ring-4 ring-purple-500/50 text-white text-2xl sm:text-3xl font-bold">
+                          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full icn-pg-monogram flex items-center justify-center icn-pg-avatar text-2xl sm:text-3xl font-bold">
                             {profile?.first_name?.charAt(0) || ''}
                             {profile?.last_name?.charAt(0) || 'U'}
                           </div>
@@ -552,7 +553,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                 <button
                   onClick={triggerFileInput}
                   disabled={isUploadingAvatar}
-                  className="w-full flex items-center justify-center gap-2 sm:gap-3 px-4 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-purple-600/50 disabled:to-pink-600/50 text-white rounded-lg font-medium transition-all text-sm sm:text-base"
+                  className="icn-pg-btn icn-pg-btn-primary w-full px-4 py-3 text-sm sm:text-base"
                 >
                   <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span>{isUploadingAvatar ? 'Uploading...' : 'Upload Photo'}</span>
@@ -560,7 +561,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
                 {/* Take Photo Button (Placeholder) */}
                 <button
-                  className="w-full flex items-center justify-center gap-2 sm:gap-3 px-4 py-2.5 sm:py-3 bg-slate-800 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg font-medium transition-all text-sm sm:text-base"
+                  className="icn-pg-btn icn-pg-btn-ghost w-full px-4 py-3 text-sm sm:text-base"
                 >
                   <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span>Take Photo</span>
@@ -568,14 +569,14 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
 
                 {/* Remove Photo Button */}
                 <button
-                  className="w-full flex items-center justify-center gap-2 sm:gap-3 px-4 py-2.5 sm:py-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-lg font-medium transition-all text-sm sm:text-base"
+                  className="icn-pg-btn icn-pg-btn-danger w-full px-4 py-3 text-sm sm:text-base"
                 >
                   <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span>Remove Photo</span>
                 </button>
 
                 {/* Info Text */}
-                <p className="text-[10px] sm:text-xs text-slate-600 text-center mt-3 sm:mt-4 px-2">
+                <p className="icn-pg-sub text-[11px] text-center mt-3 sm:mt-4 px-2">
                   Recommended: Square image, at least 400x400 pixels, JPG or PNG format
                 </p>
               </div>
@@ -626,14 +627,14 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
                       setShowAvatarView(false);
                       setIsEditing(true);
                     }}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors text-sm sm:text-base"
+                    className="icn-pg-btn icn-pg-btn-primary w-full sm:w-auto px-6 py-3 text-sm sm:text-base"
                   >
                     <Edit2 className="w-4 h-4" />
                     Edit Profile
                   </button>
                   <button
                     onClick={() => setShowAvatarView(false)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors text-sm sm:text-base"
+                    className="icn-pg-btn w-full sm:w-auto px-6 py-3 text-sm sm:text-base text-white" style={{ border: "1px solid rgba(255,255,255,0.4)" }}
                   >
                     Close
                   </button>

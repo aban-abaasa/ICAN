@@ -157,6 +157,19 @@ const LandingPage = ({ onGetStarted }) => {
     onGetStarted?.('signin');
   };
 
+  // Posting and replying on the community board need an account.
+  const handleGoogleContinue = async () => {
+    try {
+      const sb = getSupabaseClient();
+      await sb.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}${window.location.pathname}#community` },
+      });
+    } catch (err) {
+      console.error('[LandingPage] google sign-in failed:', err);
+    }
+  };
+
   const handleCreateAccount = () => {
     onGetStarted?.('signup');
   };
@@ -712,7 +725,7 @@ const LandingPage = ({ onGetStarted }) => {
 
   const handleContactSubmit = async (event) => {
     event.preventDefault();
-    if (!contactForm.message.trim() || submitState === 'sending') return;
+    if (!identity?.authId || !contactForm.message.trim() || submitState === 'sending') return;
 
     setSubmitState('sending');
     try {
@@ -759,12 +772,8 @@ const LandingPage = ({ onGetStarted }) => {
     const body = replyDraft.trim();
     if (!body || replyState === 'sending') return;
 
-    const who = identity
-      ? { name: identity.name, email: identity.email, authId: identity.authId }
-      : guestIdentity?.name
-        ? { name: guestIdentity.name, email: guestIdentity.email, authId: null }
-        : null;
-    if (!who) return;
+    if (!identity?.authId) return;
+    const who = { name: identity.name, email: identity.email, authId: identity.authId };
 
     setReplyState('sending');
     try {
@@ -1571,6 +1580,18 @@ const LandingPage = ({ onGetStarted }) => {
             <h3 className={`text-lg md:text-xl font-bold mb-4 ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>
               {identity ? `Welcome back, ${identity.name}.` : 'Talk to the IcanEra team.'}
             </h3>
+            {!identity ? (
+              <div className={`rounded-sm border-2 p-5 text-center ${isDarkTheme ? 'border-amber-300/30 bg-slate-950/40' : 'border-[#1f1a12]/30 bg-[#fffdf6]'}`}>
+                <Lock className={`mx-auto mb-2 h-6 w-6 ${isDarkTheme ? 'text-amber-200' : 'text-[#14532d]'}`} />
+                <p className={`text-sm font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>Sign in to post a message</p>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                  <button type="button" onClick={handleSignIn} className="rounded-sm border-2 border-[#14532d] bg-[#14532d] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#0f4023]">Sign in</button>
+                  <button type="button" onClick={handleGoogleContinue} className={`inline-flex items-center justify-center gap-2 rounded-sm border-2 px-5 py-2.5 text-sm font-bold ${isDarkTheme ? 'border-white/30 text-white hover:bg-white/10' : 'border-[#1f1a12]/60 bg-white text-[#1f1a12] hover:bg-[#1f1a12] hover:text-[#f7f3e8]'}`}><span aria-hidden="true" className="font-black text-[#4285F4]">G</span>Continue with Google</button>
+                </div>
+                <button type="button" onClick={handleCreateAccount} className={`mt-3 text-xs underline ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>New here? Create an account</button>
+              </div>
+            ) : (
+            <>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className={`mb-1.5 block text-xs font-semibold uppercase tracking-wide ${isDarkTheme ? 'text-slate-300' : 'text-slate-600'}`}>Your name</label>
@@ -1646,15 +1667,9 @@ const LandingPage = ({ onGetStarted }) => {
               </div>
             ) : identity ? (
               <p className={`mt-4 text-xs leading-5 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>
-                Messages here are public — anyone can see them, but the IcanEra team can remove any message.{' '}
-                Connect your IcanEra wallet after signing in to unlock private messages.
+                Connect your IcanEra wallet to unlock private messages.
               </p>
-            ) : (
-              <p className={`mt-4 text-xs leading-5 ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>
-                Messages here are public — anyone can see them, but the IcanEra team can remove any message.
-                Sign in with an IcanEra wallet to choose public or private for your own messages.
-              </p>
-            )}
+            ) : null}
 
             <button
               type="submit"
@@ -1669,6 +1684,9 @@ const LandingPage = ({ onGetStarted }) => {
             )}
             {submitState === 'error' && (
               <p className="mt-3 text-sm text-rose-400">Something went wrong sending that. Please try again.</p>
+            )}
+
+            </>
             )}
 
             {identity && myMessages.length > 0 && (
@@ -1700,7 +1718,7 @@ const LandingPage = ({ onGetStarted }) => {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {threads.slice(0, boardVisibleCount).map((m) => {
               const isExpanded = expandedThreadId === m.id;
-              const canReply = !!(identity || guestIdentity?.name);
+              const canReply = !!identity?.authId;
               return (
                 <article
                   key={m.id}
@@ -1788,29 +1806,15 @@ const LandingPage = ({ onGetStarted }) => {
                       )}
 
                       {!canReply && (
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <input
-                            value={guestReplyForm.name}
-                            onChange={(e) => setGuestReplyForm((p) => ({ ...p, name: e.target.value }))}
-                            placeholder="Your name"
-                            className={`rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60 ${isDarkTheme ? 'bg-slate-950/50 border-slate-600/40 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400'}`}
-                          />
-                          <input
-                            value={guestReplyForm.email}
-                            onChange={(e) => setGuestReplyForm((p) => ({ ...p, email: e.target.value }))}
-                            placeholder="Your email"
-                            type="email"
-                            className={`rounded-lg border px-3 py-2 text-sm outline-none focus:border-cyan-400/60 ${isDarkTheme ? 'bg-slate-950/50 border-slate-600/40 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400'}`}
-                          />
-                          <button
-                            type="button"
-                            onClick={handleSaveGuestReplyIdentity}
-                            disabled={!guestReplyForm.name.trim()}
-                            className={`rounded-lg border px-3 py-2 text-xs font-medium transition disabled:opacity-40 sm:col-span-2 ${isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-200 hover:bg-white/10' : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-                          >
-                            Continue as this name
-                          </button>
-                        </div>
+                        <div className={`rounded-sm border-2 p-4 text-center ${isDarkTheme ? 'border-amber-300/30 bg-slate-950/40' : 'border-[#1f1a12]/30 bg-[#fffdf6]'}`}>
+                <Lock className={`mx-auto mb-2 h-6 w-6 ${isDarkTheme ? 'text-amber-200' : 'text-[#14532d]'}`} />
+                <p className={`text-sm font-bold ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>Sign in to reply</p>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                  <button type="button" onClick={handleSignIn} className="rounded-sm border-2 border-[#14532d] bg-[#14532d] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#0f4023]">Sign in</button>
+                  <button type="button" onClick={handleGoogleContinue} className={`inline-flex items-center justify-center gap-2 rounded-sm border-2 px-5 py-2.5 text-sm font-bold ${isDarkTheme ? 'border-white/30 text-white hover:bg-white/10' : 'border-[#1f1a12]/60 bg-white text-[#1f1a12] hover:bg-[#1f1a12] hover:text-[#f7f3e8]'}`}><span aria-hidden="true" className="font-black text-[#4285F4]">G</span>Continue with Google</button>
+                </div>
+                <button type="button" onClick={handleCreateAccount} className={`mt-3 text-xs underline ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>New here? Create an account</button>
+              </div>
                       )}
 
                       {canReply && (

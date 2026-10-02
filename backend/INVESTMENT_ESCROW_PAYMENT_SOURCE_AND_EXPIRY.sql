@@ -74,6 +74,9 @@ CREATE INDEX IF NOT EXISTS idx_agreements_approval_deadline
 -- ----------------------------------------------------------------
 -- 2. create_investment_escrow(): atomic debit + agreement creation
 -- ----------------------------------------------------------------
+-- Signature gained p_price_per_coin_ugx; drop the old one so there is no overload.
+DROP FUNCTION IF EXISTS public.create_investment_escrow(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, UUID);
+
 CREATE OR REPLACE FUNCTION public.create_investment_escrow(
   p_pitch_id UUID,
   p_business_profile_id UUID,
@@ -86,7 +89,8 @@ CREATE OR REPLACE FUNCTION public.create_investment_escrow(
   p_device_location TEXT,
   p_investor_pin_hash TEXT,
   p_source_type TEXT,
-  p_source_business_profile_id UUID DEFAULT NULL
+  p_source_business_profile_id UUID DEFAULT NULL,
+  p_price_per_coin_ugx NUMERIC DEFAULT NULL
 )
 RETURNS public.investment_agreements
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
@@ -127,9 +131,10 @@ BEGIN
      WHERE id = v_personal_wallet.id;
 
     INSERT INTO public.ican_coin_blockchain_txs
-      (user_id, tx_hash, tx_type, ican_amount, from_address, to_address, status, timestamp)
+      (user_id, tx_hash, tx_type, ican_amount, price_per_coin, total_value_ugx, from_address, to_address, status, timestamp)
     VALUES
       (v_investor, 'escrow-hold-' || p_escrow_id, 'transfer', p_total_investment,
+       COALESCE(p_price_per_coin_ugx, 0), p_total_investment * COALESCE(p_price_per_coin_ugx, 0),
        v_personal_wallet.wallet_address, 'escrow_pool', 'completed', clock_timestamp());
   ELSE
     IF p_source_business_profile_id IS NULL THEN
@@ -186,8 +191,8 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.create_investment_escrow(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.create_investment_escrow(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, UUID) TO authenticated;
+REVOKE ALL ON FUNCTION public.create_investment_escrow(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, NUMERIC) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.create_investment_escrow(UUID, UUID, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT, TEXT, TEXT, TEXT, UUID, NUMERIC) TO authenticated;
 
 -- ----------------------------------------------------------------
 -- 3. release_investment_escrow_to_business(): credit the target business

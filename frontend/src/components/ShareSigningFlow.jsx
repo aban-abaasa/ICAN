@@ -1698,13 +1698,16 @@ const ShareSigningFlow = ({ pitch, businessProfile, currentUser, onClose, onInve
           p_investment_type: investmentType || 'support',
           p_shares_amount: sharesAmount || 0,
           p_share_price: sharesAmount > 0 ? totalInvestment / sharesAmount : 0,
-          p_total_investment: totalInvestment,
+          // The RPC debits ican_balance and later credits/refunds the same figure,
+          // so it must be in coins -- not the local-currency totalInvestment.
+          p_total_investment: investmentInIcanCoins,
           p_escrow_id: investmentId,
           p_device_id: 'web_platform',
           p_device_location: 'in_app',
           p_investor_pin_hash: walletPin.substring(0, 1) + '****' + walletPin.substring(walletPin.length - 1),
           p_source_type: paymentSourceType,
-          p_source_business_profile_id: paymentSourceType === 'business' ? paymentSourceBusinessProfileId : null
+          p_source_business_profile_id: paymentSourceType === 'business' ? paymentSourceBusinessProfileId : null,
+          p_price_per_coin_ugx: icanPriceUgx
         });
 
         if (escrowError) {

@@ -17,6 +17,7 @@ import ConfirmDeleteAccountPage from './components/ConfirmDeleteAccountPage';
 import DecoyPortal from './components/DecoyPortal';
 import SupportConsole from './components/SupportConsole';
 import ChatWidget from './components/ChatWidget';
+import CardPayPage from './pages/CardPayPage';
 import { offlineManager } from './lib/offlineManager';
 import { Loader2, AlertCircle } from 'lucide-react';
 
@@ -340,6 +341,14 @@ const App = () => {
   // Developer panel — silent intercept, no auth session required
   if (sessionStorage.getItem(ICAN_DEV_KEY) === 'true') {
     return <ICANDevPanel onExit={() => window.location.reload()} />;
+  }
+
+  // Public card-QR page: opened by scanning someone's card, no account needed.
+  const cardPayMatch = typeof window !== 'undefined'
+    ? window.location.pathname.match(/^\/card-pay\/([A-Za-z0-9]{20,100})\/?$/)
+    : null;
+  if (cardPayMatch) {
+    return <CardPayPage token={cardPayMatch[1]} />;
   }
 
   // Show loading screen while checking auth status

@@ -744,28 +744,28 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack 
             </button>
 
             {moreOpen && (
-              <div className="absolute right-0 top-full mt-2 bg-slate-900/95 border border-slate-600 rounded-lg shadow-2xl z-30 min-w-56 animate-in fade-in zoom-in-95 duration-200">
-                <div className="px-4 py-3 border-b border-slate-700 text-slate-300 text-xs font-semibold bg-slate-900 rounded-t-lg">
-                  MORE SECTIONS
+              <div className="icn-menu absolute right-0 top-full mt-2 z-50 w-64" role="menu">
+                <div className="icn-menu-head">
+                  <p className="icn-menu-eyebrow">More sections</p>
                 </div>
-                <div className="divide-y divide-slate-700 max-h-96 overflow-y-auto">
+                <div className="icn-menu-body">
                   {overflowTabs.map(tab => {
                     const TabIcon = tab.icon;
                     const isActive = activeTab === tab.id;
                     return (
                       <button
                         key={tab.id}
+                        role="menuitem"
                         onClick={() => {
                           onTabClick(tab.id);
                           setMoreOpen(false);
                         }}
-                        className={`w-full px-4 py-3 text-sm font-medium transition-all text-left flex items-center gap-3 ${
-                          isActive ? 'bg-indigo-500/25 text-indigo-100 border-l-4 border-indigo-300/60' : 'text-slate-200 hover:bg-slate-800'
-                        }`}
+                        className={`icn-menu-item ${isActive ? 'is-active' : ''}`}
+                        aria-current={isActive ? 'page' : undefined}
                       >
-                        <TabIcon className={`w-4 h-4 ${isActive ? 'text-indigo-300' : 'text-slate-500'}`} />
-                        <span className="flex-1">{tab.label}</span>
-                        {isActive && <span className="text-white">✓</span>}
+                        <TabIcon />
+                        <span>{tab.label}</span>
+                        {isActive && <Check className="icn-menu-trail" style={{ width: 14, height: 14 }} />}
                       </button>
                     );
                   })}
@@ -5472,169 +5472,94 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <HeaderAvatar url={avatarUrl} name={displayName} />
               </button>
 
-              {/* Dropdown Menu - Exact Image Layout */}
+              {/* Classic account menu */}
               {showMenuDropdown && (
-                <div className="absolute right-0 top-full mt-2 bg-slate-900 border border-purple-500/30 rounded-lg shadow-2xl z-50 w-56 overflow-hidden">
-                  <div className="p-2">
-                    {/* My profile */}
-                    <button
-                      onClick={() => {
-                        openDetailView('profile', 'My Profile');
-                        setShowMenuDropdown(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
-                    >
-                       My profile
+                <div className="icn-menu absolute right-0 top-full mt-2 z-50 w-64" role="menu">
+                  <div className="icn-menu-head">
+                    <p className="icn-menu-eyebrow">Signed in</p>
+                    <p className="icn-menu-name">{displayName || 'My account'}</p>
+                  </div>
+                  <div className="icn-menu-body">
+                    <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('profile', 'My Profile'); setShowMenuDropdown(false); }}>
+                      <User /> <span>My profile</span>
                     </button>
 
-                    {/* Notifications */}
                     <button
+                      role="menuitem"
+                      className="icn-menu-item"
                       onClick={() => {
                         const isNotificationsOpen =
                           selectedDetail?.tab === 'security' && selectedDetail?.item === 'Notifications';
-
                         if (isNotificationsOpen) {
                           setSelectedDetail(null);
                         } else {
                           openDetailView('security', 'Notifications');
                         }
-
                         setShowMenuDropdown(false);
                       }}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-blue-500/20 hover:text-blue-300 rounded transition flex items-center justify-between"
                     >
-                      <span className="flex items-center gap-2">
-                        <Bell className="w-4 h-4" />
-                        Notifications
-                      </span>
+                      <Bell /> <span>Notifications</span>
                       {unreadCount > 0 && (
-                        <span className="bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                          {unreadCount > 99 ? '99+' : unreadCount}
-                        </span>
+                        <span className="icn-menu-trail"><span className="icn-menu-badge">{unreadCount > 99 ? '99+' : unreadCount}</span></span>
                       )}
                     </button>
 
-                    {/* Security */}
-                    <button
-                      onClick={() => navigateTo('security')}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-red-500/20 hover:text-red-300 rounded transition flex items-center gap-2"
-                    >
-                      <span>🔐</span> Security
+                    <button role="menuitem" className="icn-menu-item" onClick={() => navigateTo('security')}>
+                      <Shield /> <span>Security</span>
                     </button>
 
-                    {/* Readiness */}
-                    <button
-                      onClick={() => {
-                        openDetailView('readiness', 'Readiness');
-                        setShowMenuDropdown(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
-                    >
-                       Readiness
+                    <div className="icn-menu-sep" />
+
+                    <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('readiness', 'Readiness'); setShowMenuDropdown(false); }}>
+                      <Target /> <span>Readiness</span>
+                    </button>
+                    <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('growth', 'Growth'); setShowMenuDropdown(false); }}>
+                      <TrendingUp /> <span>Growth</span>
+                    </button>
+                    <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('resume', 'My Resume'); setShowMenuDropdown(false); }}>
+                      <Briefcase /> <span>My resume</span>
+                    </button>
+                    <button role="menuitem" className="icn-menu-item" onClick={() => { navigateTo('professionals'); setShowMenuDropdown(false); }}>
+                      <Users /> <span>Professionals</span>
                     </button>
 
-                    {/* Growth */}
-                    <button
-                      onClick={() => {
-                        openDetailView('growth', 'Growth');
-                        setShowMenuDropdown(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition"
-                    >
-                       Growth
+                    <div className="icn-menu-sep" />
+
+                    <button role="menuitem" className="icn-menu-item" onClick={() => navigateTo('reports')}>
+                      <BarChart3 /> <span>Reports</span>
+                    </button>
+                    <button role="menuitem" className="icn-menu-item" onClick={() => navigateTo('tithe')}>
+                      <Heart /> <span>Tithe</span>
+                    </button>
+                    <button role="menuitem" className="icn-menu-item" onClick={() => navigateTo('loancalc')}>
+                      <Percent /> <span>Loan calculator</span>
                     </button>
 
-                    {/* My Resume / Portfolio */}
+                    <div className="icn-menu-sep" />
+
                     <button
-                      onClick={() => {
-                        openDetailView('resume', 'My Resume');
-                        setShowMenuDropdown(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-amber-500/20 hover:text-amber-300 rounded transition"
+                      role="menuitem"
+                      className={`icn-menu-item ${activeMenuTab === 'settings' ? 'is-active' : ''}`}
+                      onClick={() => setActiveMenuTab(activeMenuTab === 'settings' ? null : 'settings')}
+                      aria-expanded={activeMenuTab === 'settings'}
                     >
-                       My Resume
+                      <Settings /> <span>Settings</span>
+                      <ChevronDown className="icn-menu-trail" style={{ width: 14, height: 14, transform: activeMenuTab === 'settings' ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
                     </button>
 
-                    {/* Professionals directory */}
-                    <button
-                      onClick={() => {
-                        navigateTo('professionals');
-                        setShowMenuDropdown(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-amber-500/20 hover:text-amber-300 rounded transition"
-                    >
-                       Professionals
-                    </button>
-
-                    {/* Reports */}
-                    <button
-                      onClick={() => navigateTo('reports')}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-rose-500/20 hover:text-rose-300 rounded transition flex items-center gap-2"
-                    >
-                      <span>📊</span> Reports
-                    </button>
-
-                    {/* Tithe */}
-                    <button
-                      onClick={() => navigateTo('tithe')}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-yellow-500/20 hover:text-yellow-300 rounded transition flex items-center gap-2"
-                    >
-                      <span>🙏</span> Tithe
-                    </button>
-
-                    {/* Loan Calculator */}
-                    <button
-                      onClick={() => navigateTo('loancalc')}
-                      className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-amber-500/20 hover:text-amber-300 rounded transition flex items-center gap-2"
-                    >
-                      <span>🏦</span> Loan Calculator
-                    </button>
-
-                    {/* Settings - Expandable */}
-                    <div className="space-y-1">
-                      <button
-                        onClick={() => setActiveMenuTab(activeMenuTab === 'settings' ? null : 'settings')}
-                        className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-purple-500/20 hover:text-purple-300 rounded transition flex items-center justify-between"
-                      >
-                        <span> Settings</span>
-                        <span className={`text-xs transition ${activeMenuTab === 'settings' ? 'rotate-90' : ''}`}></span>
-                      </button>
-
-                      {/* Settings Submenu */}
-                      {activeMenuTab === 'settings' && (
-                        <div className="pl-4 space-y-1">
-                          <button
-                            onClick={() => {
-                              openDetailView('settings', 'Readiness Pillars');
-                              setShowMenuDropdown(false);
-                            }}
-                            className="w-full px-4 py-2 text-left text-xs text-gray-400 hover:bg-purple-500/10 hover:text-purple-200 rounded transition"
-                          >
-                             Readiness Pillars
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              openDetailView('settings', 'Profile Configuration');
-                              setShowMenuDropdown(false);
-                            }}
-                            className="w-full px-4 py-2 text-left text-xs text-gray-400 hover:bg-purple-500/10 hover:text-purple-200 rounded transition"
-                          >
-                             Profile Configuration
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              openDetailView('settings', 'Danger Zone');
-                              setShowMenuDropdown(false);
-                            }}
-                            className="w-full px-4 py-2 text-left text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded transition"
-                          >
-                             Danger Zone
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    {activeMenuTab === 'settings' && (
+                      <>
+                        <button role="menuitem" className="icn-menu-item is-sub" onClick={() => { openDetailView('settings', 'Readiness Pillars'); setShowMenuDropdown(false); }}>
+                          <span>Readiness pillars</span>
+                        </button>
+                        <button role="menuitem" className="icn-menu-item is-sub" onClick={() => { openDetailView('settings', 'Profile Configuration'); setShowMenuDropdown(false); }}>
+                          <span>Profile configuration</span>
+                        </button>
+                        <button role="menuitem" className="icn-menu-item is-sub is-danger" onClick={() => { openDetailView('settings', 'Danger Zone'); setShowMenuDropdown(false); }}>
+                          <span>Danger zone</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

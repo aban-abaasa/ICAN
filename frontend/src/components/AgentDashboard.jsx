@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   DollarSign, 
   Plus, 
@@ -7,7 +8,9 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  BarChart3
+  BarChart3,
+  ArrowLeft,
+  Pencil
 } from 'lucide-react';
 import agentService, { hashPIN } from '../services/agentService';
 import { CountryService } from '../services/countryService';
@@ -826,24 +829,33 @@ const AgentDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 md:p-8">
+    <div className="min-h-screen p-2 md:p-6" style={{ color: 'var(--color-text)' }}>
       <div className="max-w-7xl mx-auto">
 
         {/* ============================================ */}
         {/* HEADER */}
         {/* ============================================ */}
 
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-2">🏪 Agent Terminal</h1>
-              <p className="text-gray-400">Local-Currency Agent Operations ({localCurrency})</p>
+        <div className="mb-6 pb-4" style={{ borderBottom: '1px solid rgba(196,160,82,0.45)' }}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-[0.18em] font-semibold" style={{ color: '#c4a052' }}>
+                Local-currency agent operations · {localCurrency}
+              </p>
+              <h1
+                className="text-2xl sm:text-3xl mt-1"
+                style={{ color: 'var(--color-text)', fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}
+              >
+                Agent Terminal
+              </h1>
             </div>
             <button
               onClick={() => setShowAgentEdit(true)}
-              className="px-4 py-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 rounded-lg text-sm font-medium transition-all border border-blue-500/30"
+              className="shrink-0 inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold"
+              style={{ border: '1px solid rgba(196,160,82,0.6)', color: 'var(--color-text)', background: 'transparent' }}
             >
-              ✏️ Edit Profile
+              <Pencil style={{ width: 14, height: 14, color: '#c4a052' }} />
+              Edit Profile
             </button>
           </div>
         </div>
@@ -858,167 +870,177 @@ const AgentDashboard = () => {
         {/* AGENT EDIT MODAL */}
         {/* ============================================ */}
 
-        {showAgentEdit && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[200] p-4 pt-20 sm:pt-4">
-            <div className="glass-card p-8 w-full max-w-md max-h-[85vh] overflow-y-auto">
-              <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
-                ✏️ Edit Agent Profile
-              </h2>
-
-              {agentMessage && (
-                <div className={`mb-6 p-4 rounded-lg border ${
-                  agentMessage.type === 'success' 
-                    ? 'bg-green-500/20 border-green-500/50 text-green-400' 
-                    : 'bg-red-500/20 border-red-500/50 text-red-400'
-                }`}>
-                  {agentMessage.text}
-                </div>
-              )}
-
-              <form onSubmit={handleEditAgentProfile} className="space-y-4">
-                {/* Agent Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Agent Name</label>
-                  <input
-                    type="text"
-                    value={agentEditForm.agentName}
-                    onChange={(e) => setAgentEditForm({ ...agentEditForm, agentName: e.target.value })}
-                    placeholder="Enter agent name"
-                    className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all"
-                  />
-                </div>
-
-                {/* Phone Number */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number</label>
-                  <input
-                    type="tel"
-                    value={agentEditForm.phoneNumber}
-                    onChange={(e) => setAgentEditForm({ ...agentEditForm, phoneNumber: e.target.value })}
-                    placeholder="+256..."
-                    className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all"
-                  />
-                </div>
-
-                {/* Location City */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Location City</label>
-                  <input
-                    type="text"
-                    value={agentEditForm.locationCity}
-                    onChange={(e) => setAgentEditForm({ ...agentEditForm, locationCity: e.target.value })}
-                    placeholder="e.g., Kampala"
-                    className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all"
-                  />
-                </div>
-
-                {/* Location Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Location Name</label>
-                  <input
-                    type="text"
-                    value={agentEditForm.locationName}
-                    onChange={(e) => setAgentEditForm({ ...agentEditForm, locationName: e.target.value })}
-                    placeholder="e.g., Downtown Branch"
-                    className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all"
-                  />
-                </div>
-
-                {/* Security Settings Section */}
-                <div className="border-t border-blue-500/20 pt-4 mt-4">
-                  <h4 className="text-sm font-semibold text-blue-300 mb-3">🔐 Security Settings</h4>
-
-                  {/* PIN */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Transaction PIN (4-6 digits)</label>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type={showPinInput ? "text" : "password"}
-                        value={agentEditForm.pin}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, '');
-                          if (value.length <= 6) {
-                            setAgentEditForm({ ...agentEditForm, pin: value });
-                          }
-                        }}
-                        placeholder="Enter 4-6 digit PIN"
-                        maxLength="6"
-                        className="flex-1 px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPinInput(!showPinInput)}
-                        className="px-3 py-2 bg-slate-600/50 hover:bg-slate-600 text-gray-300 rounded-lg transition-all"
-                        title={showPinInput ? "Hide PIN" : "Show PIN"}
-                      >
-                        {showPinInput ? "👁️" : "👁️‍🗨️"}
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Used to authorize transactions</p>
-                    <button
-                      type="button"
-                      onClick={() => setShowPINRecovery(true)}
-                      disabled={!currentUserId}
-                      className="w-full flex items-center justify-between mt-3 p-2 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <span className="text-sm text-gray-300">🆘 Forgot PIN / Locked Out?</span>
-                      <span className="text-xs text-orange-400">→</span>
-                    </button>
-                  </div>
-
-                  {/* Fingerprint Toggle */}
-                  <div className="mt-4">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={agentEditForm.enableFingerprint}
-                        onChange={(e) => {
-                          setAgentEditForm({ ...agentEditForm, enableFingerprint: e.target.checked });
-                          if (e.target.checked) {
-                            setShowFingerprintSetup(true);
-                          }
-                        }}
-                        className="w-5 h-5 rounded border-blue-500/50 bg-slate-700/50 checked:bg-blue-600 cursor-pointer"
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-gray-300">Enable Fingerprint Sign-In</p>
-                        <p className="text-xs text-gray-500">Faster authentication on this device</p>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Fingerprint Setup Info */}
-                  {showFingerprintSetup && agentEditForm.enableFingerprint && (
-                    <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                      <p className="text-xs text-blue-300">
-                        ✓ Fingerprint authentication will be enabled on your next login
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-4">
+        {showAgentEdit && (() => {
+          const T = 'var(--color-text)';
+          const T2 = 'var(--color-textSecondary)';
+          const labelCls = 'block text-[11px] uppercase tracking-[0.16em] font-semibold mb-2';
+          const fld = {
+            background: 'var(--color-bg)',
+            border: '1px solid rgba(196,160,82,0.55)',
+            color: T,
+            borderRadius: 10
+          };
+          const inputCls = 'w-full px-3.5 py-3 text-base placeholder-gray-400 focus:outline-none';
+          const fields = [
+            { key: 'agentName', label: 'Agent name', type: 'text', ph: 'Enter agent name' },
+            { key: 'phoneNumber', label: 'Phone number', type: 'tel', ph: '+256...' },
+            { key: 'locationCity', label: 'City', type: 'text', ph: 'e.g., Kampala' },
+            { key: 'locationName', label: 'Location name', type: 'text', ph: 'e.g., Downtown Branch' }
+          ];
+          return createPortal(
+            <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4">
+              <div
+                className="w-full h-full sm:h-auto sm:max-w-md sm:max-h-[calc(100dvh-3rem)] flex flex-col sm:rounded-2xl overflow-hidden shadow-2xl"
+                style={{ background: 'var(--color-bg)', border: '1px solid rgba(196,160,82,0.45)', color: T }}
+              >
+                <div
+                  className="flex items-center gap-3 px-4 py-3.5 shrink-0"
+                  style={{ background: 'var(--color-bgSecondary)', borderBottom: '1px solid rgba(196,160,82,0.45)' }}
+                >
                   <button
                     type="button"
                     onClick={() => setShowAgentEdit(false)}
                     disabled={agentEditLoading}
-                    className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
+                    aria-label="Back"
+                    className="p-2 -ml-2 rounded-lg shrink-0 hover:bg-black/5 active:bg-black/10"
+                    style={{ color: T }}
                   >
-                    ❌ Cancel
+                    <ArrowLeft className="w-5 h-5" />
                   </button>
-                  <button
-                    type="submit"
-                    disabled={agentEditLoading}
-                    className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
-                  >
-                    {agentEditLoading ? '⏳ Saving...' : '💾 Save Changes'}
-                  </button>
+                  <div className="min-w-0">
+                    <h3 className="text-lg leading-tight" style={{ color: T, fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}>
+                      Edit Agent Profile
+                    </h3>
+                    <p className="text-[11px] uppercase tracking-[0.16em]" style={{ color: '#c4a052' }}>Details &amp; security</p>
+                  </div>
                 </div>
-              </form>
-            </div>
-          </div>
-        )}
+
+                <form onSubmit={handleEditAgentProfile} className="flex flex-col flex-1 min-h-0">
+                  <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+                    {agentMessage && (
+                      <div
+                        className="p-3.5 rounded-xl text-sm font-medium"
+                        style={{
+                          background: agentMessage.type === 'success' ? 'rgba(47,158,114,0.12)' : 'rgba(220,38,38,0.10)',
+                          border: `1px solid ${agentMessage.type === 'success' ? 'rgba(47,158,114,0.55)' : 'rgba(220,38,38,0.5)'}`,
+                          color: agentMessage.type === 'success' ? '#1f7a5a' : '#b91c1c'
+                        }}
+                      >
+                        {agentMessage.text}
+                      </div>
+                    )}
+
+                    {fields.map(({ key, label, type, ph }) => (
+                      <div key={key}>
+                        <label className={labelCls} style={{ color: T2 }}>{label}</label>
+                        <input
+                          type={type}
+                          value={agentEditForm[key]}
+                          onChange={(e) => setAgentEditForm({ ...agentEditForm, [key]: e.target.value })}
+                          placeholder={ph}
+                          className={inputCls}
+                          style={fld}
+                        />
+                      </div>
+                    ))}
+
+                    <div className="pt-4" style={{ borderTop: '1px solid rgba(196,160,82,0.35)' }}>
+                      <h4 className="text-[11px] uppercase tracking-[0.16em] font-bold mb-3" style={{ color: '#c4a052' }}>
+                        🔐 Security
+                      </h4>
+                      <label className={labelCls} style={{ color: T2 }}>Transaction PIN (4–6 digits)</label>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type={showPinInput ? 'text' : 'password'}
+                          inputMode="numeric"
+                          value={agentEditForm.pin}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '');
+                            if (value.length <= 6) {
+                              setAgentEditForm({ ...agentEditForm, pin: value });
+                            }
+                          }}
+                          placeholder="Enter 4-6 digit PIN"
+                          maxLength="6"
+                          className={`flex-1 ${inputCls}`}
+                          style={fld}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPinInput(!showPinInput)}
+                          className="px-3 py-3 rounded-lg"
+                          style={{ border: '1px solid rgba(196,160,82,0.55)', color: T }}
+                          title={showPinInput ? 'Hide PIN' : 'Show PIN'}
+                        >
+                          {showPinInput ? '👁️' : '👁️‍🗨️'}
+                        </button>
+                      </div>
+                      <p className="text-xs mt-1.5" style={{ color: T2 }}>Used to authorize transactions</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowPINRecovery(true)}
+                        disabled={!currentUserId}
+                        className="w-full flex items-center justify-between mt-3 px-3 py-2.5 rounded-lg disabled:opacity-50"
+                        style={{ border: '1px solid rgba(196,160,82,0.35)', color: T }}
+                      >
+                        <span className="text-sm">🆘 Forgot PIN / locked out?</span>
+                        <span className="text-xs" style={{ color: '#c4a052' }}>→</span>
+                      </button>
+
+                      <label className="flex items-center gap-3 cursor-pointer mt-4">
+                        <input
+                          type="checkbox"
+                          checked={agentEditForm.enableFingerprint}
+                          onChange={(e) => {
+                            setAgentEditForm({ ...agentEditForm, enableFingerprint: e.target.checked });
+                            if (e.target.checked) {
+                              setShowFingerprintSetup(true);
+                            }
+                          }}
+                          className="w-5 h-5 cursor-pointer"
+                          style={{ accentColor: '#b8862e' }}
+                        />
+                        <div>
+                          <p className="text-sm font-medium" style={{ color: T }}>Enable fingerprint sign-in</p>
+                          <p className="text-xs" style={{ color: T2 }}>Faster authentication on this device</p>
+                        </div>
+                      </label>
+                      {showFingerprintSetup && agentEditForm.enableFingerprint && (
+                        <p className="mt-3 text-xs font-medium" style={{ color: '#2f9e72' }}>
+                          ✓ Fingerprint authentication will be enabled on your next login
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    className="shrink-0 flex gap-3 px-4 sm:px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+                    style={{ background: 'var(--color-bgSecondary)', borderTop: '1px solid rgba(196,160,82,0.45)' }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setShowAgentEdit(false)}
+                      disabled={agentEditLoading}
+                      className="flex-1 py-3 rounded-xl font-medium disabled:opacity-50"
+                      style={{ border: '1px solid rgba(196,160,82,0.55)', color: T, background: 'transparent' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={agentEditLoading}
+                      className="flex-[1.6] py-3 rounded-xl font-semibold tracking-wide disabled:opacity-50 hover:brightness-110"
+                      style={{ background: 'linear-gradient(135deg, #b8862e, #8a6a1f)', color: '#ffffff', boxShadow: '0 8px 22px rgba(138,106,31,0.30)' }}
+                    >
+                      {agentEditLoading ? 'Saving…' : 'Save Changes'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body
+          );
+        })()}
 
         {currentUserId && (
           <PINRecoveryModal
@@ -1039,60 +1061,78 @@ const AgentDashboard = () => {
         {/* FLOAT BALANCES - MAIN CARDS */}
         {/* ============================================ */}
 
-        <div className="grid md:grid-cols-1 gap-4 mb-8">
-          {/* Local Float */}
-          <div className="bg-gradient-to-br from-emerald-900/40 to-emerald-800/20 border border-emerald-500/30 rounded-xl p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <p className="text-emerald-300 text-sm font-semibold mb-1">{localCurrency} Float Balance</p>
-                <p className="text-4xl font-bold text-white">{formatLocalAmount(localFloat)}</p>
+        <div className="mb-8">
+          <div
+            className="rounded-xl p-5 sm:p-6"
+            style={{ border: '1px solid rgba(196,160,82,0.55)', background: 'rgba(196,160,82,0.07)' }}
+          >
+            <div className="flex justify-between items-start gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-[0.18em] font-bold mb-1.5" style={{ color: '#c4a052' }}>
+                  {localCurrency} Float Balance
+                </p>
+                <p
+                  className="text-3xl sm:text-4xl break-words"
+                  style={{ color: 'var(--color-text)', fontFamily: 'ui-sans-serif, system-ui, "Segoe UI", sans-serif', fontWeight: 700, fontVariantNumeric: 'lining-nums tabular-nums' }}
+                >
+                  {formatLocalAmount(localFloat)}
+                </p>
               </div>
-              <DollarSign className="w-10 h-10 text-emerald-400 opacity-50" />
+              <span
+                className="shrink-0 w-11 h-11 rounded-full flex items-center justify-center"
+                style={{ border: '1px solid #c4a052' }}
+              >
+                <DollarSign className="w-5 h-5" style={{ color: '#c4a052' }} />
+              </span>
             </div>
-            <div className="space-y-2 text-sm text-gray-300">
-              <div className="flex justify-between">
-                <span>Available</span>
-                <span className="text-emerald-400 font-semibold">{formatLocalAmount(localFloat)}</span>
-              </div>
-              <div className="h-1 bg-emerald-900/50 rounded-full overflow-hidden">
-                <div className="h-full w-3/4 bg-emerald-500"></div>
-              </div>
+            <div className="mt-4 pt-3 flex justify-between text-sm" style={{ borderTop: '1px solid rgba(196,160,82,0.35)', color: 'var(--color-textSecondary)' }}>
+              <span>Available</span>
+              <span className="font-semibold" style={{ color: '#2f9e72' }}>{formatLocalAmount(localFloat)}</span>
             </div>
           </div>
-
         </div>
 
         {/* ============================================ */}
         {/* TAB NAVIGATION */}
         {/* ============================================ */}
 
-        <div className="flex gap-2 mb-8 flex-wrap">
+        <div
+          className="flex gap-1 mb-6 overflow-x-auto"
+          style={{ borderBottom: '1px solid rgba(196,160,82,0.35)' }}
+        >
           {[
-            { id: 'dashboard', label: '📊 Dashboard', icon: BarChart3 },
-            { id: 'cash-in', label: '💰 Cash-In', icon: Plus },
-            { id: 'cash-out', label: '💸 Cash-Out', icon: Minus },
-            { id: 'topup', label: '⬆️ Top-Up', icon: RefreshCw },
-            { id: 'settlement', label: '✅ Settlement', icon: CheckCircle }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition ${
-                activeTab === tab.id
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-purple-900/30 text-purple-300 hover:bg-purple-900/50'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+            { id: 'dashboard', label: '📊 Dashboard' },
+            { id: 'cash-in', label: '💰 Cash-In' },
+            { id: 'cash-out', label: '💸 Cash-Out' },
+            { id: 'topup', label: '⬆️ Top-Up' },
+            { id: 'settlement', label: '✅ Settlement' }
+          ].map(tab => {
+            const on = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className="px-3.5 py-2.5 text-sm whitespace-nowrap transition"
+                style={{
+                  background: on ? 'linear-gradient(180deg, transparent, rgba(196,160,82,0.16))' : 'transparent',
+                  color: on ? 'var(--color-text)' : 'var(--color-textSecondary)',
+                  fontWeight: on ? 700 : 500,
+                  border: 'none',
+                  borderBottom: on ? '2px solid #c4a052' : '2px solid transparent',
+                  marginBottom: -1
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* ============================================ */}
         {/* TAB CONTENT */}
         {/* ============================================ */}
 
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
+        <div className="rounded-xl p-4 sm:p-6" style={{ border: '1px solid rgba(196,160,82,0.35)' }}>
 
           {/* DASHBOARD TAB */}
           {activeTab === 'dashboard' && (
