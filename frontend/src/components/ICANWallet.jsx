@@ -2560,6 +2560,39 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   };
 
+  // Show a finished (PIN set) account: swap the setup card for the account
+  // card and close the creation form.
+  const applyFinishedAccount = (account) => {
+    setUserAccount(account);
+    setPersonalPinLink({ sentTo: null, loading: false, error: null });
+    setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+    setAccountMessage({ type: 'success', text: `✅ Wallet ready! Account #: ${account.account_number}` });
+    setTimeout(() => setShowAccountCreation(false), 1200);
+  };
+
+  // The PIN is often set somewhere else (the emailed link opens in another tab
+  // or the installed app), so this screen can be stale. While the wallet still
+  // has no PIN, re-check when the user comes back to it and — with the setup
+  // form open — every few seconds, then continue on its own.
+  useEffect(() => {
+    if (!currentUserId || userAccount?.pin_hash) return undefined;
+    let cancelled = false;
+    const check = async () => {
+      if (document.visibilityState === 'hidden') return;
+      const account = await walletAccountService.checkUserAccount(currentUserId);
+      if (!cancelled && account?.pin_hash) applyFinishedAccount(account);
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    const timer = showAccountCreation ? setInterval(check, 5000) : null;
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('focus', check);
+      if (timer) clearInterval(timer);
+    };
+  }, [currentUserId, userAccount?.pin_hash, showAccountCreation]);
+
   // After the emailed link: pick up the PIN that was set (possibly in another
   // tab or on another device) and carry on into the wallet.
   const handleContinueAfterPinLink = async () => {
@@ -2579,11 +2612,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         return;
       }
 
-      setUserAccount(account);
-      setPersonalPinLink({ sentTo: null, loading: false, error: null });
-      setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
-      setAccountMessage({ type: 'success', text: `✅ Wallet ready! Account #: ${account.account_number}` });
-      setTimeout(() => setShowAccountCreation(false), 1200);
+      applyFinishedAccount(account);
     } catch (error) {
       setPersonalPinLink(prev => ({ ...prev, loading: false, error: error.message || 'Could not check your wallet' }));
     }
