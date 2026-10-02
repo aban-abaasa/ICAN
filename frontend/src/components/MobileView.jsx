@@ -102,7 +102,6 @@ import DashboardUpdatesCard from './DashboardUpdatesCard';
 import BusinessTrendChart from './BusinessTrendChart';
 import CmmsActivityWidget from './CmmsActivityWidget';
 import { supabase } from '../lib/supabase/client';
-import { getBackendUrl } from '../lib/backendUrl';
 import { deleteTransaction } from '../services/supabaseTransactions';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
 import DataCleanupModal from './DataCleanupModal';
@@ -3609,22 +3608,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         throw new Error('That email does not match your account\'s registered Gmail.');
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('Session verification failed. Please sign in again.');
-      }
-
-      const backendUrl = getBackendUrl();
-      const response = await fetch(`${backendUrl}/api/email/request-account-deletion`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ confirmEmail: email, confirmPhrase: phrase })
+      // Reuses the request-pin-reset Edge Function (Resend) — no extra Vercel function.
+      const { data, error: invokeError } = await supabase.functions.invoke('request-pin-reset', {
+        body: { action: 'delete-account', confirmEmail: email, confirmPhrase: phrase }
       });
-
-      const data = await response.json();
+      if (invokeError && !data) throw new Error(invokeError.message || 'Failed to send deletion link.');
       if (!data?.success) {
         throw new Error(data?.message || 'Failed to send deletion link.');
       }
