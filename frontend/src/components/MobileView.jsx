@@ -352,7 +352,7 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency, onOpenRec
                         <p className="text-xs text-gray-400">
                           {new Date(transaction.created_at).toLocaleDateString()}
                         </p>
-                        {getProofStatus(transaction) === 'attached' && <span title="Receipt attached" className="text-[11px]">🧾</span>}
+                        {getProofStatus(transaction) !== 'system' && <span title="Receipt attached" className="text-[11px]">🧾</span>}
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${
                           isBusiness
                             ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
@@ -3853,7 +3853,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
     const filtered = owner.records;
-    const rows = [['Account Holder', 'Account', 'Business Name', 'Date', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Chain Hash', 'Receipt No.', 'Proof']];
+    const rows = [['Account Holder', 'Account', 'Business Name', 'Date', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Chain Hash', 'Receipt No.', 'Proof', 'Receipt Ref']];
     filtered.forEach(t => {
       const hash = txChainHashes[t.id] || t.data_hash || '';
       rows.push([
@@ -3869,7 +3869,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         Math.abs(t.amount || 0),
         hash.slice(0, 20) || '',
         getReceiptNumber(t),
-        getProofLabel(t)
+        getProofLabel(t),
+        t.metadata?.receipt_ref || ''
       ]);
     });
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -3905,10 +3906,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       'Amount (UGX)': Math.abs(t.amount || 0),
       'Chain Hash': (txChainHashes[t.id] || t.data_hash || '').slice(0, 20),
       'Receipt No.': getReceiptNumber(t),
-      Proof: getProofLabel(t)
+      Proof: getProofLabel(t),
+      'Receipt Ref': t.metadata?.receipt_ref || ''
     }));
     const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Info: 'No transactions in this period' }]);
-    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 24 }, { wch: 22 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 22 }, { wch: 24 }, { wch: 16 }];
+    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 24 }, { wch: 22 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 22 }, { wch: 24 }, { wch: 20 }, { wch: 20 }];
     const info = XLSX.utils.aoa_to_sheet([
       ['IcanEra Transaction Report'],
       [owner.scope === 'business' ? 'Business' : 'Account', owner.title],
@@ -4106,9 +4108,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
     // ── Proof note — how many entries carry an attached receipt photo ──
     {
-      const attachedCount = filtered.filter((t) => getProofStatus(t) === 'attached').length;
+      const attachedCount = filtered.filter((t) => getProofStatus(t) !== 'system').length;
       doc.setFontSize(7); doc.setTextColor(71, 85, 105); doc.setFont('helvetica', 'normal');
-      doc.text(`Receipts: ${attachedCount} of ${filtered.length} entries have an attached receipt photo; the rest carry a system receipt (RCT number in Excel/CSV exports).`.slice(0, 150), 14, y + 3);
+      doc.text(`Receipts: ${attachedCount} of ${filtered.length} entries have a receipt photo or receipt no.; the rest carry a system receipt (RCT number in Excel/CSV exports).`.slice(0, 150), 14, y + 3);
       y += 8;
     }
 
@@ -4154,7 +4156,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         (t.description || '').slice(0, 30),
         `${isIncome ? '+' : '-'}${Math.abs(t.amount||0).toLocaleString()}`,
         hash ? hash.slice(0, 6) + '…' : '',
-        getProofStatus(t) === 'attached' ? 'Photo' : 'System',
+        getProofStatus(t) === 'attached' ? 'Photo' : getProofStatus(t) === 'reference' ? 'Ref no.' : 'System',
       ];
       cx = 14;
       cells.forEach((cell, ci) => {
@@ -4266,7 +4268,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           ['Account Holder:', owner.accountHolder],
           [`Period: ${period}`, `Generated: ${new Date().toLocaleDateString()}`],
           [],
-          ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Blockchain Hash', 'Receipt No.', 'Proof']
+          ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Blockchain Hash', 'Receipt No.', 'Proof', 'Receipt Ref']
         ];
 
         filtered.forEach((t, idx) => {
@@ -4285,7 +4287,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             t.transaction_type === 'income' ? t.amount : -t.amount,
             hash,
             getReceiptNumber(t),
-            getProofLabel(t)
+            getProofLabel(t),
+            t.metadata?.receipt_ref || ''
           ]);
         });
         
@@ -5257,7 +5260,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         quantity: transaction.quantity || null,
         unit_price: transaction.unitPrice || null,
         receipt_url: transaction.receiptUrl || null,
-        receipt_attached_at: transaction.receiptAttachedAt || null
+        receipt_attached_at: transaction.receiptAttachedAt || null,
+        receipt_ref: transaction.receiptRef || null
       }
     };
     setTransactions(prev => [formattedTransaction, ...prev]);
@@ -5351,7 +5355,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         quantity: transaction.quantity || null,
         unit_price: transaction.unitPrice || null,
         receipt_url: transaction.receiptUrl || null,
-        receipt_attached_at: transaction.receiptAttachedAt || null
+        receipt_attached_at: transaction.receiptAttachedAt || null,
+        receipt_ref: transaction.receiptRef || null
       });
 
       if (result.success) {
@@ -7643,7 +7648,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                                   {catName}
                                 </span>
                               )}
-                              {getProofStatus(transaction) === 'attached' && <span title="Receipt attached" className="text-[11px]">🧾</span>}
+                              {getProofStatus(transaction) !== 'system' && <span title="Receipt attached" className="text-[11px]">🧾</span>}
                               <span className="text-[10px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
                                 {fmtTxDate(transaction.created_at)}
                               </span>
@@ -8494,7 +8499,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               {chainHash.slice(0, 6)}…
                             </span>
                           )}
-                          {getProofStatus(transaction) === 'attached' && <span title="Receipt attached" className="text-[10px]">🧾</span>}
+                          {getProofStatus(transaction) !== 'system' && <span title="Receipt attached" className="text-[10px]">🧾</span>}
                           <span className="text-[9px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
                             {fmtExpDate(transaction.created_at)}
                           </span>

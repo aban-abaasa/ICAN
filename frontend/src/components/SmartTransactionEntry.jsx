@@ -49,6 +49,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptPreview, setReceiptPreview] = useState(null);
   const [receiptError, setReceiptError] = useState('');
+  const [receiptRef, setReceiptRef] = useState('');
   const receiptInputRef = useRef(null);
 
   const clearReceipt = () => {
@@ -815,6 +816,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           businessProfileId: selectedMode === 'business' ? (selectedBusinessProfileId || null) : null
         };
 
+        if (receiptRef.trim()) finalTransaction.receiptRef = receiptRef.trim();
         if (receiptFile) {
           if (!navigator.onLine) {
             setReceiptError('You are offline — remove the receipt photo to save now, or reconnect to attach it.');
@@ -846,6 +848,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         setParsedData(null);
         setAiAnalysis(null);
         clearReceipt();
+        setReceiptRef('');
         if (onClose) onClose();
       } catch (error) {
         console.error('❌ Submit failed:', error);
@@ -1080,6 +1083,13 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
                 <Paperclip className="w-4 h-4" /> Attach receipt photo (optional)
               </button>
             )}
+            <input
+              type="text"
+              value={receiptRef}
+              onChange={(e) => setReceiptRef(e.target.value.slice(0, 60))}
+              placeholder="Receipt / reference no. (optional)"
+              className="mt-2 w-full border-2 border-gray-200 bg-white rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-300"
+            />
             {receiptError && <p className="mt-1 text-xs text-red-600">{receiptError}</p>}
           </div>
 

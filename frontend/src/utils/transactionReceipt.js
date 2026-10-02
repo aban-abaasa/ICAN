@@ -30,10 +30,17 @@ export const getReceiptNumber = (tx) => {
 /** The attached proof image reference (r2:// or https://), or null. */
 export const getReceiptImageRef = (tx) => tx?.metadata?.receipt_url || null;
 
-/** 'attached' = user supplied proof image, 'system' = generated from the ledger row. */
-export const getProofStatus = (tx) => (getReceiptImageRef(tx) ? 'attached' : 'system');
+/** External receipt/reference number typed in by the user (shop receipt, mobile-money ref, church receipt book...). */
+export const getReceiptRef = (tx) => (tx?.metadata?.receipt_ref || '').toString().trim() || null;
 
-export const getProofLabel = (tx) => (getProofStatus(tx) === 'attached' ? 'Receipt attached' : 'System receipt');
+/** 'attached' = proof photo, 'reference' = receipt number only, 'system' = generated from the ledger row. */
+export const getProofStatus = (tx) => (getReceiptImageRef(tx) ? 'attached' : getReceiptRef(tx) ? 'reference' : 'system');
+
+export const getProofLabel = (tx) => ({
+  attached: getReceiptRef(tx) ? 'Photo + receipt no.' : 'Receipt photo attached',
+  reference: 'Receipt no. recorded',
+  system: 'System receipt',
+}[getProofStatus(tx)]);
 
 const titleCase = (value) => String(value || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -67,6 +74,7 @@ export const getReceiptLines = (tx, { businessName = null, currency = 'UGX' } = 
   const source = meta.source || meta.source_app;
   if (source) lines.push(['Recorded via', titleCase(source)]);
   if (meta.reference_id) lines.push(['Reference', String(meta.reference_id)]);
+  if (getReceiptRef(tx)) lines.push(['Receipt ref', getReceiptRef(tx)]);
   if (tx?.id && !String(tx.id).startsWith('temp_')) lines.push(['Ledger ID', String(tx.id)]);
   return lines;
 };

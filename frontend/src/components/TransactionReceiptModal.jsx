@@ -12,9 +12,16 @@ import {
   getReceiptImageRef,
   getReceiptLines,
   getReceiptNumber,
+  getReceiptRef,
   getReceiptText,
   signReceipt,
 } from '../utils/transactionReceipt';
+
+const pickProof = (meta = {}) => ({
+  receipt_url: meta.receipt_url || null,
+  receipt_ref: meta.receipt_ref || null,
+  receipt_attached_at: meta.receipt_attached_at || null,
+});
 
 const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
 
@@ -29,19 +36,40 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
   const [tx, setTx] = useState(transaction);
   const [imageUrl, setImageUrl] = useState(null);
   const [imageLoading, setImageLoading] = useState(false);
-  const [canAttach, setCanAttach] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [target, setTarget] = useState(null); // { id, user_id } of the ledger row proof is saved on
+  const [refInput, setRefInput] = useState('');
+  const [savingRef, setSavingRef] = useState(false);
   const [signer, setSigner] = useState('');
   const [seal, setSeal] = useState(null);
 
-  useEffect(() => { setTx(transaction); }, [transaction]);
+  useEffect(() => { setTx(transaction); setRefInput(getReceiptRef(transaction) || ''); }, [transaction]);
 
+  // Resolve which ledger row proof is saved on: the row itself when it's the
+  // user's own, or -- for tithe receipts -- the ledger row the tithe page wrote
+  // for that tithe record (metadata.tithe_id), when one exists.
   useEffect(() => {
     let cancelled = false;
-    supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setCanAttach(Boolean(data?.user?.id) && data.user.id === transaction?.user_id && isUuid(transaction?.id));
-    }).catch(() => {});
+    setTarget(null);
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        const uid = data?.user?.id;
+        if (!uid || !transaction) return;
+        if (isUuid(transaction.id) && transaction.user_id === uid) { if (!cancelled) setTarget({ id: transaction.id, user_id: uid }); return; }
+        if (transaction.metadata?.source === 'tithe page' && isUuid(transaction.id)) {
+          const { data: row } = await supabase.from('ican_transactions').select('id, user_id, metadata')
+            .eq('user_id', uid).eq('metadata->>tithe_id', transaction.id).limit(1).maybeSingle();
+          if (row && !cancelled) {
+            setTarget({ id: row.id, user_id: uid });
+            // Show proof already saved on the ledger row
+            setTx((prev) => ({ ...prev, metadata: { ...(prev.metadata || {}), ...pickProof(row.metadata) } }));
+            setRefInput(row.metadata?.receipt_ref || '');
+          }
+        }
+      } catch { /* attach stays hidden */ }
+    })();
     return () => { cancelled = true; };
   }, [transaction?.id, transaction?.user_id]);
 
@@ -77,8 +105,24 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
 
   const lines = getReceiptLines(tx, { businessName });
   const receiptNumber = getReceiptNumber(tx);
-  const hasImage = getProofStatus(tx) === 'attached';
+  const proofStatus = getProofStatus(tx);
+  const hasImage = proofStatus === 'attached';
+  const canAttach = Boolean(target);
   const isIncome = tx.transaction_type === 'income';
+
+  // Merge proof fields into the latest stored metadata so concurrent edits aren't clobbered.
+  const saveProof = async (fields) => {
+    const { data: current, error: readError } = await supabase
+      .from('ican_transactions').select('metadata').eq('id', target.id).eq('user_id', target.user_id).maybeSingle();
+    if (readError || !current) throw new Error('Could not find this transaction to save the receipt on.');
+    const metadata = { ...(current.metadata || {}), receipt_number: receiptNumber, ...fields };
+    const { error: updateError } = await supabase
+      .from('ican_transactions').update({ metadata }).eq('id', target.id).eq('user_id', target.user_id);
+    if (updateError) throw new Error(updateError.message || 'Could not save the receipt.');
+    const updated = { ...tx, metadata: { ...(tx.metadata || {}), ...pickProof(metadata), receipt_number: receiptNumber } };
+    setTx(updated);
+    if (onProofAttached) onProofAttached(updated);
+  };
 
   const handleFile = async (event) => {
     const picked = event.target.files?.[0];
@@ -93,28 +137,23 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
       const { data: { session } } = await supabase.auth.getSession();
       const upload = await uploadToR2({ file, folder: RECEIPT_FOLDER, accessToken: session?.access_token });
       if (!upload.success) throw new Error(upload.error || 'Upload failed');
-
-      // Merge into the latest stored metadata so concurrent edits aren't clobbered.
-      const { data: current, error: readError } = await supabase
-        .from('ican_transactions').select('metadata').eq('id', tx.id).eq('user_id', tx.user_id).maybeSingle();
-      if (readError || !current) throw new Error('Could not find this transaction to attach the receipt.');
-      const metadata = {
-        ...(current.metadata || {}),
-        receipt_url: upload.url,
-        receipt_number: receiptNumber,
-        receipt_attached_at: new Date().toISOString(),
-      };
-      const { error: updateError } = await supabase
-        .from('ican_transactions').update({ metadata }).eq('id', tx.id).eq('user_id', tx.user_id);
-      if (updateError) throw new Error(updateError.message || 'Could not save the receipt.');
-
-      const updated = { ...tx, metadata: { ...(tx.metadata || {}), ...metadata } };
-      setTx(updated);
-      if (onProofAttached) onProofAttached(updated);
+      await saveProof({ receipt_url: upload.url, receipt_attached_at: new Date().toISOString() });
     } catch (err) {
       setError(err.message || 'Could not attach the receipt.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleSaveRef = async () => {
+    setError('');
+    setSavingRef(true);
+    try {
+      await saveProof({ receipt_ref: refInput.trim() || null, receipt_attached_at: tx.metadata?.receipt_attached_at || new Date().toISOString() });
+    } catch (err) {
+      setError(err.message || 'Could not save the receipt number.');
+    } finally {
+      setSavingRef(false);
     }
   };
 
@@ -196,9 +235,9 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
           </button>
         </div>
 
-        <div className={`mb-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${hasImage ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300'}`}>
-          {hasImage ? <ShieldCheck className="h-4 w-4" /> : <FileCheck2 className="h-4 w-4" />}
-          {hasImage ? 'Proof attached — receipt image backs this transaction' : 'System receipt generated from the ledger record'}
+        <div className={`mb-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${proofStatus !== 'system' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300'}`}>
+          {proofStatus !== 'system' ? <ShieldCheck className="h-4 w-4" /> : <FileCheck2 className="h-4 w-4" />}
+          {hasImage ? 'Proof attached — receipt image backs this transaction' : proofStatus === 'reference' ? 'Receipt number recorded as proof' : 'System receipt generated from the ledger record'}
         </div>
 
         {hasImage && (
@@ -236,6 +275,24 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
         {error && <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</p>}
 
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+        {canAttach && (
+          <div className="mt-4 flex gap-2">
+            <input
+              type="text"
+              value={refInput}
+              onChange={(e) => setRefInput(e.target.value.slice(0, 60))}
+              placeholder="Receipt / reference no."
+              className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-400 focus:outline-none"
+            />
+            <button
+              onClick={handleSaveRef}
+              disabled={savingRef || refInput.trim() === (getReceiptRef(tx) || '')}
+              className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+            >
+              {savingRef ? '…' : 'Save'}
+            </button>
+          </div>
+        )}
         <div className="mt-4 grid grid-cols-2 gap-3">
           {canAttach && (
             <button

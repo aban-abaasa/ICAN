@@ -121,7 +121,8 @@ export class VelocityEngine {
               unit_price: transactionData.unit_price || null,
               // Proof image (r2:// ref from the existing upload flow) — optional
               receipt_url: transactionData.receipt_url || null,
-              receipt_attached_at: transactionData.receipt_attached_at || null
+              receipt_attached_at: transactionData.receipt_attached_at || null,
+              receipt_ref: transactionData.receipt_ref || null
             }
           }
         ])
