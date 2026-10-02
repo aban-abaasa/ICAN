@@ -268,6 +268,95 @@ class WalletAccountService {
   }
 
   /**
+   * Set up a personal wallet account through the emailed PIN link instead of
+   * a 6-digit code. The code path needs the request-pin-reset Edge Function's
+   * RESEND_API_KEY secret; this path works without it because it falls back to
+   * Supabase Auth's own recovery email.
+   *
+   * 1. Saves the profile (name, phone, email, currency, biometrics) onto the
+   *    bare user_accounts row the signup trigger already created — no PIN yet.
+   * 2. Emails a recovery link that lands on /reset-password?flow=pin, where
+   *    ResetPinPage sets the PIN via reset_wallet_pin_from_recovery().
+   *
+   * The link is always sent to the signed-in Auth email, since that is the
+   * only address Auth can issue a recovery session for.
+   * @returns {Promise<{success: boolean, sentTo?: string, error?: string}>}
+   */
+  async sendPinSetupLink(params) {
+    const {
+      userId,
+      authEmail,
+      accountHolderName,
+      phoneNumber,
+      email,
+      preferredCurrency = 'USD',
+      biometrics = {}
+    } = params;
+
+    try {
+      if (!userId || !authEmail || !accountHolderName || !phoneNumber || !email) {
+        return { success: false, error: 'Fill in your name, phone number and email first.' };
+      }
+
+      this.supabase = getSupabaseClient();
+
+      const existingAccount = await this.checkUserAccount(userId);
+      if (!existingAccount) {
+        return { success: false, error: 'No wallet account was found for this user. Please contact support.' };
+      }
+      if (existingAccount.pin_hash) {
+        return { success: false, error: 'You already have a wallet PIN. Use "Forgot PIN" to reset it.' };
+      }
+
+      const { error: updateError } = await this.supabase
+        .from('user_accounts')
+        .update({
+          account_holder_name: accountHolderName,
+          phone_number: phoneNumber,
+          email,
+          preferred_currency: preferredCurrency,
+          fingerprint_enabled: biometrics.fingerprintEnabled || false,
+          phone_pin_enabled: biometrics.phonePhoneEnabled || false,
+          biometric_enabled: (biometrics.fingerprintEnabled || biometrics.phonePhoneEnabled) || false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingAccount.id);
+      if (updateError) {
+        console.error('❌ Error saving wallet profile before PIN link:', updateError);
+        return { success: false, error: updateError.message || 'Failed to save your wallet details' };
+      }
+
+      await this._ensureCurrencyWallets(userId);
+
+      const redirectTo = new URL('/reset-password', window.location.origin);
+      redirectTo.searchParams.set('accountType', 'personal');
+      redirectTo.searchParams.set('flow', 'pin');
+      redirectTo.searchParams.set('purpose', 'setup');
+
+      // Same order as PINRecoveryModal: dedicated Resend email first, then
+      // Supabase's own Auth mailer if the function is unavailable or lacks
+      // its secrets.
+      const { data, error: invokeError } = await this.supabase.functions.invoke('request-pin-reset', {
+        body: { accountType: 'personal', redirectTo: redirectTo.toString() }
+      });
+      if (invokeError || !data?.success) {
+        console.warn('request-pin-reset failed, falling back to Auth mailer:', invokeError || data?.message);
+        const { error: resetError } = await this.supabase.auth.resetPasswordForEmail(authEmail, {
+          redirectTo: redirectTo.toString()
+        });
+        if (resetError) {
+          return { success: false, error: resetError.message || 'Failed to send the PIN setup link' };
+        }
+      }
+
+      return { success: true, sentTo: authEmail };
+    } catch (error) {
+      console.error('❌ Error in sendPinSetupLink:', error);
+      return { success: false, error: error.message || 'Failed to send the PIN setup link' };
+    }
+  }
+
+  /**
    * Create wallet entries for each supported currency using the backend
    * function (bypasses RLS policies which block a direct client-side INSERT).
    * Shared by both the "finish an auto-created bare account" and the

@@ -26,6 +26,11 @@ const ResetPinPage = ({ onDone }) => {
     ? new URLSearchParams(window.location.search).get('accountId') || null
     : null;
 
+  // Links emailed during wallet creation carry purpose=setup: same recovery
+  // flow, but the copy talks about setting a first PIN rather than resetting.
+  const isSetup = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('purpose') === 'setup';
+
   const handleBack = () => {
     if (window.location.pathname === '/reset-pin' || new URLSearchParams(window.location.search).get('flow') === 'pin') {
       window.history.replaceState({}, '', '/');
@@ -102,8 +107,12 @@ const ResetPinPage = ({ onDone }) => {
           <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-green-400" />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">PIN Reset</h2>
-          <p className="text-gray-400 mb-6">Your wallet PIN has been reset. Sign in and use your new PIN.</p>
+          <h2 className="text-2xl font-bold text-white mb-2">{isSetup ? 'PIN Set' : 'PIN Reset'}</h2>
+          <p className="text-gray-400 mb-6">
+            {isSetup
+              ? 'Your wallet PIN is set and your wallet is ready. Sign in and use your new PIN.'
+              : 'Your wallet PIN has been reset. Sign in and use your new PIN.'}
+          </p>
           <button
             onClick={handleBack}
             className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all"
@@ -130,8 +139,10 @@ const ResetPinPage = ({ onDone }) => {
           <div className="w-16 h-16 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
             <KeyRound className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Reset Your PIN</h1>
-          <p className="text-gray-400">Choose a new PIN for your {accountType} wallet</p>
+          <h1 className="text-3xl font-bold text-white mb-2">{isSetup ? 'Set Your PIN' : 'Reset Your PIN'}</h1>
+          <p className="text-gray-400">
+            {isSetup ? `Choose a PIN for your new ${accountType} wallet` : `Choose a new PIN for your ${accountType} wallet`}
+          </p>
         </div>
 
         {error && (
@@ -184,10 +195,10 @@ const ResetPinPage = ({ onDone }) => {
             {loading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Resetting PIN...
+                {isSetup ? 'Setting PIN...' : 'Resetting PIN...'}
               </>
             ) : (
-              'Reset PIN'
+              isSetup ? 'Set PIN' : 'Reset PIN'
             )}
           </button>
         </form>

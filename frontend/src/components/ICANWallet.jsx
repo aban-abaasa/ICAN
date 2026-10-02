@@ -223,6 +223,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // creation form doesn't lose its state to a redirect.
   const [personalOtp, setPersonalOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
   const [businessOtp, setBusinessOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
+  // Personal wallet setup through the emailed PIN link (works without the Resend secret).
+  const [personalPinLink, setPersonalPinLink] = useState({ sentTo: null, loading: false, error: null });
   // Same email-OTP gate, reused for the "Edit Account Information" form —
   // changing the email to a new address requires re-verifying that address
   // before the change is saved (otherwise a hijacked session could silently
@@ -2468,7 +2470,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
   // 📧 Email verification (OTP) before first-time PIN creation — shared by
   // both the personal and business "Create Account" forms.
-  const requestAccountEmailOtp = async (email, accountType, setOtpState) => {
+  const requestAccountEmailOtp = async (email, accountType, setOtpState, onEmailUnavailable) => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setOtpState(prev => ({ ...prev, error: 'Enter a valid email address first' }));
       return;
@@ -2489,7 +2491,44 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
       setOtpState(prev => ({ ...prev, sent: true, loading: false }));
     } catch (error) {
-      setOtpState(prev => ({ ...prev, loading: false, error: error.message || 'Failed to send verification code' }));
+      const message = error.message || 'Failed to send verification code';
+      // Resend isn't configured (or delivery failed): hand over to the PIN
+      // link flow, which uses Supabase's own mailer, instead of dead-ending.
+      if (onEmailUnavailable && /not configured|could not send|failed to send|non-2xx/i.test(message)) {
+        setOtpState(prev => ({ ...prev, loading: false, error: null }));
+        await onEmailUnavailable();
+        return;
+      }
+      setOtpState(prev => ({ ...prev, loading: false, error: message }));
+    }
+  };
+
+  // 🔗 Personal wallet setup via the emailed PIN reset link: saves the profile
+  // on the auto-created account row, then emails a link where the PIN is set.
+  const handleSendPersonalPinLink = async () => {
+    setPersonalPinLink({ sentTo: null, loading: true, error: null });
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Your session expired — please sign in again.');
+
+      const result = await walletAccountService.sendPinSetupLink({
+        userId: user.id,
+        authEmail: user.email,
+        accountHolderName: accountCreationForm.accountHolderName.trim(),
+        phoneNumber: accountCreationForm.phoneNumber.trim(),
+        email: accountCreationForm.email.trim(),
+        preferredCurrency: registeredCurrency,
+        biometrics: {
+          fingerprintEnabled: accountCreationForm.fingerprintEnabled || false,
+          phonePhoneEnabled: accountCreationForm.phonePhoneEnabled || false
+        }
+      });
+      if (!result.success) throw new Error(result.error);
+
+      setPersonalPinLink({ sentTo: result.sentTo, loading: false, error: null });
+    } catch (error) {
+      setPersonalPinLink({ sentTo: null, loading: false, error: error.message || 'Failed to send the PIN setup link' });
     }
   };
 
@@ -7246,6 +7285,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     if (personalOtp.sent || personalOtp.verified) {
                       setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
                     }
+                    if (personalPinLink.sentTo || personalPinLink.error) {
+                      setPersonalPinLink({ sentTo: null, loading: false, error: null });
+                    }
                   }}
                   placeholder="you@example.com"
                   className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-all disabled:opacity-60"
@@ -7263,11 +7305,37 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                       We'll email a 6-digit code to confirm this address before you can set a PIN.
                     </p>
                     {personalOtp.error && <p className="text-red-400 text-xs mb-2">{personalOtp.error}</p>}
-                    {!personalOtp.sent ? (
+                    {personalPinLink.error && <p className="text-red-400 text-xs mb-2">{personalPinLink.error}</p>}
+                    {personalPinLink.sentTo ? (
+                      <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-sm text-green-300">
+                        <p className="font-semibold mb-1">📧 PIN setup link sent</p>
+                        <p className="text-gray-300">
+                          Open the link we emailed to <span className="text-white">{personalPinLink.sentTo}</span> to
+                          set your wallet PIN. Your wallet is ready as soon as the PIN is saved.
+                        </p>
+                        <div className="flex gap-3 mt-2">
+                          <button
+                            type="button"
+                            disabled={personalPinLink.loading}
+                            onClick={handleSendPersonalPinLink}
+                            className="text-xs text-purple-300 hover:text-purple-200"
+                          >
+                            {personalPinLink.loading ? 'Sending...' : 'Resend link'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowAccountCreation(false)}
+                            className="text-xs text-gray-300 hover:text-white"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      </div>
+                    ) : !personalOtp.sent ? (
                       <button
                         type="button"
                         disabled={personalOtp.loading || !accountCreationForm.email}
-                        onClick={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp)}
+                        onClick={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp, handleSendPersonalPinLink)}
                         className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium transition-all"
                       >
                         {personalOtp.loading ? 'Sending...' : 'Send Verification Code'}
@@ -7296,10 +7364,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                       <button
                         type="button"
                         disabled={personalOtp.loading}
-                        onClick={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp)}
+                        onClick={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp, handleSendPersonalPinLink)}
                         className="mt-2 text-xs text-purple-300 hover:text-purple-200"
                       >
                         Resend code
+                      </button>
+                    )}
+                    {!personalPinLink.sentTo && (
+                      <button
+                        type="button"
+                        disabled={personalPinLink.loading || personalOtp.loading}
+                        onClick={handleSendPersonalPinLink}
+                        className="mt-3 w-full px-4 py-2 bg-slate-700/60 hover:bg-slate-700 border border-purple-500/30 disabled:opacity-50 text-purple-200 rounded-lg text-sm font-medium transition-all"
+                      >
+                        {personalPinLink.loading ? 'Sending link...' : '🔗 Email me a PIN setup link instead'}
                       </button>
                     )}
                   </>
