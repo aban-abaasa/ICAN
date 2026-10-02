@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Lock, Clock, CheckCircle, XCircle, AlertCircle, Mail } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase/client';
+import { requestPinResetEmail } from '../services/walletAccountService';
 
 /**
  * 🔐 PIN RECOVERY MODAL
@@ -203,28 +204,13 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
       const supabase = getSupabaseClient();
       if (!supabase) throw new Error('Supabase is not initialized. Please refresh and try again.');
 
-      const redirectTo = new URL('/reset-password', window.location.origin);
-      redirectTo.searchParams.set('accountType', accountType);
-      redirectTo.searchParams.set('flow', 'pin');
-      if (accountType === 'business' && businessAccountId) redirectTo.searchParams.set('accountId', businessAccountId);
-      // Preferred: the request-pin-reset Edge Function sends a dedicated
-      // "Reset your wallet PIN" email through Resend. If it fails, fall back
-      // to Supabase's own Auth recovery email so the user can still reset.
-      // Either link lands on /reset-password?flow=pin (ResetPinPage).
-      const { data, error: invokeError } = await supabase.functions.invoke('request-pin-reset', {
-        body: {
-          accountType,
-          ...(accountType === 'business' && businessAccountId ? { accountId: businessAccountId } : {}),
-          redirectTo: redirectTo.toString()
-        }
+      // Dedicated Resend email first, Supabase Auth's recovery email as the
+      // fallback — shared with new-account setup (requestPinResetEmail).
+      await requestPinResetEmail(supabase, {
+        accountType,
+        accountId: businessAccountId,
+        email: userEmail
       });
-      if (invokeError || !data?.success) {
-        console.warn('request-pin-reset failed, falling back to Auth mailer:', invokeError || data?.message);
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(userEmail, {
-          redirectTo: redirectTo.toString(),
-        });
-        if (resetError) throw resetError;
-      }
 
       setEmailSentTo(userEmail);
       setStep('email_sent');
