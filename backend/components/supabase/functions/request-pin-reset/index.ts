@@ -157,12 +157,9 @@ const handleDeleteAccountNow = async (
   const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
   if (deleteError) {
     console.error("Delete user error:", deleteError);
-    const blocked = /database error deleting user/i.test(deleteError.message || "");
     return jsonResponse({
       success: false,
-      message: blocked
-        ? "This account has payment, trust or coin transaction history that must be kept, so it can't be deleted automatically. Please contact support."
-        : deleteError.message || "Failed to delete account.",
+      message: `Your account could not be deleted (${deleteError.message || "database error"}). Nothing was changed. Please contact support.`,
     });
   }
   return jsonResponse({ success: true, message: "Your account has been deleted." });

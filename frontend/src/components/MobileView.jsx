@@ -3601,6 +3601,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       return;
     }
 
+    if (!window.confirm('FINAL WARNING: this permanently deletes your account and EVERYTHING linked to it (profile, wallets, balances, transactions, business data). This cannot be undone. Delete everything now?')) {
+      return;
+    }
+
     setIsDeletingAccount(true);
 
     try {
@@ -6014,7 +6018,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <div className="space-y-4">
                   <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
                     <h3 className="text-sm font-bold text-red-300 mb-4">Danger Zone - Delete Your Account</h3>
-                    <p className="text-xs text-gray-300 mb-4">This action cannot be undone. All your data will be permanently deleted. Confirm your Gmail and password and your account is deleted immediately.</p>
+                    <div className="mb-4 p-3 bg-red-950/60 border border-red-500/50 rounded-lg text-xs text-red-100 space-y-2">
+                      <p className="font-bold text-red-200">Warning: you will lose everything.</p>
+                      <p>Deleting your account permanently erases your profile, wallets, balances, coin and trust transactions, business data and every other record linked to you from our database. This cannot be undone and nothing can be recovered.</p>
+                      <p>Confirm your Gmail and password below. You will be asked to confirm one last time before anything is deleted.</p>
+                    </div>
 
                     <div className="mb-4">
                       <label className="block text-xs text-gray-300 mb-2">Confirm your Gmail address</label>
