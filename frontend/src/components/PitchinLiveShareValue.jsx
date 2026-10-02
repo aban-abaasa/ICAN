@@ -21,12 +21,12 @@ import {
   FileText, CheckCircle2, Wallet, PieChart, Pencil, Users
 } from 'lucide-react';
 import BusinessTeamMembersModal from './BusinessTeamMembersModal';
+import PitchinValueGrowth from './PitchinValueGrowth';
 import {
   calculateLiveShareValue,
   saveDataLink,
   removeDataLink,
   getBusinessDataLinks,
-  getSharePriceHistory,
   setBusinessTotalShares,
   getBusinessTransactionsByContributor
 } from '../services/pitchinValuationService';
@@ -150,32 +150,6 @@ const colorMap = {
   purple: { bg: 'bg-purple-900/30', border: 'border-purple-700/50', text: 'text-purple-300', badge: 'bg-purple-800/60', dot: 'bg-purple-400' }
 };
 
-// ─── Sparkline ────────────────────────────────────────────────────────────────
-
-function Sparkline({ history }) {
-  if (!history || history.length < 2) return null;
-  const prices = history.map(h => parseFloat(h.share_price_ugx));
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  const range = max - min || 1;
-  const W = 320, H = 48, PAD = 4;
-
-  const points = prices.map((p, i) => {
-    const x = PAD + (i / (prices.length - 1)) * (W - 2 * PAD);
-    const y = PAD + ((max - p) / range) * (H - 2 * PAD);
-    return `${x},${y}`;
-  }).join(' ');
-
-  const trend = prices[prices.length - 1] >= prices[0];
-  const color = trend ? '#22c55e' : '#ef4444';
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-10 sm:h-12 overflow-visible">
-      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function PitchinLiveShareValue({ businessProfile, ownerUserId, readOnly = false }) {
@@ -188,7 +162,6 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
   const [linksError, setLinksError] = useState('');
   const [linkInputs, setLinkInputs] = useState({});
   const [linkSaving, setLinkSaving] = useState('');
-  const [history, setHistory] = useState([]);
   const [discovered, setDiscovered] = useState({});   // { appKey: [{id, label}] }
   const [discovering, setDiscovering] = useState(false);
   const [showManualTx, setShowManualTx] = useState(false);
@@ -397,19 +370,10 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
     }
   }, [businessProfileId]);
 
-  const loadHistory = useCallback(async () => {
-    if (!businessProfileId) return;
-    try {
-      const h = await getSharePriceHistory(businessProfileId, 30);
-      setHistory(h);
-    } catch {}
-  }, [businessProfileId]);
-
   useEffect(() => {
     loadLinks();
-    loadHistory();
     loadValuation();
-  }, [loadLinks, loadHistory, loadValuation]);
+  }, [loadLinks, loadValuation]);
 
   // Live-refresh: recompute the valuation whenever a transaction tagged to
   // this business changes, so "icaneracoin per share" moves the moment a
@@ -431,13 +395,12 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
         },
         () => {
           loadValuation();
-          loadHistory();
         }
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [businessProfileId, loadValuation, loadHistory]);
+  }, [businessProfileId, loadValuation]);
 
   const handleSaveLink = async (sourceApp, resolvedEntityId, resolvedEntityName) => {
     const entityId = resolvedEntityId || (linkInputs[sourceApp] || '').trim();
@@ -500,13 +463,13 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
 
   return (
     <>
-    <div className="rounded-2xl border border-slate-700/60 bg-slate-900/80 backdrop-blur-sm overflow-hidden">
+    <div className="ls-classic rounded-2xl border border-slate-700/60 bg-slate-900/80 backdrop-blur-sm overflow-hidden">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-700/40">
         <div className="flex items-center gap-2 flex-wrap">
           <Coins size={16} className="text-amber-400 shrink-0" />
-          <span className="text-sm sm:text-base font-bold text-white">Live Share Value</span>
+          <span className="ls-title text-base sm:text-xl font-bold text-white">Live Share Value</span>
           {readOnly && (
             <span className="text-[10px] sm:text-xs text-slate-400 bg-slate-800/60 border border-slate-700/50 rounded-full px-2 py-0.5">
               Shareholder view
@@ -641,7 +604,8 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
             ) : (
               <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
                 <div className="min-w-0">
-                  <p className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-extrabold text-white tabular-nums break-words">
+                  <p className="ls-eyebrow mb-1">Value of one share · today</p>
+                  <p className="ls-price text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-extrabold text-white tabular-nums break-words">
                     {FMT(valuation.sharePriceUgx)}
                   </p>
                   <p className="text-xs sm:text-sm xl:text-base text-amber-400 mt-0.5 tabular-nums">
@@ -701,10 +665,21 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
               </div>
             )}
 
-            {/* Sparkline */}
-            {history.length >= 2 && (
-              <div className="mt-3 sm:mt-4 xl:mt-6">
-                <Sparkline history={history} />
+            {/* Real value growth — daily snapshots + today's live price */}
+            {!valuation.needsShareSetup && (
+              <div className="mt-4 xl:mt-6">
+                <PitchinValueGrowth
+                  businessProfileId={businessProfileId}
+                  current={{
+                    priceUgx: valuation.sharePriceUgx,
+                    businessValueUgx: valuation.businessValueUgx,
+                    declaredPriceUgx: valuation.originalPriceUgx
+                  }}
+                  fmt={FMT}
+                  fmtIcan={(ugx) => ICAN_PER_SHARE(ugx, valuation.breakdown?.ican_market_price)}
+                  annualInflationPct={countryPrice ? Number(countryPrice.local_inflation) : null}
+                  refreshToken={valuation.sharePriceUgx}
+                />
               </div>
             )}
 
