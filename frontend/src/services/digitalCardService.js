@@ -57,7 +57,8 @@ export async function getCardQrAccountName(token, accountNumber) {
 export async function listUgandaBanks() {
   const { data, error } = await supabase.functions.invoke('flutterwave-banks', { method: 'GET' });
   if (error || !data?.success) throw new Error('Could not load banks');
-  return data.banks || [];
+  // Flutterwave tags the mobile money networks as "bank" too; they have their own tab.
+  return (data.banks || []).filter((b) => !/^(MTN|AIRTEL)\b/i.test(b.name || ''));
 }
 
 export async function listCardQrRequests(limit = 20) {
