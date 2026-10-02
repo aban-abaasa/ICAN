@@ -183,3 +183,20 @@ export const titheToReceiptTx = ({ id, amount, currency = 'UGX', date, givingTyp
     is_anonymous: Boolean(isAnonymous),
   },
 });
+
+/**
+ * Tally of how many entries (and how much money) are backed by user-supplied
+ * proof (photo or receipt number) versus system receipt only. Income and
+ * expense amounts are summed by absolute value, since this is about coverage.
+ */
+export const getReceiptTally = (transactions = []) => {
+  const tally = { total: 0, backed: 0, unbacked: 0, backedAmount: 0, unbackedAmount: 0, percent: 0 };
+  transactions.forEach((t) => {
+    const amount = Math.abs(Number(t?.amount) || 0);
+    tally.total += 1;
+    if (getProofStatus(t) === 'system') { tally.unbacked += 1; tally.unbackedAmount += amount; }
+    else { tally.backed += 1; tally.backedAmount += amount; }
+  });
+  tally.percent = tally.total ? Math.round((tally.backed / tally.total) * 100) : 0;
+  return tally;
+};

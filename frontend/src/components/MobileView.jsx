@@ -63,6 +63,7 @@ import {
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import TransactionReceiptModal from './TransactionReceiptModal';
+import ReceiptTally from './ReceiptTally';
 import { getProofStatus, getProofLabel, getReceiptNumber } from '../utils/transactionReceipt';
 import CmmsPageShell from './CmmsPageShell';
 import { ProfilePage } from './auth/ProfilePage';
@@ -841,6 +842,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [transactionType, setTransactionType] = useState(null); // 'business' or 'personal'
   const [showRecordTypeModal, setShowRecordTypeModal] = useState(false);
   const [receiptTransaction, setReceiptTransaction] = useState(null);
+  const [showOnlyNoProof, setShowOnlyNoProof] = useState(false);
   const [recordTypeChoice, setRecordTypeChoice] = useState(''); // dropdown selection inside the Record Transaction modal
   const [recordBusinessChoice, setRecordBusinessChoice] = useState('');
   const [recordBusinessProfiles, setRecordBusinessProfiles] = useState([]);
@@ -7599,9 +7601,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     </div>
                   </div>
 
+                  <ReceiptTally
+                    transactions={txPeriodFiltered}
+                    formatCurrency={formatCurrency}
+                    onlyMissing={showOnlyNoProof}
+                    onToggleMissing={() => setShowOnlyNoProof((v) => !v)}
+                  />
+
                   {/* Transaction rows */}
                   <div className="space-y-2 max-h-80 overflow-y-auto pr-0.5">
-                    {txPeriodFiltered.slice(0, 30).map((transaction) => {
+                    {(showOnlyNoProof ? txPeriodFiltered.filter((t) => getProofStatus(t) === 'system') : txPeriodFiltered).slice(0, 30).map((transaction) => {
                       const recCat    = transaction.record_category || transaction.metadata?.record_category || 'personal';
                       const isBiz     = recCat === 'business';
                       const isIncome  = transaction.transaction_type === 'income';
