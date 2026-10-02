@@ -7548,7 +7548,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     Professional trading · real-time market data
                   </p>
                 )}
-                <h2 className={`${activeTradeTab === 'chart' ? 'text-base truncate' : 'text-2xl sm:text-3xl mt-1 break-words'}`} style={{ color: 'var(--color-text)', fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}>
+                <h2 className={`${activeTradeTab === 'chart' ? 'text-base truncate' : 'text-xl sm:text-3xl mt-1 break-words'}`} style={{ color: 'var(--color-text)', fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}>
                   IcanEra Trading Center
                 </h2>
               </div>
@@ -7591,7 +7591,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     role="tab"
                     aria-selected={on}
                     onClick={() => setActiveTradeTab(id)}
-                    className={`inline-flex items-center gap-2 px-4 ${activeTradeTab === 'chart' ? 'py-2' : 'py-3'} text-sm whitespace-nowrap transition`}
+                    className={`flex-1 min-w-0 sm:flex-none flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-0.5 sm:gap-2 px-1 sm:px-4 ${activeTradeTab === 'chart' ? 'py-1.5 sm:py-2' : 'py-2 sm:py-3'} text-[10px] leading-tight sm:text-sm sm:leading-normal text-center sm:text-left whitespace-normal sm:whitespace-nowrap transition`}
                     style={{
                       background: on ? 'linear-gradient(180deg, transparent, rgba(196,160,82,0.16))' : 'transparent',
                       color: on ? 'var(--color-text)' : 'var(--color-textSecondary)',
@@ -7601,8 +7601,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                       marginBottom: -1
                     }}
                   >
-                    <Icon className="w-4 h-4" style={{ color: on ? '#c4a052' : undefined }} />
-                    {label}
+                    <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" style={{ color: on ? '#c4a052' : undefined }} />
+                    <span className="min-w-0">{label}</span>
                   </button>
                 );
               })}
