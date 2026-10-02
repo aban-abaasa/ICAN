@@ -42,7 +42,7 @@ import { cardTransactionService } from '../services/cardTransactionService';
 import { walletService } from '../services/walletService';
 import paymentMethodDetector from '../services/paymentMethodDetector';
 import agentService from '../services/agentService';
-import { walletAccountService, hashPIN } from '../services/walletAccountService';
+import { walletAccountService, hashPIN, requestPinResetEmail } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
 import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFiatToMobileMoney, sendFiatToBank, detectUgandaMobileNetwork } from '../services/icanWalletService';
 import { listUgandaBanks } from '../services/digitalCardService';
@@ -225,6 +225,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [businessOtp, setBusinessOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
   // Personal wallet setup through the emailed PIN link (works without the Resend secret).
   const [personalPinLink, setPersonalPinLink] = useState({ sentTo: null, loading: false, error: null });
+  const [businessPinLink, setBusinessPinLink] = useState({ sentTo: null, loading: false, error: null });
   // Same email-OTP gate, reused for the "Edit Account Information" form —
   // changing the email to a new address requires re-verifying that address
   // before the change is saved (otherwise a hijacked session could silently
@@ -2556,6 +2557,30 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       setOtpState(prev => ({ ...prev, verified: true, loading: false }));
     } catch (error) {
       setOtpState(prev => ({ ...prev, loading: false, error: error.message || 'Verification failed' }));
+    }
+  };
+
+  // 🔗 Business wallet PIN via the emailed PIN reset link — the same email and
+  // landing page "Forgot PIN" uses for a business. The iCanEra business wallet
+  // already exists for the profile; ResetPinPage sets its PIN through
+  // reset_business_wallet_pin_from_recovery (highest-ownership shareholder only).
+  const handleSendBusinessPinLink = async (businessProfile) => {
+    setBusinessPinLink({ sentTo: null, loading: true, error: null });
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error('Your session expired — please sign in again.');
+      if (!businessProfile?.id) throw new Error('Choose which business to set up.');
+
+      await requestPinResetEmail(supabase, {
+        accountType: 'business',
+        accountId: businessProfile.id,
+        email: user.email,
+        extraParams: { purpose: 'setup' }
+      });
+      setBusinessPinLink({ sentTo: user.email, loading: false, error: null });
+    } catch (error) {
+      setBusinessPinLink({ sentTo: null, loading: false, error: error.message || 'Failed to send the PIN setup link' });
     }
   };
 
@@ -5620,6 +5645,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     if (businessOtp.sent || businessOtp.verified) {
                       setBusinessOtp({ sent: false, verified: false, code: '', loading: false, error: null });
                     }
+                    if (businessPinLink.sentTo || businessPinLink.error) {
+                      setBusinessPinLink({ sentTo: null, loading: false, error: null });
+                    }
                   }}
                   placeholder="Enter email address"
                   className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-60"
@@ -5663,11 +5691,38 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                         We'll email a 6-digit code to confirm this address before you can set a PIN.
                       </p>
                       {businessOtp.error && <p className="text-red-400 text-xs mb-2">{businessOtp.error}</p>}
-                      {!businessOtp.sent ? (
+                      {businessPinLink.error && <p className="text-red-400 text-xs mb-2">{businessPinLink.error}</p>}
+                      {businessPinLink.sentTo ? (
+                        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-xs text-green-300">
+                          <p className="font-semibold mb-1">📧 PIN setup link sent</p>
+                          <p className="text-gray-300">
+                            Open the link we emailed to <span className="text-white">{businessPinLink.sentTo}</span> to
+                            set the PIN for {editingBusinessProfile.business_name}. Only the business's highest-ownership
+                            shareholder can set it.
+                          </p>
+                          <div className="flex gap-3 mt-2">
+                            <button
+                              type="button"
+                              disabled={businessPinLink.loading}
+                              onClick={() => handleSendBusinessPinLink(editingBusinessProfile)}
+                              className="text-xs text-purple-300 hover:text-purple-200"
+                            >
+                              {businessPinLink.loading ? 'Sending...' : 'Resend link'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingBusinessProfile(null)}
+                              className="text-xs text-gray-300 hover:text-white"
+                            >
+                              Close
+                            </button>
+                          </div>
+                        </div>
+                      ) : !businessOtp.sent ? (
                         <button
                           type="button"
                           disabled={businessOtp.loading || !accountEditForm.email}
-                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp)}
+                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp, () => handleSendBusinessPinLink(editingBusinessProfile))}
                           className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-all"
                         >
                           {businessOtp.loading ? 'Sending...' : 'Send Verification Code'}
@@ -5696,10 +5751,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                         <button
                           type="button"
                           disabled={businessOtp.loading}
-                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp)}
+                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp, () => handleSendBusinessPinLink(editingBusinessProfile))}
                           className="mt-2 text-xs text-purple-300 hover:text-purple-200"
                         >
                           Resend code
+                        </button>
+                      )}
+                      {!businessPinLink.sentTo && (
+                        <button
+                          type="button"
+                          disabled={businessPinLink.loading || businessOtp.loading}
+                          onClick={() => handleSendBusinessPinLink(editingBusinessProfile)}
+                          className="mt-3 w-full px-4 py-2 bg-slate-700/60 hover:bg-slate-700 border border-purple-500/30 disabled:opacity-50 text-purple-200 rounded-lg text-xs font-medium transition-all"
+                        >
+                          {businessPinLink.loading ? 'Sending link...' : '🔗 Email me a PIN setup link instead'}
                         </button>
                       )}
                     </>
