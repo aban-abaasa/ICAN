@@ -69,6 +69,7 @@ import ReceiveMoneyModal from './ReceiveMoneyModal';
 import PayMoneyModal from './PayMoneyModal';
 import IcanPaymentReceiptModal from './IcanPaymentReceiptModal';
 import PINRecoveryModal from './PINRecoveryModal';
+import WalletAccessModal from './WalletAccessModal';
 import { usePinPrompt } from './PinPromptDialog';
 
 // Big balances (14,378,412 UGX) overflow the balance card, so the headline shows
@@ -2504,6 +2505,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   };
 
+  // Changing the email invalidates any code/link already sent for the old one.
+  const handlePersonalEmailChange = (value) => {
+    setAccountCreationForm((prev) => ({ ...prev, email: value }));
+    if (personalOtp.sent || personalOtp.verified) {
+      setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+    }
+    if (personalPinLink.sentTo || personalPinLink.error) {
+      setPersonalPinLink({ sentTo: null, loading: false, error: null });
+    }
+  };
+
   // 🔗 Personal wallet setup via the emailed PIN reset link: saves the profile
   // on the auto-created account row, then emails a link where the PIN is set.
   const handleSendPersonalPinLink = async () => {
@@ -2518,7 +2530,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         authEmail: user.email,
         accountHolderName: accountCreationForm.accountHolderName.trim(),
         phoneNumber: accountCreationForm.phoneNumber.trim(),
-        email: accountCreationForm.email.trim(),
+        email: accountCreationForm.email.trim() || user.email,
         preferredCurrency: registeredCurrency,
         biometrics: {
           fingerprintEnabled: accountCreationForm.fingerprintEnabled || false,
@@ -2560,6 +2572,39 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   };
 
+  // Show a finished (PIN set) account: swap the setup card for the account
+  // card and close the creation form.
+  const applyFinishedAccount = (account) => {
+    setUserAccount(account);
+    setPersonalPinLink({ sentTo: null, loading: false, error: null });
+    setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+    setAccountMessage({ type: 'success', text: `✅ Wallet ready! Account #: ${account.account_number}` });
+    setTimeout(() => setShowAccountCreation(false), 1200);
+  };
+
+  // The PIN is often set somewhere else (the emailed link opens in another tab
+  // or the installed app), so this screen can be stale. While the wallet still
+  // has no PIN, re-check when the user comes back to it and — with the setup
+  // form open — every few seconds, then continue on its own.
+  useEffect(() => {
+    if (!currentUserId || userAccount?.pin_hash) return undefined;
+    let cancelled = false;
+    const check = async () => {
+      if (document.visibilityState === 'hidden') return;
+      const account = await walletAccountService.checkUserAccount(currentUserId);
+      if (!cancelled && account?.pin_hash) applyFinishedAccount(account);
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    const timer = showAccountCreation ? setInterval(check, 5000) : null;
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('focus', check);
+      if (timer) clearInterval(timer);
+    };
+  }, [currentUserId, userAccount?.pin_hash, showAccountCreation]);
+
   // After the emailed link: pick up the PIN that was set (possibly in another
   // tab or on another device) and carry on into the wallet.
   const handleContinueAfterPinLink = async () => {
@@ -2579,11 +2624,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         return;
       }
 
-      setUserAccount(account);
-      setPersonalPinLink({ sentTo: null, loading: false, error: null });
-      setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
-      setAccountMessage({ type: 'success', text: `✅ Wallet ready! Account #: ${account.account_number}` });
-      setTimeout(() => setShowAccountCreation(false), 1200);
+      applyFinishedAccount(account);
     } catch (error) {
       setPersonalPinLink(prev => ({ ...prev, loading: false, error: error.message || 'Could not check your wallet' }));
     }
@@ -7340,273 +7381,33 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         />
       )}
 
-      {/* 🎯 CREATE WALLET ACCOUNT MODAL */}
+      {/* 🎯 WALLET ACCESS MODAL — enter your PIN, or get the setup link / set up the wallet */}
       {showAccountCreation && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-3xl font-bold text-white mb-2 flex items-center gap-2">
-              💳 Create Your Wallet Account
-            </h2>
-            <p className="text-gray-400 mb-6">Set up your IcanEra wallet with a secure PIN and biometric options</p>
-
-            {accountMessage && (
-              <div className={`mb-6 p-4 rounded-lg border ${
-                accountMessage.type === 'success' 
-                  ? 'bg-green-500/20 border-green-500/50 text-green-400' 
-                  : 'bg-red-500/20 border-red-500/50 text-red-400'
-              }`}>
-                {accountMessage.text}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateAccount} className="space-y-4">
-              {/* Account Holder Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Full Name *</label>
-                <input
-                  type="text"
-                  value={accountCreationForm.accountHolderName}
-                  onChange={(e) => setAccountCreationForm({ ...accountCreationForm, accountHolderName: e.target.value })}
-                  placeholder="Enter your full name"
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-all"
-                />
-              </div>
-
-              {/* Phone Number */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number *</label>
-                <input
-                  type="tel"
-                  value={accountCreationForm.phoneNumber}
-                  onChange={(e) => setAccountCreationForm({ ...accountCreationForm, phoneNumber: e.target.value })}
-                  placeholder="+256..."
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-all"
-                />
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Email Address *</label>
-                <input
-                  type="email"
-                  value={accountCreationForm.email}
-                  disabled={personalOtp.verified}
-                  onChange={(e) => {
-                    setAccountCreationForm({ ...accountCreationForm, email: e.target.value });
-                    if (personalOtp.sent || personalOtp.verified) {
-                      setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
-                    }
-                    if (personalPinLink.sentTo || personalPinLink.error) {
-                      setPersonalPinLink({ sentTo: null, loading: false, error: null });
-                    }
-                  }}
-                  placeholder="you@example.com"
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-all disabled:opacity-60"
-                />
-              </div>
-
-              {/* Email verification (required before PIN can be set) */}
-              <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
-                <h3 className="text-purple-300 font-semibold mb-2 flex items-center gap-2">
-                  📧 Verify Your Email {personalOtp.verified && <span className="text-green-400">✓ Verified</span>}
-                </h3>
-                {!personalOtp.verified && (
-                  <>
-                    <p className="text-gray-400 text-sm mb-3">
-                      We'll email a 6-digit code to confirm this address before you can set a PIN.
-                    </p>
-                    {personalOtp.error && <p className="text-red-400 text-xs mb-2">{personalOtp.error}</p>}
-                    {personalPinLink.error && <p className="text-red-400 text-xs mb-2">{personalPinLink.error}</p>}
-                    {personalPinLink.sentTo ? (
-                      <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-sm text-green-300">
-                        <p className="font-semibold mb-1">📧 PIN setup link sent</p>
-                        <p className="text-gray-300">
-                          Open the link we emailed to <span className="text-white">{personalPinLink.sentTo}</span> to
-                          set your wallet PIN. Your wallet is ready as soon as the PIN is saved.
-                        </p>
-                        <button
-                          type="button"
-                          disabled={personalPinLink.loading}
-                          onClick={handleContinueAfterPinLink}
-                          className="w-full mt-3 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-all"
-                        >
-                          {personalPinLink.loading ? 'Checking...' : "✅ I've set my PIN — continue"}
-                        </button>
-                        <div className="flex gap-3 mt-2">
-                          <button
-                            type="button"
-                            disabled={personalPinLink.loading}
-                            onClick={handleSendPersonalPinLink}
-                            className="text-xs text-purple-300 hover:text-purple-200"
-                          >
-                            {personalPinLink.loading ? 'Sending...' : 'Resend link'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setShowAccountCreation(false)}
-                            className="text-xs text-gray-300 hover:text-white"
-                          >
-                            Close
-                          </button>
-                        </div>
-                      </div>
-                    ) : !personalOtp.sent ? (
-                      <button
-                        type="button"
-                        disabled={personalOtp.loading || !accountCreationForm.email}
-                        onClick={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp, handleSendPersonalPinLink)}
-                        className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium transition-all"
-                      >
-                        {personalOtp.loading ? 'Sending...' : 'Send Verification Code'}
-                      </button>
-                    ) : (
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={personalOtp.code}
-                          onChange={(e) => setPersonalOtp(prev => ({ ...prev, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
-                          placeholder="6-digit code"
-                          className="flex-1 px-4 py-2 bg-slate-700/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none tracking-widest text-center"
-                        />
-                        <button
-                          type="button"
-                          disabled={personalOtp.loading}
-                          onClick={() => verifyAccountEmailOtp(personalOtp.code, 'personal', setPersonalOtp)}
-                          className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium transition-all"
-                        >
-                          {personalOtp.loading ? 'Checking...' : 'Verify'}
-                        </button>
-                      </div>
-                    )}
-                    {personalOtp.sent && (
-                      <button
-                        type="button"
-                        disabled={personalOtp.loading}
-                        onClick={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp, handleSendPersonalPinLink)}
-                        className="mt-2 text-xs text-purple-300 hover:text-purple-200"
-                      >
-                        Resend code
-                      </button>
-                    )}
-                    {!personalPinLink.sentTo && (
-                      <button
-                        type="button"
-                        disabled={personalPinLink.loading || personalOtp.loading}
-                        onClick={handleSendPersonalPinLink}
-                        className="mt-3 w-full px-4 py-2 bg-slate-700/60 hover:bg-slate-700 border border-purple-500/30 disabled:opacity-50 text-purple-200 rounded-lg text-sm font-medium transition-all"
-                      >
-                        {personalPinLink.loading ? 'Sending link...' : '🔗 Email me a PIN setup link instead'}
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* PIN Setup */}
-              <div className={`bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4 ${!personalOtp.verified ? 'opacity-50' : ''}`}>
-                <h3 className="text-blue-400 font-semibold mb-3 flex items-center gap-2">
-                  🔐 Set Your PIN (Required)
-                </h3>
-                <p className="text-gray-400 text-sm mb-3">
-                  {personalOtp.verified
-                    ? "Your 4-6 digit PIN protects your account. You'll use this for transactions."
-                    : 'Verify your email above to set your PIN.'}
-                </p>
-                <input
-                  type="password"
-                  value={accountCreationForm.pin}
-                  disabled={!personalOtp.verified}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '');
-                    if (value.length <= 6) {
-                      setAccountCreationForm({ ...accountCreationForm, pin: value });
-                    }
-                  }}
-                  placeholder="Enter 4-6 digits"
-                  maxLength="6"
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all text-center text-2xl tracking-widest disabled:cursor-not-allowed"
-                />
-                <p className="text-gray-500 text-xs mt-2">
-                  {accountCreationForm.pin.length === 0 ? '0' : accountCreationForm.pin.length} / 6 digits
-                </p>
-              </div>
-
-              {/* Biometric Options */}
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                <h3 className="text-green-400 font-semibold mb-4 flex items-center gap-2">
-                  👆 Biometric Security (Optional)
-                </h3>
-
-                {/* Fingerprint Option */}
-                <div className="flex items-center gap-3 mb-4 p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700/70 cursor-pointer transition-all"
-                     onClick={() => setAccountCreationForm({ 
-                       ...accountCreationForm, 
-                       fingerprintEnabled: !accountCreationForm.fingerprintEnabled 
-                     })}>
-                  <input
-                    type="checkbox"
-                    checked={accountCreationForm.fingerprintEnabled}
-                    onChange={() => {}}
-                    className="w-5 h-5 rounded accent-green-500 cursor-pointer"
-                  />
-                  <div className="flex-1">
-                    <p className="text-white font-medium">Enable Fingerprint</p>
-                    <p className="text-gray-400 text-sm">Use your fingerprint to unlock transactions</p>
-                  </div>
-                </div>
-
-                {/* Phone PIN Option */}
-                <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700/70 cursor-pointer transition-all"
-                     onClick={() => setAccountCreationForm({ 
-                       ...accountCreationForm, 
-                       phonePhoneEnabled: !accountCreationForm.phonePhoneEnabled 
-                     })}>
-                  <input
-                    type="checkbox"
-                    checked={accountCreationForm.phonePhoneEnabled}
-                    onChange={() => {}}
-                    className="w-5 h-5 rounded accent-green-500 cursor-pointer"
-                  />
-                  <div className="flex-1">
-                    <p className="text-white font-medium">Use Phone PIN</p>
-                    <p className="text-gray-400 text-sm">Authenticate using your device's PIN or biometric</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Preferred Currency */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Preferred Currency</label>
-                <input
-                  type="text"
-                  value={localCurrencyLabel}
-                  readOnly
-                  className="w-full px-4 py-3 bg-slate-800/60 border border-purple-500/30 rounded-lg text-purple-200 focus:outline-none"
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowAccountCreation(false)}
-                  disabled={accountCreationLoading}
-                  className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
-                >
-                  ❌ Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={accountCreationLoading || !personalOtp.verified}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
-                >
-                  {accountCreationLoading ? '⏳ Creating Account...' : '✨ Create Account'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <WalletAccessModal
+          userId={currentUserId}
+          userEmail={userEmail}
+          localCurrencyLabel={localCurrencyLabel}
+          accountMessage={accountMessage}
+          form={accountCreationForm}
+          setForm={setAccountCreationForm}
+          onEmailChange={handlePersonalEmailChange}
+          otp={personalOtp}
+          setOtp={setPersonalOtp}
+          pinLink={personalPinLink}
+          creating={accountCreationLoading}
+          onClose={() => setShowAccountCreation(false)}
+          onSubmit={handleCreateAccount}
+          onSendCode={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp, handleSendPersonalPinLink)}
+          onVerifyCode={() => verifyAccountEmailOtp(personalOtp.code, 'personal', setPersonalOtp)}
+          onSendLink={handleSendPersonalPinLink}
+          onContinue={handleContinueAfterPinLink}
+          onUnlocked={applyFinishedAccount}
+          onForgotPin={() => {
+            setShowAccountCreation(false);
+            setPinRecoveryAccountType('personal');
+            setShowPINRecovery(true);
+          }}
+        />
       )}
 
       {/* WITHDRAW MODAL */}
