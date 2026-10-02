@@ -62,6 +62,7 @@ import {
   Loader2
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
+import CmmsPageShell from './CmmsPageShell';
 import { ProfilePage } from './auth/ProfilePage';
 import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
 import ReadinessPanel from './profile/ReadinessPanel';
@@ -8982,35 +8983,51 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
-      {/* ── Tithe Panel — full screen, like Pitchin/Trust/CMMS ─────────────── */}
+      {/* ── Tithe Panel — full screen, classic CMMS-payroll look ─────────────── */}
       {showTithingCalculator && (
         <div
-          className={`fixed inset-x-0 flex flex-col bg-gradient-to-b from-amber-50 to-yellow-50 overflow-hidden ${isWebDashboard ? 'z-30' : 'top-0 z-[60]'}`}
-          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+          className={`cmms-page-classic fixed inset-x-0 overflow-y-auto ${isWebDashboard ? 'z-30' : 'top-0 z-[60]'}`}
+          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset, paddingTop: isWebDashboard ? 0 : 'env(safe-area-inset-top)' }}
         >
-          {/* Header */}
-          <div
-            className="flex-shrink-0 bg-gradient-to-r from-yellow-600 to-amber-500 px-4 pb-3 flex items-center gap-3"
-            style={{ paddingTop: isWebDashboard ? '0.75rem' : 'calc(env(safe-area-inset-top) + 0.75rem)' }}
-          >
-            <button
-              onClick={() => navigateTo('dashboard')}
-              className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 active:scale-90 transition-all flex-shrink-0"
-              aria-label="Go back"
+          <div className="tithe-scope min-h-full p-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <CmmsPageShell
+              title="Tithe Calculator"
+              subtitle="Steward faithfully — Uganda giving tracker"
+              icon={<span aria-hidden="true">🙏</span>}
+              hideFullPage
+              actions={
+                <button type="button" onClick={() => navigateTo('dashboard')} className="cmms-classic-btn-secondary inline-flex !h-auto !min-h-0 flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs" aria-label="Go back">
+                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back
+                </button>
+              }
+              chips={[
+                tithingMetrics.monthLabel,
+                tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data',
+                tithingMetrics.combinedTithe > 0 && `Due UGX ${Math.round(tithingMetrics.remainingCombined || 0).toLocaleString()}`,
+              ]}
+              info={'Tithe is worked out from the income and business profit recorded in the period you pick. Use Quick for the overall picture, Business or Personal to adjust the rate, and Pay In to record what you have given.'}
+              tabs={[
+                { id: 'quick', label: '⚡ Quick', accent: 'gold' },
+                { id: 'business', label: '💼 Business', accent: 'navy' },
+                { id: 'personal', label: '👤 Personal', accent: 'emerald' },
+                { id: 'pay-in', label: '💳 Pay In', accent: 'burgundy' },
+              ]}
+              tab={selectedTithingTab}
+              onTab={(tab) => {
+                setSelectedTithingTab(tab);
+                if (tab === 'pay-in') {
+                  // Use remaining after already-paid tithe (not gross income-based)
+                  const due = Math.round(tithingMetrics.remainingCombined || 0);
+                  if (due > 0) setTithePaymentAmount(String(due));
+                  setTithePaymentType('combined');
+                  clampPaymentDateToSelectedPeriod();
+                }
+              }}
             >
-              <ChevronLeft className="w-5 h-5 text-white" />
-            </button>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-base font-bold text-white leading-tight">🙏 Tithe Calculator</h2>
-              <p className="text-yellow-100 text-[10px] mt-0.5">Steward faithfully — Uganda giving tracker</p>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* Period selector — which stretch of time this whole calculator looks at */}
-              <div className="bg-white rounded-xl p-3 shadow-sm">
-                <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Tithe Period</label>
-                <div className="flex gap-1.5 flex-wrap">
+              <section className="cmms-accent-gold space-y-2.5">
+                <p className="cmms-classic-label">Tithe period</p>
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap cmms-tabs-compact" role="tablist" aria-label="Tithe period" style={{ scrollbarWidth: 'none' }}>
                   {[
                     { id: 'this_month',   label: 'This Month' },
                     { id: 'last_month',   label: 'Last Month' },
@@ -9020,383 +9037,266 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   ].map(p => (
                     <button
                       key={p.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={tithePeriodPreset === p.id}
                       onClick={() => { setTithePeriodPreset(p.id); if (p.id !== 'custom') clampPaymentDateToSelectedPeriod(); }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${tithePeriodPreset === p.id ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      className={`cmms-ptab cmms-accent-gold ${tithePeriodPreset === p.id ? 'is-active' : ''}`}
                     >
                       {p.label}
                     </button>
                   ))}
                 </div>
                 {tithePeriodPreset === 'custom' && (
-                  <div className="flex gap-2 mt-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                     <input
                       type="date"
+                      aria-label="Period start"
                       value={tithePeriodCustomStart}
                       max={tithePeriodCustomEnd || undefined}
                       onChange={e => { setTithePeriodCustomStart(e.target.value); if (e.target.value && tithePeriodCustomEnd) clampPaymentDateToSelectedPeriod(); }}
-                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="cmms-classic-field min-w-0 !px-2 !py-1.5 !text-xs"
                     />
-                    <span className="text-xs text-gray-400 self-center">to</span>
+                    <span className="cmms-classic-muted text-xs">to</span>
                     <input
                       type="date"
+                      aria-label="Period end"
                       value={tithePeriodCustomEnd}
                       min={tithePeriodCustomStart || undefined}
                       max={new Date().toISOString().split('T')[0]}
                       onChange={e => { setTithePeriodCustomEnd(e.target.value); if (tithePeriodCustomStart && e.target.value) clampPaymentDateToSelectedPeriod(); }}
-                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="cmms-classic-field min-w-0 !px-2 !py-1.5 !text-xs"
                     />
                   </div>
                 )}
                 {tithePeriodPreset === 'custom' && (!tithePeriodCustomStart || !tithePeriodCustomEnd) && (
-                  <p className="text-[10px] text-amber-600 mt-1.5">Pick both dates — showing "{tithingMetrics.monthLabel}" until then.</p>
+                  <p className="tithe-notice tithe-notice-warn text-xs" role="status">Pick both dates — showing "{tithingMetrics.monthLabel}" until then.</p>
                 )}
-              </div>
+              </section>
 
-              {/* Tab switcher */}
-              <div className="flex gap-2 bg-amber-100 rounded-xl p-1">
-                {['quick', 'business', 'personal', 'pay-in'].map(tab => (
-                  <button key={tab} onClick={() => {
-                    setSelectedTithingTab(tab);
-                    if (tab === 'pay-in') {
-                      // Use remaining after already-paid tithe (not gross income-based)
-                      const due = Math.round(tithingMetrics.remainingCombined || 0);
-                      if (due > 0) setTithePaymentAmount(String(due));
-                      setTithePaymentType('combined');
-                      clampPaymentDateToSelectedPeriod();
-                    }
-                  }}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold capitalize transition ${selectedTithingTab === tab ? 'bg-white text-amber-700 shadow' : 'text-amber-600 hover:text-amber-800'}`}>
-                    {tab === 'quick' ? '⚡ Quick' : tab === 'business' ? '💼 Business' : tab === 'personal' ? '👤 Personal' : '💳 Pay In'}
-                  </button>
-                ))}
-              </div>
+              <div className="cmms-ornament" aria-hidden="true" />
 
               {selectedTithingTab === 'quick' && (
-                <div className="space-y-3">
-                  {/* Live data banner */}
-                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
-                    <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? `${tithingMetrics.monthLabel} — based on this period's transactions` : 'No transactions loaded yet'}</span>
+                <div className="space-y-4">
+                  <p className="tithe-notice tithe-notice-ok text-xs font-semibold" role="status" style={tithingMetrics.hasRealData ? undefined : { borderColor: 'rgba(100,116,139,.4)', background: 'rgba(100,116,139,.12)', color: 'inherit' }}>
+                    {tithingMetrics.hasRealData ? `🟢 Live · ${tithingMetrics.monthLabel} — based on this period's transactions` : '⚪ No transactions loaded yet'}
+                  </p>
+
+                  {/* Combined tithe — calculated from current income, not database historical debt */}
+                  <div className="cmms-classic-card cmms-accent-gold p-4 text-center">
+                    <p className="cmms-classic-label">Combined tithe due</p>
+                    <p className="tithe-total mt-1" style={{ color: '#b8892b' }}>UGX {(tithingMetrics.combinedTithe || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                    <p className="cmms-classic-muted text-xs">calculated from current income</p>
                   </div>
 
-                  {/* 🔧 FIXED: Separate personal and business income display */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm space-y-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{tithingMetrics.monthLabel} Financials</p>
-                    
-                    {/* Personal Income */}
-                    <div className="border-b pb-2">
-                      <div className="text-xs text-gray-400 mb-1">💼 Personal Income (Salary)</div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Salary/Wages</span>
-                        <span className="font-semibold text-green-600">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
-                      </div>
+                  <div className="tithe-ledger">
+                    <div className="tithe-figure">
+                      <p className="tithe-figure-label">Personal tithe</p>
+                      <p className="tithe-figure-value tithe-ok">UGX {(tithingMetrics.personalTithe || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                      <p className="tithe-figure-sub">from income</p>
                     </div>
-                    
-                    {/* Business Income & Expenses */}
-                    <div className="border-b pb-2">
-                      <div className="text-xs text-gray-400 mb-1">🏪 Business Income & Expenses</div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Business Sales</span>
-                        <span className="font-semibold text-green-600">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Business Expenses</span>
-                        <span className="font-semibold text-red-500">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
-                      </div>
-                      <div className="flex justify-between text-sm font-bold border-t pt-1 mt-1">
-                        <span className="text-gray-700">Business Profit</span>
-                        <span className={tithingMetrics.businessProfit >= 0 ? 'text-blue-600' : 'text-red-600'}>
-                          UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Total Summary */}
-                    <div className="bg-gray-50 rounded-lg p-2">
-                      <div className="flex justify-between text-sm font-bold">
-                        <span className="text-gray-700">Total Net Worth Change</span>
-                        <span className={tithingMetrics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}>
-                          UGX {(tithingMetrics.netProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}
-                        </span>
-                      </div>
+                    <div className="tithe-figure" style={{ animationDelay: '70ms' }}>
+                      <p className="tithe-figure-label">Business tithe</p>
+                      <p className="tithe-figure-value tithe-info">UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                      <p className="tithe-figure-sub">from profit</p>
                     </div>
                   </div>
 
-                  {/* Combined tithe - SHOW CALCULATED (based on current income), not database historical debt */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm text-center">
-                    <p className="text-xs text-gray-500 mb-1">Combined tithe due (calculated from current income)</p>
-                    <div className="text-3xl font-bold text-amber-600">UGX {(tithingMetrics.combinedTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white rounded-xl p-4 shadow-sm text-center">
-                      <div className="text-sm text-gray-500">Personal Tithe</div>
-                      <div className="text-xl font-bold text-green-600">UGX {(tithingMetrics.personalTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                      <div className="text-xs text-gray-400">calculated from income</div>
-                    </div>
-                    <div className="bg-white rounded-xl p-4 shadow-sm text-center">
-                      <div className="text-sm text-gray-500">Business Tithe</div>
-                      <div className="text-xl font-bold text-blue-600">UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                      <div className="text-xs text-gray-400">calculated from profit</div>
-                    </div>
-                  </div>
-                  <div className="bg-amber-100 rounded-xl p-3 text-xs text-amber-800 border border-amber-200">
+                  <section className="cmms-classic-card cmms-accent-emerald p-4">
+                    <h3 className="cmms-classic-heading mb-1">{tithingMetrics.monthLabel} financials</h3>
+                    <p className="cmms-classic-eyebrow mt-2">💼 Personal income (salary)</p>
+                    <div className="tithe-row"><span className="cmms-classic-muted">Salary / wages</span><span className="font-semibold tithe-ok">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <p className="cmms-classic-eyebrow mt-3">🏪 Business income &amp; expenses</p>
+                    <div className="tithe-row"><span className="cmms-classic-muted">Business sales</span><span className="font-semibold tithe-ok">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <div className="tithe-row"><span className="cmms-classic-muted">Business expenses</span><span className="font-semibold tithe-bad">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <div className="tithe-row tithe-row-total"><span className="cmms-classic-heading">Business profit</span><span className={tithingMetrics.businessProfit >= 0 ? 'tithe-info' : 'tithe-bad'}>UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <div className="tithe-row tithe-row-total"><span className="cmms-classic-heading">Net worth change</span><span className={tithingMetrics.netProfit >= 0 ? 'tithe-ok' : 'tithe-bad'}>UGX {(tithingMetrics.netProfit || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                  </section>
+
+                  <div className="cmms-classic-callout p-3 text-xs">
                     📖 <strong>Malachi 3:10</strong> — "Bring the whole tithe into the storehouse... and see if I will not open the floodgates of heaven."
                   </div>
                 </div>
               )}
 
               {selectedTithingTab === 'business' && (
-                <div className="space-y-3">
-                  {/* Live data banner */}
-                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
-                    <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? `Business profit for ${tithingMetrics.monthLabel}` : 'No transactions loaded yet'}</span>
+                <div className="space-y-4">
+                  <p className="tithe-notice tithe-notice-ok text-xs font-semibold" role="status" style={tithingMetrics.hasRealData ? undefined : { borderColor: 'rgba(100,116,139,.4)', background: 'rgba(100,116,139,.12)', color: 'inherit' }}>
+                    {tithingMetrics.hasRealData ? `🟢 Live · Business profit for ${tithingMetrics.monthLabel}` : '⚪ No transactions loaded yet'}
+                  </p>
+                  <section className="cmms-classic-card cmms-accent-navy p-4">
+                    <label className="cmms-classic-label block">Business tithe rate (%)
+                      <input type="range" min="5" max="20" value={businessTithingRate} onChange={e => setBusinessTithingRate(Number(e.target.value))} className="mt-2 w-full" />
+                    </label>
+                    <div className="mt-1 flex justify-between text-xs cmms-classic-muted"><span>5%</span><span className="font-bold" style={{ color: '#b8892b' }}>{businessTithingRate}%</span><span>20%</span></div>
+                  </section>
+                  <section className="cmms-classic-card cmms-accent-navy p-4">
+                    <div className="tithe-row"><span className="cmms-classic-muted">Business sales ({tithingMetrics.monthLabel})</span><span className="font-semibold tithe-ok">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <div className="tithe-row"><span className="cmms-classic-muted">Business expenses ({tithingMetrics.monthLabel})</span><span className="font-semibold tithe-bad">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <div className="tithe-row tithe-row-total"><span className="cmms-classic-heading">Business profit</span><span className={(tithingMetrics.businessProfit || 0) >= 0 ? 'tithe-info' : 'tithe-bad'}>UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                  </section>
+                  <div className="cmms-classic-card cmms-accent-gold p-4 text-center">
+                    <p className="cmms-classic-label">Tithe due {actualTitheOwed && actualTitheOwed.business !== undefined ? '(from database)' : '(calculated)'}</p>
+                    <p className="tithe-total mt-1" style={{ color: '#b8892b' }}>UGX {(actualTitheOwed && actualTitheOwed.business !== undefined ? actualTitheOwed.business : (tithingMetrics.businessTithe || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                   </div>
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Business Tithe Rate (%)</label>
-                    <input type="range" min="5" max="20" value={businessTithingRate}
-                      onChange={e => setBusinessTithingRate(Number(e.target.value))}
-                      className="w-full accent-amber-500" />
-                    <div className="flex justify-between text-xs text-gray-400 mt-1"><span>5%</span><span className="font-bold text-amber-600">{businessTithingRate}%</span><span>20%</span></div>
-                  </div>
-                  {/* 🔧 FIXED: Show only business income for business tithe */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm space-y-2">
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Business Sales ({tithingMetrics.monthLabel})</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Business Expenses ({tithingMetrics.monthLabel})</span><span className="font-semibold text-red-500">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm border-t pt-2"><span className="text-gray-700 font-bold">Business Profit</span><span className={`font-bold ${(tithingMetrics.businessProfit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm text-xs text-gray-500 mt-1"><span>Tithe Due {actualTitheOwed && actualTitheOwed.business !== undefined ? '(from database)' : '(calculated)'}</span><span className="font-bold text-amber-600 text-lg">UGX {(actualTitheOwed && actualTitheOwed.business !== undefined ? actualTitheOwed.business : (tithingMetrics.businessTithe || 0)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                  </div>
-                  <div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-800 border border-blue-200">
-                    💡 <strong>Tithe on Profit:</strong> Business tithe is calculated on net profit (revenue minus expenses), not gross revenue.
+                  <div className="tithe-notice tithe-notice-info text-xs">
+                    💡 <strong>Tithe on profit:</strong> business tithe is calculated on net profit (revenue minus expenses), not gross revenue.
                   </div>
                 </div>
               )}
 
               {selectedTithingTab === 'personal' && (
-                <div className="space-y-3">
-                  {/* Live data banner */}
-                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
-                    <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? `Salary for ${tithingMetrics.monthLabel}` : 'No transactions loaded yet'}</span>
+                <div className="space-y-4">
+                  <p className="tithe-notice tithe-notice-ok text-xs font-semibold" role="status" style={tithingMetrics.hasRealData ? undefined : { borderColor: 'rgba(100,116,139,.4)', background: 'rgba(100,116,139,.12)', color: 'inherit' }}>
+                    {tithingMetrics.hasRealData ? `🟢 Live · Salary for ${tithingMetrics.monthLabel}` : '⚪ No transactions loaded yet'}
+                  </p>
+                  <section className="cmms-classic-card cmms-accent-emerald p-4">
+                    <label className="cmms-classic-label block">Personal tithe rate (%)
+                      <input type="range" min="5" max="20" value={personalTithingRate} onChange={e => setPersonalTithingRate(Number(e.target.value))} className="mt-2 w-full" />
+                    </label>
+                    <div className="mt-1 flex justify-between text-xs cmms-classic-muted"><span>5%</span><span className="font-bold" style={{ color: '#b8892b' }}>{personalTithingRate}%</span><span>20%</span></div>
+                  </section>
+                  <section className="cmms-classic-card cmms-accent-emerald p-4">
+                    <div className="tithe-row"><span className="cmms-classic-muted">Salary / wages ({tithingMetrics.monthLabel})</span><span className="font-semibold tithe-ok">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                  </section>
+                  <div className="cmms-classic-card cmms-accent-gold p-4 text-center">
+                    <p className="cmms-classic-label">Tithe due {actualTitheOwed && actualTitheOwed.personal !== undefined ? '(from database)' : '(calculated)'}</p>
+                    <p className="tithe-total mt-1" style={{ color: '#b8892b' }}>UGX {(actualTitheOwed && actualTitheOwed.personal !== undefined ? actualTitheOwed.personal : (tithingMetrics.personalTithe || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                   </div>
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Personal Tithe Rate (%)</label>
-                    <input type="range" min="5" max="20" value={personalTithingRate}
-                      onChange={e => setPersonalTithingRate(Number(e.target.value))}
-                      className="w-full accent-amber-500" />
-                    <div className="flex justify-between text-xs text-gray-400 mt-1"><span>5%</span><span className="font-bold text-amber-600">{personalTithingRate}%</span><span>20%</span></div>
-                  </div>
-                  {/* 🔧 FIXED: Show only personal/salary income for personal tithe */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm space-y-2">
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Salary/Wages ({tithingMetrics.monthLabel})</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm border-t pt-2"><span className="text-gray-500">Tithe Due {actualTitheOwed && actualTitheOwed.personal !== undefined ? '(from database)' : '(calculated)'}</span><span className="font-bold text-green-600 text-lg">UGX {(actualTitheOwed && actualTitheOwed.personal !== undefined ? actualTitheOwed.personal : (tithingMetrics.personalTithe || 0)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                  </div>
-                  <div className="bg-green-50 rounded-xl p-3 text-xs text-green-800 border border-green-200">
-                    💡 <strong>Tithe on Income:</strong> Personal tithe is calculated on salary/wages and personal income only.
+                  <div className="tithe-notice tithe-notice-ok text-xs">
+                    💡 <strong>Tithe on income:</strong> personal tithe is calculated on salary/wages and personal income only.
                   </div>
                 </div>
               )}
 
-              {/* 🔧 NEW: Pay In Tithe Tab */}
-              {selectedTithingTab === 'pay-in' && (
-                <div className="space-y-3">
-                  {/* Summary of tithe due - SHOW CALCULATED based on current income */}
-                  <div className={`rounded-xl p-4 shadow-sm border ${tithingMetrics.remainingCombined === 0 && tithingMetrics.combinedTithe > 0 ? 'bg-green-50 border-green-300' : 'bg-gradient-to-br from-amber-100 to-yellow-100 border-amber-300'}`}>
-                    <div className="text-xs text-amber-700 mb-1 font-semibold uppercase tracking-wide">
-                      {tithingMetrics.monthLabel} — Remaining Tithe
-                    </div>
-                    <div className={`text-3xl font-bold ${tithingMetrics.remainingCombined === 0 && tithingMetrics.combinedTithe > 0 ? 'text-green-700' : 'text-amber-900'}`}>
-                      UGX {Math.round(tithingMetrics.remainingCombined || 0).toLocaleString()}
-                    </div>
-                    <div className="text-xs text-amber-700 mt-2 space-y-1">
-                      <div>
-                        Personal: <span className="font-semibold">UGX {Math.round(tithingMetrics.remainingPersonal || 0).toLocaleString()}</span>
-                        <span className="text-gray-400 ml-1">of {Math.round(tithingMetrics.personalTithe || 0).toLocaleString()}</span>
-                      </div>
-                      <div>
-                        Business: <span className="font-semibold">UGX {Math.round(tithingMetrics.remainingBusiness || 0).toLocaleString()}</span>
-                        <span className="text-gray-400 ml-1">of {Math.round(tithingMetrics.businessTithe || 0).toLocaleString()}</span>
-                      </div>
-                      {tithingMetrics.totalTithePaid > 0 && (
-                        <div className="text-green-600 font-semibold pt-1 border-t border-amber-200">
-                          ✓ Paid this month: UGX {Math.round(tithingMetrics.totalTithePaid).toLocaleString()}
-                        </div>
-                      )}
-                    </div>
-                    {tithingMetrics.remainingCombined === 0 && tithingMetrics.combinedTithe > 0 && (
-                      <div className="text-sm text-green-700 font-bold mt-2">🎉 All tithes cleared for {tithingMetrics.monthLabel}!</div>
+              {/* Pay In Tithe Tab */}
+              {selectedTithingTab === 'pay-in' && (() => {
+                const cleared = tithingMetrics.remainingCombined === 0 && tithingMetrics.combinedTithe > 0;
+                const paidPct = tithingMetrics.combinedTithe > 0 ? Math.min(100, Math.round(((tithingMetrics.totalTithePaid || 0) / tithingMetrics.combinedTithe) * 100)) : 0;
+                return (
+                <div className="space-y-4">
+                  {/* Summary of tithe due - calculated from current income */}
+                  <section className="cmms-classic-card cmms-accent-gold p-4 text-center">
+                    <p className="cmms-classic-label">{tithingMetrics.monthLabel} — remaining tithe</p>
+                    <p className={`tithe-total mt-1 ${cleared ? 'tithe-ok' : ''}`} style={cleared ? undefined : { color: '#b8892b' }}>UGX {Math.round(tithingMetrics.remainingCombined || 0).toLocaleString()}</p>
+                    {tithingMetrics.combinedTithe > 0 && (
+                      <div className="tithe-meter mt-3" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={paidPct} aria-label="Share of tithe paid"><span style={{ width: `${paidPct}%` }} /></div>
                     )}
-                    {tithingMetrics.combinedTithe === 0 && (
-                      <div className="text-xs text-gray-500 mt-2">No income recorded this month yet.</div>
-                    )}
-                  </div>
-
-                  {/* 🔧 FIXED: Use calculated tithe for the quick-fill button */}
-                  {/* Payment amount input */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">Payment Amount (UGX)</label>
-                    <input 
-                      type="number" 
-                      value={tithePaymentAmount}
-                      onChange={e => setTithePaymentAmount(e.target.value)}
-                      placeholder="Enter amount to pay"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                    <button 
-                      onClick={() => setTithePaymentAmount(String(Math.round(tithingMetrics.remainingCombined || 0)))}
-                      className="text-xs text-amber-600 hover:text-amber-700 mt-2 font-semibold"
-                    >
-                      Use full tithe due
-                    </button>
-                  </div>
-
-                  {/* Payment type */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">Payment Type</label>
-                    <select
-                      value={tithePaymentType}
-                      onChange={e => { setTithePaymentType(e.target.value); if (e.target.value !== 'personal') setTithePaySourceTxId(''); }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="combined">Combined Tithe</option>
-                      <option value="personal">Personal Tithe — per income</option>
-                      <option value="business">Business Tithe — pay any time</option>
-                    </select>
-                    {tithePaymentType === 'business' && (
-                      <p className="text-xs text-gray-500 mt-2">You decide when to pay this — weekly, monthly, or whenever suits the business.</p>
-                    )}
-                  </div>
-
-                  {/* Personal: tie this payment to one specific income so it's tithed exactly once */}
-                  {tithePaymentType === 'personal' && (() => {
-                    const isBizTx = (t) => t.metadata?.record_category === 'business' || t.metadata?.reporting_bucket === 'sold_income' || t.metadata?.category === 'business';
-                    const personalIncomeTxs = transactions
-                      .filter(t => t.transaction_type === 'income' && !isBizTx(t))
-                      .slice(0, 30);
-                    const titheedSourceIds = new Set(
-                      transactions
-                        .filter(t => t.metadata?.record_category === 'tithe' && t.metadata?.source_transaction_id)
-                        .map(t => t.metadata.source_transaction_id)
-                    );
-                    return (
-                      <div className="bg-white rounded-xl p-4 shadow-sm">
-                        <label className="block text-xs font-semibold text-gray-700 mb-2">Which Income? (optional — ties this payment to one income)</label>
-                        <select
-                          value={tithePaySourceTxId}
-                          onChange={e => {
-                            const id = e.target.value;
-                            setTithePaySourceTxId(id);
-                            const tx = personalIncomeTxs.find(t => t.id === id);
-                            if (tx) setTithePaymentAmount(String(Math.round(tx.amount * 0.1)));
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        >
-                          <option value="">— General personal tithe (not tied to one income) —</option>
-                          {personalIncomeTxs.map(t => {
-                            const already = titheedSourceIds.has(t.id);
-                            return (
-                              <option key={t.id} value={t.id} disabled={already}>
-                                {already ? '✓ Already tithed — ' : ''}{t.description || 'Income'} · UGX {t.amount.toLocaleString()} (10% = {Math.round(t.amount * 0.1).toLocaleString()})
-                              </option>
-                            );
-                          })}
-                        </select>
-                        {tithePaySourceTxId && (
-                          <p className="text-xs text-green-600 mt-1">🔒 This payment will be locked to that income — it can't be tithed twice.</p>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Cash or Wallet */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">Paid With</label>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setTithePaymentMethod('wallet')}
-                        className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${tithePaymentMethod === 'wallet' ? 'bg-amber-500 text-white border-amber-500' : 'bg-gray-50 text-gray-600 border-gray-300'}`}>
-                        💳 Wallet
-                      </button>
-                      <button type="button" onClick={() => setTithePaymentMethod('cash')}
-                        className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${tithePaymentMethod === 'cash' ? 'bg-amber-500 text-white border-amber-500' : 'bg-gray-50 text-gray-600 border-gray-300'}`}>
-                        💵 Cash (given by hand)
-                      </button>
+                    {cleared && <p className="tithe-ok mt-2 text-sm font-bold">🎉 All tithes cleared for {tithingMetrics.monthLabel}!</p>}
+                    {tithingMetrics.combinedTithe === 0 && <p className="cmms-classic-muted mt-2 text-xs">No income recorded this month yet.</p>}
+                  </section>
+                  <div className="tithe-ledger">
+                    <div className="tithe-figure">
+                      <p className="tithe-figure-label">Personal left</p>
+                      <p className="tithe-figure-value">UGX {Math.round(tithingMetrics.remainingPersonal || 0).toLocaleString()}</p>
+                      <p className="tithe-figure-sub">of {Math.round(tithingMetrics.personalTithe || 0).toLocaleString()}</p>
                     </div>
-                    {tithePaymentMethod === 'cash' && (
-                      <p className="text-xs text-gray-500 mt-2">Recorded as given — your wallet balance won't be touched.</p>
-                    )}
+                    <div className="tithe-figure" style={{ animationDelay: '70ms' }}>
+                      <p className="tithe-figure-label">Business left</p>
+                      <p className="tithe-figure-value">UGX {Math.round(tithingMetrics.remainingBusiness || 0).toLocaleString()}</p>
+                      <p className="tithe-figure-sub">of {Math.round(tithingMetrics.businessTithe || 0).toLocaleString()}</p>
+                    </div>
                   </div>
+                  {tithingMetrics.totalTithePaid > 0 && (
+                    <p className="tithe-notice tithe-notice-ok text-xs font-semibold">✓ Paid this period: UGX {Math.round(tithingMetrics.totalTithePaid).toLocaleString()}</p>
+                  )}
 
-                  {/* Giving date — the giver's own choice */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">Giving Date</label>
-                    <input
-                      type="date"
-                      value={tithePaymentDate}
-                      max={new Date().toISOString().split('T')[0]}
-                      onChange={e => setTithePaymentDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
+                  <section className="cmms-classic-card cmms-accent-burgundy space-y-4 p-4">
+                    <h3 className="cmms-classic-heading">Record a payment</h3>
 
-                  {/* Payment recipient - OPTIONAL */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">
-                      Recipient/Church/Organization (Optional)
+                    <label className="cmms-classic-label block">Payment amount (UGX)
+                      <input type="number" value={tithePaymentAmount} onChange={e => setTithePaymentAmount(e.target.value)} placeholder="Enter amount to pay" className="cmms-classic-field mt-1 normal-case tracking-normal font-normal" />
+                      <button type="button" onClick={() => setTithePaymentAmount(String(Math.round(tithingMetrics.remainingCombined || 0)))} className="mt-2 text-xs font-semibold normal-case tracking-normal !bg-transparent" style={{ color: '#b8892b', background: 'transparent', border: 0, boxShadow: 'none', padding: 0 }}>Use full tithe due</button>
                     </label>
-                    <input 
-                      type="text" 
-                      value={tithePaymentRecipient}
-                      onChange={e => setTithePaymentRecipient(e.target.value)}
-                      placeholder="e.g., Mt. Zion Church, Local Ministry"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                    {tithePaymentRecipient.trim() === '' && (
-                      <p className="text-xs text-gray-500 mt-1">💡 Defaults to 'Tithe Fund' if not specified</p>
-                    )}
-                  </div>
 
-                  {/* Payment notes */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">Notes (Optional)</label>
-                    <textarea 
-                      value={tithePaymentNotes}
-                      onChange={e => setTithePaymentNotes(e.target.value)}
-                      placeholder="Add any notes about this tithe payment"
-                      rows="2"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
+                    <label className="cmms-classic-label block">Payment type
+                      <select value={tithePaymentType} onChange={e => { setTithePaymentType(e.target.value); if (e.target.value !== 'personal') setTithePaySourceTxId(''); }} className="cmms-classic-field mt-1 normal-case tracking-normal font-normal">
+                        <option value="combined">Combined Tithe</option>
+                        <option value="personal">Personal Tithe — per income</option>
+                        <option value="business">Business Tithe — pay any time</option>
+                      </select>
+                      {tithePaymentType === 'business' && <span className="cmms-classic-muted mt-1 block text-xs normal-case tracking-normal font-normal">You decide when to pay this — weekly, monthly, or whenever suits the business.</span>}
+                    </label>
 
-                  {/* Success/Error messages */}
-                  {tithePaymentSuccess && (
-                    <div className="bg-green-50 rounded-xl p-3 text-sm text-green-800 border border-green-200">
-                      ✅ {tithePaymentSuccess}
+                    {/* Personal: tie this payment to one specific income so it's tithed exactly once */}
+                    {tithePaymentType === 'personal' && (() => {
+                      const isBizTx = (t) => t.metadata?.record_category === 'business' || t.metadata?.reporting_bucket === 'sold_income' || t.metadata?.category === 'business';
+                      const personalIncomeTxs = transactions
+                        .filter(t => t.transaction_type === 'income' && !isBizTx(t))
+                        .slice(0, 30);
+                      const titheedSourceIds = new Set(
+                        transactions
+                          .filter(t => t.metadata?.record_category === 'tithe' && t.metadata?.source_transaction_id)
+                          .map(t => t.metadata.source_transaction_id)
+                      );
+                      return (
+                        <label className="cmms-classic-label block">Which income? (optional — ties this payment to one income)
+                          <select
+                            value={tithePaySourceTxId}
+                            onChange={e => {
+                              const id = e.target.value;
+                              setTithePaySourceTxId(id);
+                              const tx = personalIncomeTxs.find(t => t.id === id);
+                              if (tx) setTithePaymentAmount(String(Math.round(tx.amount * 0.1)));
+                            }}
+                            className="cmms-classic-field mt-1 normal-case tracking-normal font-normal"
+                          >
+                            <option value="">— General personal tithe (not tied to one income) —</option>
+                            {personalIncomeTxs.map(t => {
+                              const already = titheedSourceIds.has(t.id);
+                              return (
+                                <option key={t.id} value={t.id} disabled={already}>
+                                  {already ? '✓ Already tithed — ' : ''}{t.description || 'Income'} · UGX {t.amount.toLocaleString()} (10% = {Math.round(t.amount * 0.1).toLocaleString()})
+                                </option>
+                              );
+                            })}
+                          </select>
+                          {tithePaySourceTxId && <span className="tithe-ok mt-1 block text-xs normal-case tracking-normal font-normal">🔒 This payment will be locked to that income — it can't be tithed twice.</span>}
+                        </label>
+                      );
+                    })()}
+
+                    {/* Cash or Wallet */}
+                    <div>
+                      <p className="cmms-classic-label">Paid with</p>
+                      <div className="mt-1.5 flex gap-2" role="tablist" aria-label="Payment method">
+                        <button type="button" role="tab" aria-selected={tithePaymentMethod === 'wallet'} onClick={() => setTithePaymentMethod('wallet')} className={`cmms-ptab cmms-accent-burgundy flex-1 justify-center ${tithePaymentMethod === 'wallet' ? 'is-active' : ''}`}>💳 Wallet</button>
+                        <button type="button" role="tab" aria-selected={tithePaymentMethod === 'cash'} onClick={() => setTithePaymentMethod('cash')} className={`cmms-ptab cmms-accent-burgundy flex-1 justify-center ${tithePaymentMethod === 'cash' ? 'is-active' : ''}`}>💵 Cash</button>
+                      </div>
+                      {tithePaymentMethod === 'cash' && <p className="cmms-classic-muted mt-1.5 text-xs">Given by hand — recorded as given, your wallet balance won't be touched.</p>}
                     </div>
-                  )}
-                  {tithePaymentError && (
-                    <div className="bg-red-50 rounded-xl p-3 text-sm text-red-800 border border-red-200">
-                      ❌ {tithePaymentError}
-                    </div>
-                  )}
 
-                  {/* Submit button */}
-                  <button 
-                    onClick={() => handlePayTithe()}
-                    disabled={isSubmittingTithe || !tithePaymentAmount}
-                    className={`w-full py-3 rounded-xl font-bold text-white transition ${
-                      isSubmittingTithe || !tithePaymentAmount
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600'
-                    }`}
-                  >
-                    {isSubmittingTithe ? 'Processing...' : `${tithePaymentMethod === 'cash' ? '💵' : '💳'} Record Tithe Payment`}
-                  </button>
+                    {/* Giving date — the giver's own choice */}
+                    <label className="cmms-classic-label block">Giving date
+                      <input type="date" value={tithePaymentDate} max={new Date().toISOString().split('T')[0]} onChange={e => setTithePaymentDate(e.target.value)} className="cmms-classic-field mt-1 normal-case tracking-normal font-normal" />
+                    </label>
 
-                  <div className="bg-amber-50 rounded-xl p-3 text-xs text-amber-800 border border-amber-200">
+                    {/* Payment recipient - OPTIONAL */}
+                    <label className="cmms-classic-label block">Recipient / church / organization (optional)
+                      <input type="text" value={tithePaymentRecipient} onChange={e => setTithePaymentRecipient(e.target.value)} placeholder="e.g., Mt. Zion Church, Local Ministry" className="cmms-classic-field mt-1 normal-case tracking-normal font-normal" />
+                      {tithePaymentRecipient.trim() === '' && <span className="cmms-classic-muted mt-1 block text-xs normal-case tracking-normal font-normal">💡 Defaults to 'Tithe Fund' if not specified</span>}
+                    </label>
+
+                    {/* Payment notes */}
+                    <label className="cmms-classic-label block">Notes (optional)
+                      <textarea value={tithePaymentNotes} onChange={e => setTithePaymentNotes(e.target.value)} placeholder="Add any notes about this tithe payment" rows="2" className="cmms-classic-field mt-1 normal-case tracking-normal font-normal" />
+                    </label>
+
+                    {tithePaymentSuccess && <p className="tithe-notice tithe-notice-ok" role="status">✅ {tithePaymentSuccess}</p>}
+                    {tithePaymentError && <p className="tithe-notice tithe-notice-bad" role="alert">❌ {tithePaymentError}</p>}
+
+                    <button type="button" onClick={() => handlePayTithe()} disabled={isSubmittingTithe || !tithePaymentAmount} className="cmms-classic-btn-primary w-full px-4 py-3">
+                      {isSubmittingTithe ? 'Processing…' : `${tithePaymentMethod === 'cash' ? '💵' : '💳'} Record tithe payment`}
+                    </button>
+                  </section>
+
+                  <div className="cmms-classic-callout p-3 text-xs">
                     📖 <strong>Malachi 3:10</strong> — "Bring the whole tithe into the storehouse... and see if I will not open the floodgates of heaven and pour out so much blessing."
                   </div>
                 </div>
-              )}
+                );
+              })()}
+            </CmmsPageShell>
           </div>
         </div>
       )}

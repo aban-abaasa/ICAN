@@ -600,9 +600,14 @@ const CandlestickChart = React.memo(({
   }
 
   return (
-    <div className={`bg-slate-900 rounded-xl h-full w-full flex flex-col ${isCompact ? 'p-1' : 'p-2'}`}>
-      {showLegend && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-2 pb-1.5 text-[11px] text-slate-400">
+    <div className="bg-slate-950 h-full w-full flex flex-col">
+      <div
+        ref={chartContainerRef}
+        className={`relative bg-slate-950 ${hoverLine ? 'cursor-pointer' : placementMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'} overflow-hidden flex-1 flex flex-col min-h-0 select-none`}
+        style={{ touchAction: 'none' }}
+      >
+        {showLegend && (
+          <div className="absolute left-2 top-1.5 z-10 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400 pointer-events-none max-w-[70%]">
           {showLivePrice && livePrice != null && (
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-0.5 rounded" style={{ backgroundColor: LIVE_COLOR }} />
@@ -627,23 +632,18 @@ const CandlestickChart = React.memo(({
               Booked (pending)
             </span>
           )}
-        </div>
-      )}
-      <div
-        ref={chartContainerRef}
-        className={`relative bg-slate-950 rounded-lg border border-slate-800 ${hoverLine ? 'cursor-pointer' : placementMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'} overflow-hidden flex-1 flex flex-col min-h-0 select-none ${isCompact ? 'p-1' : 'p-3'}`}
-        style={{ touchAction: 'none' }}
-      >
+          </div>
+        )}
         {orderPlacementEnabled && (
           <button
             type="button"
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); setPlacementMode(p => !p); }}
-            className={`absolute top-1.5 right-1.5 z-10 px-2 py-1 rounded-md text-[10px] font-semibold border transition-colors ${
+            className={`absolute top-1.5 right-1.5 z-10 px-2 py-1 rounded text-[10px] font-semibold transition-colors ${
               placementMode
-                ? 'bg-amber-500 text-slate-900 border-amber-400'
-                : 'bg-slate-800/90 text-slate-300 border-slate-700 hover:text-white'
+                ? 'bg-amber-500 text-slate-900'
+                : 'bg-transparent text-amber-400/90 hover:text-amber-300'
             }`}
           >
             {isCompact
@@ -694,21 +694,21 @@ const CandlestickChart = React.memo(({
                 : { ...chartMargin, right: 55, left: 10 }
             }
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.08)" />
+            <CartesianGrid vertical={false} strokeDasharray="2 4" stroke="rgba(148,163,184,0.12)" />
             <XAxis
               dataKey="time"
               tick={{ fill: "#64748b", fontSize: isCompact ? 9 : 10 }}
               tickFormatter={(value) => {
-                if (!isCompact || typeof value !== 'string') return value;
-                // Trim "10:15:32 PM" down to "15:32" so labels fit narrow screens
-                const parts = value.split(':');
-                if (parts.length < 3) return value;
-                return `${parts[1]}:${parts[2].replace(/\s?[AP]M/i, '')}`;
+                if (typeof value !== 'string') return value;
+                // "02:55:00 PM" -> "2:55 PM": horizontal, uncluttered time labels
+                const m = value.match(/^0?(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)?$/i);
+                return m ? `${m[1]}:${m[2]}${m[3] ? ` ${m[3].toUpperCase()}` : ''}` : value;
               }}
-              angle={isCompact ? -60 : -45}
-              textAnchor="end"
+              angle={0}
+              textAnchor="middle"
               height={isCompact ? 28 : 60}
-              interval={Math.max(0, Math.floor(zoomedDisplayData.length / (isCompact ? 5 : 10)))}
+              minTickGap={isCompact ? 36 : 48}
+              interval="preserveStartEnd"
               axisLine={{ stroke: '#334155' }}
               tickLine={{ stroke: '#334155' }}
             />
