@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { usernameOf } from '../utils/usernameOf';
 import { CheckCircle, XCircle, AlertCircle, TrendingUp } from 'lucide-react';
 
 const AdminLoanReviewPanel = ({ groupId, user, loans = [], onReviewComplete }) => {
@@ -138,7 +139,7 @@ const AdminLoanReviewPanel = ({ groupId, user, loans = [], onReviewComplete }) =
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <h4 className="text-lg font-bold text-white">{loan.applicant_name}</h4>
-                  <p className="text-xs text-gray-400">{loan.applicant_email}</p>
+                  <p className="text-xs text-gray-400">@{usernameOf(loan.applicant_email)}</p>
                 </div>
                 <span className="px-2 py-1 bg-yellow-600/50 text-yellow-300 text-xs font-bold rounded-full">
                   ⏳ Awaiting Decision
@@ -242,7 +243,7 @@ const AdminLoanReviewPanel = ({ groupId, user, loans = [], onReviewComplete }) =
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h4 className="text-lg font-bold text-white">{loan.applicant_name}</h4>
-                    <p className="text-xs text-gray-400">{loan.applicant_email}</p>
+                    <p className="text-xs text-gray-400">@{usernameOf(loan.applicant_email)}</p>
                   </div>
                   <span
                     className={`px-2 py-1 text-xs font-bold rounded-full ${

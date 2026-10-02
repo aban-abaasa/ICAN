@@ -241,7 +241,7 @@ export const getUserMessages = async (companyId) => {
       });
 
     if (error) {
-      console.error('Error fetching user messages:', error);
+      (error.message || '').includes('not a member') ? console.debug('CMMS: not a member of this company') : console.error('Error fetching user messages:', error);
       return {
         success: false,
         error: error.message,
@@ -338,7 +338,7 @@ export const getUserJobAssignments = async (companyId) => {
       });
 
     if (error) {
-      console.error('Error fetching assignments:', error);
+      (error.message || '').includes('not a member') ? console.debug('CMMS: not a member of this company') : console.error('Error fetching assignments:', error);
       return {
         success: false,
         error: error.message,
@@ -558,7 +558,7 @@ export const getCompanyUsers = async (companyId) => {
       });
 
     if (error) {
-      console.error('Error fetching company users:', error);
+      (error.message || '').includes('not a member') ? console.debug('CMMS: not a member of this company') : console.error('Error fetching company users:', error);
       return {
         success: false,
         error: error.message,

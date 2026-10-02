@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { flwCreateTransfer } from "../_shared/flwTransfer.ts";
 
 // Sends ICAN out of the platform: debits the shared ican_user_wallets balance
 // (via request_ican_payout, which itself calls sell_ican_coins) then pays UGX
@@ -171,22 +172,15 @@ serve(async (req) => {
 
     const webhookUrl = `${supabaseUrl}/functions/v1/flutterwave-transfer-webhook`;
 
-    const transferResponse = await fetch("https://api.flutterwave.com/v3/transfers", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${flutterwaveSecretKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        account_bank: accountBank,
-        account_number: accountNumberForTransfer,
-        amount: ugxNet,
-        currency: "UGX",
-        narration: `ICAN wallet payout (${source_app})`,
-        reference,
-        beneficiary_name: channel === "bank" ? beneficiary_name : (currentUser.user_metadata?.full_name || currentUser.email),
-        callback_url: webhookUrl,
-      }),
+    const transferResponse = await flwCreateTransfer(flutterwaveSecretKey, {
+      account_bank: accountBank,
+      account_number: accountNumberForTransfer,
+      amount: ugxNet,
+      currency: "UGX",
+      narration: `ICAN wallet payout (${source_app})`,
+      reference,
+      beneficiary_name: channel === "bank" ? beneficiary_name : (currentUser.user_metadata?.full_name || currentUser.email),
+      callback_url: webhookUrl,
     });
 
     const transferBody = await transferResponse.json().catch(() => null);

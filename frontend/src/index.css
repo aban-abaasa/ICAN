@@ -1736,3 +1736,186 @@ html {
 .ls-growth__stats dt em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .8; }
 .ls-growth__stats dd { margin: .2rem 0 0; font-family: "Playfair Display", Georgia, serif; font-weight: 700; font-size: 1.15rem; color: #1f2433; }
 .ls-growth__stats dd.ls-small { font-family: Inter, system-ui, sans-serif; font-size: .74rem; font-weight: 600; line-height: 1.4; }
+
+/* ==========================================================================
+   ICAN Trust / SACCO Hub -- classic skin.
+   The Trust tabs were written with many one-off colourful Tailwind classes
+   (neon borders, emerald/blue gradients, white-on-dark text). Scoped to
+   .trust-classic, this re-dresses all of them in the CMMS Payroll classic
+   language: ivory cards with a gold hairline and jewel-accent ribbon, serif
+   headings, gold-hairline fields, gold primary buttons. Tokens follow the
+   active theme so dark presets stay readable. Modals/portals are untouched.
+   ========================================================================== */
+.trust-classic {
+  --ac: #b8892b;
+  --tc-text: #2c2416;
+  --tc-muted: #6b5d45;
+  --tc-card: #fffdf8;
+  --tc-field: #fff;
+  --tc-line: rgba(196, 160, 82, 0.42);
+  --tc-green: #1f7a5a;
+  --tc-blue: #2f4a7a;
+  --tc-amber: #8a6a1f;
+  --tc-red: #b42318;
+}
+:root[data-theme="dark"] .trust-classic, :root[data-theme="purple"] .trust-classic, :root[data-theme="green"] .trust-classic, :root[data-theme="ocean"] .trust-classic, :root[data-theme="sienna"] .trust-classic {
+  --tc-text: var(--color-text);
+  --tc-muted: var(--color-textSecondary);
+  --tc-card: var(--color-bg);
+  --tc-field: var(--color-bg);
+  --tc-line: var(--color-border);
+  --tc-green: #6ee7b7;
+  --tc-blue: #93c5fd;
+  --tc-amber: #fcd34d;
+  --tc-red: #fca5a5;
+}
+
+/* Headings: serif, gold diamond before card titles */
+.trust-classic :is(h1, h2, h3, h4) {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif !important;
+  color: var(--tc-text) !important;
+}
+.trust-classic h3::before {
+  content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 0.5rem;
+  background: var(--ac); transform: rotate(45deg); vertical-align: 2px;
+}
+
+/* Text tones (not inside buttons or solid-coloured badges) */
+.trust-classic :is(p, span, label, li, dt, dd, div):not(button *):not([class*="bg-red-"]):not([class*="bg-blue-5"]):not([class*="bg-blue-6"]):not([class*="bg-violet"]):not([class*="bg-orange"]):not([class*="bg-fuchsia"]):is([class*="text-white"], [class*="text-slate-100"], [class*="text-slate-200"], [class*="text-slate-300"], [class*="text-slate-700"], [class*="text-slate-800"], [class*="text-slate-900"], [class*="text-gray-100"], [class*="text-gray-200"], [class*="text-gray-300"], [class*="text-gray-700"], [class*="text-gray-800"], [class*="text-gray-900"]) { color: var(--tc-text) !important; }
+.trust-classic :is(p, span, label, li, div):is([class*="text-slate-400"], [class*="text-slate-500"], [class*="text-slate-600"], [class*="text-gray-400"], [class*="text-gray-500"], [class*="text-gray-600"]):not(button *) { color: var(--tc-muted) !important; }
+.trust-classic :is(p, span, div, svg):is([class*="text-green-"], [class*="text-emerald-"], [class*="text-lime-"], [class*="text-teal-"]):not(button *) { color: var(--tc-green) !important; }
+.trust-classic :is(p, span, div, svg):is([class*="text-blue-"], [class*="text-sky-"], [class*="text-cyan-"], [class*="text-indigo-"]):not(button *) { color: var(--tc-blue) !important; }
+.trust-classic :is(p, span, div, svg):is([class*="text-amber-"], [class*="text-yellow-"], [class*="text-orange-"]):not(button *) { color: var(--tc-amber) !important; }
+.trust-classic :is(p, span, div, svg):is([class*="text-red-"], [class*="text-rose-"]):not(button *) { color: var(--tc-red) !important; }
+
+/* Cards: any bordered / tinted panel becomes an ivory card with a ribbon */
+.trust-classic div:is([class*="border-2"], [class*="border-4"]):not([class*="rounded-full"]):not([class*="animate-spin"]),
+.trust-classic div:is([class*="bg-slate-8"], [class*="bg-slate-7"], [class*="bg-gray-8"], [class*="bg-gray-7"], [class*="bg-white"], [class*="bg-slate-9"], [class*="bg-gray-9"], [class*="bg-emerald-9"], [class*="bg-green-9"], [class*="bg-blue-9"], [class*="bg-blue-5"], [class*="bg-amber-5"], [class*="bg-violet-5"], [class*="bg-purple-"], [class*="bg-yellow-"], [class*="bg-indigo-"], [class*="bg-rose-"], [class*="bg-emerald-5"], [class*="bg-green-5"], [class*="bg-red-5"]):is([class*="border"], [class*="rounded-lg"], [class*="rounded-xl"]):not([class*="rounded-full"]):not([class*="fixed"]):not([class*="absolute"]):not([class*="animate-"]) {
+  background: linear-gradient(135deg, var(--tc-card) 0%, color-mix(in srgb, var(--ac) 8%, var(--tc-card)) 100%) !important;
+  border: 1px solid var(--tc-line) !important;
+  border-radius: 16px !important;
+  box-shadow: inset 4px 0 0 var(--ac), 0 1px 2px rgba(44, 36, 22, 0.05), 0 12px 24px -20px color-mix(in srgb, var(--ac) 75%, #000) !important;
+  animation: cmms-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.trust-classic div[class*="border-dotted"] {
+  border-style: dashed !important;
+  box-shadow: none !important;
+  border-radius: 12px !important;
+  background: color-mix(in srgb, var(--ac) 7%, transparent) !important;
+}
+.trust-classic div[class*="grid"] > div:is([class*="border-2"], [class*="border-4"], [class*="bg-white"]):hover { transform: translateY(-2px); border-color: var(--ac) !important; }
+/* Jewel accents rotate through a grid of cards */
+.trust-classic div[class*="grid"] > div:nth-child(6n+2) { --ac: #1f7a5a; }
+.trust-classic div[class*="grid"] > div:nth-child(6n+3) { --ac: #2f4a7a; }
+.trust-classic div[class*="grid"] > div:nth-child(6n+4) { --ac: #8b2e3c; }
+.trust-classic div[class*="grid"] > div:nth-child(6n+5) { --ac: #6b3f7a; }
+.trust-classic div[class*="grid"] > div:nth-child(6n+6) { --ac: #197a82; }
+
+/* Fields */
+.trust-classic :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+  background: var(--tc-field) !important;
+  color: var(--tc-text) !important;
+  border: 1px solid rgba(196, 160, 82, 0.55) !important;
+  border-radius: 10px !important;
+}
+.trust-classic :is(input, select, textarea)::placeholder { color: var(--tc-muted) !important; opacity: 0.75; }
+.trust-classic :is(input, select, textarea):focus { outline: none !important; border-color: #c4a052 !important; box-shadow: 0 0 0 3px rgba(196, 160, 82, 0.22) !important; }
+.trust-classic label { font-weight: 700; letter-spacing: 0.01em; }
+
+/* Buttons: coloured action buttons become gold primary; red ones burgundy */
+.trust-classic button:is([class*="bg-gradient"], [class*="bg-emerald-"], [class*="bg-green-"], [class*="bg-blue-"], [class*="bg-amber-"], [class*="bg-violet-"], [class*="bg-orange-"], [class*="bg-fuchsia-"], [class*="bg-indigo-"]):not([class*="rounded-full"]) {
+  background: linear-gradient(135deg, #c79a36, #8a6a1f) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 14px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 10px 22px -14px #8a6a1f, inset 0 0 0 1px rgba(255, 255, 255, 0.14) !important;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.trust-classic button:is([class*="bg-gradient"], [class*="bg-emerald-"], [class*="bg-green-"], [class*="bg-blue-"], [class*="bg-amber-"], [class*="bg-violet-"], [class*="bg-orange-"], [class*="bg-fuchsia-"], [class*="bg-indigo-"]):not([class*="rounded-full"]):hover:not(:disabled) { filter: brightness(1.07); transform: translateY(-1px); }
+.trust-classic button:is([class*="bg-red-"], [class*="bg-rose-"]):not([class*="rounded-full"]) {
+  background: linear-gradient(135deg, #a8374a, #7a2231) !important;
+  color: #fff !important;
+  border-radius: 14px !important;
+  font-weight: 700 !important;
+}
+.trust-classic button:disabled { opacity: 0.5; filter: grayscale(0.4); box-shadow: none !important; }
+/* Quiet buttons (slate/transparent) become the classic outlined secondary */
+.trust-classic button:is([class*="bg-slate-"], [class*="bg-gray-"], [class*="bg-transparent"], [class*="border-slate"], [class*="border-gray"]):not([class*="rounded-full"]):not([class*="bg-gradient"]) {
+  background: transparent !important;
+  border: 1px solid rgba(196, 160, 82, 0.5) !important;
+  color: var(--tc-amber) !important;
+  border-radius: 14px !important;
+  font-weight: 700 !important;
+}
+.trust-classic table th { text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.06em; color: var(--tc-muted) !important; border-bottom: 1px solid var(--tc-line) !important; }
+.trust-classic table td { border-bottom: 1px solid var(--tc-line) !important; color: var(--tc-text) !important; }
+@media (prefers-reduced-motion: reduce) { .trust-classic div { animation: none !important; transition: none !important; } }
+
+/* Tighter, phone-first rhythm for the classic cards */
+@media (max-width: 639px) {
+  .trust-classic div:is([class*="border-2"], [class*="border-4"]) { border-radius: 14px !important; }
+  .trust-classic .grid { gap: 0.75rem; }
+}
+
+/* Trust admin: classic pay-register style ledger, compact on small phones */
+.trust-eyebrow { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--tc-muted, #6b5d45); margin: 0 0 0.35rem 0.15rem; }
+.trust-classic .trust-ledger {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); position: relative;
+  border-top: 1px solid rgba(196, 160, 82, 0.5); border-bottom: 1px solid rgba(196, 160, 82, 0.5);
+  background: transparent !important; box-shadow: none !important; border-radius: 0 !important;
+}
+.trust-classic .trust-ledger::before, .trust-classic .trust-ledger::after { content: ''; position: absolute; left: 0; right: 0; height: 1px; background: rgba(196, 160, 82, 0.25); }
+.trust-classic .trust-ledger::before { top: 3px; }
+.trust-classic .trust-ledger::after { bottom: 3px; }
+.trust-classic .trust-figure {
+  padding: 0.65rem 0.25rem 0.6rem; text-align: center; min-width: 0;
+  border: 0 !important; border-right: 1px solid rgba(196, 160, 82, 0.2) !important; animation: cmms-rise 0.45s ease both;
+  background: transparent !important; box-shadow: none !important; border-radius: 0 !important;
+}
+.trust-classic .trust-figure:last-child { border-right: 0 !important; }
+.trust-classic .trust-figure-label { font-size: 0.56rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--tc-muted) !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
+.trust-classic .trust-figure-value { margin: 0.15rem 0 0; font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif !important; font-size: 1.05rem; line-height: 1.2; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--tc-text) !important; }
+.trust-classic .trust-figure-value.trust-tone-ok { color: var(--tc-green) !important; }
+.trust-classic .trust-figure-value.trust-tone-warn { color: var(--tc-amber) !important; }
+.trust-classic .trust-figure-value.trust-tone-info { color: var(--tc-blue) !important; }
+.trust-classic .trust-figure-value.trust-tone-bad { color: var(--tc-red) !important; }
+@media (min-width: 640px) {
+  .trust-classic .trust-figure { padding: 0.9rem 0.5rem 0.85rem; }
+  .trust-classic .trust-figure-label { font-size: 0.66rem; letter-spacing: 0.14em; }
+  .trust-classic .trust-figure-value { font-size: 1.4rem; }
+}
+/* Navigation pills: small type on small phones, full size from tablet up */
+@media (max-width: 479px) {
+  .trust-classic .trust-nav { gap: 0.4rem; }
+  .trust-classic .trust-nav .cmms-ptab { font-size: 0.7rem; padding: 0.35rem 0.65rem; gap: 0.3rem; }
+  .trust-classic .trust-nav .cmms-ptab svg { width: 0.8rem; height: 0.8rem; }
+}
+
+/* Count badge inside a nav pill */
+.trust-classic .trust-tabcount { display: inline-flex; align-items: center; justify-content: center; min-width: 1.35rem; height: 1.35rem; padding: 0 0.35rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; line-height: 1; background: color-mix(in srgb, var(--ac) 16%, transparent); color: var(--ac); font-variant-numeric: tabular-nums; }
+.trust-classic .trust-tabcount[data-zero="true"] { opacity: 0.55; }
+.trust-classic .cmms-ptab.is-active .trust-tabcount { background: rgba(255, 255, 255, 0.25); color: #fff; }
+@media (max-width: 479px) { .trust-classic .trust-tabcount { min-width: 1.1rem; height: 1.1rem; font-size: 0.62rem; } }
+
+/* Applicant avatar: gold initial medallion */
+.trust-avatar { display: inline-grid; place-items: center; flex: none; width: 2.2rem; height: 2.2rem; border-radius: 999px; font-family: Georgia, "Palatino Linotype", serif; font-size: 1rem; font-weight: 700; color: #fff; background: linear-gradient(135deg, var(--ac, #b8892b), color-mix(in srgb, var(--ac, #b8892b) 55%, #000)); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55), 0 6px 12px -8px var(--ac, #b8892b); }
+.trust-classic [class*="animate-pulse"][class*="rounded-full"] { display: none; }
+@media (max-width: 479px) { .trust-avatar { width: 1.9rem; height: 1.9rem; font-size: 0.85rem; } }
+
+/* Applicant list rows: compact until tapped, then they unfold */
+.trust-classic .trust-row { padding: 0.65rem 0.85rem !important; }
+.trust-classic .trust-row-head { align-items: center !important; gap: 0.6rem; margin-bottom: 0 !important; cursor: pointer; }
+.trust-classic .trust-row-head::after { content: ''; flex: none; width: 0.55rem; height: 0.55rem; margin-left: 0.15rem; border-right: 2px solid var(--ac, #b8892b); border-bottom: 2px solid var(--ac, #b8892b); transform: rotate(45deg) translateY(-2px); transition: transform 0.25s ease; }
+.trust-classic .trust-row[data-open="true"] .trust-row-head::after { transform: rotate(-135deg) translateY(-2px); }
+.trust-classic .trust-row[data-open="true"] .trust-row-head { margin-bottom: 0.9rem !important; padding-bottom: 0.6rem; border-bottom: 1px dashed rgba(196, 160, 82, 0.45); }
+.trust-classic .trust-row[data-open="false"] > :not(.trust-row-head) { display: none !important; }
+.trust-classic .trust-row[data-open="true"] > :not(.trust-row-head) { animation: cmms-unfold 0.3s ease both; }
+.trust-classic .trust-row-head > div:first-child { min-width: 0; flex: 1; }
+@media (max-width: 479px) {
+  .trust-classic .trust-row-head > div:not(:first-child) { padding: 0.2rem 0.45rem !important; }
+  .trust-classic .trust-row-head > div:not(:first-child) span { font-size: 0.58rem !important; }
+  .trust-classic .trust-row-head > div:not(:first-child) svg { display: none; }
+  .trust-classic .trust-row-head p { font-size: 0.65rem; }
+}

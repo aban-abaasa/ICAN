@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { flwCreateTransfer } from "../_shared/flwTransfer.ts";
 
 // "Tap-to-pay style" payout for the ICANera digital card: whoever scans the
 // card's QR (a shop terminal, an agent's phone, a friend's phone) enters the
@@ -208,19 +209,15 @@ serve(async (req) => {
     }
     reference = requestResult.reference as string;
 
-    const transferResponse = await fetch("https://api.flutterwave.com/v3/transfers", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${flutterwaveSecretKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        account_bank: accountBankCode,
-        account_number: phone,
-        amount: Number(requestResult.net_amount),
-        currency: "UGX",
-        narration: note || "ICANera card payment",
-        reference,
-        beneficiary_name: destType === "bank" ? beneficiary : "ICANera mobile money recipient",
-        callback_url: `${supabaseUrl}/functions/v1/flutterwave-transfer-webhook`,
-      }),
+    const transferResponse = await flwCreateTransfer(flutterwaveSecretKey, {
+      account_bank: accountBankCode,
+      account_number: phone,
+      amount: Number(requestResult.net_amount),
+      currency: "UGX",
+      narration: note || "ICANera card payment",
+      reference,
+      beneficiary_name: destType === "bank" ? beneficiary : "ICANera mobile money recipient",
+      callback_url: `${supabaseUrl}/functions/v1/flutterwave-transfer-webhook`,
     });
     const transferBody = await transferResponse.json().catch(() => null);
     const transferData = transferBody?.data;

@@ -326,13 +326,24 @@ const ChatWidget = ({ hasBottomNav = false }) => {
         setCmmsSelfId(selfCmmsUser?.id || '');
         setCmmsRecipients(cmmsUsers.filter((user) => user.id !== selfCmmsUser?.id));
         if (!verified && channelRef.current === 'cmms') setChannel('support');
+        // Stale/foreign company id (user isn't a member): retrying every 30s only
+        // spams 400s. Stop polling until the company id or identity changes.
+        // Drop the stale saved company id so it isn't retried on every reload.
+        if (!verified && [messagesResult, tasksResult, usersResult].every((r) => /not a member/i.test(r.error || ''))) {
+          try {
+            localStorage.removeItem('cmms_company_id');
+            if (identity?.email) localStorage.removeItem(`cmms_active_company::${String(identity.email).trim().toLowerCase()}`);
+          } catch (_) { /* Storage is optional. */ }
+        }
+        if (!verified && intervalId) { window.clearInterval(intervalId); intervalId = null; }
       } finally {
         if (!cancelled) setCmmsLoading(false);
       }
     };
+    let intervalId = null;
     loadCmmsFeed();
-    const intervalId = window.setInterval(loadCmmsFeed, 30000);
-    return () => { cancelled = true; window.clearInterval(intervalId); };
+    intervalId = window.setInterval(loadCmmsFeed, 30000);
+    return () => { cancelled = true; if (intervalId) window.clearInterval(intervalId); };
   }, [canCheckCmmsAccess, cmmsCompanyId]);
 
   useEffect(() => {
