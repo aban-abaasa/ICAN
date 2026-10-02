@@ -1304,6 +1304,8 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [deleteAccountEmail, setDeleteAccountEmail] = useState('');
   const [deleteAccountPhrase, setDeleteAccountPhrase] = useState('');
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+  const [deleteAccountHasPassword, setDeleteAccountHasPassword] = useState(true);
   const [deleteAccountError, setDeleteAccountError] = useState('');
   const [deleteAccountSuccess, setDeleteAccountSuccess] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -2744,8 +2746,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     if (selectedDetail?.tab === 'settings' && selectedDetail?.item === 'Danger Zone') {
       setDeleteAccountEmail('');
       setDeleteAccountPhrase('');
+      setDeleteAccountPassword('');
       setDeleteAccountError('');
       setDeleteAccountSuccess('');
+      supabase?.auth.getUser().then(({ data }) => {
+        const providers = data?.user?.app_metadata?.providers;
+        setDeleteAccountHasPassword(!Array.isArray(providers) || providers.includes('email'));
+      }).catch(() => {});
     }
   }, [selectedDetail]);
 
@@ -3571,24 +3578,25 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   };
 
-  // Danger Zone - request an emailed deletion link (see backend/routes/
-  // emailRoutes.js POST /api/email/request-account-deletion and backend/
-  // DELETE_ACCOUNT_EMAIL_SELFSERVICE.sql). Typing the Gmail + "delete"
-  // here only asks for that link to be sent — it never deletes
-  // anything itself. Opening the link (ConfirmDeleteAccountPage) is what
-  // actually redeems the token and deletes the account.
+  // Danger Zone - delete the account right away. The user confirms their Gmail
+  // and password (Google-only accounts type "delete" instead); the
+  // request-pin-reset Edge Function re-verifies the password server-side and
+  // then deletes the account. No email is sent.
   const handleDeleteAccount = async () => {
     setDeleteAccountError('');
     setDeleteAccountSuccess('');
 
     const email = deleteAccountEmail.trim().toLowerCase();
-    const phrase = deleteAccountPhrase.trim().toLowerCase();
 
     if (!email) {
       setDeleteAccountError('Please enter your Gmail address to confirm account deletion.');
       return;
     }
-    if (phrase !== 'delete') {
+    if (deleteAccountHasPassword && !deleteAccountPassword) {
+      setDeleteAccountError('Please enter your password to delete your account.');
+      return;
+    }
+    if (!deleteAccountHasPassword && deleteAccountPhrase.trim().toLowerCase() !== 'delete') {
       setDeleteAccountError('Please type "delete" to confirm.');
       return;
     }
@@ -3608,21 +3616,27 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         throw new Error('That email does not match your account\'s registered Gmail.');
       }
 
-      // Reuses the request-pin-reset Edge Function (Resend) — no extra Vercel function.
       const { data, error: invokeError } = await supabase.functions.invoke('request-pin-reset', {
-        body: { action: 'delete-account', confirmEmail: email, confirmPhrase: phrase }
+        body: {
+          action: 'delete-account-now',
+          confirmEmail: email,
+          password: deleteAccountPassword,
+          confirmPhrase: deleteAccountPhrase.trim().toLowerCase()
+        }
       });
-      if (invokeError && !data) throw new Error(invokeError.message || 'Failed to send deletion link.');
+      if (invokeError && !data) throw new Error(invokeError.message || 'Failed to delete account.');
       if (!data?.success) {
-        throw new Error(data?.message || 'Failed to send deletion link.');
+        throw new Error(data?.message || 'Failed to delete account.');
       }
 
-      setDeleteAccountSuccess(`A deletion link was sent to ${user.email}. Open it from that inbox to permanently delete your account.`);
+      setDeleteAccountSuccess('Your account has been deleted.');
       setDeleteAccountEmail('');
       setDeleteAccountPhrase('');
+      setDeleteAccountPassword('');
+      await supabase.auth.signOut();
     } catch (error) {
       console.error('Delete account error:', error);
-      setDeleteAccountError(error.message || 'Unable to send deletion link right now.');
+      setDeleteAccountError(error.message || 'Unable to delete your account right now.');
     } finally {
       setIsDeletingAccount(false);
     }
@@ -6000,7 +6014,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 <div className="space-y-4">
                   <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
                     <h3 className="text-sm font-bold text-red-300 mb-4">Danger Zone - Delete Your Account</h3>
-                    <p className="text-xs text-gray-300 mb-4">This action cannot be undone. All your data will be permanently deleted. We'll email a confirmation link to your Gmail — your account is only deleted once you open that link.</p>
+                    <p className="text-xs text-gray-300 mb-4">This action cannot be undone. All your data will be permanently deleted. Confirm your Gmail and password and your account is deleted immediately.</p>
 
                     <div className="mb-4">
                       <label className="block text-xs text-gray-300 mb-2">Confirm your Gmail address</label>
@@ -6014,17 +6028,31 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       />
                     </div>
 
-                    <div className="mb-4">
-                      <label className="block text-xs text-gray-300 mb-2">Type <span className="font-mono text-red-300">delete</span> to confirm</label>
-                      <input
-                        type="text"
-                        value={deleteAccountPhrase}
-                        onChange={(e) => setDeleteAccountPhrase(e.target.value)}
-                        placeholder="delete"
-                        autoComplete="off"
-                        className="w-full px-3 py-2 bg-slate-800/70 border border-red-500/30 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                      />
-                    </div>
+                    {deleteAccountHasPassword ? (
+                      <div className="mb-4">
+                        <label className="block text-xs text-gray-300 mb-2">Enter your password to confirm</label>
+                        <input
+                          type="password"
+                          value={deleteAccountPassword}
+                          onChange={(e) => setDeleteAccountPassword(e.target.value)}
+                          placeholder="Your password"
+                          autoComplete="current-password"
+                          className="w-full px-3 py-2 bg-slate-800/70 border border-red-500/30 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                        />
+                      </div>
+                    ) : (
+                      <div className="mb-4">
+                        <label className="block text-xs text-gray-300 mb-2">Type <span className="font-mono text-red-300">delete</span> to confirm</label>
+                        <input
+                          type="text"
+                          value={deleteAccountPhrase}
+                          onChange={(e) => setDeleteAccountPhrase(e.target.value)}
+                          placeholder="delete"
+                          autoComplete="off"
+                          className="w-full px-3 py-2 bg-slate-800/70 border border-red-500/30 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                        />
+                      </div>
+                    )}
 
                     {deleteAccountError && (
                       <div className="mb-3 p-2 bg-red-500/20 border border-red-500/40 rounded text-xs text-red-200">
@@ -6043,7 +6071,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       disabled={isDeletingAccount}
                       className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-800/60 text-white rounded-lg transition font-medium mb-2"
                     >
-                      {isDeletingAccount ? 'Sending Deletion Link...' : 'Send Deletion Link'}
+                      {isDeletingAccount ? 'Deleting Account...' : 'Delete My Account'}
                     </button>
                     <button 
                       onClick={() => setSelectedDetail(null)}

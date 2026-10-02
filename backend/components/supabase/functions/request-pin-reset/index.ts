@@ -30,8 +30,8 @@ const allowedOrigins = new Set([
 // Extra actions that reuse this function's Resend + service-role setup so no
 // additional Vercel/Supabase function is needed:
 //   action "account-otp"            -> 6-digit email code before wallet creation
-//   action "delete-account"         -> emails a one-time account deletion link
-//   action "confirm-delete-account" -> redeems that link and deletes the account
+//   action "delete-account-now"     -> deletes the signed-in user's account after
+//                                      re-checking their password (no email sent)
 // Expected failures are returned as HTTP 200 { success: false, message } so the
 // client can show the message without parsing a non-2xx response body.
 // ---------------------------------------------------------------------------
@@ -114,95 +114,45 @@ const handleAccountOtp = async (
   return jsonResponse({ success: true, message: "Verification code sent — check your email." });
 };
 
-const handleDeleteAccountRequest = async (
+const handleDeleteAccountNow = async (
   admin: AdminClient,
-  resendApiKey: string,
-  user: AuthedUser,
+  supabaseUrl: string,
+  user: AuthedUser & { providers: string[] },
   request: Record<string, unknown>,
 ) => {
   const confirmEmail = String(request?.confirmEmail || "").trim().toLowerCase();
-  const confirmPhrase = String(request?.confirmPhrase || "").trim().toLowerCase();
   if (confirmEmail !== user.email.trim().toLowerCase()) {
     return jsonResponse({ success: false, message: "That email does not match your account email." });
   }
-  if (confirmPhrase !== "delete") {
+
+  if (user.providers.includes("email")) {
+    // Password accounts: re-verify the password server-side before deleting.
+    const password = String(request?.password || "");
+    if (!password) {
+      return jsonResponse({ success: false, message: "Enter your password to delete your account." });
+    }
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!anonKey) {
+      console.error("delete-account-now: SUPABASE_ANON_KEY is not available");
+      return jsonResponse({ success: false, message: "Account deletion is not configured." });
+    }
+    const verifier = createClient(supabaseUrl, anonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { error: passwordError } = await verifier.auth.signInWithPassword({
+      email: user.email,
+      password,
+    });
+    if (passwordError) {
+      return jsonResponse({ success: false, message: "Incorrect password." });
+    }
+  } else if (String(request?.confirmPhrase || "").trim().toLowerCase() !== "delete") {
+    // Google-only accounts have no password to check; require the typed word instead.
     return jsonResponse({ success: false, message: 'Please type "delete" to confirm.' });
   }
 
-  const { data: recent } = await admin
-    .from("account_deletion_tokens")
-    .select("id, created_at")
-    .eq("user_id", user.id)
-    .is("used_at", null)
-    .gt("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1);
-  const recentRow = recent?.[0];
-  if (recentRow && Date.now() - new Date(recentRow.created_at).getTime() < 2 * 60 * 1000) {
-    return jsonResponse({ success: true, message: "A deletion link was already sent — check your email." });
-  }
-
-  const rawToken = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  const { error: insertError } = await admin.from("account_deletion_tokens").insert({
-    user_id: user.id,
-    token_hash: await sha256Hex(rawToken),
-    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-  });
-  if (insertError) {
-    console.error("delete-account token insert failed:", insertError);
-    return jsonResponse({ success: false, message: "Could not create a deletion link." });
-  }
-
-  const siteUrl = Deno.env.get("APP_URL") || "https://icanera.space";
-  const safeLink = escapeHtml(`${siteUrl}/confirm-delete-account?token=${rawToken}`);
-  const sent = await sendResendEmail(
-    resendApiKey,
-    user.email,
-    "Confirm deletion of your IcanEra account",
-    `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1f2937"><h1>Delete your account</h1><p>We received a request to permanently delete your IcanEra account. This cannot be undone.</p><p><a href="${safeLink}" style="display:inline-block;background:#dc2626;color:#fff;padding:12px 22px;border-radius:6px;text-decoration:none">Permanently delete my account</a></p><p>This link expires in 30 minutes and can only be used once. If you did not request this, ignore this email; your account stays exactly as it is.</p><p style="font-size:12px;color:#6b7280">If the button does not work, copy this link into your browser:<br>${safeLink}</p></div>`,
-  );
-  if (!sent) return jsonResponse({ success: false, message: "Could not send the deletion email." });
-  return jsonResponse({ success: true, message: "Deletion link sent — check your email." });
-};
-
-const handleConfirmDeleteAccount = async (admin: AdminClient, request: Record<string, unknown>) => {
-  const token = String(request?.token || "").trim();
-  if (!token) {
-    return jsonResponse({
-      success: false,
-      message: "Missing deletion token. Request a deletion link from your account's Danger Zone first.",
-    });
-  }
-
-  const tokenHash = await sha256Hex(token);
-  const { data: tokenRow, error: lookupError } = await admin
-    .from("account_deletion_tokens")
-    .select("id, user_id, used_at, expires_at")
-    .eq("token_hash", tokenHash)
-    .maybeSingle();
-  if (lookupError) {
-    console.error("Deletion token lookup error:", lookupError);
-    return jsonResponse({ success: false, message: "Failed to verify deletion link." });
-  }
-  if (!tokenRow || tokenRow.used_at || new Date(tokenRow.expires_at).getTime() <= Date.now()) {
-    return jsonResponse({
-      success: false,
-      message: "This deletion link is invalid or has expired. Request a new one from your account's Danger Zone.",
-    });
-  }
-
-  const userId = tokenRow.user_id as string;
-  // Burn every live token for this user first so a replayed link can't redeem twice.
-  await admin
-    .from("account_deletion_tokens")
-    .update({ used_at: new Date().toISOString() })
-    .eq("user_id", userId)
-    .is("used_at", null);
-
-  await admin.from("profiles").delete().eq("id", userId);
-  const { error: deleteError } = await admin.auth.admin.deleteUser(userId);
+  await admin.from("profiles").delete().eq("id", user.id);
+  const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
   if (deleteError) {
     console.error("Delete user error:", deleteError);
     return jsonResponse({ success: false, message: deleteError.message || "Failed to delete account." });
@@ -226,14 +176,16 @@ serve(async (req) => {
     const request = await req.json().catch(() => ({}));
     const action = typeof request?.action === "string" ? request.action : "";
 
-    if (!supabaseUrl || !serviceRoleKey || !resendApiKey) {
+    // Deleting an account needs no email, so it only requires the Supabase keys.
+    const needsResend = action !== "delete-account-now";
+    if (!supabaseUrl || !serviceRoleKey || (needsResend && !resendApiKey)) {
       const missing = [
         !supabaseUrl && "SUPABASE_URL",
         !serviceRoleKey && "SUPABASE_SERVICE_ROLE_KEY",
-        !resendApiKey && "RESEND_API_KEY",
+        needsResend && !resendApiKey && "RESEND_API_KEY",
       ].filter(Boolean).join(", ");
       console.error(`request-pin-reset is missing function secrets: ${missing}`);
-      const isNewAction = ["account-otp", "delete-account", "confirm-delete-account"].includes(action);
+      const isNewAction = ["account-otp", "delete-account-now"].includes(action);
       return jsonResponse({
         success: false,
         message: `Email is not configured on the Supabase project (missing secret: ${missing}).`,
@@ -243,12 +195,6 @@ serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-
-    // The deletion link is opened from an email inbox that may have no session;
-    // the one-time token itself is the proof of ownership.
-    if (action === "confirm-delete-account") {
-      return await handleConfirmDeleteAccount(admin, request);
-    }
 
     const authHeader = req.headers.get("Authorization") || "";
     if (!authHeader.startsWith("Bearer ")) {
@@ -261,11 +207,12 @@ serve(async (req) => {
       return jsonResponse({ success: false, message: "Your session expired. Sign in and try again." }, 401);
     }
 
-    if (action === "account-otp") {
-      return await handleAccountOtp(admin, resendApiKey, { id: user.id, email: user.email }, request);
+    if (action === "delete-account-now") {
+      const providers = Array.isArray(user.app_metadata?.providers) ? user.app_metadata.providers as string[] : [];
+      return await handleDeleteAccountNow(admin, supabaseUrl, { id: user.id, email: user.email, providers }, request);
     }
-    if (action === "delete-account") {
-      return await handleDeleteAccountRequest(admin, resendApiKey, { id: user.id, email: user.email }, request);
+    if (action === "account-otp") {
+      return await handleAccountOtp(admin, resendApiKey!, { id: user.id, email: user.email }, request);
     }
 
     const accountType = request?.accountType === "business" ? "business" : "personal";
