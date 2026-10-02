@@ -5,10 +5,12 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Check, DollarSign, Briefcase, Loader, Mic, MicOff, Calendar } from 'lucide-react';
+import { Send, Check, DollarSign, Briefcase, Loader, Mic, MicOff, Calendar, Paperclip, X } from 'lucide-react';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
 import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { supabase } from '../lib/supabase/client';
+import { uploadToR2 } from '../services/r2StorageService';
+import { RECEIPT_FOLDER, RECEIPT_MAX_BYTES, compressReceiptImage } from '../utils/transactionReceipt';
 
 
 export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, preselectedBusinessProfileId = null, onClose = null, onSubmit = null, prefillText = '' }) => {
@@ -42,6 +44,32 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
   // actually moved (e.g. catching up on last week's sales) ──
   const todayStr = () => new Date().toISOString().split('T')[0];
   const [transactionDate, setTransactionDate] = useState(todayStr());
+  // Optional proof: a photo of the receipt, uploaded through the existing R2
+  // flow on submit and stored on the entry as metadata.receipt_url.
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptPreview, setReceiptPreview] = useState(null);
+  const [receiptError, setReceiptError] = useState('');
+  const [receiptRef, setReceiptRef] = useState('');
+  const receiptInputRef = useRef(null);
+
+  const clearReceipt = () => {
+    if (receiptPreview) URL.revokeObjectURL(receiptPreview);
+    setReceiptFile(null);
+    setReceiptPreview(null);
+    setReceiptError('');
+  };
+
+  const handleReceiptPicked = (event) => {
+    const picked = event.target.files?.[0];
+    event.target.value = '';
+    if (!picked) return;
+    if (!/^image\//i.test(picked.type)) { setReceiptError('Choose a photo of the receipt (JPG, PNG or WebP).'); return; }
+    if (picked.size > RECEIPT_MAX_BYTES) { setReceiptError('That image is too large (max 8 MB).'); return; }
+    if (receiptPreview) URL.revokeObjectURL(receiptPreview);
+    setReceiptError('');
+    setReceiptFile(picked);
+    setReceiptPreview(URL.createObjectURL(picked));
+  };
 
   const startVoiceRecognition = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -788,6 +816,23 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
           businessProfileId: selectedMode === 'business' ? (selectedBusinessProfileId || null) : null
         };
 
+        if (receiptRef.trim()) finalTransaction.receiptRef = receiptRef.trim();
+        if (receiptFile) {
+          if (!navigator.onLine) {
+            setReceiptError('You are offline — remove the receipt photo to save now, or reconnect to attach it.');
+            return;
+          }
+          const file = await compressReceiptImage(receiptFile);
+          const { data: { session } } = await supabase.auth.getSession();
+          const upload = await uploadToR2({ file, folder: RECEIPT_FOLDER, accessToken: session?.access_token });
+          if (!upload.success) {
+            setReceiptError(upload.error || 'Receipt upload failed. Try again or remove the photo.');
+            return;
+          }
+          finalTransaction.receiptUrl = upload.url;
+          finalTransaction.receiptAttachedAt = new Date().toISOString();
+        }
+
         // Use OpenAI for professional accounting analysis in business mode
         if (selectedMode === 'business') {
           const enrichedTransaction = await analyzeTransactionWithAI(finalTransaction);
@@ -802,6 +847,8 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
         setTextInput('');
         setParsedData(null);
         setAiAnalysis(null);
+        clearReceipt();
+        setReceiptRef('');
         if (onClose) onClose();
       } catch (error) {
         console.error('❌ Submit failed:', error);
@@ -1014,6 +1061,36 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
                 Backdated
               </span>
             )}
+          </div>
+
+          {/* Optional receipt photo — proof that backs this entry in reports */}
+          <div>
+            <input ref={receiptInputRef} type="file" accept="image/*" className="hidden" onChange={handleReceiptPicked} />
+            {receiptFile ? (
+              <div className="flex items-center gap-2 border-2 border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">
+                {receiptPreview && <img src={receiptPreview} alt="Receipt preview" className="w-9 h-9 rounded object-cover flex-shrink-0" />}
+                <span className="flex-1 min-w-0 text-xs font-semibold text-emerald-800 truncate">🧾 Receipt attached · {receiptFile.name || 'photo'}</span>
+                <button type="button" onClick={clearReceipt} className="p-1 text-emerald-700 hover:text-emerald-900" aria-label="Remove receipt photo">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => receiptInputRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 bg-white rounded-lg px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+              >
+                <Paperclip className="w-4 h-4" /> Attach receipt photo (optional)
+              </button>
+            )}
+            <input
+              type="text"
+              value={receiptRef}
+              onChange={(e) => setReceiptRef(e.target.value.slice(0, 60))}
+              placeholder="Receipt / reference no. (optional)"
+              className="mt-2 w-full border-2 border-gray-200 bg-white rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-300"
+            />
+            {receiptError && <p className="mt-1 text-xs text-red-600">{receiptError}</p>}
           </div>
 
           {/* Quick Entry Tabs — pre-fill "Sold " or "Bought " into the input */}

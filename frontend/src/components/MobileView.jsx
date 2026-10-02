@@ -62,6 +62,9 @@ import {
   Loader2
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
+import TransactionReceiptModal from './TransactionReceiptModal';
+import ReceiptTally from './ReceiptTally';
+import { getProofStatus, getProofLabel, getReceiptNumber } from '../utils/transactionReceipt';
 import CmmsPageShell from './CmmsPageShell';
 import { ProfilePage } from './auth/ProfilePage';
 import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
@@ -178,7 +181,7 @@ const getWalletTabLabel = (tabName = '') => {
 };
 
 // Recent Transactions Collapsible Component
-const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
+const RecentTransactionsCollapsible = ({ transactions, formatCurrency, onOpenReceipt }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [period, setPeriod] = useState('week'); // 'today' | 'week' | 'month' | 'year'
 
@@ -328,7 +331,14 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
               const recCat = transaction.record_category || transaction.metadata?.record_category || 'personal';
               const isBusiness = recCat === 'business';
               return (
-                <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30">
+                <div
+                  key={transaction.id}
+                  role={onOpenReceipt ? 'button' : undefined}
+                  tabIndex={onOpenReceipt ? 0 : undefined}
+                  onClick={onOpenReceipt ? () => onOpenReceipt(transaction) : undefined}
+                  onKeyDown={onOpenReceipt ? (e) => { if (e.key === 'Enter') onOpenReceipt(transaction); } : undefined}
+                  className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30 cursor-pointer active:bg-slate-800/60"
+                >
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                       transaction.transaction_type === 'income' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
@@ -343,6 +353,7 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
                         <p className="text-xs text-gray-400">
                           {new Date(transaction.created_at).toLocaleDateString()}
                         </p>
+                        {getProofStatus(transaction) !== 'system' && <span title="Receipt attached" className="text-[11px]">🧾</span>}
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${
                           isBusiness
                             ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
@@ -830,6 +841,8 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [tithePayMsg, setTithePayMsg] = useState(null); // { type: 'ok'|'err', text }
   const [transactionType, setTransactionType] = useState(null); // 'business' or 'personal'
   const [showRecordTypeModal, setShowRecordTypeModal] = useState(false);
+  const [receiptTransaction, setReceiptTransaction] = useState(null);
+  const [showOnlyNoProof, setShowOnlyNoProof] = useState(false);
   const [recordTypeChoice, setRecordTypeChoice] = useState(''); // dropdown selection inside the Record Transaction modal
   const [recordBusinessChoice, setRecordBusinessChoice] = useState('');
   const [recordBusinessProfiles, setRecordBusinessProfiles] = useState([]);
@@ -3842,7 +3855,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
     const filtered = owner.records;
-    const rows = [['Account Holder', 'Account', 'Business Name', 'Date', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Chain Hash']];
+    const rows = [['Account Holder', 'Account', 'Business Name', 'Date', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Chain Hash', 'Receipt No.', 'Proof', 'Receipt Ref']];
     filtered.forEach(t => {
       const hash = txChainHashes[t.id] || t.data_hash || '';
       rows.push([
@@ -3856,7 +3869,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         t.metadata?.quantity ?? '',
         t.metadata?.unit_price ?? '',
         Math.abs(t.amount || 0),
-        hash.slice(0, 20) || ''
+        hash.slice(0, 20) || '',
+        getReceiptNumber(t),
+        getProofLabel(t),
+        t.metadata?.receipt_ref || ''
       ]);
     });
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -3890,10 +3906,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       Quantity: t.metadata?.quantity ?? '',
       'Unit Price (UGX)': t.metadata?.unit_price ?? '',
       'Amount (UGX)': Math.abs(t.amount || 0),
-      'Chain Hash': (txChainHashes[t.id] || t.data_hash || '').slice(0, 20)
+      'Chain Hash': (txChainHashes[t.id] || t.data_hash || '').slice(0, 20),
+      'Receipt No.': getReceiptNumber(t),
+      Proof: getProofLabel(t),
+      'Receipt Ref': t.metadata?.receipt_ref || ''
     }));
     const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Info: 'No transactions in this period' }]);
-    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 24 }, { wch: 22 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 22 }];
+    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 24 }, { wch: 22 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 22 }, { wch: 24 }, { wch: 20 }, { wch: 20 }];
     const info = XLSX.utils.aoa_to_sheet([
       ['IcanEra Transaction Report'],
       [owner.scope === 'business' ? 'Business' : 'Account', owner.title],
@@ -4089,6 +4108,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       y += 11;
     }
 
+    // ── Proof note — how many entries carry an attached receipt photo ──
+    {
+      const attachedCount = filtered.filter((t) => getProofStatus(t) !== 'system').length;
+      doc.setFontSize(7); doc.setTextColor(71, 85, 105); doc.setFont('helvetica', 'normal');
+      doc.text(`Receipts: ${attachedCount} of ${filtered.length} entries have a receipt photo or receipt no.; the rest carry a system receipt (RCT number in Excel/CSV exports).`.slice(0, 150), 14, y + 3);
+      y += 8;
+    }
+
     // ── Table header — Light with green accent ──
     const cols = [
       { label: '#',           w: 8  },
@@ -4096,9 +4123,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       { label: 'Type',        w: 16 },
       { label: 'Category',    w: 14 },
       { label: 'Qty',         w: 10 },
-      { label: 'Description', w: 54 },
-      { label: 'Amount (UGX)',w: 30 },
-      { label: 'Chain',       w: 18 },
+      { label: 'Description', w: 42 },
+      { label: 'Amount (UGX)',w: 28 },
+      { label: 'Chain',       w: 16 },
+      { label: 'Proof',       w: 16 },
     ];
     doc.setFillColor(220, 252, 231);  // green-100
     doc.rect(14, y, pageW - 28, 7, 'F');
@@ -4127,9 +4155,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         isBiz ? 'Biz' : 'Pers',
         (t.metadata?.category || t.metadata?.categoryName || '').slice(0, 10),
         t.metadata?.quantity ? `${t.metadata.quantity}×` : '',
-        (t.description || '').slice(0, 40),
+        (t.description || '').slice(0, 30),
         `${isIncome ? '+' : '-'}${Math.abs(t.amount||0).toLocaleString()}`,
-        hash ? hash.slice(0, 8) + '…' : '',
+        hash ? hash.slice(0, 6) + '…' : '',
+        getProofStatus(t) === 'attached' ? 'Photo' : getProofStatus(t) === 'reference' ? 'Ref no.' : 'System',
       ];
       cx = 14;
       cells.forEach((cell, ci) => {
@@ -4241,7 +4270,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           ['Account Holder:', owner.accountHolder],
           [`Period: ${period}`, `Generated: ${new Date().toLocaleDateString()}`],
           [],
-          ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Blockchain Hash']
+          ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Blockchain Hash', 'Receipt No.', 'Proof', 'Receipt Ref']
         ];
 
         filtered.forEach((t, idx) => {
@@ -4258,7 +4287,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             t.metadata?.quantity ?? '',
             t.metadata?.unit_price ?? '',
             t.transaction_type === 'income' ? t.amount : -t.amount,
-            hash
+            hash,
+            getReceiptNumber(t),
+            getProofLabel(t),
+            t.metadata?.receipt_ref || ''
           ]);
         });
         
@@ -5228,7 +5260,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         raw_entry_text: transaction.originalText || transaction.rawInput || null,
         entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
         quantity: transaction.quantity || null,
-        unit_price: transaction.unitPrice || null
+        unit_price: transaction.unitPrice || null,
+        receipt_url: transaction.receiptUrl || null,
+        receipt_attached_at: transaction.receiptAttachedAt || null,
+        receipt_ref: transaction.receiptRef || null
       }
     };
     setTransactions(prev => [formattedTransaction, ...prev]);
@@ -5320,7 +5355,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         // Pass selected business profile so this transaction feeds PitchIn share valuation
         business_profile_id: transaction.businessProfileId || null,
         quantity: transaction.quantity || null,
-        unit_price: transaction.unitPrice || null
+        unit_price: transaction.unitPrice || null,
+        receipt_url: transaction.receiptUrl || null,
+        receipt_attached_at: transaction.receiptAttachedAt || null,
+        receipt_ref: transaction.receiptRef || null
       });
 
       if (result.success) {
@@ -7563,9 +7601,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     </div>
                   </div>
 
+                  <ReceiptTally
+                    transactions={txPeriodFiltered}
+                    formatCurrency={formatCurrency}
+                    onlyMissing={showOnlyNoProof}
+                    onToggleMissing={() => setShowOnlyNoProof((v) => !v)}
+                  />
+
                   {/* Transaction rows */}
                   <div className="space-y-2 max-h-80 overflow-y-auto pr-0.5">
-                    {txPeriodFiltered.slice(0, 30).map((transaction) => {
+                    {(showOnlyNoProof ? txPeriodFiltered.filter((t) => getProofStatus(t) === 'system') : txPeriodFiltered).slice(0, 30).map((transaction) => {
                       const recCat    = transaction.record_category || transaction.metadata?.record_category || 'personal';
                       const isBiz     = recCat === 'business';
                       const isIncome  = transaction.transaction_type === 'income';
@@ -7575,7 +7620,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       return (
                         <div
                           key={transaction.id}
-                          className="flex items-center gap-3 p-3 rounded-xl border transition-all group"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setReceiptTransaction(transaction)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') setReceiptTransaction(transaction); }}
+                          className="flex items-center gap-3 p-3 rounded-xl border transition-all group cursor-pointer"
                           style={{ backgroundColor: 'var(--color-bgSecondary)', borderColor: 'var(--color-border)' }}
                         >
                           {/* Category emoji / fallback icon */}
@@ -7608,6 +7657,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                                   {catName}
                                 </span>
                               )}
+                              {getProofStatus(transaction) !== 'system' && <span title="Receipt attached" className="text-[11px]">🧾</span>}
                               <span className="text-[10px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
                                 {fmtTxDate(transaction.created_at)}
                               </span>
@@ -7620,7 +7670,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               {isIncome ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
                             </p>
                             <button
-                              onClick={() => handleDeleteTransaction(transaction.id, transaction.description || 'Transaction')}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(transaction.id, transaction.description || 'Transaction'); }}
                               className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
                               title="Delete"
                             >
@@ -7714,7 +7764,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       </div>
 
       {/* Recent Transactions Section - Keep for backup */}
-      {transactions.length > 0 && false && <RecentTransactionsCollapsible transactions={transactions} formatCurrency={formatCurrency} />}
+      {transactions.length > 0 && false && <RecentTransactionsCollapsible transactions={transactions} formatCurrency={formatCurrency} onOpenReceipt={setReceiptTransaction} />}
 
       {/* ====== UPDATES SECTION - HORIZONTAL SCROLLING ====== */}
       <div className="px-4 py-6">
@@ -8410,7 +8460,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   return (
                     <div
                       key={transaction.id}
-                      className="flex items-center gap-2 p-2.5 rounded-lg border transition-all group"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setReceiptTransaction(transaction)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') setReceiptTransaction(transaction); }}
+                      className="flex items-center gap-2 p-2.5 rounded-lg border transition-all group cursor-pointer"
                       style={{
                         backgroundColor: 'var(--color-bgSecondary)',
                         borderColor: isBiz && chainHash ? 'rgba(59,130,246,0.25)' : 'var(--color-border)'
@@ -8454,6 +8508,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               {chainHash.slice(0, 6)}…
                             </span>
                           )}
+                          {getProofStatus(transaction) !== 'system' && <span title="Receipt attached" className="text-[10px]">🧾</span>}
                           <span className="text-[9px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
                             {fmtExpDate(transaction.created_at)}
                           </span>
@@ -8466,7 +8521,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                           {isIncome ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
                         </p>
                         <button
-                          onClick={() => handleDeleteTransaction(transaction.id, transaction.description || 'Transaction')}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(transaction.id, transaction.description || 'Transaction'); }}
                           className="p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
                           title="Delete"
                         >
@@ -10289,6 +10344,18 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           />
         );
       })()}
+
+      {receiptTransaction && (
+        <TransactionReceiptModal
+          transaction={receiptTransaction}
+          businessName={recordBusinessProfiles.find((p) => p.id === (receiptTransaction.business_profile_id || receiptTransaction.metadata?.business_profile_id))?.business_name || null}
+          onClose={() => setReceiptTransaction(null)}
+          onProofAttached={(updated) => {
+            setReceiptTransaction(updated);
+            setTransactions((prev) => prev.map((t) => (t.id === updated.id ? { ...t, metadata: updated.metadata } : t)));
+          }}
+        />
+      )}
 
       {/* Smart Transaction Entry Modal */}
       <SmartTransactionEntry
