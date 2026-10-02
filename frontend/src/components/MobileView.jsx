@@ -102,6 +102,7 @@ import DashboardUpdatesCard from './DashboardUpdatesCard';
 import BusinessTrendChart from './BusinessTrendChart';
 import CmmsActivityWidget from './CmmsActivityWidget';
 import { supabase } from '../lib/supabase/client';
+import { getBackendUrl } from '../lib/backendUrl';
 import { deleteTransaction } from '../services/supabaseTransactions';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
 import DataCleanupModal from './DataCleanupModal';
@@ -3573,8 +3574,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
   // Danger Zone - request an emailed deletion link (see backend/routes/
   // emailRoutes.js POST /api/email/request-account-deletion and backend/
-  // DELETE_ACCOUNT_EMAIL_SELFSERVICE.sql). Typing the Gmail + "delete my
-  // account" here only asks for that link to be sent — it never deletes
+  // DELETE_ACCOUNT_EMAIL_SELFSERVICE.sql). Typing the Gmail + "delete"
+  // here only asks for that link to be sent — it never deletes
   // anything itself. Opening the link (ConfirmDeleteAccountPage) is what
   // actually redeems the token and deletes the account.
   const handleDeleteAccount = async () => {
@@ -3588,8 +3589,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       setDeleteAccountError('Please enter your Gmail address to confirm account deletion.');
       return;
     }
-    if (phrase !== 'delete my account') {
-      setDeleteAccountError('Please type "delete my account" exactly to confirm.');
+    if (phrase !== 'delete') {
+      setDeleteAccountError('Please type "delete" to confirm.');
       return;
     }
 
@@ -3613,7 +3614,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         throw new Error('Session verification failed. Please sign in again.');
       }
 
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+      const backendUrl = getBackendUrl();
       const response = await fetch(`${backendUrl}/api/email/request-account-deletion`, {
         method: 'POST',
         headers: {
@@ -6018,12 +6019,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     </div>
 
                     <div className="mb-4">
-                      <label className="block text-xs text-gray-300 mb-2">Type <span className="font-mono text-red-300">delete my account</span> to confirm</label>
+                      <label className="block text-xs text-gray-300 mb-2">Type <span className="font-mono text-red-300">delete</span> to confirm</label>
                       <input
                         type="text"
                         value={deleteAccountPhrase}
                         onChange={(e) => setDeleteAccountPhrase(e.target.value)}
-                        placeholder="delete my account"
+                        placeholder="delete"
                         autoComplete="off"
                         className="w-full px-3 py-2 bg-slate-800/70 border border-red-500/30 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
                       />

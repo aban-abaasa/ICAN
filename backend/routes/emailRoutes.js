@@ -299,7 +299,7 @@ router.post('/request-pin-reset', async (req, res) => {
 // ============================================
 // Danger Zone (MobileView.jsx) no longer deletes on the spot from a typed
 // password. It instead makes the user type their registered Gmail and the
-// literal phrase "delete my account" here; only once both match do we email
+// literal phrase "delete" here; only once both match do we email
 // a one-time deletion link to that same address (see
 // backend/DELETE_ACCOUNT_EMAIL_SELFSERVICE.sql). Actually deleting the
 // account happens later, when that link is opened and the delete-account
@@ -355,10 +355,10 @@ router.post('/request-account-deletion', async (req, res) => {
       });
     }
 
-    if (confirmPhrase !== 'delete my account') {
+    if (confirmPhrase !== 'delete') {
       return res.status(400).json({
         success: false,
-        message: 'Please type "delete my account" exactly to confirm.'
+        message: 'Please type "delete" to confirm.'
       });
     }
 
