@@ -13,6 +13,7 @@ import {
   getReceiptLines,
   getReceiptNumber,
   getReceiptText,
+  signReceipt,
 } from '../utils/transactionReceipt';
 
 const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
@@ -31,6 +32,8 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
   const [canAttach, setCanAttach] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [signer, setSigner] = useState('');
+  const [seal, setSeal] = useState(null);
 
   useEffect(() => { setTx(transaction); }, [transaction]);
 
@@ -41,6 +44,22 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [transaction?.id, transaction?.user_id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      const u = data?.user;
+      const name = u?.user_metadata?.full_name || u?.user_metadata?.name || (u?.email ? u.email.split('@')[0] : '');
+      if (!cancelled) setSigner(name);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    signReceipt(tx, { businessName }).then((hash) => { if (!cancelled) setSeal(hash); });
+    return () => { cancelled = true; };
+  }, [tx, businessName]);
 
   const imageRef = getReceiptImageRef(tx);
   useEffect(() => {
@@ -134,12 +153,22 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
       }
     }
     pdf.setFont(undefined, 'normal'); pdf.setFontSize(8); pdf.setTextColor(100, 116, 139);
-    pdf.text('Digitally recorded on the IcanEra ledger.', 15, 290);
+    if (seal) {
+      pdf.setFont('times', 'italic'); pdf.setFontSize(16); pdf.setTextColor(49, 46, 129);
+      pdf.text(signer || 'IcanEra', 15, 272);
+      pdf.setDrawColor(196, 160, 82); pdf.line(15, 274, 95, 274);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(100, 116, 139);
+      pdf.text('Autographed digitally by the account holder', 15, 278);
+      pdf.text(`SHA-256 seal: ${seal.slice(0, 32)}`, 15, 282);
+      pdf.text(`${seal.slice(32)}`, 15, 285.5);
+    }
+    pdf.setFontSize(8);
+    pdf.text('Digitally recorded on the IcanEra ledger.', 15, 291);
     pdf.save(`${receiptNumber}.pdf`);
   };
 
   const share = async () => {
-    const text = getReceiptText(tx, { businessName });
+    const text = getReceiptText(tx, { businessName }, seal);
     if (navigator.share) { try { await navigator.share({ title: 'IcanEra receipt', text }); } catch { /* dismissed */ } return; }
     await navigator.clipboard?.writeText(text);
   };
@@ -195,6 +224,14 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
             </div>
           ))}
         </div>
+
+        {seal && (
+          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-300">Autograph</p>
+            <p className="mt-1 text-2xl text-indigo-200" style={{ fontFamily: '"Brush Script MT", "Segoe Script", cursive' }}>{signer || 'IcanEra'}</p>
+            <p className="mt-1 break-all font-mono text-[9px] text-slate-400" title="SHA-256 seal over this receipt's details">SHA-256 seal · {seal.slice(0, 32)}…</p>
+          </div>
+        )}
 
         {error && <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">{error}</p>}
 

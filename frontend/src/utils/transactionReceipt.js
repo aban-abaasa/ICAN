@@ -12,15 +12,19 @@ export const RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
 
 const shortId = (value) => String(value || '').replace(/-/g, '').slice(0, 8).toUpperCase();
 
-/** Stable receipt number derived from the ledger row, e.g. RCT-20260314-A1B2C3D4 */
+/** Receipt number from a date + source id, e.g. RCT-20260314-A1B2C3D4 */
+export const makeReceiptNumber = (dateValue, id) => {
+  const date = new Date(dateValue);
+  const day = Number.isNaN(date.getTime()) ? '00000000' : date.toISOString().slice(0, 10).replace(/-/g, '');
+  return `RCT-${day}-${shortId(id) || 'LOCAL'}`;
+};
+
+/** Stable receipt number for a ledger row (a number stamped in metadata wins). */
 export const getReceiptNumber = (tx) => {
   if (!tx) return '';
   const stamped = tx.metadata?.receipt_number;
   if (stamped) return stamped;
-  const date = new Date(tx.created_at);
-  const day = Number.isNaN(date.getTime()) ? '00000000' : date.toISOString().slice(0, 10).replace(/-/g, '');
-  const ref = shortId(tx.id || tx.metadata?.receipt_id || tx.metadata?.reference_id) || 'LOCAL';
-  return `RCT-${day}-${ref}`;
+  return makeReceiptNumber(tx.created_at, tx.id || tx.metadata?.receipt_id || tx.metadata?.reference_id);
 };
 
 /** The attached proof image reference (r2:// or https://), or null. */
@@ -56,6 +60,9 @@ export const getReceiptLines = (tx, { businessName = null, currency = 'UGX' } = 
   if (meta.payment_method) lines.push(['Method', titleCase(meta.payment_method)]);
   if (meta.payer_name) lines.push(['Paid by', meta.payer_name]);
   if (meta.recipient_name || meta.recipient) lines.push(['Received by', meta.recipient_name || meta.recipient]);
+  if (meta.giving_type) lines.push(['Giving type', titleCase(meta.giving_type)]);
+  if (meta.recipient_type) lines.push(['Given to', titleCase(meta.recipient_type)]);
+  if (meta.is_anonymous) lines.push(['Giver', 'Anonymous']);
   if (meta.merchant_name) lines.push(['Merchant', meta.merchant_name]);
   const source = meta.source || meta.source_app;
   if (source) lines.push(['Recorded via', titleCase(source)]);
@@ -65,8 +72,8 @@ export const getReceiptLines = (tx, { businessName = null, currency = 'UGX' } = 
 };
 
 /** Plain-text receipt, used for sharing/clipboard. */
-export const getReceiptText = (tx, options) =>
-  ['IcanEra Transaction Receipt', ...getReceiptLines(tx, options).map(([k, v]) => `${k}: ${v}`)].join('\n');
+export const getReceiptText = (tx, options, seal = null) =>
+  ['IcanEra Transaction Receipt', ...getReceiptLines(tx, options).map(([k, v]) => `${k}: ${v}`), ...(seal ? [`Digital seal: ${seal.slice(0, 32)}…`] : [])].join('\n');
 
 /**
  * Downscale big phone photos before upload so receipts stay small. Non-images
@@ -125,3 +132,46 @@ export const walletTxToReceiptTx = (tx) => {
     },
   };
 };
+
+/**
+ * Autograph: SHA-256 seal over the receipt's canonical lines, so any later
+ * change to the amount/date/description produces a different seal. Returns
+ * null where WebCrypto isn't available.
+ */
+export const signReceipt = async (tx, options) => {
+  try {
+    if (!globalThis.crypto?.subtle) return null;
+    const canonical = getReceiptLines(tx, options).map(([k, v]) => `${k}=${v}`).join('|');
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
+    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Build a receipt-ready transaction from a tithe payment. The receipt number
+ * is derived from the tithe record id, so the same number is stamped on the
+ * matching ledger row and shown wherever the receipt is opened.
+ */
+export const titheToReceiptTx = ({ id, amount, currency = 'UGX', date, givingType, recipientType, paymentMethod, titheType, isAnonymous, description }) => ({
+  id: id || null,
+  user_id: null,
+  amount: Math.abs(Number(amount) || 0),
+  currency,
+  transaction_type: 'expense',
+  description: description || `${titleCase(givingType || 'tithe')} to ${recipientType || 'church'}`,
+  created_at: date ? new Date(date).toISOString() : new Date().toISOString(),
+  record_category: 'tithe',
+  metadata: {
+    record_category: 'tithe',
+    category: 'tithe',
+    source: 'tithe page',
+    receipt_number: makeReceiptNumber(date || new Date(), id),
+    giving_type: givingType,
+    recipient_type: recipientType,
+    payment_method: paymentMethod,
+    tithe_type: titheType,
+    is_anonymous: Boolean(isAnonymous),
+  },
+});
