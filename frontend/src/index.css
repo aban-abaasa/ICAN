@@ -621,6 +621,118 @@ html {
   box-shadow: 0 0 0 3px rgba(196, 160, 82, 0.25);
 }
 
+/* ==================== Account setup form (classic) ====================
+   Pieces the classic kit above doesn't have: numbered steps, status alerts,
+   on/off switches and text-link buttons. Everything is a CSS variable that
+   follows the same ivory/gold default + dark-surface preset split as the kit,
+   so the form reads in every colour mode. Use inside an `.acct-classic` root.
+
+   Why !important appears below: ThemeContext paints every input and button
+   (background/color/border) with !important. Text-link buttons and the primary
+   button therefore need a class-level !important to opt out, the same way
+   `button.icon-btn-transparent` does. */
+.acct-classic {
+  --acct-gold: #a17c28;
+  --acct-gold-line: rgba(196, 160, 82, 0.4);
+  --acct-muted: #64748b;
+  --acct-ok: #166534;
+  --acct-ok-solid: #15803d;
+  --acct-ok-bg: #ecfdf3;
+  --acct-ok-line: #86d3a3;
+  --acct-err: #991b1b;
+  --acct-err-bg: #fef2f2;
+  --acct-err-line: #f1a8a8;
+  --acct-track: #cbd5e1;
+}
+:root[data-theme="dark"] .acct-classic,
+:root[data-theme="purple"] .acct-classic,
+:root[data-theme="green"] .acct-classic,
+:root[data-theme="ocean"] .acct-classic,
+:root[data-theme="sienna"] .acct-classic {
+  --acct-gold: #e6c980;
+  --acct-gold-line: var(--color-border);
+  --acct-muted: var(--color-textSecondary);
+  --acct-ok: #86efac;
+  --acct-ok-solid: #16a34a;
+  --acct-ok-bg: rgba(22, 163, 74, 0.14);
+  --acct-ok-line: rgba(74, 222, 128, 0.45);
+  --acct-err: #fca5a5;
+  --acct-err-bg: rgba(239, 68, 68, 0.14);
+  --acct-err-line: rgba(248, 113, 113, 0.5);
+  --acct-track: var(--color-border);
+}
+
+/* White label text needs a deep enough fill in every theme; the classic kit
+   gradient is pale on the dark presets (e.g. #60a5fa), so deepen it here. */
+.acct-classic .cmms-classic-btn-primary {
+  color: #fff !important;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--color-primary) 62%, #0b1020),
+    color-mix(in srgb, var(--color-secondary) 72%, #0b1020));
+}
+
+.acct-classic .acct-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 28%, transparent);
+}
+
+.acct-step {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--acct-gold);
+  color: var(--acct-gold);
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  font-size: 0.875rem;
+}
+.acct-step.is-done { background: var(--acct-ok-solid); border-color: transparent; color: #fff; }
+.acct-step.is-locked { border-color: var(--acct-gold-line); color: var(--acct-muted); }
+.acct-classic .acct-locked { color: var(--acct-muted) !important; }
+
+.acct-alert { border-radius: 10px; padding: 0.6rem 0.8rem; border: 1px solid; font-size: 0.85rem; }
+.acct-alert.is-error { color: var(--acct-err); background: var(--acct-err-bg); border-color: var(--acct-err-line); }
+.acct-alert.is-ok { color: var(--acct-ok); background: var(--acct-ok-bg); border-color: var(--acct-ok-line); }
+
+.acct-classic button.acct-link {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--acct-gold) !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.acct-classic button.acct-link:disabled { opacity: 0.55; text-decoration: none; cursor: not-allowed; }
+
+.acct-switch-track {
+  position: relative;
+  flex: none;
+  width: 2.75rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--acct-track);
+  transition: background-color 0.15s ease;
+}
+.acct-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease;
+}
+.acct-switch-track.is-on { background: var(--acct-ok-solid); }
+.acct-switch-track.is-on::after { transform: translateX(1.25rem); }
+
+.acct-dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; background: var(--acct-track); }
+.acct-dot.is-on { background: var(--color-primary); }
+
 /* ==================== Colorful Dashboard Cards ====================
    Distinct-hue card variants for the main dashboard so its containers
    don't all read as one flat "glass" tone. Built on the same CSS

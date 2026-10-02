@@ -176,7 +176,7 @@ serve(async (req) => {
     // ── ICANera account: atomic wallet-to-wallet, nothing to refund ─────
     if (destType === "icanera") {
       const { data: sent, error: sendError } = await admin.rpc("card_pin_send_to_account", {
-        p_from_user: card.user_id, p_account_number: phone, p_amount: amount,
+        p_from_user: card.user_id, p_account_number: phone, p_amount: amount, p_request_id: scanId,
       });
       if (sendError || !sent?.success) {
         const reason = sent?.error || sendError?.message || "Could not send to that account.";
@@ -188,19 +188,22 @@ serve(async (req) => {
     }
 
     // ── Debit wallet + open send request (mobile money or bank) ─────────
+    // The card_pin_request_* wrappers also record the payment in the owner's
+    // wallet transactions in the same database transaction as the debit.
     const { data: requestResult, error: requestError } = destType === "bank"
-      ? await admin.rpc("request_fiat_bank_send", {
+      ? await admin.rpc("card_pin_request_bank_send", {
         p_user_id: card.user_id, p_amount: amount, p_account_number: phone,
         p_bank_code: accountBankCode, p_beneficiary: beneficiary,
         p_note: note || "Card payment (PIN approved at scan)",
+        p_request_id: scanId,
       })
-      : await admin.rpc("request_fiat_momo_send", {
+      : await admin.rpc("card_pin_request_momo_send", {
         p_user_id: card.user_id,
         p_amount: amount,
-        p_currency: "UGX",
-        p_recipient_phone: phone,
-        p_recipient_network: network,
+        p_phone: phone,
+        p_network: network,
         p_note: note || "Card payment (PIN approved at scan)",
+        p_request_id: scanId,
       });
     if (requestError || !requestResult?.success) {
       const reason = requestResult?.error || requestError?.message || "Could not start transfer.";

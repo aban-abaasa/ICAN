@@ -70,6 +70,7 @@ import ReceiveMoneyModal from './ReceiveMoneyModal';
 import PayMoneyModal from './PayMoneyModal';
 import IcanPaymentReceiptModal from './IcanPaymentReceiptModal';
 import PINRecoveryModal from './PINRecoveryModal';
+import EmailVerifyStep from './EmailVerifyStep';
 import { usePinPrompt } from './PinPromptDialog';
 
 // Big balances (14,378,412 UGX) overflow the balance card, so the headline shows
@@ -223,6 +224,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // A short typed code is used here (not a link) so the multi-field
   // creation form doesn't lose its state to a redirect.
   const [personalOtp, setPersonalOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
+  const [showCreatePin, setShowCreatePin] = useState(false);
   const [businessOtp, setBusinessOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
   // Same email-OTP gate, reused for the "Edit Account Information" form —
   // changing the email to a new address requires re-verifying that address
@@ -872,7 +874,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       // activity, salary payments received included) vs Business (rows tied
       // to a business wallet they manage, including receipts with no
       // personal recipient_user_id) vs All (both, unfiltered).
-      const [sharedResult, legacyResult] = await Promise.all([
+      const [sharedResult, legacyResult, cardResult] = await Promise.all([
         supabase.rpc('get_ican_record_every_transaction_feed', { p_scope: walletTxScope }),
         walletTxScope === 'business'
           ? Promise.resolve({ data: [], error: null })
@@ -880,6 +882,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               .from('ican_transactions')
               .select('*')
               .eq('user_id', currentUserId)
+              .order('created_at', { ascending: false })
+              .limit(100),
+        // Digital-card payments are recorded in the UGX wallet ledger
+        // (wallet_transactions, tagged source = digital_card), not the coin feed.
+        walletTxScope === 'business'
+          ? Promise.resolve({ data: [], error: null })
+          : supabase
+              .from('wallet_transactions')
+              .select('*')
+              .eq('user_id', currentUserId)
+              .contains('metadata', { source: 'digital_card' })
               .order('created_at', { ascending: false })
               .limit(100),
       ]);
@@ -913,7 +926,22 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         description: tx.description || tx.transaction_type || tx.type || 'Wallet transaction',
       }));
 
-      const merged = [...shared, ...legacy]
+      const card = (cardResult.data || []).map((tx) => {
+        const incoming = tx.transaction_type === 'receive';
+        const failed = tx.status === 'failed';
+        return {
+          ...tx,
+          id: 'card-' + tx.id,
+          amount: (incoming ? 1 : -1) * Number(tx.amount || 0),
+          currency: tx.currency || 'UGX',
+          transaction_type: incoming ? 'card_receive' : 'card_send',
+          description: `${tx.description || 'Card payment'}${failed ? ' (failed, refunded)' : tx.status === 'pending' ? ' (processing)' : ''}`,
+          metadata: { ...(tx.metadata || {}), source_app: 'ican' },
+          fiat_only: true,
+        };
+      });
+
+      const merged = [...shared, ...legacy, ...card]
         .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
         .slice(0, 100);
       setWalletTransactions(merged);
@@ -2487,8 +2515,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ email, accountType })
       });
-      const data = await response.json();
-      if (!data.success) throw new Error(data.message || 'Failed to send verification code');
+      const data = await response.json().catch(() => null);
+      if (!data?.success) {
+        // Server-configuration wording is for operators, not for people signing up.
+        const shown = /missing .*configuration/i.test(data?.message || '') ? null : data?.message;
+        throw new Error(shown || 'Email verification is temporarily unavailable. Please try again shortly.');
+      }
 
       setOtpState(prev => ({ ...prev, sent: true, loading: false }));
     } catch (error) {
@@ -4998,10 +5030,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     {isIncoming ? '+' : '-'}{Math.abs(Number(tx.local_amount ?? tx.amount)).toLocaleString()} {tx.currency}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400">IcanEra Amount</span>
-                  <span className="text-gray-200">{Math.abs(Number(tx.amount)).toFixed(4)} IcanEra</span>
-                </div>
+                {!tx.fiat_only && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">IcanEra Amount</span>
+                    <span className="text-gray-200">{Math.abs(Number(tx.amount)).toFixed(4)} IcanEra</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400">Type</span>
                   <span className="text-gray-200">{tx.transaction_type}</span>
@@ -5616,57 +5650,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   (and its PIN) is created for this business; not shown when
                   just editing an existing business wallet's details. */}
               {(!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0) && (
-                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
-                  <h3 className="text-purple-300 font-semibold mb-2 flex items-center gap-2 text-sm">
-                    📧 Verify Your Email {businessOtp.verified && <span className="text-green-400">✓ Verified</span>}
-                  </h3>
-                  {!businessOtp.verified && (
-                    <>
-                      <p className="text-gray-400 text-xs mb-3">
-                        We'll email a 6-digit code to confirm this address before you can set a PIN.
-                      </p>
-                      {businessOtp.error && <p className="text-red-400 text-xs mb-2">{businessOtp.error}</p>}
-                      {!businessOtp.sent ? (
-                        <button
-                          type="button"
-                          disabled={businessOtp.loading || !accountEditForm.email}
-                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp)}
-                          className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-all"
-                        >
-                          {businessOtp.loading ? 'Sending...' : 'Send Verification Code'}
-                        </button>
-                      ) : (
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={businessOtp.code}
-                            onChange={(e) => setBusinessOtp(prev => ({ ...prev, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
-                            placeholder="6-digit code"
-                            className="flex-1 px-4 py-2 bg-slate-700/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none tracking-widest text-center"
-                          />
-                          <button
-                            type="button"
-                            disabled={businessOtp.loading}
-                            onClick={() => verifyAccountEmailOtp(businessOtp.code, 'business', setBusinessOtp)}
-                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-all"
-                          >
-                            {businessOtp.loading ? 'Checking...' : 'Verify'}
-                          </button>
-                        </div>
-                      )}
-                      {businessOtp.sent && (
-                        <button
-                          type="button"
-                          disabled={businessOtp.loading}
-                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp)}
-                          className="mt-2 text-xs text-purple-300 hover:text-purple-200"
-                        >
-                          Resend code
-                        </button>
-                      )}
-                    </>
-                  )}
+                <div className="rounded-lg border border-slate-600/60 bg-slate-900/30 p-4">
+                  <h3 className="mb-3 font-serif text-base text-white">Verify your email</h3>
+                  <EmailVerifyStep
+                    compact
+                    email={accountEditForm.email}
+                    state={businessOtp}
+                    setState={setBusinessOtp}
+                    onSend={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp)}
+                    onVerify={() => verifyAccountEmailOtp(businessOtp.code, 'business', setBusinessOtp)}
+                    onChangeEmail={() => setBusinessOtp({ sent: false, verified: false, code: '', loading: false, error: null })}
+                  />
                 </div>
               )}
 
@@ -7021,57 +7015,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               {/* Email verification — only required when the address is
                   actually being changed from what's on file. */}
               {accountEditForm.email.trim().toLowerCase() !== originalAccountEmail.trim().toLowerCase() && (
-                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
-                  <h3 className="text-purple-300 font-semibold mb-2 flex items-center gap-2 text-sm">
-                    📧 Verify Your New Email {editEmailOtp.verified && <span className="text-green-400">✓ Verified</span>}
-                  </h3>
-                  {!editEmailOtp.verified && (
-                    <>
-                      <p className="text-gray-400 text-xs mb-3">
-                        We'll email a 6-digit code to confirm this new address before it's saved.
-                      </p>
-                      {editEmailOtp.error && <p className="text-red-400 text-xs mb-2">{editEmailOtp.error}</p>}
-                      {!editEmailOtp.sent ? (
-                        <button
-                          type="button"
-                          disabled={editEmailOtp.loading || !accountEditForm.email}
-                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'personal', setEditEmailOtp)}
-                          className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-all"
-                        >
-                          {editEmailOtp.loading ? 'Sending...' : 'Send Verification Code'}
-                        </button>
-                      ) : (
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={editEmailOtp.code}
-                            onChange={(e) => setEditEmailOtp(prev => ({ ...prev, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
-                            placeholder="6-digit code"
-                            className="flex-1 px-4 py-2 bg-slate-700/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none tracking-widest text-center"
-                          />
-                          <button
-                            type="button"
-                            disabled={editEmailOtp.loading}
-                            onClick={() => verifyAccountEmailOtp(editEmailOtp.code, 'personal', setEditEmailOtp)}
-                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium text-sm transition-all"
-                          >
-                            {editEmailOtp.loading ? 'Checking...' : 'Verify'}
-                          </button>
-                        </div>
-                      )}
-                      {editEmailOtp.sent && (
-                        <button
-                          type="button"
-                          disabled={editEmailOtp.loading}
-                          onClick={() => requestAccountEmailOtp(accountEditForm.email, 'personal', setEditEmailOtp)}
-                          className="mt-2 text-xs text-purple-300 hover:text-purple-200"
-                        >
-                          Resend code
-                        </button>
-                      )}
-                    </>
-                  )}
+                <div className="rounded-lg border border-slate-600/60 bg-slate-900/30 p-4">
+                  <h3 className="mb-3 font-serif text-base text-white">Verify your new email</h3>
+                  <EmailVerifyStep
+                    compact
+                    email={accountEditForm.email}
+                    state={editEmailOtp}
+                    setState={setEditEmailOtp}
+                    purpose="We'll email a 6-digit code to confirm this new address before it's saved."
+                    onSend={() => requestAccountEmailOtp(accountEditForm.email, 'personal', setEditEmailOtp)}
+                    onVerify={() => verifyAccountEmailOtp(editEmailOtp.code, 'personal', setEditEmailOtp)}
+                  />
                 </div>
               )}
 
@@ -7193,226 +7147,236 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       )}
 
       {/* 🎯 CREATE WALLET ACCOUNT MODAL */}
-      {showAccountCreation && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-3xl font-bold text-white mb-2 flex items-center gap-2">
-              💳 Create Your Wallet Account
-            </h2>
-            <p className="text-gray-400 mb-6">Set up your IcanEra wallet with a secure PIN and biometric options</p>
+      {showAccountCreation && (() => {
+        // Colours come only from the classic kit / .acct-* theme variables in
+        // index.css (never fixed Tailwind colours) so every colour mode reads.
+        const inputCls = 'acct-input w-full rounded-lg border px-4 py-3 disabled:opacity-60';
+        const pinLength = accountCreationForm.pin.length;
+        const detailsDone = accountCreationForm.accountHolderName.trim().length > 1
+          && accountCreationForm.phoneNumber.trim().length >= 9
+          && accountCreationForm.email.trim().length > 3;
 
-            {accountMessage && (
-              <div className={`mb-6 p-4 rounded-lg border ${
-                accountMessage.type === 'success' 
-                  ? 'bg-green-500/20 border-green-500/50 text-green-400' 
-                  : 'bg-red-500/20 border-red-500/50 text-red-400'
-              }`}>
-                {accountMessage.text}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateAccount} className="space-y-4">
-              {/* Account Holder Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Full Name *</label>
-                <input
-                  type="text"
-                  value={accountCreationForm.accountHolderName}
-                  onChange={(e) => setAccountCreationForm({ ...accountCreationForm, accountHolderName: e.target.value })}
-                  placeholder="Enter your full name"
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-all"
-                />
-              </div>
-
-              {/* Phone Number */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Phone Number *</label>
-                <input
-                  type="tel"
-                  value={accountCreationForm.phoneNumber}
-                  onChange={(e) => setAccountCreationForm({ ...accountCreationForm, phoneNumber: e.target.value })}
-                  placeholder="+256..."
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-all"
-                />
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Email Address *</label>
-                <input
-                  type="email"
-                  value={accountCreationForm.email}
-                  disabled={personalOtp.verified}
-                  onChange={(e) => {
-                    setAccountCreationForm({ ...accountCreationForm, email: e.target.value });
-                    if (personalOtp.sent || personalOtp.verified) {
-                      setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
-                    }
-                  }}
-                  placeholder="you@example.com"
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-purple-500/30 hover:border-purple-500/60 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-all disabled:opacity-60"
-                />
-              </div>
-
-              {/* Email verification (required before PIN can be set) */}
-              <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
-                <h3 className="text-purple-300 font-semibold mb-2 flex items-center gap-2">
-                  📧 Verify Your Email {personalOtp.verified && <span className="text-green-400">✓ Verified</span>}
-                </h3>
-                {!personalOtp.verified && (
-                  <>
-                    <p className="text-gray-400 text-sm mb-3">
-                      We'll email a 6-digit code to confirm this address before you can set a PIN.
-                    </p>
-                    {personalOtp.error && <p className="text-red-400 text-xs mb-2">{personalOtp.error}</p>}
-                    {!personalOtp.sent ? (
-                      <button
-                        type="button"
-                        disabled={personalOtp.loading || !accountCreationForm.email}
-                        onClick={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp)}
-                        className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium transition-all"
-                      >
-                        {personalOtp.loading ? 'Sending...' : 'Send Verification Code'}
-                      </button>
-                    ) : (
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={personalOtp.code}
-                          onChange={(e) => setPersonalOtp(prev => ({ ...prev, code: e.target.value.replace(/\D/g, '').slice(0, 6) }))}
-                          placeholder="6-digit code"
-                          className="flex-1 px-4 py-2 bg-slate-700/50 border border-purple-500/30 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none tracking-widest text-center"
-                        />
-                        <button
-                          type="button"
-                          disabled={personalOtp.loading}
-                          onClick={() => verifyAccountEmailOtp(personalOtp.code, 'personal', setPersonalOtp)}
-                          className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg font-medium transition-all"
-                        >
-                          {personalOtp.loading ? 'Checking...' : 'Verify'}
-                        </button>
-                      </div>
-                    )}
-                    {personalOtp.sent && (
-                      <button
-                        type="button"
-                        disabled={personalOtp.loading}
-                        onClick={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp)}
-                        className="mt-2 text-xs text-purple-300 hover:text-purple-200"
-                      >
-                        Resend code
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* PIN Setup */}
-              <div className={`bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4 ${!personalOtp.verified ? 'opacity-50' : ''}`}>
-                <h3 className="text-blue-400 font-semibold mb-3 flex items-center gap-2">
-                  🔐 Set Your PIN (Required)
-                </h3>
-                <p className="text-gray-400 text-sm mb-3">
-                  {personalOtp.verified
-                    ? "Your 4-6 digit PIN protects your account. You'll use this for transactions."
-                    : 'Verify your email above to set your PIN.'}
-                </p>
-                <input
-                  type="password"
-                  value={accountCreationForm.pin}
-                  disabled={!personalOtp.verified}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '');
-                    if (value.length <= 6) {
-                      setAccountCreationForm({ ...accountCreationForm, pin: value });
-                    }
-                  }}
-                  placeholder="Enter 4-6 digits"
-                  maxLength="6"
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-blue-500/30 hover:border-blue-500/60 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none transition-all text-center text-2xl tracking-widest disabled:cursor-not-allowed"
-                />
-                <p className="text-gray-500 text-xs mt-2">
-                  {accountCreationForm.pin.length === 0 ? '0' : accountCreationForm.pin.length} / 6 digits
-                </p>
-              </div>
-
-              {/* Biometric Options */}
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                <h3 className="text-green-400 font-semibold mb-4 flex items-center gap-2">
-                  👆 Biometric Security (Optional)
-                </h3>
-
-                {/* Fingerprint Option */}
-                <div className="flex items-center gap-3 mb-4 p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700/70 cursor-pointer transition-all"
-                     onClick={() => setAccountCreationForm({ 
-                       ...accountCreationForm, 
-                       fingerprintEnabled: !accountCreationForm.fingerprintEnabled 
-                     })}>
-                  <input
-                    type="checkbox"
-                    checked={accountCreationForm.fingerprintEnabled}
-                    onChange={() => {}}
-                    className="w-5 h-5 rounded accent-green-500 cursor-pointer"
-                  />
-                  <div className="flex-1">
-                    <p className="text-white font-medium">Enable Fingerprint</p>
-                    <p className="text-gray-400 text-sm">Use your fingerprint to unlock transactions</p>
-                  </div>
-                </div>
-
-                {/* Phone PIN Option */}
-                <div className="flex items-center gap-3 p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700/70 cursor-pointer transition-all"
-                     onClick={() => setAccountCreationForm({ 
-                       ...accountCreationForm, 
-                       phonePhoneEnabled: !accountCreationForm.phonePhoneEnabled 
-                     })}>
-                  <input
-                    type="checkbox"
-                    checked={accountCreationForm.phonePhoneEnabled}
-                    onChange={() => {}}
-                    className="w-5 h-5 rounded accent-green-500 cursor-pointer"
-                  />
-                  <div className="flex-1">
-                    <p className="text-white font-medium">Use Phone PIN</p>
-                    <p className="text-gray-400 text-sm">Authenticate using your device's PIN or biometric</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Preferred Currency */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Preferred Currency</label>
-                <input
-                  type="text"
-                  value={localCurrencyLabel}
-                  readOnly
-                  className="w-full px-4 py-3 bg-slate-800/60 border border-purple-500/30 rounded-lg text-purple-200 focus:outline-none"
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowAccountCreation(false)}
-                  disabled={accountCreationLoading}
-                  className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
-                >
-                  ❌ Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={accountCreationLoading || !personalOtp.verified}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white rounded-lg font-semibold transition-all disabled:opacity-50"
-                >
-                  {accountCreationLoading ? '⏳ Creating Account...' : '✨ Create Account'}
-                </button>
-              </div>
-            </form>
+        // A numbered step heading; the number turns into a tick once the step is complete.
+        const stepHead = (n, title, { done = false, locked = false, hint = null } = {}) => (
+          <div className="mb-4 flex items-start gap-3">
+            <span aria-hidden="true" className={`acct-step mt-0.5 ${done ? 'is-done' : locked ? 'is-locked' : ''}`}>
+              {done ? '✓' : n}
+            </span>
+            <div>
+              <h3 className={`cmms-classic-heading text-lg leading-tight ${locked ? 'acct-locked' : ''}`}>{title}</h3>
+              {hint && <p className="cmms-classic-muted mt-0.5 text-xs">{hint}</p>}
+            </div>
           </div>
-        </div>
-      )}
+        );
+
+        // Accessible on/off switch row for the optional biometric choices.
+        const switchRow = (label, description, checked, toggle) => (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            onClick={toggle}
+            className="flex w-full items-center justify-between gap-4 rounded-lg border px-4 py-3 text-left"
+          >
+            <span>
+              <span className="block text-sm font-semibold">{label}</span>
+              <span className="cmms-classic-muted block text-xs">{description}</span>
+            </span>
+            <span className={`acct-switch-track ${checked ? 'is-on' : ''}`} />
+          </button>
+        );
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4">
+            <div className="cmms-classic-card acct-classic max-h-[92vh] w-full max-w-xl overflow-y-auto p-5 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="create-account-title">
+              <header className="mb-6">
+                <p className="cmms-classic-eyebrow mb-2">IcanEra Wallet</p>
+                <h2 id="create-account-title" className="cmms-classic-heading text-2xl sm:text-3xl">Open your wallet account</h2>
+                <p className="cmms-classic-muted mt-2 text-sm">Four short steps. Your PIN protects every transaction you make.</p>
+                <div className="cmms-classic-hairline mt-5" />
+              </header>
+
+              {accountMessage && (
+                <div
+                  role="alert"
+                  className={`acct-alert mb-6 ${accountMessage.type === 'success' ? 'is-ok' : 'is-error'}`}
+                >
+                  {accountMessage.text}
+                </div>
+              )}
+
+              <form onSubmit={handleCreateAccount} className="space-y-6">
+                {/* 1 — Details */}
+                <section>
+                  {stepHead(1, 'Your details', { done: detailsDone })}
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="acct-name" className="cmms-classic-label mb-1.5">Full name</label>
+                      <input
+                        id="acct-name"
+                        type="text"
+                        autoComplete="name"
+                        value={accountCreationForm.accountHolderName}
+                        onChange={(e) => setAccountCreationForm({ ...accountCreationForm, accountHolderName: e.target.value })}
+                        placeholder="As it appears on your ID"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="acct-phone" className="cmms-classic-label mb-1.5">Phone number</label>
+                      <input
+                        id="acct-phone"
+                        type="tel"
+                        autoComplete="tel"
+                        value={accountCreationForm.phoneNumber}
+                        onChange={(e) => setAccountCreationForm({ ...accountCreationForm, phoneNumber: e.target.value })}
+                        placeholder="+256…"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="acct-email" className="cmms-classic-label mb-1.5">Email address</label>
+                      <input
+                        id="acct-email"
+                        type="email"
+                        autoComplete="email"
+                        value={accountCreationForm.email}
+                        disabled={personalOtp.verified}
+                        onChange={(e) => {
+                          setAccountCreationForm({ ...accountCreationForm, email: e.target.value });
+                          if (personalOtp.sent || personalOtp.verified) {
+                            setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+                          }
+                        }}
+                        placeholder="you@example.com"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="acct-currency" className="cmms-classic-label mb-1.5">Wallet currency</label>
+                      <input
+                        id="acct-currency"
+                        type="text"
+                        value={localCurrencyLabel}
+                        readOnly
+                        className="acct-input w-full rounded-lg border px-4 py-3 opacity-80"
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                {/* 2 — Verify email */}
+                <section className="cmms-classic-divider">
+                  {stepHead(2, 'Verify your email', { done: personalOtp.verified })}
+                  <EmailVerifyStep
+                    email={accountCreationForm.email}
+                    state={personalOtp}
+                    setState={setPersonalOtp}
+                    onSend={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp)}
+                    onVerify={() => verifyAccountEmailOtp(personalOtp.code, 'personal', setPersonalOtp)}
+                    onChangeEmail={() => setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null })}
+                  />
+                </section>
+
+                {/* 3 — PIN */}
+                <section className="cmms-classic-divider">
+                  {stepHead(3, 'Set your PIN', {
+                    done: personalOtp.verified && pinLength >= 4,
+                    locked: !personalOtp.verified,
+                    hint: personalOtp.verified
+                      ? 'Choose 4 to 6 digits. You will use it to approve transactions.'
+                      : 'Available once your email is verified.',
+                  })}
+                  <div className={personalOtp.verified ? '' : 'pointer-events-none opacity-50'}>
+                    <label htmlFor="acct-pin" className="cmms-classic-label mb-1.5">Transaction PIN</label>
+                    <div className="relative">
+                      <input
+                        id="acct-pin"
+                        type={showCreatePin ? 'text' : 'password'}
+                        inputMode="numeric"
+                        autoComplete="new-password"
+                        value={accountCreationForm.pin}
+                        disabled={!personalOtp.verified}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          if (value.length <= 6) {
+                            setAccountCreationForm({ ...accountCreationForm, pin: value });
+                          }
+                        }}
+                        placeholder="4–6 digits"
+                        maxLength="6"
+                        className={`${inputCls} pr-16 text-center font-mono text-xl tracking-[0.4em] disabled:cursor-not-allowed`}
+                      />
+                      <button
+                        type="button"
+                        tabIndex={personalOtp.verified ? 0 : -1}
+                        onClick={() => setShowCreatePin((s) => !s)}
+                        className="acct-link icon-btn-transparent absolute right-3 top-1/2 -translate-y-1/2 text-xs"
+                        aria-label={showCreatePin ? 'Hide PIN' : 'Show PIN'}
+                      >
+                        {showCreatePin ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <div className="flex gap-1.5" aria-hidden="true">
+                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                          <span key={i} className={`acct-dot ${i < pinLength ? 'is-on' : ''}`} />
+                        ))}
+                      </div>
+                      <p className="cmms-classic-muted text-xs">
+                        {pinLength === 0 ? '4 to 6 digits' : pinLength < 4 ? `${4 - pinLength} more to go` : 'Looks good'}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                {/* 4 — Biometrics (optional) */}
+                <section className="cmms-classic-divider">
+                  {stepHead(4, 'Biometric security', { hint: 'Optional. You can change this later in settings.' })}
+                  <div className="space-y-2">
+                    {switchRow(
+                      'Fingerprint',
+                      'Unlock transactions with your fingerprint',
+                      accountCreationForm.fingerprintEnabled,
+                      () => setAccountCreationForm({ ...accountCreationForm, fingerprintEnabled: !accountCreationForm.fingerprintEnabled }),
+                    )}
+                    {switchRow(
+                      'Phone PIN or biometric',
+                      "Authenticate with your device's own lock",
+                      accountCreationForm.phonePhoneEnabled,
+                      () => setAccountCreationForm({ ...accountCreationForm, phonePhoneEnabled: !accountCreationForm.phonePhoneEnabled }),
+                    )}
+                  </div>
+                </section>
+
+                {/* Actions */}
+                <div className="cmms-classic-divider">
+                  {!personalOtp.verified && (
+                    <p className="cmms-classic-muted mb-3 text-center text-xs">Verify your email above to create your account.</p>
+                  )}
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAccountCreation(false)}
+                      disabled={accountCreationLoading}
+                      className="cmms-classic-btn-secondary flex-1 px-4 py-3 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={accountCreationLoading || !personalOtp.verified}
+                      className="cmms-classic-btn-primary flex-1 px-4 py-3 disabled:cursor-not-allowed"
+                    >
+                      {accountCreationLoading ? 'Creating account…' : 'Create account'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* WITHDRAW MODAL */}
       {activeModal === 'withdraw' && (

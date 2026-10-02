@@ -30,6 +30,7 @@
  */
 
 import crypto from 'node:crypto';
+import { applyCors } from '../_lib/cors.js';
 
 const supabaseRest = async ({ path, method = 'GET', query, body, prefer }) => {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -89,16 +90,29 @@ const sendEmail = async ({ to, from, subject, html }) => {
 };
 
 export default async function handler(req, res) {
+  // Local dev (localhost:300x) calls this deployed route cross-origin, so the
+  // browser sends a preflight first; without CORS headers it is blocked.
+  if (applyCors(req, res)) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
   try {
-    if ((!process.env.SUPABASE_URL && !process.env.VITE_SUPABASE_URL) || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      return res.status(500).json({ success: false, message: 'Server is missing Supabase configuration.' });
-    }
-    if (!process.env.RESEND_API_KEY) {
-      return res.status(500).json({ success: false, message: 'Server is missing email configuration.' });
+    // Name exactly which variable is absent in the Vercel function log, so the
+    // fix is a one-line dashboard change instead of guesswork.
+    const missing = [
+      !process.env.SUPABASE_URL && !process.env.VITE_SUPABASE_URL && 'SUPABASE_URL (or VITE_SUPABASE_URL)',
+      !process.env.SUPABASE_SERVICE_ROLE_KEY && 'SUPABASE_SERVICE_ROLE_KEY',
+      !process.env.RESEND_API_KEY && 'RESEND_API_KEY'
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      console.error(`request-account-otp: missing Vercel environment variable(s): ${missing.join(', ')}`);
+      return res.status(500).json({
+        success: false,
+        message: missing.includes('RESEND_API_KEY') && missing.length === 1
+          ? 'Server is missing email configuration.'
+          : 'Server is missing Supabase configuration.'
+      });
     }
 
     const authHeader = req.headers.authorization || '';
