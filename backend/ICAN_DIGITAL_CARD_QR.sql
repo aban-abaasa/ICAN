@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS public.ican_digital_cards (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Owner switch: allow paying out straight from the scan page when the card's
+-- transaction PIN is entered there (like a card terminal). Done by the
+-- card-pay-with-pin Edge Function, which checks the PIN server-side.
+ALTER TABLE public.ican_digital_cards ADD COLUMN IF NOT EXISTS pin_pay_enabled BOOLEAN NOT NULL DEFAULT true;
+
 ALTER TABLE public.ican_digital_cards ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "digital_card_owner_read" ON public.ican_digital_cards;
@@ -127,6 +132,12 @@ LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
   UPDATE public.ican_digital_cards SET qr_enabled = p_enabled WHERE user_id = auth.uid();
 $$;
 
+CREATE OR REPLACE FUNCTION public.set_my_card_pin_pay_enabled(p_enabled BOOLEAN)
+RETURNS VOID
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  UPDATE public.ican_digital_cards SET pin_pay_enabled = p_enabled WHERE user_id = auth.uid();
+$$;
+
 -- Claim a pending request for payout (pending -> processing), atomically, so
 -- a double tap / two devices can never pay it twice.
 CREATE OR REPLACE FUNCTION public.claim_card_qr_request(p_request_id UUID)
@@ -163,11 +174,13 @@ $$;
 
 -- ─── 4. Public (scanner) RPCs -- callable without an account ───────────────
 
--- What the scan page may show: first name + last 4 only.
+-- What the scan page may show: first name + last 4 + whether the owner allows
+-- approving right on the scan page with the card PIN (no owner phone needed).
+DROP FUNCTION IF EXISTS public.get_card_qr_info(TEXT);
 CREATE OR REPLACE FUNCTION public.get_card_qr_info(p_token TEXT)
-RETURNS TABLE (holder_first_name TEXT, last4 TEXT)
+RETURNS TABLE (holder_first_name TEXT, last4 TEXT, pin_pay_enabled BOOLEAN)
 LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
-  SELECT initcap(split_part(holder_name, ' ', 1)), right(card_number, 4)
+  SELECT initcap(split_part(holder_name, ' ', 1)), right(card_number, 4), pin_pay_enabled
     FROM public.ican_digital_cards
    WHERE qr_token = p_token AND qr_enabled AND status = 'active';
 $$;
@@ -210,6 +223,8 @@ END $$;
 REVOKE ALL ON FUNCTION public.get_or_create_my_digital_card() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.rotate_my_card_qr() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.set_my_card_qr_enabled(BOOLEAN) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.set_my_card_pin_pay_enabled(BOOLEAN) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.set_my_card_pin_pay_enabled(BOOLEAN) TO authenticated;
 REVOKE ALL ON FUNCTION public.claim_card_qr_request(UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.finish_card_qr_request(UUID, BOOLEAN, TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.decline_card_qr_request(UUID) FROM PUBLIC;

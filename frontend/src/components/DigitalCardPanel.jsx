@@ -3,7 +3,7 @@ import { QRCodeCanvas as QRCode } from 'qrcode.react';
 import { CreditCard, Printer, RefreshCw, Check, X, Loader2 } from 'lucide-react';
 import {
   getMyDigitalCard, rotateMyCardQr, setMyCardQrEnabled, listCardQrRequests,
-  declineCardQrRequest, claimCardQrRequest, finishCardQrRequest, cardQrUrl,
+  declineCardQrRequest, claimCardQrRequest, finishCardQrRequest, cardQrUrl, setMyCardPinPayEnabled,
 } from '../services/digitalCardService';
 import { sendFiatToMobileMoney } from '../services/icanWalletService';
 import { walletAccountService } from '../services/walletAccountService';
@@ -98,6 +98,10 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
     try { await setMyCardQrEnabled(!card.qr_enabled); await refresh(); } catch (e) { setMsg({ ok: false, text: e.message }); }
   };
 
+  const togglePinPay = async () => {
+    try { await setMyCardPinPayEnabled(!card.pin_pay_enabled); await refresh(); } catch (e) { setMsg({ ok: false, text: e.message }); }
+  };
+
   const printCard = () => {
     const c = card;
     const qr = c.qr_enabled && qrRef.current?.toDataURL ? qrRef.current.toDataURL('image/png') : null;
@@ -178,7 +182,7 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
                   ? <QRCode ref={qrRef} value={cardQrUrl(card.qr_token)} size={96} level="H" />
                   : <div className="w-24 h-24 flex items-center justify-center text-[10px] text-slate-600 text-center">QR off</div>}
               </div>
-              <p className="text-[11px] leading-snug opacity-90">Scan to request money from {card.holder_name.split(' ')[0]}. Nothing is sent until the owner confirms with their PIN.</p>
+              <p className="text-[11px] leading-snug opacity-90">Scan to request money from {card.holder_name.split(' ')[0]}. Money is only sent when the owner approves with their PIN.</p>
             </div>
             <p className="absolute left-5 right-5 bottom-3 text-[9px] opacity-70">ICANera digital card · not a Visa/Mastercard network card · ••••{card.card_number.slice(-4)}</p>
           </div>
@@ -191,6 +195,13 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
         <button onClick={toggleQr} className="px-3 py-2 text-xs bg-white/10 rounded text-white">{card.qr_enabled ? 'QR off' : 'QR on'}</button>
         <button onClick={rotate} className="px-3 py-2 text-xs bg-white/10 rounded flex items-center justify-center gap-1 text-white"><RefreshCw className="w-3 h-3" /> New QR</button>
       </div>
+
+      <button onClick={togglePinPay} className="w-full px-3 py-2 text-xs bg-white/10 rounded text-white text-left">
+        PIN approval at scan: <b>{card.pin_pay_enabled ? 'ON' : 'OFF'}</b>
+        <span className="block text-gray-400">{card.pin_pay_enabled
+          ? 'Whoever scans your QR can pay out right there if your transaction PIN is entered. No phone needed. Tap to turn off.'
+          : 'Scans only send you a request to confirm in this wallet. Tap to turn on PIN approval at scan.'}</span>
+      </button>
 
       {msg && (
         <div className={`p-3 rounded-lg border text-sm ${msg.ok ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-red-500/20 border-red-500/50 text-red-300'}`}>{msg.text}</div>
