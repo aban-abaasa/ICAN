@@ -38,7 +38,7 @@ const formatCandleRow = (candle) => ({
   close_time: candle.close_time,
 });
 
-// A real, live ICANera price chart — the same public.ican_price_ohlc feed
+// A real, live IcanEra price chart — the same public.ican_price_ohlc feed
 // and CandlestickChart used inside the wallet's Trade tab, but standalone so
 // it can live directly on the main dashboard instead of behind a wallet
 // panel. Self-contained: mount it anywhere, no props required.
@@ -116,7 +116,7 @@ const IcanPriceChartWidget = () => {
         className="w-full flex items-center gap-2 px-4 py-3 hover:bg-white/[0.03] transition-colors"
       >
         <LineChartIcon className="w-4 h-4 shrink-0" style={{ color: '#f97316' }} />
-        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-textSecondary)' }}>ICANera price</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-textSecondary)' }}>IcanEra price</p>
         <span className="text-[10px] font-semibold border rounded px-1.5 py-0.5" style={{ color: '#f97316', borderColor: 'rgba(249,115,22,0.4)' }}>Live</span>
         <span className="ml-auto flex items-center gap-2">
           {latestClose != null && (

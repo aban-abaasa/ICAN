@@ -2540,7 +2540,7 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
           </>)}
         </>)}
 
-        {/* ══ REFERRALS (ICANera + BodaGoEra — the one place they're managed) ══ */}
+        {/* ══ REFERRALS (IcanEra + BodaGoEra — the one place they're managed) ══ */}
         {tab==='referrals' && <ICANReferralsDevTab devToken={DEV_TOKEN}/>}
 
         {/* ══ CORPORATE (subscriptions + contract requests) ══ */}

@@ -1,7 +1,7 @@
 /**
  * 🧪 LANDING MOCK TRADE SERVICE
  * Records simulated (not real) invest/buy/sell actions taken on the
- * ICANera landing page (public.landing_mock_trades). No real money,
+ * IcanEra landing page (public.landing_mock_trades). No real money,
  * equity, or wallet balance is ever touched here — see
  * ICAN/backend/db/create_landing_mock_trades_table.sql for the schema
  * and RLS policy this relies on.

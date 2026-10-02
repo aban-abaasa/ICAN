@@ -43,7 +43,7 @@ const statusShareMatch = window.location.pathname.match(/^\/status\/([^/]+)/);
 const portfolioShareMatch = window.location.pathname.match(/^\/portfolio\/([^/]+)/);
 // A dropship storefront link (e.g. https://icanera.space/store/<businessProfileId>)
 // must be browsable by anyone, signed in or not -- same reasoning as the
-// Pitchin/status share links above. Only checkout (a real ICANera payment)
+// Pitchin/status share links above. Only checkout (a real IcanEra payment)
 // prompts sign-in, in place, without losing the cart.
 const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
 // A CMMS company's public notice board (announcements + job postings) at
