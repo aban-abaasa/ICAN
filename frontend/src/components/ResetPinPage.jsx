@@ -15,26 +15,33 @@ const ResetPinPage = ({ onDone }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  const token = typeof window !== 'undefined'
-    ? new URLSearchParams(window.location.search).get('token') || ''
-    : '';
-  const accountType = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('accountType') === 'business'
-    ? 'business'
-    : 'personal';
+  // Read the link's params once: the URL is cleaned right after a successful
+  // reset, so re-reading it on re-render would change the page's wording.
+  const [{ token, accountType, accountId, isSetup }] = useState(() => {
+    const query = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const type = query.get('accountType') === 'business' ? 'business' : 'personal';
+    return {
+      token: query.get('token') || '',
+      accountType: type,
+      accountId: type === 'business' ? query.get('accountId') || null : null,
+      // Links emailed during wallet creation carry purpose=setup: same
+      // recovery flow, but the copy talks about setting a first PIN.
+      isSetup: query.get('purpose') === 'setup'
+    };
+  });
+  const [signedIn, setSignedIn] = useState(false);
 
-  const accountId = typeof window !== 'undefined' && accountType === 'business'
-    ? new URLSearchParams(window.location.search).get('accountId') || null
-    : null;
-
-  // Links emailed during wallet creation carry purpose=setup: same recovery
-  // flow, but the copy talks about setting a first PIN rather than resetting.
-  const isSetup = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get('purpose') === 'setup';
-
-  const handleBack = () => {
-    if (window.location.pathname === '/reset-pin' || new URLSearchParams(window.location.search).get('flow') === 'pin') {
+  // Leave the recovery URL behind so a refresh opens the app instead of
+  // showing this PIN form again.
+  const clearRecoveryUrl = () => {
+    if (typeof window !== 'undefined'
+      && (window.location.pathname === '/reset-pin' || new URLSearchParams(window.location.search).get('flow') === 'pin')) {
       window.history.replaceState({}, '', '/');
     }
+  };
+
+  const handleBack = () => {
+    clearRecoveryUrl();
     onDone?.();
   };
 
@@ -58,6 +65,7 @@ const ResetPinPage = ({ onDone }) => {
 
       let data;
       let err;
+      let recoveryUserId = null;
       if (token) {
         ({ data, error: err } = await supabase.rpc('redeem_pin_reset_token', {
           p_token: token,
@@ -69,6 +77,7 @@ const ResetPinPage = ({ onDone }) => {
         if (!sessionData?.session?.user) {
           throw new Error('This recovery link is invalid or expired. Request a new PIN reset email.');
         }
+        recoveryUserId = sessionData.session.user.id;
         if (accountType === 'business' && accountId) {
           // iCanEra business wallet: the PIN is per business profile and
           // stored bcrypt-hashed server-side, so the raw PIN goes over TLS.
@@ -89,6 +98,21 @@ const ResetPinPage = ({ onDone }) => {
       const row = Array.isArray(data) ? data[0] : data;
       if (row?.success) {
         if (typeof window !== 'undefined') sessionStorage.removeItem('ican-pin-recovery-session');
+        // First-time PIN from wallet creation: record when it was created, as
+        // the in-app "Create Account" form does. Best effort — the PIN is
+        // already saved.
+        if (isSetup && accountType === 'personal' && recoveryUserId) {
+          await supabase
+            .from('user_accounts')
+            .update({ pin_created_at: new Date().toISOString() })
+            .eq('user_id', recoveryUserId)
+            .eq('account_type', 'personal')
+            .is('pin_created_at', null)
+            .then(() => {}, () => {});
+        }
+        clearRecoveryUrl();
+        const { data: after } = await supabase.auth.getSession();
+        setSignedIn(!!after?.session?.user);
         setSuccess(true);
       } else {
         setError(row?.message || 'This reset link is invalid or has expired.');
@@ -117,7 +141,7 @@ const ResetPinPage = ({ onDone }) => {
             onClick={handleBack}
             className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all"
           >
-            Continue to Sign In
+            {signedIn ? 'Continue to Wallet' : 'Continue to Sign In'}
           </button>
         </div>
       </div>

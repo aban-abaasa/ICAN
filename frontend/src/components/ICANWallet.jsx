@@ -2560,6 +2560,45 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   };
 
+  // After the emailed link: pick up the PIN that was set (possibly in another
+  // tab or on another device) and carry on into the wallet.
+  const handleContinueAfterPinLink = async () => {
+    setPersonalPinLink(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Your session expired — please sign in again.');
+
+      const account = await walletAccountService.checkUserAccount(user.id);
+      if (!account?.pin_hash) {
+        setPersonalPinLink(prev => ({
+          ...prev,
+          loading: false,
+          error: "We can't see your PIN yet. Open the link in your email, set the PIN, then press Continue again."
+        }));
+        return;
+      }
+
+      setUserAccount(account);
+      setPersonalPinLink({ sentTo: null, loading: false, error: null });
+      setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+      setAccountMessage({ type: 'success', text: `✅ Wallet ready! Account #: ${account.account_number}` });
+      setTimeout(() => setShowAccountCreation(false), 1200);
+    } catch (error) {
+      setPersonalPinLink(prev => ({ ...prev, loading: false, error: error.message || 'Could not check your wallet' }));
+    }
+  };
+
+  // Business: the PIN lives with the iCanEra business wallet, so just refresh
+  // the business list and close the form.
+  const handleContinueAfterBusinessPinLink = async () => {
+    setBusinessPinLink({ sentTo: null, loading: false, error: null });
+    setBusinessOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+    setEditingBusinessProfile(null);
+    await loadBusinessAccountProfiles();
+    onRefreshProfiles?.();
+  };
+
   // 🔗 Business wallet PIN via the emailed PIN reset link — the same email and
   // landing page "Forgot PIN" uses for a business. The iCanEra business wallet
   // already exists for the profile; ResetPinPage sets its PIN through
@@ -5700,6 +5739,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                             set the PIN for {editingBusinessProfile.business_name}. Only the business's highest-ownership
                             shareholder can set it.
                           </p>
+                          <button
+                            type="button"
+                            onClick={handleContinueAfterBusinessPinLink}
+                            className="w-full mt-3 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-xs font-semibold transition-all"
+                          >
+                            ✅ I've set the PIN — continue
+                          </button>
                           <div className="flex gap-3 mt-2">
                             <button
                               type="button"
@@ -7378,6 +7424,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                           Open the link we emailed to <span className="text-white">{personalPinLink.sentTo}</span> to
                           set your wallet PIN. Your wallet is ready as soon as the PIN is saved.
                         </p>
+                        <button
+                          type="button"
+                          disabled={personalPinLink.loading}
+                          onClick={handleContinueAfterPinLink}
+                          className="w-full mt-3 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition-all"
+                        >
+                          {personalPinLink.loading ? 'Checking...' : "✅ I've set my PIN — continue"}
+                        </button>
                         <div className="flex gap-3 mt-2">
                           <button
                             type="button"
