@@ -6042,6 +6042,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       </div>
                     ) : (
                       <div className="mb-4">
+                        <p className="text-xs text-amber-300 mb-2">This account signs in with Google, so it has no password to enter. Type delete instead.</p>
                         <label className="block text-xs text-gray-300 mb-2">Type <span className="font-mono text-red-300">delete</span> to confirm</label>
                         <input
                           type="text"
