@@ -180,11 +180,11 @@ DECLARE
   v_owner UUID;
 BEGIN
   IF NOT public.pitchin_business_shareholder_access(p_business_profile_id) THEN
-    RAISE EXCEPTION 'You do not have access to this PitchIn business profile';
+    RAISE EXCEPTION 'You do not have access to this IcanEra business profile';
   END IF;
 
   SELECT user_id INTO v_owner FROM public.business_profiles WHERE id = p_business_profile_id;
-  IF v_owner IS NULL THEN RAISE EXCEPTION 'PitchIn business profile not found'; END IF;
+  IF v_owner IS NULL THEN RAISE EXCEPTION 'IcanEra business profile not found'; END IF;
 
   INSERT INTO public.ican_business_wallets (business_profile_id, created_by)
   VALUES (p_business_profile_id, v_owner)
