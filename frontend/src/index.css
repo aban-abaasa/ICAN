@@ -1611,6 +1611,18 @@ html {
 :root[data-theme="light"] .icn-menu-item.is-danger:hover { background: rgba(220, 38, 38, 0.1); color: #7f1d1d; }
 @media (prefers-reduced-motion: reduce) { .icn-menu { animation: none; } }
 
+/* Compact variant — the theme ("Appearance") list: small type, tight rows,
+   names only, a tick on the current choice. */
+.icn-menu-compact { width: 11.5rem; border-radius: 10px; }
+.icn-menu-compact .icn-menu-head { padding: .45rem .75rem .4rem; }
+.icn-menu-compact .icn-menu-eyebrow { font-size: .6rem; margin: 0; }
+.icn-menu-compact .icn-menu-body { padding: .2rem; }
+.icn-menu-compact .icn-menu-item { padding: .4rem .6rem; font-size: .75rem; gap: .5rem; border-radius: 6px; line-height: 1.25; }
+.icn-menu-compact .icn-menu-item.is-active::before { top: 20%; bottom: 20%; }
+.icn-menu-check { width: .8rem !important; height: .8rem !important; margin-left: auto; }
+.icn-menu-foot { margin: 0; padding: .4rem .75rem; font-size: .62rem; color: #8f8566; border-top: 1px solid rgba(196, 160, 82, 0.3); }
+:root[data-theme="light"] .icn-menu-foot { color: #7a6c48; border-top-color: rgba(160, 125, 45, 0.35); }
+
 
 /* ── Classic profile page (theme-aware: follows --color-* tokens) ───────── */
 .icn-pg { min-height: 100dvh; background: var(--color-bg); color: var(--color-text); }
