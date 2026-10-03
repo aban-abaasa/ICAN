@@ -10,6 +10,8 @@
  */
 
 import { callAI } from './_lib/aiProvider.js';
+import { applyCors } from './_lib/cors.js';
+import handleProfileFromConversation from './_lib/profileFromConversationHandler.js';
 
 const FINANCE_TUTOR_PACK = {
   pillars: [
@@ -111,9 +113,19 @@ const normalizeMessages = (messages = []) => {
 };
 
 export default async function handler(req, res) {
+  // Preflight, only ever sent by local dev (production shares one origin with the app).
+  if (req.method === 'OPTIONS') return applyCors(req, res);
+
   // Only allow POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // "Read my conversation" for the resume and Pitchin profile lives here because the project
+  // is at its serverless function limit; it needs a signed-in user, unlike the chat proxy below.
+  if (req.body?.task === 'profile-from-conversation') {
+    applyCors(req, res);
+    return handleProfileFromConversation(req, res);
   }
 
   try {

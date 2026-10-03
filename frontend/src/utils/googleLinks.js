@@ -93,6 +93,47 @@ export function classifyGoogleUrl(input) {
   return fail('That Drive link type is not supported. Use a file or folder link from Drive.');
 }
 
+/**
+ * Find the first usable Google link inside free text, such as a WhatsApp share
+ * ("Here is my certificate https://drive.google.com/file/d/…/view?usp=sharing") or a
+ * clipboard with extra words around the link. Returns the classification of that link,
+ * or a failure. Only the matched address is used; the rest of the text is ignored.
+ */
+export function extractGoogleLink(text) {
+  const source = String(text || '').slice(0, 20000);
+  // The host must start the address or follow a non-host character, so "evildrive.google.com"
+  // and "drive.google.com.example.com" never match.
+  const pattern = /(^|[^A-Za-z0-9.-])((?:https?:\/\/)?(?:docs\.google\.com|drive\.google\.com|forms\.gle)\/[^\s<>"'\])]+)/gi;
+  let firstFailure = null;
+  for (const match of source.matchAll(pattern)) {
+    const candidate = match[2].replace(/[.,;:!?]+$/, '');
+    const c = classifyGoogleUrl(candidate);
+    if (c.ok) return c;
+    firstFailure = firstFailure || c;
+  }
+  return firstFailure || fail('No Google Drive, Docs or Forms link found in that text.');
+}
+
+const DRIVE_MIME_URL = {
+  'application/vnd.google-apps.folder': (id) => `https://drive.google.com/drive/folders/${id}`,
+  'application/vnd.google-apps.document': (id) => `https://docs.google.com/document/d/${id}/edit`,
+  'application/vnd.google-apps.spreadsheet': (id) => `https://docs.google.com/spreadsheets/d/${id}/edit`,
+  'application/vnd.google-apps.presentation': (id) => `https://docs.google.com/presentation/d/${id}/edit`,
+  'application/vnd.google-apps.form': (id) => `https://docs.google.com/forms/d/${id}/viewform`,
+};
+
+/**
+ * Classify a file chosen in the Google Drive picker. The address is rebuilt from the file id
+ * and type, never taken from what the picker reported, then passes the same checks as a
+ * pasted link. Returns the same shape as classifyGoogleUrl.
+ */
+export function classifyDriveDoc(doc) {
+  const id = String(doc?.id || '');
+  if (!ID.test(id)) return fail('Google did not return a usable file.');
+  const build = DRIVE_MIME_URL[String(doc?.mimeType || '')] || ((fileId) => `https://drive.google.com/file/d/${fileId}/view`);
+  return classifyGoogleUrl(build(id));
+}
+
 /** True when the link may be shown in an in-app frame (the stored url is re-checked, never trusted). */
 export const isEmbeddable = (storedUrl) => {
   const c = classifyGoogleUrl(storedUrl);

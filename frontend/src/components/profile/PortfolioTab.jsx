@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Link2, Copy, Eye, Plus, Trash2, Edit2, RefreshCw, Upload, ShieldCheck,
   Briefcase, Award, GraduationCap, FolderKanban, Rocket, FlaskConical, Presentation,
-  Loader2, Users, ExternalLink, Share2, Check, MapPin, Phone, Mail, BadgeCheck,
+  Loader2, Users, ExternalLink, Share2, Check, MapPin, Phone, Mail, BadgeCheck, Sparkles,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -16,6 +16,7 @@ import PortfolioMessagesInbox from './PortfolioMessagesInbox';
 import CertificateRequestsInbox from './CertificateRequestsInbox';
 import ResumeOpportunityBidsPanel from './ResumeOpportunityBidsPanel';
 import PublicPortfolioPage from './PublicPortfolioPage';
+import ConversationImportModal from '../common/ConversationImportModal';
 
 const ITEM_ICONS = {
   experience: Briefcase,
@@ -71,6 +72,7 @@ export default function PortfolioTab() {
   const [removingVerificationId, setRemovingVerificationId] = useState(null);
 
   const [showPreview, setShowPreview] = useState(false);
+  const [showConversation, setShowConversation] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('profile');
   const [linkCopied, setLinkCopied] = useState(false);
@@ -183,6 +185,43 @@ export default function PortfolioTab() {
     } finally {
       setIsSavingProfile(false);
     }
+  };
+
+  // Apply what was read from a conversation. Profile details only fill the form (the person
+  // still presses Save Details); experience entries are saved straight away, as each one is
+  // what they ticked in the review.
+  const applyConversation = async ({ fields, skills, links, items: newItems }) => {
+    setForm((f) => {
+      const merged = { ...f, ...fields };
+      if (skills.length) {
+        const have = f.skills.split(',').map((s) => s.trim()).filter(Boolean);
+        const lower = new Set(have.map((s) => s.toLowerCase()));
+        merged.skills = [...have, ...skills.filter((s) => !lower.has(s.toLowerCase()))].join(', ');
+      }
+      return merged;
+    });
+    if (links.length) setLinksList((rows) => [...rows, ...links.map(({ label, url }) => ({ label, url }))]);
+
+    let saved = 0;
+    const failed = [];
+    for (const entry of newItems) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await addPortfolioItem(user.id, entry);
+        saved += 1;
+      } catch (err) {
+        console.error('Error saving entry from conversation:', err);
+        failed.push(entry.title);
+      }
+    }
+    if (saved) setItems(await getPortfolioItems(user.id));
+
+    const toReview = Object.keys(fields).length + (skills.length ? 1 : 0) + links.length;
+    const parts = [];
+    if (saved) parts.push(`${saved} ${saved === 1 ? 'entry was' : 'entries were'} added to Experience.`);
+    if (toReview) parts.push('Your profile details are filled in. Check them, then press Save Details.');
+    if (failed.length) parts.push(`Could not save: ${failed.join(', ')}. You can add ${failed.length === 1 ? 'it' : 'them'} in the Experience tab.`);
+    return parts.join(' ') || 'Nothing was changed.';
   };
 
   const manualItems = items.filter((i) => i.source === 'manual');
@@ -493,6 +532,19 @@ export default function PortfolioTab() {
       <div role="tabpanel" id={`rz-panel-${activeTab}`} aria-labelledby={`rz-tab-${activeTab}`} key={activeTab} className="rz-panel space-y-4">
         {activeTab === 'profile' && (
           <>
+            <section className="rz-card">
+              <div className="flex items-start gap-3">
+                <Sparkles className="w-5 h-5 mt-0.5 flex-shrink-0 text-[#c4a052]" />
+                <div className="min-w-0 flex-1">
+                  <h3 className="rz-serif text-base font-bold text-white">Build your resume by talking</h3>
+                  <p className="text-sm text-slate-300 mt-1">Tell your story in your own words, speak it, or paste a chat where you talked about yourself. You review everything before it is added.</p>
+                  <button onClick={() => setShowConversation(true)} className="rz-btn rz-btn-primary rz-btn-sm mt-3">
+                    <Sparkles className="w-4 h-4" /> Start from a conversation
+                  </button>
+                </div>
+              </div>
+            </section>
+
             <section className="rz-card">
               <div className="rz-section-title"><h3>Resume Details</h3></div>
               <div className="space-y-4">
@@ -841,6 +893,14 @@ export default function PortfolioTab() {
       </footer>
 
       {showPreview && handle && <PublicPortfolioPage handle={handle} onClose={() => setShowPreview(false)} />}
+      {showConversation && (
+        <ConversationImportModal
+          target="resume"
+          current={{ form, links: linksList, items }}
+          onApply={applyConversation}
+          onClose={() => setShowConversation(false)}
+        />
+      )}
     </div>
   );
 }
