@@ -1,10 +1,10 @@
 /**
  * TransactionDayBook
  *
- * A classic "day book": transactions grouped per day, each day a closed ledger
- * leaf that opens when tapped to show that day's entries. Used by Pitchin's
- * Manual Transactions so an owner can scan a busy business day by day instead of
- * scrolling one long list.
+ * A classic "day book": transactions grouped per day as a plain, compact list —
+ * one tight row per day (date, entry count, net) that opens when tapped to show
+ * that day's entries. Used by Pitchin's Manual Transactions so an owner can scan a
+ * busy business day by day instead of scrolling one long list.
  *
  * Entries that involve two accounts (a helper recording on behalf of the
  * company, a co-owner's entry…) carry a lock — they can never be deleted — and
@@ -119,36 +119,29 @@ export default function TransactionDayBook({
               aria-controls={panelId}
               onClick={() => toggle(day.key)}
             >
-              <span className="ls-day__leaf" aria-hidden="true">
-                <b>{day.date ? day.date.getDate() : '—'}</b>
-                <i>{day.date ? day.date.toLocaleDateString(undefined, { month: 'short' }) : ''}</i>
+              <span className="ls-day__date">
+                {day.date
+                  ? day.date.toLocaleDateString(undefined, {
+                      weekday: 'short', day: 'numeric', month: 'short',
+                      // The year only earns its space on days outside this one.
+                      ...(day.date.getFullYear() !== currentYear && { year: 'numeric' })
+                    })
+                  : 'Undated'}
+                {rel && <em className="ls-day__rel">{rel}</em>}
               </span>
+              <ChevronDown size={14} className="ls-day__chev" aria-hidden="true" />
 
-              <span className="ls-day__title">
-                <span className="ls-day__date">
-                  {day.date
-                    ? day.date.toLocaleDateString(undefined, {
-                        weekday: 'long', day: 'numeric', month: 'long',
-                        // The year only earns its space on days outside this one.
-                        ...(day.date.getFullYear() !== currentYear && { year: 'numeric' })
-                      })
-                    : 'Undated'}
-                  {rel && <em className="ls-day__rel">{rel}</em>}
-                </span>
-                <span className="ls-day__meta">
-                  {plural(day.entries.length, 'entry', 'entries')}
-                  {day.locked > 0 && (
-                    <span className="ls-day__lockcount">
-                      <Lock size={10} aria-hidden="true" /> {day.locked} permanent
-                    </span>
-                  )}
-                </span>
+              <span className="ls-day__meta">
+                {plural(day.entries.length, 'entry', 'entries')}
+                {day.locked > 0 && (
+                  <span className="ls-day__lockcount">
+                    <Lock size={10} aria-hidden="true" /> {day.locked} permanent
+                  </span>
+                )}
               </span>
-
               <span className={`ls-day__net ${netTone}`}>
                 {day.net > 0 ? '+' : day.net < 0 ? '−' : ''}{fmt(Math.abs(day.net))}
               </span>
-              <ChevronDown size={16} className="ls-day__chev" aria-hidden="true" />
             </button>
 
             {isOpen && (
@@ -163,42 +156,40 @@ export default function TransactionDayBook({
 
                   return (
                     <li key={e.id} className="ls-day__line">
-                      <span className="ls-day__time">{time}</span>
-                      <span className="ls-day__what">
-                        <span className="ls-day__desc">{label}</span>
-                        <span className="ls-day__sub">
-                          {showWho && e.contributor_name && <span>{e.contributor_name}</span>}
-                          {e.reporting_bucket && bucketLabels[e.reporting_bucket] && e.description && (
-                            <span>{bucketLabels[e.reporting_bucket]}</span>
-                          )}
-                          {e.involves_two_accounts && (
-                            <span
-                              className="ls-pill ls-pill--lock"
-                              title={`${lockInfo(e.lock_reason || (e.entered_on_behalf ? 'helper' : '')).hint} — it can never be deleted`}
-                            >
-                              <Lock size={9} aria-hidden="true" /> {lockInfo(e.lock_reason || (e.entered_on_behalf ? 'helper' : '')).label}
-                            </span>
-                          )}
-                          {archived && (
-                            <span className="ls-pill ls-pill--archived" title="Detail compacted to save space; still counted in the share value">
-                              <Archive size={9} aria-hidden="true" /> Archived
-                            </span>
-                          )}
-                        </span>
-                      </span>
+                      <span className="ls-day__desc">{label}</span>
                       <span className={`ls-day__amt ${tone}`}>{sign}{fmt(Math.abs(Number(e.amount) || 0))}</span>
-                      {canArchive && e.involves_two_accounts && !archived && onArchive && (
-                        <button
-                          type="button"
-                          className="ls-day__archive"
-                          disabled={busy}
-                          onClick={() => onArchive(e)}
-                          aria-label={`Archive ${label}`}
-                          title="Archive — frees storage, keeps the amount in your figures"
-                        >
-                          {busy ? <Loader size={13} className="animate-spin" aria-hidden="true" /> : <Archive size={13} aria-hidden="true" />}
-                        </button>
-                      )}
+                      <span className="ls-day__sub">
+                        <span className="ls-day__time">{time}</span>
+                        {showWho && e.contributor_name && <span>{e.contributor_name}</span>}
+                        {e.reporting_bucket && bucketLabels[e.reporting_bucket] && e.description && (
+                          <span>{bucketLabels[e.reporting_bucket]}</span>
+                        )}
+                        {e.involves_two_accounts && (
+                          <span
+                            className="ls-pill ls-pill--lock"
+                            title={`${lockInfo(e.lock_reason || (e.entered_on_behalf ? 'helper' : '')).hint} — it can never be deleted`}
+                          >
+                            <Lock size={9} aria-hidden="true" /> {lockInfo(e.lock_reason || (e.entered_on_behalf ? 'helper' : '')).label}
+                          </span>
+                        )}
+                        {archived && (
+                          <span className="ls-pill ls-pill--archived" title="Detail compacted to save space; still counted in the share value">
+                            <Archive size={9} aria-hidden="true" /> Archived
+                          </span>
+                        )}
+                        {canArchive && e.involves_two_accounts && !archived && onArchive && (
+                          <button
+                            type="button"
+                            className="ls-day__archive"
+                            disabled={busy}
+                            onClick={() => onArchive(e)}
+                            aria-label={`Archive ${label}`}
+                            title="Archive — frees storage, keeps the amount in your figures"
+                          >
+                            {busy ? <Loader size={13} className="animate-spin" aria-hidden="true" /> : <Archive size={13} aria-hidden="true" />}
+                          </button>
+                        )}
+                      </span>
                     </li>
                   );
                 })}

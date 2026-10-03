@@ -1558,6 +1558,9 @@ export const addBusinessTeamMember = async (businessProfileId, member) => {
       if (error.code === '23505') {
         return { success: false, error: `${member.name} already has access to this business` };
       }
+      if (error.code === '42501' || /row-level security/i.test(error.message || '')) {
+        return { success: false, error: "You don't have permission to assign helpers for this business. Ask the business owner." };
+      }
       throw error;
     }
     return { success: true, data: data[0] };
@@ -1572,12 +1575,18 @@ export const removeBusinessTeamMember = async (memberId) => {
     const sb = getSupabase();
     if (!sb) return { success: false, error: 'Supabase not configured' };
 
-    const { error } = await sb
+    // .select() so a delete blocked by row-level security (which removes nothing and
+    // raises no error) is reported instead of looking like it worked.
+    const { data, error } = await sb
       .from('business_team_members')
       .delete()
-      .eq('id', memberId);
+      .eq('id', memberId)
+      .select('id');
 
     if (error) throw error;
+    if (!data || data.length === 0) {
+      return { success: false, error: "Couldn't remove this person — you may not have permission for this business." };
+    }
     return { success: true };
   } catch (error) {
     console.error('Error removing business team member:', error);

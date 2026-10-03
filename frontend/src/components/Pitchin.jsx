@@ -55,6 +55,7 @@ import { getUserNotifications } from '../services/investmentNotificationsService
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { resolveMediaValue, resolveDownloadUrl } from '../services/r2StorageService';
 import { getBusinessStorefronts } from '../services/dropshipService';
+import { canAssignBusinessHelpers } from '../utils/businessAccess';
 
 // Why an Invest tap can't open the signing flow. Each case is a missing piece
 // of live data — the flow never falls back to the listed pitch price, so the
@@ -2946,6 +2947,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                 businessProfile={currentBusinessProfile}
                 ownerUserId={currentBusinessProfile.user_id || currentUser.id}
                 readOnly={currentBusinessProfile.user_id !== currentUser.id}
+                canAssignHelpers={canAssignBusinessHelpers(currentBusinessProfile, currentUser.id, currentUser.email)}
               />
             </div>
           </div>
