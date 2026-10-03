@@ -44,5 +44,45 @@ design, for up to 7 days, on the device that cached the session.
 
 Readiness reads a public Google Sheet as CSV, frames Google Forms and Drive previews, and
 embeds Google Maps. All Google addresses are checked for an exact host match before use and
-again by a database constraint. No Google login, OAuth client or API key is involved:
-people paste links to things they have already shared.
+again by a database constraint. By default no Google login, OAuth client or API key is
+involved: people paste links to things they have already shared. A link pasted inside other
+text (a WhatsApp share, an email line) is picked out automatically, and the Paste button reads
+the copied link in one tap.
+
+### Optional: browse Google Drive from the app (phone and computer)
+
+Adds a **Browse my Google Drive** button to Readiness, Forms & documents. People pick files
+from My Drive or Shared with me, or use the Upload tab to send a file from the phone or computer
+to Drive, and the link is saved for them. Several files can be picked at once.
+
+Set these in Vercel (Project, Settings, Environment Variables) and redeploy. They are public
+browser values; there is no client secret.
+
+| Variable | Value |
+| --- | --- |
+| `VITE_GOOGLE_CLIENT_ID` | OAuth client ID, type "Web application" |
+| `VITE_GOOGLE_API_KEY` | Browser API key, restricted to the Picker API and your site |
+| `VITE_GOOGLE_APP_ID` | Optional: the Google Cloud project number |
+
+In the Google Cloud console: enable the **Google Picker API**; create the OAuth client with
+your site (for example `https://icanera.space`) under Authorised JavaScript origins; create the
+API key. The only scope requested is `drive.file`, so the app sees nothing but the files a
+person picks. The access token stays in the browser tab and is never sent to our server; only the
+link is saved. Without the variables the button is replaced by Open Google Drive and Paste.
+
+A picked file is private until its owner shares it, so others will see a blank preview until
+the owner sets sharing in Drive.
+
+## 6. Build from a conversation (Resume and Pitchin profile)
+
+Resume, Profile tab has **Start from a conversation**, and the Pitchin business form has
+**Fill this in from your idea**. A person types, speaks, pastes a chat or uploads a WhatsApp
+export (.txt), reviews what the AI found, and ticks what to keep.
+
+- Needs the same AI keys the app already uses (`OPENAI_API_KEY` and/or `GEMINI_API_KEY` in Vercel).
+- No migration. It is served by `api/ai-analysis.js` (task `profile-from-conversation`), so it
+  adds no new Vercel function. The handler lives in `api/_lib/profileFromConversationHandler.js`.
+- Signed-in users only, limited to 8 reads per 10 minutes each. The text is sent once to the AI
+  provider and is not stored or logged.
+- Existing details are never overwritten unless the person ticks that row. Experience entries
+  are saved when confirmed; profile details only fill the form until Save is pressed.

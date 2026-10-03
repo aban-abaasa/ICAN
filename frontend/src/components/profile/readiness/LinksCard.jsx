@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
-  ExternalLink, FileText, FolderOpen, Link2, Loader2, Plus, Presentation, Sheet, Trash2, ClipboardList, Eye,
+  ClipboardPaste, ExternalLink, FileText, FolderOpen, HardDrive, Link2, Loader2, Plus, Presentation, Sheet, Trash2, ClipboardList, Eye,
 } from 'lucide-react';
-import { KIND_LABELS, classifyGoogleUrl, isEmbeddable } from '../../../utils/googleLinks';
+import { KIND_LABELS, classifyGoogleUrl, extractGoogleLink, isEmbeddable } from '../../../utils/googleLinks';
+import { isDrivePickerConfigured, pickFromGoogleDrive } from '../../../services/googleDrivePicker';
 
 const KIND_ICON = { form: ClipboardList, drive_file: FileText, drive_folder: FolderOpen, doc: FileText, sheet: Sheet, slides: Presentation };
 
@@ -12,9 +13,12 @@ export default function LinksCard({ links, items, backendReady, defaultItemKey, 
   const [title, setTitle] = useState('');
   const [itemKey, setItemKey] = useState(defaultItemKey || '');
   const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [confirmId, setConfirmId] = useState(null);
 
+  const pickerReady = isDrivePickerConfigured();
   const detected = url.trim() ? classifyGoogleUrl(url) : null;
 
   const submit = async (e) => {
@@ -30,6 +34,70 @@ export default function LinksCard({ links, items, backendReady, defaultItemKey, 
       setError(err.message);
     }
     setBusy(false);
+  };
+
+  // A copied Google link usually arrives inside other words (a WhatsApp share, an email line).
+  // Keep just the link so people never have to trim it by hand.
+  const takeLinkFromText = (text) => {
+    const found = extractGoogleLink(text);
+    if (!found.ok) return false;
+    setUrl(found.url);
+    setError('');
+    setNotice('');
+    return true;
+  };
+
+  const onUrlPaste = (e) => {
+    const text = e.clipboardData?.getData('text') || '';
+    if (text.trim() && takeLinkFromText(text)) e.preventDefault();
+  };
+
+  const pasteFromClipboard = async () => {
+    setError('');
+    setNotice('');
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!takeLinkFromText(text)) setError('There is no Google link in what you copied. In Google Drive, open the file, choose Share, then Copy link.');
+    } catch {
+      setError('This browser did not allow reading your clipboard. Press and hold in the box and choose Paste.');
+    }
+  };
+
+  // Choose files in Google's own picker (My Drive, Shared with me, or upload from this device)
+  // and save a link for each one, tied to the checklist item chosen above.
+  const browseDrive = async () => {
+    setError('');
+    setNotice('');
+    setPicking(true);
+    try {
+      const picked = await pickFromGoogleDrive();
+      const known = new Set(links.map((l) => l.url));
+      let added = 0;
+      let skipped = 0;
+      const problems = [];
+      for (const file of picked) {
+        if (!file.link.ok) { problems.push(`${file.name || 'A file'}: ${file.link.reason}`); continue; }
+        if (known.has(file.link.url)) { skipped += 1; continue; }
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await onAdd({ url: file.link.url, title: file.name, itemKey: itemKey || null });
+          known.add(file.link.url);
+          added += 1;
+        } catch (err) {
+          problems.push(`${file.name || 'A file'}: ${err.message}`);
+        }
+      }
+      if (problems.length) setError(problems.join(' '));
+      if (added) {
+        setNotice(`Added ${added} ${added === 1 ? 'file' : 'files'} from Google Drive.${skipped ? ` ${skipped} already connected.` : ''}`);
+        if (!problems.length) { setTitle(''); setItemKey(''); setFormOpen(false); }
+      } else if (skipped && !problems.length) {
+        setNotice('That is already connected.');
+      }
+    } catch (err) {
+      setError(err.message || 'Google Drive could not open. Paste a link instead.');
+    }
+    setPicking(false);
   };
 
   const itemTitle = (key) => items.find((i) => i.key === key)?.title;
@@ -49,35 +117,65 @@ export default function LinksCard({ links, items, backendReady, defaultItemKey, 
         Connect a Google Form to fill it in without leaving the app, or attach a certificate, receipt or application from Google Drive as evidence for a checklist item.
       </p>
 
+      {notice && <div className="gr-alert gr-alert--ok" role="status">{notice}</div>}
+
       {formOpen && (
         <form className="gr-form" onSubmit={submit} noValidate aria-label="Connect a Google link">
           <div className="gr-field">
-            <label className="gr-label" htmlFor="gr-link-url">Google link</label>
-            <input id="gr-link-url" className="gr-input" inputMode="url" autoComplete="off" autoCapitalize="off" spellCheck="false"
-              placeholder="Paste a Google Forms or Drive link" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus />
+            <label className="gr-label" htmlFor="gr-link-item">Attach to</label>
+            <select id="gr-link-item" className="gr-select" value={itemKey} onChange={(e) => setItemKey(e.target.value)}>
+              <option value="">General (not tied to an item)</option>
+              {items.map((i) => <option key={i.key} value={i.key}>{i.title}</option>)}
+            </select>
+          </div>
+
+          <div className="gr-field">
+            <span className="gr-label">From Google Drive</span>
+            {pickerReady ? (
+              <>
+                <button type="button" className="gr-btn gr-btn--primary gr-btn--block" onClick={browseDrive} disabled={picking || busy}>
+                  {picking ? <Loader2 className="gr-spin" aria-hidden="true" /> : <HardDrive aria-hidden="true" />}Browse my Google Drive
+                </button>
+                <p className="gr-hint">
+                  Works on your phone and your computer. Pick several files at once, or use the Upload tab to send a file from this device to Drive and get its link.
+                  The app only sees the files you pick.
+                </p>
+              </>
+            ) : (
+              <>
+                <a className="gr-btn gr-btn--ghost gr-btn--block" href="https://drive.google.com/drive/my-drive" target="_blank" rel="noopener noreferrer">
+                  <HardDrive aria-hidden="true" />Open Google Drive
+                </a>
+                <p className="gr-hint">
+                  In Drive, open the file and choose Share, then Copy link. Come back here and tap Paste. On a phone the Drive app does the same.
+                </p>
+              </>
+            )}
+          </div>
+
+          <div className="gr-field">
+            <label className="gr-label" htmlFor="gr-link-url">Or paste a Google link</label>
+            <div className="gr-grid2" style={{ gridTemplateColumns: '1fr auto' }}>
+              <input id="gr-link-url" className="gr-input" inputMode="url" autoComplete="off" autoCapitalize="off" spellCheck="false"
+                placeholder="Paste a Google Forms or Drive link" value={url} onChange={(e) => setUrl(e.target.value)} onPaste={onUrlPaste} />
+              <button type="button" className="gr-btn gr-btn--ghost" onClick={pasteFromClipboard} aria-label="Paste the copied link">
+                <ClipboardPaste aria-hidden="true" />Paste
+              </button>
+            </div>
             {detected && (
               <p className="gr-hint" role="status" style={{ color: detected.ok ? 'var(--gr-ok)' : 'var(--gr-err)' }}>
                 {detected.ok ? `${detected.label} recognised.${detected.embedUrl ? '' : ' It will open in Google.'}` : detected.reason}
               </p>
             )}
           </div>
-          <div className="gr-grid2">
-            <div className="gr-field">
-              <label className="gr-label" htmlFor="gr-link-title">Name (optional)</label>
-              <input id="gr-link-title" className="gr-input" maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Tax clearance scan" />
-            </div>
-            <div className="gr-field">
-              <label className="gr-label" htmlFor="gr-link-item">Attach to</label>
-              <select id="gr-link-item" className="gr-select" value={itemKey} onChange={(e) => setItemKey(e.target.value)}>
-                <option value="">General (not tied to an item)</option>
-                {items.map((i) => <option key={i.key} value={i.key}>{i.title}</option>)}
-              </select>
-            </div>
+          <div className="gr-field">
+            <label className="gr-label" htmlFor="gr-link-title">Name (optional)</label>
+            <input id="gr-link-title" className="gr-input" maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Tax clearance scan" />
           </div>
           {error && <div className="gr-alert gr-alert--err" role="alert">{error}</div>}
           <div className="gr-grid2">
-            <button type="button" className="gr-btn gr-btn--ghost" onClick={() => { setFormOpen(false); setError(''); }} disabled={busy}>Cancel</button>
-            <button type="submit" className="gr-btn gr-btn--primary" disabled={busy || !detected?.ok}>
+            <button type="button" className="gr-btn gr-btn--ghost" onClick={() => { setFormOpen(false); setError(''); }} disabled={busy || picking}>Cancel</button>
+            <button type="submit" className="gr-btn gr-btn--primary" disabled={busy || picking || !detected?.ok}>
               {busy ? <Loader2 className="gr-spin" aria-hidden="true" /> : <Link2 aria-hidden="true" />}Connect
             </button>
           </div>

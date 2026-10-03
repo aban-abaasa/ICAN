@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Plus, X, Trash2, PieChart, Loader, Search, CheckCircle2, AlertCircle, Wallet, FileText, Bell, Clock, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Building2, Users, Plus, X, Trash2, PieChart, Loader, Search, CheckCircle2, AlertCircle, Wallet, FileText, Bell, Clock, ThumbsUp, ThumbsDown, Sparkles } from 'lucide-react';
 import { createBusinessProfile, updateBusinessProfile, getSupabase, verifyICANUser, searchICANUsers, saveBusinessCoOwners } from '../services/pitchingService';
 import { uploadToR2, resolveMediaValue } from '../services/r2StorageService';
 import { registerBusinessWallet, setBusinessWalletPin } from '../services/icanWalletService';
 import { memberApprovalService } from '../services/memberApprovalService';
 import { createBusinessProfileFromCategory, publishBusinessAsSupplier, getMySupplierHint } from '../services/businessManagementService';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
+import ConversationImportModal from './common/ConversationImportModal';
 import { COUNTRIES } from '../constants/countries';
 
 const STRUCTURE_LIMITS = {
@@ -65,6 +66,10 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(''); // resolved, renderable URL for the <img> preview
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [supplierAutoDetected, setSupplierAutoDetected] = useState(false); // true once cmms_get_my_supplier_hint() found an existing Supermarketa/business-profile supplier match
+  // "Fill from my idea": details read from a conversation. `conceptDraft` is handed to the
+  // documents step, which uses it only for sections that are still empty.
+  const [showConversation, setShowConversation] = useState(false);
+  const [conceptDraft, setConceptDraft] = useState(null);
 
   const [coOwners, setCoOwners] = useState([]);
 
@@ -371,6 +376,16 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
     if (coOwners.length > 1) {
       setCoOwners(coOwners.filter(owner => owner.id !== id));
     }
+  };
+
+  const applyBusinessConversation = async ({ fields, plan }) => {
+    setBusinessData((current) => ({ ...current, ...fields }));
+    const planCount = Object.keys(plan).length;
+    if (planCount) setConceptDraft((prev) => ({ ...(prev || {}), ...plan }));
+    const parts = [];
+    if (Object.keys(fields).length) parts.push('Your business details are filled in. Check them before you continue.');
+    if (planCount) parts.push('The pitch document sections will be pre-filled when you reach the Documents step.');
+    return parts.join(' ') || 'Nothing was changed.';
   };
 
   const handleBusinessChange = (field, value) => {
@@ -764,6 +779,18 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
           {step === 'business' && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white">Business Information</h3>
+
+              <button
+                type="button"
+                onClick={() => setShowConversation(true)}
+                className="w-full flex items-center gap-3 text-left bg-gradient-to-r from-amber-500/15 to-pink-500/10 hover:from-amber-500/25 border border-amber-400/40 rounded-xl px-4 py-3 transition"
+              >
+                <Sparkles className="w-5 h-5 text-amber-300 flex-shrink-0" />
+                <span className="min-w-0">
+                  <span className="block text-white font-semibold text-sm">Fill this in from your idea</span>
+                  <span className="block text-slate-300 text-xs mt-0.5">Describe the business in your own words, or speak it. You review everything before it is added.</span>
+                </span>
+              </button>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
@@ -1409,6 +1436,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                 </div>
               </div>
               <BusinessProfileDocuments
+                draft={conceptDraft}
                 businessProfile={{
                   id: editingProfile?.id,
                   business_name: businessData.businessName
@@ -1546,6 +1574,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
               </div>
 
               <BusinessProfileDocuments
+                draft={conceptDraft}
                 businessProfile={editingProfile || { business_name: businessData.businessName }}
                 onDocumentsComplete={() => setStep('wallet')}
                 onCancel={() => setStep(isSoleProprietorship ? 'business' : 'owners')}
@@ -2135,6 +2164,16 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
           )}
         </div>
       </div>
+
+      {showConversation && (
+        <ConversationImportModal
+          target="business"
+          current={businessData}
+          countries={COUNTRIES}
+          onApply={applyBusinessConversation}
+          onClose={() => setShowConversation(false)}
+        />
+      )}
     </div>
   );
 };
