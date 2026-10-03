@@ -1585,6 +1585,80 @@ export const removeBusinessTeamMember = async (memberId) => {
   }
 };
 
+// CMMS people who work for this business: the staff of every CMMS company linked to
+// it (either through Link Data Sources or a company that points at the business).
+// The owner can pick any of them as a helper. Returns { staff, companies, error }.
+export const getCmmsStaffForBusiness = async (businessProfileId) => {
+  try {
+    const sb = getSupabase();
+    if (!sb || !businessProfileId) return { staff: [], companies: [], error: null };
+
+    const companyIds = new Set();
+    const { data: links } = await sb
+      .from('pitchin_business_data_links')
+      .select('source_entity_id')
+      .eq('business_profile_id', businessProfileId)
+      .eq('source_app', 'cmms')
+      .eq('is_active', true);
+    (links || []).forEach((l) => l.source_entity_id && companyIds.add(l.source_entity_id));
+
+    const { data: pointing } = await sb
+      .from('cmms_company_profiles')
+      .select('id')
+      .or(`pichin_business_profile_id.eq.${businessProfileId},business_profile_id.eq.${businessProfileId}`);
+    (pointing || []).forEach((c) => companyIds.add(c.id));
+
+    if (companyIds.size === 0) return { staff: [], companies: [], error: null };
+
+    const [{ data: companies }, { data: people, error }] = await Promise.all([
+      sb.from('cmms_company_profiles').select('id, company_name').in('id', [...companyIds]),
+      sb.from('cmms_users_with_roles')
+        .select('id, cmms_company_id, email, full_name, user_name, job_title, department, effective_role, is_active')
+        .in('cmms_company_id', [...companyIds])
+        .eq('is_active', true)
+    ]);
+    if (error) throw error;
+
+    const companyName = new Map((companies || []).map((c) => [c.id, c.company_name]));
+    const seen = new Set();
+    const staff = [];
+    for (const p of people || []) {
+      const email = (p.email || '').trim().toLowerCase();
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+      staff.push({
+        email,
+        name: p.full_name || p.user_name || email.split('@')[0],
+        jobTitle: p.job_title || p.effective_role || '',
+        department: p.department || '',
+        company: companyName.get(p.cmms_company_id) || ''
+      });
+    }
+    staff.sort((a, b) => a.name.localeCompare(b.name));
+    return { staff, companies: [...companyName.values()], error: null };
+  } catch (error) {
+    console.error('Error fetching CMMS staff for business:', error);
+    return { staff: [], companies: [], error: error.message || 'Could not load CMMS staff' };
+  }
+};
+
+// Assign a CMMS person as a helper. Helpers are IcanEra accounts, so the CMMS
+// person's email is matched to their account; if they have none yet we say so.
+export const assignCmmsStaffAsHelper = async (businessProfileId, staffMember) => {
+  const email = (staffMember?.email || '').trim().toLowerCase();
+  if (!email) return { success: false, error: 'This CMMS person has no email address' };
+
+  const matches = await searchICANUsers(email);
+  const account = (matches || []).find((u) => (u.email || '').trim().toLowerCase() === email);
+  if (!account) {
+    return {
+      success: false,
+      error: `${staffMember.name || email} has no IcanEra account yet. They need to sign up with ${email}, then you can assign them.`
+    };
+  }
+  return addBusinessTeamMember(businessProfileId, { ...account, name: account.name || staffMember.name });
+};
+
 // Get all business profiles where user has team-member (transaction-only) access
 export const getTeamMemberBusinessProfiles = async (userId) => {
   try {

@@ -1,7 +1,9 @@
 /**
  * Transaction Cleanup Service
  * Provides safe data deletion and cleanup operations for the ICAN app
- * All operations respect RLS - users can only delete their own data
+ * All operations respect RLS - users can only delete their own data.
+ * Permanent transactions (two accounts / IcanEra wallet / CMMS) are never deleted: every
+ * delete below skips them (involves_two_accounts), and the database refuses them anyway.
  */
 
 import { getSupabaseClient } from '../lib/supabase/client';
@@ -105,6 +107,7 @@ export const deleteAllTransactions = async () => {
       .from('ican_transactions')
       .delete()
       .eq('user_id', user.id)
+      .eq('involves_two_accounts', false)
       .select();
 
     if (error) throw error;
@@ -134,6 +137,7 @@ export const deleteOldTransactions = async (daysOld = 90) => {
       .from('ican_transactions')
       .delete()
       .eq('user_id', user.id)
+      .eq('involves_two_accounts', false)
       .lt('created_at', cutoffDate.toISOString())
       .select();
 
@@ -161,6 +165,7 @@ export const deleteTransactionsByType = async (type) => {
       .from('ican_transactions')
       .delete()
       .eq('user_id', user.id)
+      .eq('involves_two_accounts', false)
       .eq('transaction_type', type)
       .select();
 
@@ -188,6 +193,7 @@ export const deleteTransactionsByDateRange = async (startDate, endDate) => {
       .from('ican_transactions')
       .delete()
       .eq('user_id', user.id)
+      .eq('involves_two_accounts', false)
       .gte('created_at', startDate)
       .lte('created_at', endDate)
       .select();
@@ -217,6 +223,7 @@ export const deleteLowConfidenceTransactions = async (confidenceThreshold = 0.5)
       .from('ican_transactions')
       .select('id')
       .eq('user_id', user.id)
+      .eq('involves_two_accounts', false)
       .lt('confidence', confidenceThreshold);
 
     if (!toDelete || toDelete.length === 0) {
@@ -256,6 +263,7 @@ export const deleteOfflineSyncTransactions = async () => {
       .from('ican_transactions')
       .select('id')
       .eq('user_id', user.id)
+      .eq('involves_two_accounts', false)
       .or("metadata->>synced_from_offline.eq.true,metadata->>source.eq.offline_sync");
 
     if (!toDelete || toDelete.length === 0) {
@@ -294,6 +302,7 @@ export const deleteTransactionsByCategory = async (category) => {
       .from('ican_transactions')
       .select('id')
       .eq('user_id', user.id)
+      .eq('involves_two_accounts', false)
       .or(`metadata->>category.eq.${category},category.eq.${category}`);
 
     if (!toDelete || toDelete.length === 0) {

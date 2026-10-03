@@ -212,6 +212,13 @@ export const updateTransaction = async (transactionId, updates) => {
   }
 };
 
+// A transaction that ties two accounts together (a helper recording on behalf of
+// a company, a co-owner's entry, a payment with a counterparty) is permanent —
+// see MANUAL_TRANSACTION_HELPERS.sql. The database enforces it; this is the
+// friendly message for the UI.
+export const TWO_ACCOUNT_DELETE_MESSAGE =
+  'This transaction is permanent (it involves two accounts, the IcanEra wallet or CMMS), so it can never be deleted. It can be archived instead.';
+
 /**
  * Delete a transaction
  * @param {number} transactionId - Transaction ID
@@ -220,19 +227,32 @@ export const updateTransaction = async (transactionId, updates) => {
 export const deleteTransaction = async (transactionId) => {
   try {
     console.log(`🗑️ [supabaseTransactions] Deleting transaction ID: ${transactionId}`);
-    
+
     // Get current user to verify ownership
     const client = getClient();
     const { data: { user } } = await client.auth.getUser();
-    
+
     if (!user) {
       console.error('❌ No authenticated user found');
       return { success: false, error: new Error('Not authenticated') };
     }
-    
+
     const userId = user.id;
     console.log(`👤 [supabaseTransactions] Auth user ID: ${userId}`);
-    
+
+    // Refuse up front for two-account transactions — before the offline queue is
+    // touched. `select('*')` so this still works on a database that predates the
+    // involves_two_accounts column. Offline temp ids aren't uuids and simply
+    // find nothing here.
+    const { data: guardRow } = await client
+      .from('ican_transactions')
+      .select('*')
+      .eq('id', transactionId)
+      .maybeSingle();
+    if (guardRow?.involves_two_accounts) {
+      return { success: false, locked: true, error: new Error(TWO_ACCOUNT_DELETE_MESSAGE) };
+    }
+
     // Remove from offline queue first (prevent re-syncing deleted transactions)
     try {
       const removed = await offlineAuthManager.removeActionsByTransactionId(transactionId);
@@ -308,6 +328,35 @@ export const deleteTransaction = async (transactionId) => {
     return { success: true, deleted: true };
   } catch (err) {
     console.error('❌ [supabaseTransactions] Exception deleting transaction:', err);
+    return { success: false, error: err };
+  }
+};
+
+/**
+ * Archive a two-account transaction in place of deleting it. The entry keeps
+ * counting toward the business's figures; its stored detail is compacted to save
+ * space and one-way. Only the business owner may archive a company's entries
+ * (the database enforces it) — see fn_archive_ican_transaction.
+ * @param {string} transactionId - Transaction ID (uuid)
+ * @returns {Promise<{success: boolean, archivedAt?: string, bytesSaved?: number, alreadyArchived?: boolean, error?: Error}>}
+ */
+export const archiveTransaction = async (transactionId) => {
+  try {
+    const { data, error } = await getClient().rpc('fn_archive_ican_transaction', {
+      p_transaction_id: transactionId
+    });
+    if (error) {
+      console.error('❌ [supabaseTransactions] Archive failed:', error);
+      return { success: false, error };
+    }
+    return {
+      success: true,
+      archivedAt: data?.archived_at,
+      bytesSaved: data?.bytes_saved || 0,
+      alreadyArchived: !!data?.already_archived
+    };
+  } catch (err) {
+    console.error('❌ [supabaseTransactions] Exception archiving transaction:', err);
     return { success: false, error: err };
   }
 };

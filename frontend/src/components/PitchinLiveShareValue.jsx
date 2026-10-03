@@ -13,15 +13,16 @@
  * Not rendered anywhere outside PitchIn — regular users never see this.
  */
 
-import React, { useState, useEffect, useCallback, useRef, useId } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react';
 import {
   TrendingUp, TrendingDown, Link2, Link2Off, RefreshCw,
   Shield, ShieldCheck, ChevronDown, ChevronUp, Loader,
   Building2, Tractor, Bike, ShoppingCart, Coins,
-  FileText, CheckCircle2, Wallet, PieChart, Pencil, Users
+  FileText, CheckCircle2, Wallet, PieChart, Pencil, Users, Lock
 } from 'lucide-react';
 import BusinessTeamMembersModal from './BusinessTeamMembersModal';
 import PitchinValueGrowth from './PitchinValueGrowth';
+import TransactionDayBook from './TransactionDayBook';
 import {
   calculateLiveShareValue,
   saveDataLink,
@@ -30,6 +31,8 @@ import {
   setBusinessTotalShares,
   getBusinessTransactionsByContributor
 } from '../services/pitchinValuationService';
+import { getBusinessTeamMembers } from '../services/pitchingService';
+import { archiveTransaction } from '../services/supabaseTransactions';
 import { CountryService } from '../services/countryService';
 import icanCoinService from '../services/icanCoinService';
 import { supabase } from '../lib/supabase/client';
@@ -211,6 +214,9 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
   const [contributorsError, setContributorsError] = useState(null);
   const [loadingContributors, setLoadingContributors] = useState(false);
   const [expandedContributorId, setExpandedContributorId] = useState(null);
+  const [helpers, setHelpers] = useState([]);           // business_team_members: may enter data on behalf of the company
+  const [entriesView, setEntriesView] = useState('day'); // 'day' | 'contributor'
+  const [archivingId, setArchivingId] = useState(null);
   const [userCountry, setUserCountry] = useState('UG');
   const [showShareEditor, setShowShareEditor] = useState(false);
   const [shareInput, setShareInput] = useState('');
@@ -362,24 +368,34 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
   }, [showLinkPanel, discoverEntities]);
 
   // Load the per-contributor breakdown the first time Manual Transactions is
-  // opened — lets the owner see who (owner, co-owner, or team member) recorded
-  // what, not just the combined totals.
+  // opened — lets the owner see who (owner, co-owner, helper) recorded what,
+  // not just the combined totals. Also the source of the day book.
+  const loadContributors = useCallback(async () => {
+    if (!businessProfileId) return;
+    setLoadingContributors(true);
+    try {
+      const { contributors: rows, error } = await getBusinessTransactionsByContributor(businessProfileId);
+      setContributors(rows);
+      setContributorsError(error);
+    } finally {
+      setLoadingContributors(false);
+    }
+  }, [businessProfileId]);
+
+  // The owner's helper roster (people assigned to enter data on the company's behalf).
+  const loadHelpers = useCallback(async () => {
+    if (!businessProfileId || readOnly) return;
+    setHelpers(await getBusinessTeamMembers(businessProfileId));
+  }, [businessProfileId, readOnly]);
+
   useEffect(() => {
-    if (!showManualTx || !businessProfileId) return;
-    let cancelled = false;
-    (async () => {
-      setLoadingContributors(true);
-      try {
-        const { contributors: rows, error } = await getBusinessTransactionsByContributor(businessProfileId);
-        if (cancelled) return;
-        setContributors(rows);
-        setContributorsError(error);
-      } finally {
-        if (!cancelled) setLoadingContributors(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [showManualTx, businessProfileId]);
+    if (!showManualTx) return;
+    loadContributors();
+    loadHelpers();
+  }, [showManualTx, loadContributors, loadHelpers]);
+
+  // Every contributor's entries in one list — the day book groups these by date.
+  const allEntries = useMemo(() => contributors.flatMap((c) => c.entries), [contributors]);
 
   const loadValuation = useCallback(async () => {
     if (!businessProfileId || !ownerUserId) return;
@@ -467,6 +483,26 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
       await loadValuation();
     } catch (err) {
       alert('Failed to remove link: ' + err.message);
+    }
+  };
+
+  // Two-account entries can never be deleted; the owner archives them instead.
+  const handleArchiveEntry = async (entry) => {
+    const label = entry.description || REPORTING_BUCKET_LABELS[entry.reporting_bucket] || 'this entry';
+    if (!window.confirm(
+      `Archive "${label}"?\n\nIt stays in your books and keeps counting toward the share value, but its extra detail ` +
+      '(notes, quantities, product names) is removed to save space. This cannot be undone.'
+    )) return;
+    setArchivingId(entry.id);
+    try {
+      const result = await archiveTransaction(entry.id);
+      if (!result.success) {
+        alert('Could not archive: ' + (result.error?.message || 'unknown error'));
+        return;
+      }
+      await loadContributors();
+    } finally {
+      setArchivingId(null);
     }
   };
 
@@ -864,7 +900,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
                           {showManualTx ? <ChevronUp size={12} className="text-slate-500" /> : <ChevronDown size={12} className="text-slate-500" />}
                         </span>
                       </div>
-                      <p className="text-[10px] sm:text-xs text-slate-500">Entries recorded and tagged to this business via "Record Transaction" — by you and your team.</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500">Entries recorded and tagged to this business via "Record Transaction" — by you and the helpers you assign.</p>
                     </div>
                   </button>
 
@@ -902,20 +938,89 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
                         </div>
                       )}
 
-                      {/* ── By contributor — who recorded what ── */}
+                      {/* ── Helpers — people assigned to enter data on behalf of the company ── */}
                       <div className="mt-3 pt-2.5 border-t border-slate-800/60">
-                        <p className="text-[10px] sm:text-xs font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
-                          <Users size={10} className="text-blue-400" /> By contributor
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <p className="text-[10px] sm:text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                            <Users size={10} className="text-blue-400" /> Transaction helpers
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setShowTeamModal(true)}
+                            className="text-[10px] sm:text-xs text-blue-400 font-semibold py-1 pl-2"
+                          >
+                            Manage →
+                          </button>
+                        </div>
+                        {helpers.length === 0 ? (
+                          <p className="text-[10px] sm:text-xs text-slate-600 italic">
+                            No helpers yet. Assign someone to enter data on behalf of the company.
+                          </p>
+                        ) : (
+                          <div className="rounded-lg bg-slate-900/50 border border-slate-700/30 divide-y divide-slate-800/60 overflow-hidden">
+                            {helpers.map((h) => {
+                              const recorded = contributors.find((c) => c.userId === h.user_id)?.count || 0;
+                              return (
+                                <div key={h.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block text-[10px] sm:text-xs text-slate-200 font-medium truncate">{h.member_name}</span>
+                                    <span className="block text-[9px] sm:text-[10px] text-slate-500 truncate">{h.member_email}</span>
+                                  </span>
+                                  <span className="text-[10px] sm:text-xs text-slate-500 shrink-0">
+                                    {recorded} entr{recorded === 1 ? 'y' : 'ies'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <p className="mt-1.5 flex items-start gap-1 text-[10px] sm:text-xs text-slate-600">
+                          <Lock size={10} className="shrink-0 mt-0.5 text-amber-500/80" />
+                          Helper entries are permanent — they can't be deleted, only archived by you.
                         </p>
-                        {loadingContributors ? (
+                      </div>
+
+                      {/* ── Entries — day by day (default) or by who recorded them ── */}
+                      <div className="mt-3 pt-2.5 border-t border-slate-800/60">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <p className="text-[10px] sm:text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                            <FileText size={10} className="text-amber-400" /> Entries
+                          </p>
+                          <div className="ls-tabs" role="tablist" aria-label="Group entries">
+                            {[{ key: 'day', label: 'By day' }, { key: 'contributor', label: 'By contributor' }].map((v) => (
+                              <button
+                                key={v.key}
+                                type="button"
+                                role="tab"
+                                aria-selected={entriesView === v.key}
+                                className={`ls-tab ${entriesView === v.key ? 'is-active' : ''}`}
+                                onClick={() => setEntriesView(v.key)}
+                              >
+                                {v.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {loadingContributors && contributors.length === 0 ? (
                           <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500">
                             <Loader size={10} className="animate-spin" />
-                            Loading contributors…
+                            Loading entries…
                           </div>
                         ) : contributorsError ? (
                           <div className="rounded-lg border border-red-700/40 bg-red-900/20 px-2.5 py-2 text-[10px] sm:text-xs text-red-300">
-                            Couldn't load contributor breakdown: {contributorsError}. Make sure BUSINESS_TRANSACTIONS_BY_CONTRIBUTOR.sql has been deployed to Supabase, and that you're the owner or a shareholder of this business.
+                            Couldn't load the entries: {contributorsError}. Make sure BUSINESS_TRANSACTIONS_BY_CONTRIBUTOR.sql and MANUAL_TRANSACTION_HELPERS.sql have been deployed to Supabase, and that you're the owner or a shareholder of this business.
                           </div>
+                        ) : entriesView === 'day' ? (
+                          <TransactionDayBook
+                            entries={allEntries}
+                            fmt={FMT}
+                            bucketLabels={REPORTING_BUCKET_LABELS}
+                            showWho
+                            canArchive
+                            onArchive={handleArchiveEntry}
+                            archivingId={archivingId}
+                          />
                         ) : contributors.length === 0 ? (
                           <p className="text-[10px] sm:text-xs text-slate-600 italic">No entries recorded yet.</p>
                         ) : (
@@ -941,22 +1046,15 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
                                   </button>
 
                                   {isOpen && (
-                                    <div className="bg-slate-950/40 divide-y divide-slate-800/40">
-                                      {c.entries.map(e => (
-                                        <div key={e.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
-                                          <span className="min-w-0 flex-1">
-                                            <span className="block text-[10px] text-slate-300 truncate">
-                                              {e.description || REPORTING_BUCKET_LABELS[e.reporting_bucket] || 'Entry'}
-                                            </span>
-                                            <span className="block text-[9px] text-slate-600">
-                                              {new Date(e.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                            </span>
-                                          </span>
-                                          <span className="text-[10px] font-semibold tabular-nums text-slate-400 shrink-0">
-                                            {FMT(e.amount)}
-                                          </span>
-                                        </div>
-                                      ))}
+                                    <div className="p-2">
+                                      <TransactionDayBook
+                                        entries={c.entries}
+                                        fmt={FMT}
+                                        bucketLabels={REPORTING_BUCKET_LABELS}
+                                        canArchive
+                                        onArchive={handleArchiveEntry}
+                                        archivingId={archivingId}
+                                      />
                                     </div>
                                   )}
                                 </div>
@@ -1035,23 +1133,6 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
                       )}
                     </div>
                   )}
-                </div>
-
-                {/* ── Team Members — who else can tag transactions to this business ── */}
-                <div className="pt-3 border-t border-emerald-800/20">
-                  <button
-                    onClick={() => setShowTeamModal(true)}
-                    className="w-full flex items-start gap-2 text-left"
-                  >
-                    <Users size={11} className="text-blue-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs sm:text-sm text-slate-200 font-medium">Team Members</p>
-                        <span className="text-[10px] sm:text-xs text-blue-400 font-semibold shrink-0">Manage →</span>
-                      </div>
-                      <p className="text-[10px] sm:text-xs text-slate-500">Give other IcanEra accounts access to record transactions for this business.</p>
-                    </div>
-                  </button>
                 </div>
 
               </div>
@@ -1186,7 +1267,9 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
     {!readOnly && showTeamModal && (
       <BusinessTeamMembersModal
         profile={{ id: businessProfileId, business_name: businessProfile?.business_name || businessProfile?.name }}
-        onClose={() => setShowTeamModal(false)}
+        title="Transaction Helpers"
+        includeCmms
+        onClose={() => { setShowTeamModal(false); loadHelpers(); }}
       />
     )}
     </>
