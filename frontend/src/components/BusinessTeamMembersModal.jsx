@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Loader, CheckCircle2, Trash2, Users, UserPlus, Lock } from 'lucide-react';
-import { searchICANUsers, getBusinessTeamMembers, addBusinessTeamMember, removeBusinessTeamMember } from '../services/pitchingService';
+import { X, Search, Loader, CheckCircle2, Trash2, Users, UserPlus, Lock, Building2 } from 'lucide-react';
+import {
+  searchICANUsers, getBusinessTeamMembers, addBusinessTeamMember, removeBusinessTeamMember,
+  getCmmsStaffForBusiness, assignCmmsStaffAsHelper
+} from '../services/pitchingService';
 
 // Lets a business owner assign an existing ICAN account as a helper who enters
 // data on behalf of this business (no equity/ownership involved — that's
 // handled separately by the shareholder/co-owner flow). Whatever a helper records
 // is permanent: the database refuses to delete it (MANUAL_TRANSACTION_HELPERS.sql),
 // and only the owner can archive it.
-const BusinessTeamMembersModal = ({ profile, onClose, title = 'Team Members' }) => {
+const BusinessTeamMembersModal = ({ profile, onClose, title = 'Team Members', includeCmms = false }) => {
   const [members, setMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [query, setQuery] = useState('');
@@ -15,11 +18,32 @@ const BusinessTeamMembersModal = ({ profile, onClose, title = 'Team Members' }) 
   const [results, setResults] = useState([]);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
+  const [cmmsStaff, setCmmsStaff] = useState([]);
+  const [cmmsCompanies, setCmmsCompanies] = useState([]);
+  const [cmmsLoading, setCmmsLoading] = useState(includeCmms);
+  const [cmmsError, setCmmsError] = useState('');
+  const [assigningEmail, setAssigningEmail] = useState('');
 
   useEffect(() => {
     loadMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id]);
+
+  // CMMS people who work for this business — one tap to make them a helper.
+  useEffect(() => {
+    if (!includeCmms) return;
+    let cancelled = false;
+    (async () => {
+      setCmmsLoading(true);
+      const { staff, companies, error: loadError } = await getCmmsStaffForBusiness(profile.id);
+      if (cancelled) return;
+      setCmmsStaff(staff);
+      setCmmsCompanies(companies);
+      setCmmsError(loadError || '');
+      setCmmsLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [includeCmms, profile.id]);
 
   const loadMembers = async () => {
     setLoadingMembers(true);
@@ -53,6 +77,18 @@ const BusinessTeamMembersModal = ({ profile, onClose, title = 'Team Members' }) 
       loadMembers();
     } else {
       setError(result.error || 'Failed to add team member');
+    }
+  };
+
+  const handleAssignCmms = async (person) => {
+    setAssigningEmail(person.email);
+    setError('');
+    const result = await assignCmmsStaffAsHelper(profile.id, person);
+    setAssigningEmail('');
+    if (result.success) {
+      loadMembers();
+    } else {
+      setError(result.error || 'Failed to assign helper');
     }
   };
 
@@ -138,6 +174,60 @@ const BusinessTeamMembersModal = ({ profile, onClose, title = 'Team Members' }) 
         </div>
 
         {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
+
+        {/* Assign from CMMS */}
+        {includeCmms && (
+          <div className="mt-4 pt-4 border-t border-slate-700">
+            <p className="text-slate-400 text-xs font-semibold mb-1 flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-purple-400" /> ASSIGN FROM CMMS
+            </p>
+            <p className="text-slate-500 text-xs mb-3">
+              {cmmsCompanies.length > 0
+                ? `Staff of ${cmmsCompanies.join(', ')}. Tap Assign to let them enter data on behalf of the company.`
+                : 'People from the CMMS company linked to this business.'}
+            </p>
+            {cmmsLoading ? (
+              <p className="text-slate-500 text-sm flex items-center gap-2"><Loader className="w-4 h-4 animate-spin" /> Loading CMMS staff…</p>
+            ) : cmmsError ? (
+              <p className="text-red-400 text-xs">Couldn't load CMMS staff: {cmmsError}</p>
+            ) : cmmsStaff.length === 0 ? (
+              <p className="text-slate-500 text-sm">
+                No CMMS staff found. Link this business's CMMS company under Link Data Sources first.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {cmmsStaff.map((person) => {
+                  const already = members.some((m) => (m.member_email || '').trim().toLowerCase() === person.email);
+                  const busy = assigningEmail === person.email;
+                  return (
+                    <div key={person.email} className="flex items-center justify-between gap-2 bg-slate-800/50 rounded-lg px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-white text-sm font-medium truncate">{person.name}</p>
+                        <p className="text-slate-500 text-xs truncate">
+                          {[person.jobTitle, person.department].filter(Boolean).join(' · ') || person.email}
+                        </p>
+                      </div>
+                      {already ? (
+                        <span className="text-green-400 text-xs font-semibold flex items-center gap-1 shrink-0">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Helper
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleAssignCmms(person)}
+                          disabled={busy || !!assigningEmail}
+                          className="shrink-0 text-xs font-semibold px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {busy ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                          Assign
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Current members */}
         <div className="mt-5 pt-4 border-t border-slate-700">

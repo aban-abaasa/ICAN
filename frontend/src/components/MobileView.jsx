@@ -10102,11 +10102,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       const userId = userProfile?.id;
                       if (!userId) throw new Error('User not authenticated');
 
-                      // Delete all transactions for this user
+                      // Delete this user's transactions — permanent ones (two accounts,
+                      // IcanEra wallet, CMMS) are kept; the database refuses to delete them.
                       const { error: txError } = await supabase
                         .from('ican_transactions')
                         .delete()
-                        .eq('user_id', userId);
+                        .eq('user_id', userId)
+                        .eq('involves_two_accounts', false);
                       if (txError) throw txError;
 
                       // Delete all financial reports for this user

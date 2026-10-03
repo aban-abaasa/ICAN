@@ -1,31 +1,39 @@
 -- =====================================================
--- MANUAL TRANSACTION HELPERS + NEVER-DELETE FOR TWO-ACCOUNT TRANSACTIONS
+-- MANUAL TRANSACTION HELPERS + NEVER-DELETE FOR PERMANENT TRANSACTIONS
 -- =====================================================
 -- Pitchin > Share Value > Manual Transactions lets a business owner assign
--- helpers (business_team_members) to enter data on behalf of the company.
--- This script makes those entries permanent:
+-- helpers (business_team_members) — including people from the business's CMMS
+-- company — to enter data on behalf of the company. This script makes what they
+-- record, and every other transaction that ties two accounts together,
+-- permanent.
 --
---   * A transaction that ties TWO accounts together can never be deleted:
---       - a helper recording on behalf of the company        (helper + owner)
---       - a co-owner recording into a company they don't own  (co-owner + owner)
---       - a row carrying metadata.counterparty_user_id        (e.g. cash payments)
---     The row is flagged at INSERT time by a trigger, so a client can neither
---     skip nor fake the flag.
---   * Instead of being deleted it can be ARCHIVED: fn_archive_ican_transaction()
---     compacts the stored detail to save space, keeps amount / type / date /
---     accounting bucket / proof references, stamps a SHA-256 digest of the
---     original row, and the entry keeps counting toward the share valuation.
---   * Its amount, type, date, owner and completed status are frozen too —
---     editing or "cancelling" a row would be deleting it in disguise.
+-- A row in ican_transactions is PERMANENT (involves_two_accounts = TRUE, with
+-- lock_reason saying why) when it is:
+--     helper       recorded by an assigned helper on behalf of the company
+--     cmms         booked from CMMS (metadata.source_app = 'cmms')
+--     wallet       an IcanEra wallet movement (top-up, transfer, card/cash payment…)
+--     co_owner     recorded by someone other than the company's owner
+--     counterparty carrying metadata.counterparty_user_id (e.g. cash payments)
+-- The flag is set by a trigger at INSERT time, so a client can neither skip nor
+-- fake it. Wallet-ledger rows in ican_coin_transactions can't be deleted either.
+--
+-- A permanent row can never be deleted, edited or "cancelled" (amount, type,
+-- date, owner, bucket and completed status are frozen). Instead it can be
+-- ARCHIVED: fn_archive_ican_transaction() compacts the stored detail to save
+-- space, keeps the accounting facts and proof references, stamps a SHA-256
+-- digest of the original row, and the entry keeps counting toward the share
+-- valuation.
 --
 -- Deletes that come from an FK cascade (a whole account or business being
--- removed) are still allowed: pg_trigger_depth() > 1 identifies them, so
--- deleting an auth user is never blocked by this guard.
+-- removed) are still allowed: pg_trigger_depth() > 1 identifies them, so deleting
+-- an auth user is never blocked by this guard. Bulk clean-up
+-- (cleanup_user_transactions) skips permanent rows instead of failing.
 --
--- Safe to run more than once. Run after PITCHIN_LIVE_SHARE_VALUE_MIGRATION.sql
--- (business_profile_id) and BUSINESS_TRANSACTIONS_BY_CONTRIBUTOR.sql
--- (fn_can_view_business_financials). BUSINESS_TEAM_MEMBERS_SETUP.sql supplies
--- the helper roster (the flag trigger degrades gracefully if it is missing).
+-- Safe to run more than once, and contains no DROP statements. Run after
+-- PITCHIN_LIVE_SHARE_VALUE_MIGRATION.sql (business_profile_id) and
+-- BUSINESS_TRANSACTIONS_BY_CONTRIBUTOR.sql (fn_can_view_business_financials).
+-- BUSINESS_TEAM_MEMBERS_SETUP.sql supplies the helper roster (the flag trigger
+-- degrades gracefully if it is missing).
 -- Admins who really must purge a row can run
 --   ALTER TABLE public.ican_transactions DISABLE TRIGGER trg_ican_tx_block_two_account_delete;
 -- in the SQL editor — it is never reachable from the app.
@@ -36,6 +44,7 @@
 ALTER TABLE public.ican_transactions
   ADD COLUMN IF NOT EXISTS involves_two_accounts BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS entered_on_behalf     BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS lock_reason           TEXT,
   ADD COLUMN IF NOT EXISTS archived_at           TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS archived_by           UUID;
 
@@ -43,7 +52,7 @@ CREATE INDEX IF NOT EXISTS idx_ican_tx_two_accounts
   ON public.ican_transactions (business_profile_id)
   WHERE involves_two_accounts;
 
--- ─── 2. Flag two-account rows at INSERT ─────────────────────────────────────
+-- ─── 2. Flag permanent rows at INSERT ───────────────────────────────────────
 -- Always recomputed from the data, whatever the client sent.
 
 CREATE OR REPLACE FUNCTION public.fn_ican_tx_flag_two_accounts()
@@ -54,48 +63,61 @@ SET search_path = public
 AS $$
 DECLARE
   v_owner     TEXT;
-  v_is_helper BOOLEAN := FALSE;
+  v_other     BOOLEAN := FALSE;   -- recorded by someone other than the company's owner
+  v_helper    BOOLEAN := FALSE;   -- ...and that someone is an assigned helper
+  v_cmms      BOOLEAN;
+  v_wallet    BOOLEAN;
+  v_counter   BOOLEAN;
 BEGIN
-  NEW.involves_two_accounts := FALSE;
-  NEW.entered_on_behalf     := FALSE;
-  NEW.archived_at           := NULL;
-  NEW.archived_by           := NULL;
-
   IF NEW.business_profile_id IS NOT NULL AND NEW.user_id IS NOT NULL THEN
     SELECT bp.user_id::TEXT INTO v_owner
     FROM public.business_profiles bp
     WHERE bp.id = NEW.business_profile_id;
 
-    -- Recorded by someone other than the company's owner -> two accounts.
     IF v_owner IS NOT NULL AND v_owner <> NEW.user_id::TEXT THEN
-      NEW.involves_two_accounts := TRUE;
-
+      v_other := TRUE;
       IF to_regclass('public.business_team_members') IS NOT NULL THEN
         EXECUTE 'SELECT EXISTS (
                    SELECT 1 FROM public.business_team_members m
                    WHERE m.business_profile_id = $1
                      AND m.user_id::TEXT = $2
                      AND m.status = ''active'')'
-        INTO v_is_helper
+        INTO v_helper
         USING NEW.business_profile_id, NEW.user_id::TEXT;
       END IF;
-      NEW.entered_on_behalf := COALESCE(v_is_helper, FALSE);
     END IF;
   END IF;
 
+  v_cmms := COALESCE(NEW.metadata->>'source_app', '') = 'cmms'
+         OR COALESCE(NEW.metadata->>'category', '') = 'cmms_inventory'
+         OR COALESCE(NEW.metadata->>'cmms_txn_id', '') <> '';
+
+  v_wallet := COALESCE(NEW.transaction_type, '') IN
+                ('top_up', 'transfer', 'card_payment', 'cash_payment', 'withdrawal', 'withdraw', 'cash_in', 'cash_out')
+           OR COALESCE(NEW.metadata->>'source', '') IN ('wallet', 'ican_wallet', 'icanera_wallet');
+
   -- An explicit counterparty (cash payments write metadata.counterparty_user_id).
-  IF NOT NEW.involves_two_accounts
-     AND COALESCE(NEW.metadata->>'counterparty_user_id', '') <> ''
-     AND (NEW.metadata->>'counterparty_user_id') <> NEW.user_id::TEXT THEN
-    NEW.involves_two_accounts := TRUE;
-  END IF;
+  v_counter := COALESCE(NEW.metadata->>'counterparty_user_id', '') <> ''
+           AND (NEW.metadata->>'counterparty_user_id') <> NEW.user_id::TEXT;
+
+  NEW.lock_reason := CASE
+    WHEN COALESCE(v_helper, FALSE) THEN 'helper'
+    WHEN v_cmms                    THEN 'cmms'
+    WHEN v_wallet                  THEN 'wallet'
+    WHEN v_other                   THEN 'co_owner'
+    WHEN v_counter                 THEN 'counterparty'
+    ELSE NULL
+  END;
+  NEW.involves_two_accounts := NEW.lock_reason IS NOT NULL;
+  NEW.entered_on_behalf     := COALESCE(v_helper, FALSE);
+  NEW.archived_at           := NULL;
+  NEW.archived_by           := NULL;
 
   RETURN NEW;
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_ican_tx_flag_two_accounts ON public.ican_transactions;
-CREATE TRIGGER trg_ican_tx_flag_two_accounts
+CREATE OR REPLACE TRIGGER trg_ican_tx_flag_two_accounts
   BEFORE INSERT ON public.ican_transactions
   FOR EACH ROW EXECUTE FUNCTION public.fn_ican_tx_flag_two_accounts();
 
@@ -109,19 +131,18 @@ BEGIN
   -- depth 1 = a direct DELETE; deeper = an FK cascade from an account/business
   -- being removed, which has to go through.
   IF OLD.involves_two_accounts AND pg_trigger_depth() <= 1 THEN
-    RAISE EXCEPTION 'This transaction involves two accounts and can never be deleted. Archive it instead.'
+    RAISE EXCEPTION 'This transaction is permanent (it involves two accounts, the IcanEra wallet or CMMS) and can never be deleted. Archive it instead.'
       USING HINT = 'select public.fn_archive_ican_transaction(<transaction id>)';
   END IF;
   RETURN OLD;
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_ican_tx_block_two_account_delete ON public.ican_transactions;
-CREATE TRIGGER trg_ican_tx_block_two_account_delete
+CREATE OR REPLACE TRIGGER trg_ican_tx_block_two_account_delete
   BEFORE DELETE ON public.ican_transactions
   FOR EACH ROW EXECUTE FUNCTION public.fn_ican_tx_block_two_account_delete();
 
--- ─── 4. Freeze the facts of a two-account row ───────────────────────────────
+-- ─── 4. Freeze the facts of a permanent row ─────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.fn_ican_tx_guard_two_account_update()
 RETURNS TRIGGER
@@ -138,6 +159,7 @@ BEGIN
   -- generic update helper sends whole rows, so don't raise for that).
   NEW.involves_two_accounts := OLD.involves_two_accounts;
   NEW.entered_on_behalf     := OLD.entered_on_behalf;
+  NEW.lock_reason           := OLD.lock_reason;
   NEW.archived_at           := OLD.archived_at;
   NEW.archived_by           := OLD.archived_by;
 
@@ -148,8 +170,10 @@ BEGIN
        OR NEW.transaction_type   IS DISTINCT FROM OLD.transaction_type
        OR NEW.created_at         IS DISTINCT FROM OLD.created_at
        OR (OLD.status = 'completed' AND NEW.status IS DISTINCT FROM OLD.status)
+       -- some deployments carry a deleted_at soft-delete column: that is a delete too
+       OR (to_jsonb(NEW)->>'deleted_at') IS DISTINCT FROM (to_jsonb(OLD)->>'deleted_at')
        OR (NEW.metadata->>'reporting_bucket') IS DISTINCT FROM (OLD.metadata->>'reporting_bucket') THEN
-      RAISE EXCEPTION 'This transaction involves two accounts: its amount, type, date, owner and status can never be changed.';
+      RAISE EXCEPTION 'This transaction is permanent: its amount, type, date, owner and status can never be changed, and it can never be deleted.';
     END IF;
   END IF;
 
@@ -157,8 +181,7 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_ican_tx_guard_two_account_update ON public.ican_transactions;
-CREATE TRIGGER trg_ican_tx_guard_two_account_update
+CREATE OR REPLACE TRIGGER trg_ican_tx_guard_two_account_update
   BEFORE UPDATE ON public.ican_transactions
   FOR EACH ROW EXECUTE FUNCTION public.fn_ican_tx_guard_two_account_update();
 
@@ -182,7 +205,8 @@ DECLARE
     'category', 'source', 'source_app', 'record_category', 'accounting_type',
     'reporting_bucket', 'ledger_side', 'counterparty_user_id',
     'business_profile_id', 'recipient_business_profile_id',
-    'payment_method', 'cash_receipt_id', 'receipt_number',
+    'payment_method', 'paymentMethod', 'momoTransactionId',
+    'cash_receipt_id', 'receipt_number',
     'receipt_url', 'receipt_ref', 'receipt_attached_at', 'cmms_txn_id'
   ];
   v_compact JSONB;
@@ -200,7 +224,7 @@ BEGIN
   END IF;
 
   IF NOT r.involves_two_accounts THEN
-    RAISE EXCEPTION 'Only transactions that involve two accounts are archived; this one can be deleted normally.';
+    RAISE EXCEPTION 'Only permanent transactions are archived; this one can be deleted normally.';
   END IF;
 
   IF r.business_profile_id IS NOT NULL THEN
@@ -247,13 +271,12 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.fn_archive_ican_transaction(UUID) TO authenticated;
 
--- ─── 6. Day-book feed: tell the owner which entries are locked / archived ───
--- Same function as BUSINESS_TRANSACTIONS_BY_CONTRIBUTOR.sql plus three columns.
--- The return type changes, so it has to be dropped first.
+-- ─── 6. Day-book feed: tell the owner which entries are permanent / archived ─
+-- Same shape as fn_get_business_transactions_by_contributor (left untouched) plus
+-- the lock columns. A new name, because a function's return type can't change
+-- in place without dropping it.
 
-DROP FUNCTION IF EXISTS public.fn_get_business_transactions_by_contributor(UUID);
-
-CREATE OR REPLACE FUNCTION public.fn_get_business_transactions_by_contributor(p_business_profile_id UUID)
+CREATE OR REPLACE FUNCTION public.fn_get_business_ledger_entries(p_business_profile_id UUID)
 RETURNS TABLE (
   id UUID,
   contributor_user_id UUID,
@@ -265,6 +288,7 @@ RETURNS TABLE (
   created_at TIMESTAMPTZ,
   entered_on_behalf BOOLEAN,
   involves_two_accounts BOOLEAN,
+  lock_reason TEXT,
   archived_at TIMESTAMPTZ
 )
 LANGUAGE plpgsql
@@ -290,6 +314,7 @@ BEGIN
     t.created_at,
     t.entered_on_behalf,
     t.involves_two_accounts,
+    t.lock_reason::TEXT,
     t.archived_at
   FROM ican_transactions t
   LEFT JOIN profiles p
@@ -304,17 +329,105 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.fn_get_business_transactions_by_contributor(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.fn_get_business_ledger_entries(UUID) TO authenticated;
 
--- ─── 7. Optional: protect entries helpers already recorded ──────────────────
--- Rows written before this script are NOT locked. To lock the ones existing
--- helpers entered, uncomment and run once:
+-- ─── 7. IcanEra wallet ledger: no deleting ──────────────────────────────────
+-- ican_coin_transactions is the sender -> recipient ledger between two wallets.
+
+CREATE OR REPLACE FUNCTION public.fn_block_wallet_ledger_delete()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF pg_trigger_depth() <= 1 THEN      -- FK cascades (account removal) still go through
+    RAISE EXCEPTION 'IcanEra wallet transactions involve two accounts and can never be deleted.';
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+DO $guard$
+BEGIN
+  IF to_regclass('public.ican_coin_transactions') IS NOT NULL THEN
+    EXECUTE 'CREATE OR REPLACE TRIGGER trg_ican_coin_tx_no_delete
+               BEFORE DELETE ON public.ican_coin_transactions
+               FOR EACH ROW EXECUTE FUNCTION public.fn_block_wallet_ledger_delete()';
+  END IF;
+END
+$guard$;
+
+-- ─── 8. Bulk clean-up skips permanent rows instead of failing ───────────────
+-- Only if the deployment has the RPC (it deletes the caller's own transactions).
+
+DO $cleanup$
+BEGIN
+  IF to_regprocedure('public.cleanup_user_transactions(text,integer,text)') IS NOT NULL THEN
+    EXECUTE $def$
+      CREATE OR REPLACE FUNCTION public.cleanup_user_transactions(cleanup_type text DEFAULT 'all'::text, param integer DEFAULT NULL::integer, param_text text DEFAULT NULL::text)
+      RETURNS TABLE(deleted_count integer, message text)
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      SET search_path TO 'public', 'pg_temp'
+      AS $body$
+      DECLARE
+        _deleted INT;
+      BEGIN
+        -- Permanent transactions (two accounts / IcanEra wallet / CMMS) are never deleted;
+        -- every branch below leaves them in place.
+        IF cleanup_type = 'all' THEN
+          DELETE FROM ican_transactions WHERE user_id = auth.uid() AND NOT involves_two_accounts;
+          GET DIAGNOSTICS _deleted = ROW_COUNT;
+          RETURN QUERY SELECT _deleted, 'All deletable transactions deleted (permanent ones are kept)';
+
+        ELSIF cleanup_type = 'old' THEN
+          DELETE FROM ican_transactions
+          WHERE user_id = auth.uid() AND NOT involves_two_accounts
+            AND created_at < NOW() - (param || ' days')::INTERVAL;
+          GET DIAGNOSTICS _deleted = ROW_COUNT;
+          RETURN QUERY SELECT _deleted, 'Transactions older than ' || param || ' days deleted';
+
+        ELSIF cleanup_type = 'type' THEN
+          DELETE FROM ican_transactions
+          WHERE user_id = auth.uid() AND NOT involves_two_accounts
+            AND transaction_type = param_text;
+          GET DIAGNOSTICS _deleted = ROW_COUNT;
+          RETURN QUERY SELECT _deleted, 'All ' || param_text || ' transactions deleted';
+
+        ELSIF cleanup_type = 'offline' THEN
+          DELETE FROM ican_transactions
+          WHERE user_id = auth.uid() AND NOT involves_two_accounts
+            AND metadata->>'synced_from_offline' = 'true';
+          GET DIAGNOSTICS _deleted = ROW_COUNT;
+          RETURN QUERY SELECT _deleted, 'Offline synced transactions deleted';
+
+        ELSIF cleanup_type = 'low_confidence' THEN
+          DELETE FROM ican_transactions
+          WHERE user_id = auth.uid() AND NOT involves_two_accounts
+            AND (metadata->>'confidence')::float < (param::FLOAT / 100);
+          GET DIAGNOSTICS _deleted = ROW_COUNT;
+          RETURN QUERY SELECT _deleted, 'Transactions with <' || param || '% confidence deleted';
+
+        ELSE
+          RETURN QUERY SELECT 0, 'Unknown cleanup type: ' || cleanup_type;
+        END IF;
+      END;
+      $body$
+    $def$;
+  END IF;
+END
+$cleanup$;
+
+-- ─── 9. Optional: protect entries recorded before this script ───────────────
+-- Rows written earlier are NOT locked. To lock the ones existing helpers
+-- entered, uncomment and run once as an admin (the update guard otherwise resets
+-- the flags, hence the setting):
 --
+-- BEGIN;
+-- SET LOCAL ican.archiving = 'on';
 -- UPDATE public.ican_transactions t
---    SET involves_two_accounts = TRUE, entered_on_behalf = TRUE
+--    SET involves_two_accounts = TRUE, entered_on_behalf = TRUE, lock_reason = 'helper'
 --  WHERE t.business_profile_id IS NOT NULL
 --    AND EXISTS (SELECT 1 FROM public.business_team_members m
 --                 WHERE m.business_profile_id = t.business_profile_id
 --                   AND m.user_id = t.user_id AND m.status = 'active');
--- (the update guard resets these flags, so run it as an admin after
---  `SET LOCAL ican.archiving = 'on';` in the same transaction.)
+-- COMMIT;

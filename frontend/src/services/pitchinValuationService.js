@@ -108,9 +108,16 @@ const EXPENSE_BUCKETS = new Set(['bought_stock', 'operating_expense', 'salary_ex
 // hasn't been deployed yet (both would otherwise silently look like "no data").
 export async function getBusinessTransactionsByContributor(businessProfileId) {
   if (!businessProfileId) return { contributors: [], error: null };
-  const { data, error } = await supabase.rpc('fn_get_business_transactions_by_contributor', {
+  // fn_get_business_ledger_entries (MANUAL_TRANSACTION_HELPERS.sql) adds the
+  // permanent/archived flags; fall back to the original RPC until it is deployed.
+  let { data, error } = await supabase.rpc('fn_get_business_ledger_entries', {
     p_business_profile_id: businessProfileId
   });
+  if (error && /could not find the function|does not exist/i.test(error.message || '')) {
+    ({ data, error } = await supabase.rpc('fn_get_business_transactions_by_contributor', {
+      p_business_profile_id: businessProfileId
+    }));
+  }
   if (error) {
     console.warn('[Valuation] Per-contributor transaction read failed:', error.message);
     return { contributors: [], error: error.message };

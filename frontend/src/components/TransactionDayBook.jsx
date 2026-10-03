@@ -62,6 +62,16 @@ function groupByDay(entries) {
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
+// Why an entry is permanent (ican_transactions.lock_reason).
+const LOCK_LABELS = {
+  helper:       { label: 'Helper entry',  hint: 'Entered by a helper on behalf of the company' },
+  cmms:         { label: 'CMMS',          hint: 'Booked from CMMS' },
+  wallet:       { label: 'IcanEra wallet', hint: 'An IcanEra wallet movement' },
+  co_owner:     { label: 'Co-owner',      hint: 'Recorded by someone other than the company owner' },
+  counterparty: { label: 'Two accounts',  hint: 'Involves two accounts' }
+};
+const lockInfo = (reason) => LOCK_LABELS[reason] || { label: 'Permanent', hint: 'Involves two accounts' };
+
 export default function TransactionDayBook({
   entries,
   fmt,
@@ -161,17 +171,12 @@ export default function TransactionDayBook({
                           {e.reporting_bucket && bucketLabels[e.reporting_bucket] && e.description && (
                             <span>{bucketLabels[e.reporting_bucket]}</span>
                           )}
-                          {e.entered_on_behalf && (
+                          {e.involves_two_accounts && (
                             <span
                               className="ls-pill ls-pill--lock"
-                              title="Entered by a helper on behalf of the company — it can never be deleted"
+                              title={`${lockInfo(e.lock_reason || (e.entered_on_behalf ? 'helper' : '')).hint} — it can never be deleted`}
                             >
-                              <Lock size={9} aria-hidden="true" /> Helper entry
-                            </span>
-                          )}
-                          {e.involves_two_accounts && !e.entered_on_behalf && (
-                            <span className="ls-pill ls-pill--lock" title="Involves two accounts — it can never be deleted">
-                              <Lock size={9} aria-hidden="true" /> Permanent
+                              <Lock size={9} aria-hidden="true" /> {lockInfo(e.lock_reason || (e.entered_on_behalf ? 'helper' : '')).label}
                             </span>
                           )}
                           {archived && (

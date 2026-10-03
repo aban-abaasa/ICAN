@@ -1268,6 +1268,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
       <BusinessTeamMembersModal
         profile={{ id: businessProfileId, business_name: businessProfile?.business_name || businessProfile?.name }}
         title="Transaction Helpers"
+        includeCmms
         onClose={() => { setShowTeamModal(false); loadHelpers(); }}
       />
     )}

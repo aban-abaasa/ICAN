@@ -217,7 +217,7 @@ export const updateTransaction = async (transactionId, updates) => {
 // see MANUAL_TRANSACTION_HELPERS.sql. The database enforces it; this is the
 // friendly message for the UI.
 export const TWO_ACCOUNT_DELETE_MESSAGE =
-  'This transaction involves two accounts, so it can never be deleted. It can be archived instead.';
+  'This transaction is permanent (it involves two accounts, the IcanEra wallet or CMMS), so it can never be deleted. It can be archived instead.';
 
 /**
  * Delete a transaction
