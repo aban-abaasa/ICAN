@@ -1611,17 +1611,54 @@ html {
 :root[data-theme="light"] .icn-menu-item.is-danger:hover { background: rgba(220, 38, 38, 0.1); color: #7f1d1d; }
 @media (prefers-reduced-motion: reduce) { .icn-menu { animation: none; } }
 
-/* Compact variant — the theme ("Appearance") list: small type, tight rows,
-   names only, a tick on the current choice. */
-.icn-menu-compact { width: 11.5rem; border-radius: 10px; }
-.icn-menu-compact .icn-menu-head { padding: .45rem .75rem .4rem; }
-.icn-menu-compact .icn-menu-eyebrow { font-size: .6rem; margin: 0; }
-.icn-menu-compact .icn-menu-body { padding: .2rem; }
-.icn-menu-compact .icn-menu-item { padding: .4rem .6rem; font-size: .75rem; gap: .5rem; border-radius: 6px; line-height: 1.25; }
-.icn-menu-compact .icn-menu-item.is-active::before { top: 20%; bottom: 20%; }
-.icn-menu-check { width: .8rem !important; height: .8rem !important; margin-left: auto; }
-.icn-menu-foot { margin: 0; padding: .4rem .75rem; font-size: .62rem; color: #8f8566; border-top: 1px solid rgba(196, 160, 82, 0.3); }
-:root[data-theme="light"] .icn-menu-foot { color: #7a6c48; border-top-color: rgba(160, 125, 45, 0.35); }
+/* ── Theme ("Appearance") picker ───────────────────────────────────────────
+   Standalone from .icn-menu on purpose: the account-menu UX pass further down
+   widens .icn-menu and pads its rows, mobile.css forces a 44px minimum on every
+   button, and ThemeContext paints every <button> with !important. Tight 28px
+   rows, the three main themes up front, the rest folded under "More themes". */
+.icn-tm {
+  width: 11.5rem; max-width: calc(100vw - 1rem); overflow: hidden;
+  background: linear-gradient(180deg, #1a160e, #100e09); color: #e9dfc6;
+  border: 1px solid rgba(196, 160, 82, 0.5); border-radius: 10px;
+  box-shadow: 0 18px 38px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  animation: icn-menu-in .16s ease-out both;
+}
+.icn-tm-title { margin: 0; padding: .4rem .7rem; font-size: .6rem; line-height: 1.2; letter-spacing: .2em; text-transform: uppercase; font-weight: 700; color: #c4a052; background: rgba(196, 160, 82, 0.07); border-bottom: 1px solid rgba(196, 160, 82, 0.35); }
+.icn-tm-list { padding: .2rem; }
+.icn-tm .icn-tm-item {
+  position: relative; display: flex; align-items: center; gap: .4rem; box-sizing: border-box;
+  width: 100%; min-width: 0; min-height: 1.75rem; margin: 0; padding: .2rem .6rem;
+  font-size: .75rem; line-height: 1.2; font-weight: 500; text-align: left; letter-spacing: .01em;
+  border: 0 !important; border-radius: 6px; box-shadow: none; cursor: pointer;
+  background-color: transparent !important; color: #d9ceb2 !important;
+  transition: background-color .15s ease;
+}
+@media (hover: hover) { .icn-tm .icn-tm-item:hover { background-color: rgba(196, 160, 82, 0.14) !important; color: #fff7e0 !important; } }
+.icn-tm .icn-tm-item:focus-visible { background-color: rgba(196, 160, 82, 0.14) !important; color: #fff7e0 !important; }
+.icn-tm .icn-tm-item:focus-visible { outline: 2px solid #c4a052; outline-offset: -2px; }
+.icn-tm .icn-tm-item.is-active { background-color: rgba(196, 160, 82, 0.2) !important; color: #fff7e0 !important; font-weight: 600; }
+.icn-tm .icn-tm-item.is-active::before { content: ''; position: absolute; left: 0; top: 22%; bottom: 22%; width: 3px; border-radius: 3px; background: #e6c980; }
+.icn-tm-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icn-tm-check { width: .8rem; height: .8rem; flex-shrink: 0; color: #e6c980; }
+.icn-tm-chev { width: .8rem; height: .8rem; flex-shrink: 0; color: #a9945c; transition: transform .2s ease; }
+.icn-tm-chev.is-open { transform: rotate(180deg); }
+.icn-tm-sep { height: 1px; margin: .2rem .5rem; background: linear-gradient(90deg, transparent, rgba(196, 160, 82, 0.45), transparent); }
+.icn-tm-sub { max-height: min(46dvh, 16rem); overflow-y: auto; overscroll-behavior: contain; margin: .1rem 0 .1rem .5rem; padding-left: .15rem; border-left: 1px solid rgba(196, 160, 82, 0.3); }
+.icn-tm-foot { margin: 0; padding: .3rem .7rem; font-size: .62rem; line-height: 1.2; color: #8f8566; border-top: 1px solid rgba(196, 160, 82, 0.3); }
+
+:root[data-theme="light"] .icn-tm { background: linear-gradient(180deg, #fffdf8, #f6efde); color: #3a2f18; border-color: rgba(160, 125, 45, 0.55); box-shadow: 0 16px 34px -14px rgba(60, 45, 15, 0.35); }
+:root[data-theme="light"] .icn-tm-title { color: #8a6a1f; background: rgba(184, 137, 43, 0.08); border-bottom-color: rgba(160, 125, 45, 0.4); }
+:root[data-theme="light"] .icn-tm .icn-tm-item { color: #4a3d20 !important; }
+@media (hover: hover) { :root[data-theme="light"] .icn-tm .icn-tm-item:hover { background-color: rgba(184, 137, 43, 0.14) !important; color: #2a2216 !important; } }
+:root[data-theme="light"] .icn-tm .icn-tm-item:focus-visible { background-color: rgba(184, 137, 43, 0.14) !important; color: #2a2216 !important; }
+:root[data-theme="light"] .icn-tm .icn-tm-item.is-active { background-color: rgba(184, 137, 43, 0.22) !important; color: #2a2216 !important; }
+:root[data-theme="light"] .icn-tm .icn-tm-item.is-active::before { background: #b8892b; }
+:root[data-theme="light"] .icn-tm-check { color: #8a6a1f; }
+:root[data-theme="light"] .icn-tm-chev { color: #8d7a45; }
+:root[data-theme="light"] .icn-tm-sep { background: linear-gradient(90deg, transparent, rgba(160, 125, 45, 0.5), transparent); }
+:root[data-theme="light"] .icn-tm-sub { border-left-color: rgba(160, 125, 45, 0.4); }
+:root[data-theme="light"] .icn-tm-foot { color: #7a6c48; border-top-color: rgba(160, 125, 45, 0.35); }
+@media (prefers-reduced-motion: reduce) { .icn-tm { animation: none; } .icn-tm-chev { transition: none; } }
 
 
 /* ── Classic profile page (theme-aware: follows --color-* tokens) ───────── */
