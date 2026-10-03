@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTheme, THEMES } from '../context/ThemeContext';
-import { ChevronDown, Palette } from 'lucide-react';
+import { Check, ChevronDown, Palette } from 'lucide-react';
 
 const ThemeSwitcher = () => {
   const { theme, changeTheme, actualTheme } = useTheme();
@@ -9,6 +9,13 @@ const ThemeSwitcher = () => {
   const themeList = Object.values(THEMES);
   const currentTheme = THEMES[theme];
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKeyDown = (e) => { if (e.key === 'Escape') setIsOpen(false); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen]);
+
   return (
     <div className="relative">
       <button
@@ -16,6 +23,8 @@ const ThemeSwitcher = () => {
         className="inline-flex items-center space-x-1.5 sm:space-x-2 px-1.5 sm:px-3 py-2 rounded-lg hover:bg-purple-500/20 transition-all duration-200 group"
         title="Switch theme"
         aria-label="Theme switcher"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
       >
         <Palette className="w-5 h-5 text-yellow-400 group-hover:text-yellow-300 transition-colors" />
         <span className="text-sm font-medium hidden xl:inline max-w-20 truncate">
@@ -24,52 +33,41 @@ const ThemeSwitcher = () => {
         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* Dropdown Menu */}
+      {/* Classic dropdown: small type, one plain row per theme, a tick on the current one */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-64 bg-slate-900/95 border border-purple-500/40 rounded-lg shadow-2xl shadow-purple-500/30 backdrop-blur-xl z-50 animate-fadeIn">
-          <div className="p-3 space-y-2">
-            {/* Header */}
-            <div className="px-3 py-2 border-b border-purple-500/20">
-              <p className="text-xs font-semibold text-purple-300 uppercase tracking-wider">Appear</p>
-            </div>
+        <div className="icn-menu icn-menu-compact absolute right-0 top-full mt-2 z-50" role="menu" aria-label="Appearance">
+          <div className="icn-menu-head">
+            <p className="icn-menu-eyebrow">Appearance</p>
+          </div>
 
-            {/* Theme Options */}
-            <div className="space-y-1">
-              {themeList.map((t) => (
+          <div className="icn-menu-body">
+            {themeList.map((t) => {
+              const selected = theme === t.id;
+              return (
                 <button
                   key={t.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={selected}
+                  title={t.description}
+                  className={`icn-menu-item ${selected ? 'is-active' : ''}`}
                   onClick={() => {
                     changeTheme(t.id);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
-                    theme === t.id
-                      ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50'
-                      : 'text-gray-300 hover:bg-purple-500/20'
-                  }`}
                 >
-                  <span className="text-lg">{t.icon}</span>
-                  <div className="text-left flex-1">
-                    <p className="text-sm font-semibold">{t.name}</p>
-                    <p className="text-xs text-gray-400">{t.description}</p>
-                  </div>
-                  {theme === t.id && (
-                    <div className="w-2 h-2 rounded-full bg-white shadow-lg"></div>
-                  )}
+                  <span>{t.name}</span>
+                  {selected && <Check className="icn-menu-check" aria-hidden="true" />}
                 </button>
-              ))}
-            </div>
-
-            {/* Info */}
-            <div className="px-3 py-2 border-t border-purple-500/20">
-              <p className="text-xs text-gray-500">
-                {theme === 'system' 
-                  ? `Using ${actualTheme === 'dark' ? 'dark' : 'light'} mode (system)`
-                  : `Using ${actualTheme} mode`
-                }
-              </p>
-            </div>
+              );
+            })}
           </div>
+
+          <p className="icn-menu-foot">
+            {theme === 'system'
+              ? `Using ${actualTheme === 'dark' ? 'dark' : 'light'} mode (system)`
+              : `Using ${actualTheme} mode`}
+          </p>
         </div>
       )}
 
@@ -77,6 +75,7 @@ const ThemeSwitcher = () => {
       {isOpen && (
         <div
           className="fixed inset-0 z-40"
+          aria-hidden="true"
           onClick={() => setIsOpen(false)}
         />
       )}
