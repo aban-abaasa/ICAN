@@ -4925,7 +4925,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   const showDashboardHeader = isWebDashboard ? true : !isOverlayPanelOpen;
   const headerNavTabs = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-    { id: 'pitchin', label: 'IcanEra', icon: Briefcase },
+    { id: 'pitchin', label: 'Pitchin', icon: Briefcase },
     { id: 'wallet', label: 'Wallet', icon: Wallet },
     { id: 'trust', label: 'Trust', icon: Lock },
     { id: 'cmms', label: 'CMMS', icon: Building },
@@ -7797,7 +7797,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         } style={isWebDashboard ? { border: '1px solid var(--color-border)', background: 'var(--color-bgSecondary)' } : undefined}>
           {[
             { id: 'home',   label: 'Home',   icon: Home,      go: 'dashboard' },
-            { id: 'pitchin',label: 'IcanEra',icon: Briefcase, go: 'pitchin'   },
+            { id: 'pitchin',label: 'Pitchin',icon: Briefcase, go: 'pitchin'   },
             { id: 'wallet', label: 'Wallet', icon: Wallet,    go: 'wallet'    },
             { id: 'trust',  label: 'Trust',  icon: Lock,      go: 'trust'     },
             { id: 'cmms',   label: 'CMMS',   icon: Settings,  go: 'cmms'      },

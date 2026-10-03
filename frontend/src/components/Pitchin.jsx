@@ -230,6 +230,19 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   const sideVideoRefCallbacks = useRef({}); // pitchId -> stable ref callback, so re-renders (e.g. live like counts) don't thrash the observer
   const viewedPitchIdsRef = useRef(new Set()); // pitch ids already counted as viewed this session, so switching back and forth doesn't inflate views_count
 
+  // Share-value sheet: Esc closes it and the page behind it stops scrolling.
+  useEffect(() => {
+    if (!showShareValuePanel) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setShowShareValuePanel(false); };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [showShareValuePanel]);
+
   useEffect(() => {
     return () => {
       Object.values(sideVideoObservers.current).forEach(observer => observer.disconnect());
@@ -2900,25 +2913,35 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
         />
       )}
 
-      {/* Live Share Value Panel — only shown to business owners, only in PitchIn */}
-      {showShareValuePanel && currentBusinessProfile && currentUser && (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-6 lg:p-10">
-          <div className="w-full sm:w-[92vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-6xl 2xl:max-w-[1600px] max-h-[92vh] sm:max-h-[90vh] lg:max-h-[85vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-slate-950 border border-slate-700/60 shadow-2xl">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 sm:px-6 sm:py-4 border-b border-slate-700/40 sticky top-0 bg-slate-950 z-10">
-              <div>
-                <h2 className="text-base sm:text-lg font-bold text-white">{currentBusinessProfile.name}</h2>
-                <p className="text-xs sm:text-sm text-slate-400">Live share valuation · tamper-evident hash</p>
+      {/* Live Share Value Panel — only shown to business owners, only in PitchIn.
+          Portalled to <body>: Pitchin is mounted inside MobileView's panel, which is
+          shorter than the screen and sits under the bottom nav, so an in-tree modal
+          had its last rows hidden behind the nav and was repainted by the Ebony skin. */}
+      {showShareValuePanel && currentBusinessProfile && currentUser && createPortal(
+        <div
+          className="ls-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Live share value"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowShareValuePanel(false); }}
+        >
+          <div className="ls-sheet">
+            <header className="ls-sheet__head">
+              <div className="ls-sheet__titles">
+                <p className="ls-eyebrow">Share certificate</p>
+                <h2 className="ls-sheet__title">{currentBusinessProfile.name}</h2>
+                <p className="ls-sheet__sub">Live valuation · tamper-evident hash</p>
               </div>
               <button
+                type="button"
                 onClick={() => setShowShareValuePanel(false)}
-                className="p-2.5 -m-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                className="ls-sheet__close"
+                aria-label="Close live share value"
               >
                 <X className="w-5 h-5" />
               </button>
-            </div>
-            {/* Live share value widget */}
-            <div className="p-4 sm:p-6">
+            </header>
+            <div className="ls-sheet__body">
               <PitchinLiveShareValue
                 businessProfile={currentBusinessProfile}
                 ownerUserId={currentBusinessProfile.user_id || currentUser.id}
@@ -2926,7 +2949,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Comments Modal */}
