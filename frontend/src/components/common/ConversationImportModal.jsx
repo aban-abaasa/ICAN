@@ -55,17 +55,22 @@ export default function ConversationImportModal({ target, current, countries, on
   const limited = useMemo(() => limitConversation(cleaned.text), [cleaned.text]);
   const enough = limited.text.length >= 40;
 
+  // Mount only: focus, lock page scroll, and stop voice typing when the dialog goes away.
   useEffect(() => {
     closeRef.current?.focus();
-    const onKey = (e) => { if (e.key === 'Escape' && !applying) onClose(); };
-    document.addEventListener('keydown', onKey);
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener('keydown', onKey);
       document.body.style.overflow = previous;
       recognitionRef.current?.stop();
     };
+  }, []);
+
+  // Escape closes, except while changes are being applied. Re-subscribing here is harmless.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !applying) onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, [onClose, applying]);
 
   // Keep the chosen speaker valid when the text changes.

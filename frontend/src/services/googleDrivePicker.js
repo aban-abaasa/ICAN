@@ -14,6 +14,7 @@
 // Until those are set, isDrivePickerConfigured() is false and the UI offers copy and paste instead.
 
 import { classifyDriveDoc } from '../utils/googleLinks';
+import { getSupabaseClient } from '../lib/supabase/client';
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const GSI_SRC = 'https://accounts.google.com/gsi/client';
@@ -72,10 +73,24 @@ function loadPickerApi() {
   return pickerApiPromise;
 }
 
-let cachedToken = null; // { value, expiresAt } kept in memory only
+let cachedToken = null; // { value, expiresAt, owner } kept in memory only
+
+// The signed-in ICAN user, read from the local session (no network). A cached Google token is
+// reused only for the same person, so a shared device never hands one person's Drive access
+// to the next person who signs in without the page reloading.
+async function currentOwner() {
+  try {
+    const { data } = await getSupabaseClient().auth.getSession();
+    return data?.session?.user?.id || '';
+  } catch {
+    return '';
+  }
+}
 
 async function getAccessToken(clientId) {
-  if (cachedToken && cachedToken.expiresAt > Date.now()) return cachedToken.value;
+  const owner = await currentOwner();
+  if (owner && cachedToken && cachedToken.owner === owner && cachedToken.expiresAt > Date.now()) return cachedToken.value;
+  cachedToken = null;
   await loadScript(GSI_SRC);
   return new Promise((resolve, reject) => {
     const client = window.google.accounts.oauth2.initTokenClient({
@@ -88,8 +103,8 @@ async function getAccessToken(clientId) {
             : 'Google would not sign you in. Try again, or paste a link instead.', response.error || 'auth'));
           return;
         }
-        cachedToken = { value: response.access_token, expiresAt: Date.now() + Math.max(60, Number(response.expires_in) - 60) * 1000 };
-        resolve(cachedToken.value);
+        cachedToken = owner ? { value: response.access_token, expiresAt: Date.now() + Math.max(60, Number(response.expires_in) - 60) * 1000, owner } : null;
+        resolve(response.access_token);
       },
       error_callback: (err) => {
         const message = {

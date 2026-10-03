@@ -189,7 +189,8 @@ const BUSINESS_SCHEMA = `{
 /** Build the chat messages for one extraction. `subject` names the speaker the profile is about. */
 export function buildMessages(target, conversation, subject = '') {
   const isResume = target === 'resume';
-  const who = subject ? `The profile is about the person who appears in the conversation as "${oneLine(subject, 60)}". Facts about other participants must not be used.` : 'The profile is about the person who is talking about themselves.';
+  const name = oneLine(subject, 60).replace(/["'`<>{}\\]/g, '');
+  const who = name ? `The profile is about the person who appears in the conversation as "${name}". Facts about other participants must not be used.` : 'The profile is about the person who is talking about themselves.';
   const system = `You read a personal conversation and extract what it says about someone's ${isResume ? 'career and background for their resume' : 'business idea for an investor pitch profile'}.
 ${who}
 
