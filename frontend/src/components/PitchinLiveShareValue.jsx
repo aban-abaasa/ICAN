@@ -13,7 +13,7 @@
  * Not rendered anywhere outside PitchIn — regular users never see this.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useId } from 'react';
 import {
   TrendingUp, TrendingDown, Link2, Link2Off, RefreshCw,
   Shield, ShieldCheck, ChevronDown, ChevronUp, Loader,
@@ -64,7 +64,10 @@ const ICAN_PER_SHARE = (ugx, marketPrice) => {
 const NO_DECIMAL_CURRENCIES = new Set(['UGX','TZS','RWF','BIF','SSP','DJF','XAF','XOF','JPY','KRW','IDR','VND']);
 
 const fmtLocal = (ugx, countryCode) => {
-  const local = CountryService.icanToLocal(1, countryCode || 'UG', Number(ugx) || 0);
+  // icanToLocal treats a falsy price as "use the 5,000 base rate", so an amount
+  // of exactly 0 would be shown as 5,000 — a zero must stay a zero.
+  const amount = Number(ugx) || 0;
+  const local = amount === 0 ? 0 : CountryService.icanToLocal(1, countryCode || 'UG', amount);
   const code  = CountryService.getCurrencyCode(countryCode || 'UG');
   const dec   = NO_DECIMAL_CURRENCIES.has(code) ? 0 : 2;
   try {
@@ -150,6 +153,43 @@ const colorMap = {
   purple: { bg: 'bg-purple-900/30', border: 'border-purple-700/50', text: 'text-purple-300', badge: 'bg-purple-800/60', dot: 'bg-purple-400' }
 };
 
+// Scalloped rosette: 24 points, alternating outer / inner radius.
+const SEAL_PATH = (() => {
+  const n = 24, outer = 46, inner = 41.5;
+  let d = '';
+  for (let i = 0; i < n * 2; i++) {
+    const a = (Math.PI * i) / n - Math.PI / 2;
+    const r = i % 2 ? inner : outer;
+    d += `${i ? 'L' : 'M'}${(50 + r * Math.cos(a)).toFixed(2)},${(50 + r * Math.sin(a)).toFixed(2)}`;
+  }
+  return `${d}Z`;
+})();
+
+// The certificate seal — lettering says whether the figure is anchored on-chain
+// or carries its SHA-256 hash.
+function Seal({ verified }) {
+  const ringId = `ls-ring-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const label = verified ? 'ON-CHAIN \u2022 VERIFIED \u2022 ' : 'SHA-256 \u2022 HASHED \u2022 ';
+  return (
+    <svg viewBox="0 0 100 100" className="ls-seal" role="img" aria-label={verified ? 'Valuation anchored on-chain' : 'Valuation protected by a SHA-256 hash'}>
+      <defs>
+        <path id={ringId} d="M50,50 m-30,0 a30,30 0 1,1 60,0 a30,30 0 1,1 -60,0" />
+      </defs>
+      <path d={SEAL_PATH} className="ls-seal__scallop" />
+      <circle cx="50" cy="50" r="38" className="ls-seal__ring" />
+      <g className="ls-seal__spin">
+        <text className="ls-seal__text">
+          <textPath href={`#${ringId}`} textLength="186" lengthAdjust="spacing">{label}</textPath>
+        </text>
+      </g>
+      <g transform="translate(35 35) scale(1.25)" className="ls-seal__icon">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="m9 12 2 2 4-4" />
+      </g>
+    </svg>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function PitchinLiveShareValue({ businessProfile, ownerUserId, readOnly = false }) {
@@ -176,6 +216,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
   const [shareInput, setShareInput] = useState('');
   const [savingShares, setSavingShares] = useState(false);
   const [shareError, setShareError] = useState('');
+  const [showMarketInfo, setShowMarketInfo] = useState(false);
 
   // Country is whatever the user picked at sign-up (user_accounts.country_code),
   // never guessed from browser locale — that's what forces local-currency display
@@ -453,7 +494,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
 
   const priceUp = valuation ? valuation.priceChangePercent >= 0 : true;
   const TrendIcon = priceUp ? TrendingUp : TrendingDown;
-  const trendColor = priceUp ? 'text-green-400' : 'text-red-400';
+  const marketUp = countryPrice ? countryPrice.appreciation_pct >= 0 : true;
 
   const linkedCount = SOURCE_APPS.filter(app => links[app.key]).length;
   const linkedContributionTotal = SOURCE_APPS.reduce((sum, app) => {
@@ -461,296 +502,302 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
     return sum + (Number(valuation.breakdown[app.breakdownKey]) || 0);
   }, 0);
 
+  const sharePriceText = valuation && !valuation.needsShareSetup ? FMT(valuation.sharePriceUgx) : '';
+  // A price that rounds to nothing reads as a broken "UGX 0" — say why instead.
+  const noValueYet = !!valuation && !valuation.needsShareSetup && Number(valuation.sharePriceUgx) < 1;
+  const hasSide = !!valuation || !readOnly;
+
+  const b = valuation?.breakdown || {};
+  const n = (v) => Number(v) || 0;
+  const statementRows = valuation ? [
+    { label: 'Business value',   value: FMT(valuation.businessValueUgx) },
+    { label: 'Net profit',       value: FMT(valuation.netProfitUgx) },
+    { label: 'IcanEra holdings', value: FMT(valuation.icanHoldingsValue) }
+  ] : [];
+  const breakdownRows = valuation ? [
+    { label: 'Manual sales income',       value: n(b.ican_sold_income),     tone: 'gold' },
+    { label: 'Manual capital assets',     value: n(b.ican_capital_assets),  tone: 'gold' },
+    { label: 'AgriBone wallet revenue',   value: n(b.farm_revenue),         tone: 'up' },
+    { label: 'MyBodaGuy wallet revenue',  value: n(b.boda_revenue),         tone: 'orange' },
+    { label: 'SupermartKera revenue',     value: n(b.supermarket_revenue),  tone: 'purple' },
+    { label: 'IcanEra wallet revenue',    value: n(b.ican_wallet_revenue),  tone: 'cyan' },
+    { label: 'CMMS inventory value',      value: n(b.cmms_inventory_value), tone: 'blue' },
+    { label: `IcanEra (${n(b.ican_holdings_ican).toFixed(4)} @ ${FMT(b.ican_market_price)})`,
+      value: n(b.ican_holdings_ugx), tone: 'gold' },
+    { label: 'COGS (stock bought)',       value: -n(b.ican_bought_stock),   tone: 'down' },
+    { label: 'Operating expenses',        value: -n(b.ican_operating_exp),  tone: 'down' },
+    { label: 'Salary expenses',           value: -n(b.ican_salary_exp),     tone: 'down' }
+  ].filter(r => r.value !== 0) : [];
+
   return (
     <>
-    <div className="ls-classic rounded-2xl border border-slate-700/60 bg-slate-900/80 backdrop-blur-sm overflow-hidden">
+    <div className="ls-classic">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-700/40">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Coins size={16} className="text-amber-400 shrink-0" />
-          <span className="ls-title text-base sm:text-xl font-bold text-white">Live Share Value</span>
-          {readOnly && (
-            <span className="text-[10px] sm:text-xs text-slate-400 bg-slate-800/60 border border-slate-700/50 rounded-full px-2 py-0.5">
-              Shareholder view
-            </span>
-          )}
+      <div className="ls-head">
+        <div className="ls-head__main">
+          <Coins size={18} className="ls-head__coin" />
+          <span className="ls-title">Live Share Value</span>
+          {readOnly && <span className="ls-chip">Shareholder view</span>}
           {valuation?.blockchainVerified && (
-            <span className="flex items-center gap-1 text-xs text-emerald-400 bg-emerald-900/30 border border-emerald-700/40 rounded-full px-2 py-0.5">
-              <ShieldCheck size={10} />
-              On-chain
-            </span>
+            <span className="ls-chip ls-chip--ok"><ShieldCheck size={11} /> On-chain</span>
           )}
           {valuation && !valuation.blockchainVerified && (
-            <span className="flex items-center gap-1 text-xs text-slate-400 bg-slate-800/40 border border-slate-700/40 rounded-full px-2 py-0.5">
-              <Shield size={10} />
-              Hashed
-            </span>
+            <span className="ls-chip"><Shield size={11} /> Hashed</span>
           )}
         </div>
-        <button
-          onClick={loadValuation}
-          disabled={loading}
-          aria-label="Refresh valuation"
-          className="p-2.5 -m-1 rounded-lg hover:bg-slate-700/50 active:bg-slate-700/70 text-slate-400 hover:text-white transition-colors shrink-0"
-        >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+        <button type="button" onClick={loadValuation} disabled={loading} aria-label="Refresh valuation" className="ls-iconbtn">
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
-      {/* ── icaneracoin Live Market Health — stability + real-time trend ── */}
-      <div className="px-4 pt-3 sm:px-6 sm:pt-4">
-        <div className="rounded-xl border border-amber-700/30 bg-gradient-to-r from-amber-950/30 to-slate-900/40 p-3 sm:p-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-              </span>
-              <span className="text-xs sm:text-sm font-bold text-amber-300">IcanEra — Live Market</span>
-            </div>
+      {/* ── IcanEra live market — a ticker tape, with the explanation tucked away on phones ── */}
+      <section className="ls-tape" aria-label="IcanEra live market">
+        <div className="ls-tape__head">
+          <div className="ls-tape__row">
+            <span className="ls-tape__name">
+              <span className="ls-live" aria-hidden="true" />
+              IcanEra — Live Market
+            </span>
             {countryPrice && (
-              <div className={`flex items-center gap-1 text-xs sm:text-sm font-bold ${countryPrice.appreciation_pct >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {countryPrice.appreciation_pct >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+              <span className={`ls-tape__chg ${marketUp ? 'is-up' : 'is-down'}`}>
+                {marketUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                 {PCT(countryPrice.appreciation_pct)}
-                {liveTick && <span className="text-[10px] text-slate-500 font-normal ml-1">· {liveTick}</span>}
-              </div>
+              </span>
             )}
           </div>
-
           {countryPrice ? (
             <>
-              <p className="text-lg sm:text-xl xl:text-2xl font-extrabold text-white mt-2 tabular-nums">
+              <p className="ls-tape__price">
                 {fmtExact(countryPrice.price_local, countryPrice.currency_code)}
-                <span className="text-xs sm:text-sm text-slate-500 font-medium ml-2">per IcanEra</span>
+                <small>per IcanEra</small>
               </p>
-              <p className="text-[11px] sm:text-xs xl:text-sm text-slate-400 mt-1.5 leading-relaxed">
-                Anchored to a self-adjusting 5,000 UGX floor that rises with currency depreciation and never falls.{' '}
-                {countryPrice.is_protected
-                  ? `Up ${PCT(countryPrice.appreciation_pct)} since launch — beating ${countryPrice.country_name || 'local'} inflation (${Number(countryPrice.local_inflation || 0).toFixed(1)}%) by ${PCT(countryPrice.net_protection)}.`
-                  : `Local inflation (${Number(countryPrice.local_inflation || 0).toFixed(1)}%) is currently outpacing the ${PCT(countryPrice.appreciation_pct)} rise — the floor is still catching up.`}
-                {countryPrice.inflation_as_of_year && (
-                  <span className="text-slate-600">
-                    {' '}(World Bank{countryPrice.inflation_source === 'world_bank_fp_cpi_totl_zg' ? '' : ' est.'}, {countryPrice.inflation_as_of_year})
-                  </span>
-                )}
-              </p>
+              {liveTick && <p className="ls-tape__tick">{liveTick}</p>}
+              <button
+                type="button"
+                className="ls-tape__more"
+                aria-expanded={showMarketInfo}
+                onClick={() => setShowMarketInfo(v => !v)}
+              >
+                {showMarketInfo ? 'Hide details' : 'How is this price protected?'}
+                <ChevronDown size={14} />
+              </button>
             </>
           ) : (
-            <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
-              <Loader size={11} className="animate-spin" />
+            <div className="ls-state" style={{ padding: '.6rem 0 0', color: '#b8ab8c' }}>
+              <Loader size={12} className="animate-spin" />
               Loading live market data…
             </div>
           )}
         </div>
-      </div>
+        {countryPrice && (
+          <p className={`ls-tape__text ${showMarketInfo ? 'is-open' : ''}`}>
+            Anchored to a self-adjusting 5,000 UGX floor that rises with currency depreciation and never falls.{' '}
+            {countryPrice.is_protected
+              ? `Up ${PCT(countryPrice.appreciation_pct)} since launch — beating ${countryPrice.country_name || 'local'} inflation (${Number(countryPrice.local_inflation || 0).toFixed(1)}%) by ${PCT(countryPrice.net_protection)}.`
+              : `Local inflation (${Number(countryPrice.local_inflation || 0).toFixed(1)}%) is currently outpacing the ${PCT(countryPrice.appreciation_pct)} rise — the floor is still catching up.`}
+            {countryPrice.inflation_as_of_year && (
+              <span>
+                {' '}(World Bank{countryPrice.inflation_source === 'world_bank_fp_cpi_totl_zg' ? '' : ' est.'}, {countryPrice.inflation_as_of_year})
+              </span>
+            )}
+          </p>
+        )}
+      </section>
 
-      <div className="lg:grid lg:grid-cols-5 lg:divide-x lg:divide-slate-700/40 lg:items-start">
+      <div className={`ls-grid ${hasSide ? 'ls-grid--split' : ''}`}>
 
-      {/* ── Share price display ── */}
-      <div className="px-4 pt-4 pb-2 sm:px-6 sm:pt-5 sm:pb-3 lg:col-span-3 xl:px-8 xl:pt-8">
+      {/* ── Certificate + growth ── */}
+      <div className="ls-col ls-col--main">
         {loading && !valuation ? (
-          <div className="flex items-center gap-2 text-slate-400 text-sm py-4">
-            <Loader size={14} className="animate-spin" />
+          <div className="ls-state">
+            <Loader size={15} className="animate-spin" />
             Computing live valuation…
           </div>
         ) : error ? (
-          <p className="text-red-400 text-xs sm:text-sm py-2">{error}</p>
+          <p className="ls-state ls-state--err">{error}</p>
         ) : valuation ? (
           <>
             {valuation.needsShareSetup ? (
               readOnly ? (
-                <div className="rounded-xl border border-slate-700/40 bg-slate-800/30 p-3 sm:p-4">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Shield size={14} className="text-slate-400 shrink-0" />
-                    <span className="text-sm sm:text-base font-bold text-slate-300">Share count not configured</span>
+                <div className="ls-notice">
+                  <div className="ls-notice__head">
+                    <Shield size={16} />
+                    <strong>Share count not configured</strong>
                   </div>
-                  <p className="text-xs sm:text-sm text-slate-400">
-                    The business owner must configure the total shares before a live price per share can be displayed.
-                  </p>
+                  <p>The business owner must configure the total shares before a live price per share can be displayed.</p>
                 </div>
               ) : (
-              <div className="rounded-xl border border-amber-700/40 bg-amber-900/15 p-3 sm:p-4">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <PieChart size={14} className="text-amber-400 shrink-0" />
-                  <span className="text-sm sm:text-base font-bold text-amber-300">Set up shares to see live price per share</span>
+                <div className="ls-notice ls-notice--accent">
+                  <div className="ls-notice__head">
+                    <PieChart size={16} />
+                    <strong>Set up shares to see live price per share</strong>
+                  </div>
+                  <p>
+                    Business value is <b>{FMT(valuation.businessValueUgx)}</b>.
+                    Tell PitchIn how many total shares this business has, and it'll divide that value automatically —
+                    and keep recalculating live as revenue, assets and expenses change.
+                  </p>
+                  <div className="ls-shareedit">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputMode="numeric"
+                      value={shareInput}
+                      onChange={e => setShareInput(e.target.value)}
+                      placeholder="e.g. 1000000"
+                    />
+                    <button type="button" className="ls-btn" onClick={handleSaveShares} disabled={savingShares || !shareInput}>
+                      {savingShares ? '…' : 'Set Shares'}
+                    </button>
+                  </div>
+                  {shareError && <p className="ls-err">{shareError}</p>}
                 </div>
-                <p className="text-xs sm:text-sm text-slate-400 mb-3">
-                  Business value is <span className="text-white font-semibold">{FMT(valuation.businessValueUgx)}</span>.
-                  Tell PitchIn how many total shares this business has, and it'll divide that value automatically —
-                  and keep recalculating live as revenue, assets and expenses change.
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={shareInput}
-                    onChange={e => setShareInput(e.target.value)}
-                    placeholder="e.g. 1000000"
-                    className="flex-1 min-w-0 text-[16px] sm:text-sm bg-slate-900/60 border border-amber-700/40 rounded-lg px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
-                  />
-                  <button
-                    onClick={handleSaveShares}
-                    disabled={savingShares || !shareInput}
-                    className={`text-xs sm:text-sm px-4 py-2 rounded-lg font-semibold transition-all shrink-0 ${savingShares ? 'bg-amber-800 text-amber-300' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}
-                  >
-                    {savingShares ? '…' : 'Set Shares'}
-                  </button>
-                </div>
-                {shareError && <p className="text-xs text-red-400 mt-1.5">{shareError}</p>}
-              </div>
               )
             ) : (
-              <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-                <div className="min-w-0">
-                  <p className="ls-eyebrow mb-1">Value of one share · today</p>
-                  <p className="ls-price text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-extrabold text-white tabular-nums break-words">
-                    {FMT(valuation.sharePriceUgx)}
-                  </p>
-                  <p className="text-xs sm:text-sm xl:text-base text-amber-400 mt-0.5 tabular-nums">
-                    {ICAN_PER_SHARE(valuation.sharePriceUgx, valuation.breakdown?.ican_market_price)} per share
-                  </p>
-                  {showShareEditor ? (
-                    <div className="flex gap-2 mt-2 max-w-xs">
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        autoFocus
-                        value={shareInput}
-                        onChange={e => setShareInput(e.target.value)}
-                        placeholder={String(valuation.totalShares)}
-                        className="flex-1 min-w-0 text-[16px] sm:text-xs bg-slate-900/60 border border-slate-700/50 rounded-lg px-2.5 py-1.5 text-white placeholder-slate-600 focus:outline-none focus:border-amber-500"
-                      />
-                      <button
-                        onClick={handleSaveShares}
-                        disabled={savingShares || !shareInput}
-                        className="text-xs px-3 py-1.5 rounded-lg font-semibold bg-amber-600 hover:bg-amber-500 text-white shrink-0"
-                      >
-                        {savingShares ? '…' : 'Save'}
-                      </button>
-                      <button
-                        onClick={() => { setShowShareEditor(false); setShareInput(''); setShareError(''); }}
-                        className="text-xs px-2 py-1.5 rounded-lg text-slate-400 hover:text-white shrink-0"
-                      >
-                        Cancel
-                      </button>
+              <section className="ls-cert" aria-label="Value of one share">
+                <p className="ls-eyebrow">Value of one share · today</p>
+                <p className="ls-price" style={{ '--ls-len': Math.max(6, sharePriceText.length) }}>
+                  {sharePriceText}
+                </p>
+                <p className="ls-cert__ican">
+                  {ICAN_PER_SHARE(valuation.sharePriceUgx, valuation.breakdown?.ican_market_price)} per share
+                </p>
+
+                <div className="ls-orn" aria-hidden="true">◆</div>
+
+                <div className="ls-cert__foot">
+                  <div className="ls-cert__facts">
+                    <div className={`ls-delta ${priceUp ? 'is-up' : 'is-down'}`}>
+                      <TrendIcon size={16} />
+                      {PCT(valuation.priceChangePercent)}
+                      <span>vs declared price</span>
                     </div>
-                  ) : (
-                    <>
-                    {!readOnly && <button
-                      onClick={() => { setShowShareEditor(true); setShareInput(String(valuation.totalShares)); }}
-                      className="flex items-center gap-1 text-[11px] sm:text-xs text-slate-500 hover:text-slate-300 mt-1 transition-colors"
-                    >
-                      <Pencil size={9} />
-                      {valuation.totalShares.toLocaleString()} total shares
-                    </button>}
-                  {readOnly && !showShareEditor && (
-                    <p className="text-[11px] sm:text-xs text-slate-500 mt-1">
-                      {valuation.totalShares.toLocaleString()} total shares
-                    </p>
-                  )}
-                    </>
-                  )}
-                  {shareError && showShareEditor && <p className="text-xs text-red-400 mt-1">{shareError}</p>}
-                </div>
-                <div className="text-right shrink-0">
-                  <div className={`flex items-center gap-1 justify-end text-sm sm:text-base xl:text-lg font-bold ${trendColor}`}>
-                    <TrendIcon size={14} />
-                    {PCT(valuation.priceChangePercent)}
+
+                    {showShareEditor ? (
+                      <div className="ls-shareedit">
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          inputMode="numeric"
+                          autoFocus
+                          value={shareInput}
+                          onChange={e => setShareInput(e.target.value)}
+                          placeholder={String(valuation.totalShares)}
+                        />
+                        <button type="button" className="ls-btn" onClick={handleSaveShares} disabled={savingShares || !shareInput}>
+                          {savingShares ? '…' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          className="ls-btn ls-btn--ghost"
+                          onClick={() => { setShowShareEditor(false); setShareInput(''); setShareError(''); }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : readOnly ? (
+                      <p className="ls-shares">{valuation.totalShares.toLocaleString()} total shares</p>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ls-shares--btn ls-shares"
+                        onClick={() => { setShowShareEditor(true); setShareInput(String(valuation.totalShares)); }}
+                      >
+                        <Pencil size={12} />
+                        {valuation.totalShares.toLocaleString()} total shares
+                      </button>
+                    )}
+                    {shareError && showShareEditor && <p className="ls-err">{shareError}</p>}
                   </div>
-                  <p className="text-xs sm:text-sm xl:text-base text-slate-500">vs declared price</p>
+                  <Seal verified={!!valuation.blockchainVerified} />
                 </div>
-              </div>
+
+                {noValueYet && (
+                  <p className="ls-cert__note">
+                    {readOnly
+                      ? 'This business has not recorded enough activity to give one share a value yet. It will appear here as sales, assets and linked apps are added.'
+                      : 'No value recorded yet. Record sales or assets, or link an app below, and the value of one share starts to grow.'}
+                  </p>
+                )}
+              </section>
             )}
 
             {/* Real value growth — daily snapshots + today's live price */}
             {!valuation.needsShareSetup && (
-              <div className="mt-4 xl:mt-6">
-                <PitchinValueGrowth
-                  businessProfileId={businessProfileId}
-                  current={{
-                    priceUgx: valuation.sharePriceUgx,
-                    businessValueUgx: valuation.businessValueUgx,
-                    declaredPriceUgx: valuation.originalPriceUgx
-                  }}
-                  fmt={FMT}
-                  fmtIcan={(ugx) => ICAN_PER_SHARE(ugx, valuation.breakdown?.ican_market_price)}
-                  annualInflationPct={countryPrice ? Number(countryPrice.local_inflation) : null}
-                  refreshToken={valuation.sharePriceUgx}
-                />
-              </div>
-            )}
-
-            {/* Key metrics strip */}
-            <div className="grid grid-cols-3 gap-1.5 sm:gap-3 xl:gap-4 mt-3 sm:mt-4 xl:mt-6">
-              {[
-                { label: 'Business Value', value: FMT(valuation.businessValueUgx) },
-                { label: 'Net Profit',     value: FMT(valuation.netProfitUgx) },
-                { label: 'IcanEra Holdings',  value: FMT(valuation.icanHoldingsValue) }
-              ].map(m => (
-                <div key={m.label} className="rounded-lg bg-slate-800/60 border border-slate-700/30 px-2 py-2 sm:px-3 sm:py-3 xl:px-4 xl:py-4">
-                  <p className="text-[10px] sm:text-xs xl:text-sm text-slate-500 truncate">{m.label}</p>
-                  <p className="text-xs sm:text-sm xl:text-base font-bold text-white mt-0.5 tabular-nums break-words">{m.value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Breakdown toggle */}
-            <button
-              onClick={() => setShowBreakdown(v => !v)}
-              className="flex items-center gap-1 text-xs sm:text-sm text-slate-400 hover:text-white mt-3 py-2 -my-1 transition-colors"
-            >
-              {showBreakdown ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              {showBreakdown ? 'Hide' : 'Show'} source breakdown
-            </button>
-
-            {showBreakdown && (
-              <div className="mt-2 space-y-1 text-xs sm:text-sm sm:grid sm:grid-cols-2 sm:gap-x-6 sm:gap-y-0 sm:space-y-0">
-                {[
-                  { label: 'Manual Sales Income',          value: valuation.breakdown.ican_sold_income,     color: 'text-amber-400' },
-                  { label: 'Manual Capital Assets',        value: valuation.breakdown.ican_capital_assets,  color: 'text-amber-400' },
-                  { label: 'AgriBone Wallet Revenue',     value: valuation.breakdown.farm_revenue,         color: 'text-green-400' },
-                  { label: 'MyBodaGuy Wallet Revenue',     value: valuation.breakdown.boda_revenue,         color: 'text-orange-400' },
-                  { label: 'SupermartKera Revenue',       value: valuation.breakdown.supermarket_revenue,  color: 'text-purple-400' },
-                  { label: 'IcanEra Wallet Revenue',          value: valuation.breakdown.ican_wallet_revenue,  color: 'text-cyan-400' },
-                  { label: 'CMMS Inventory Value',         value: valuation.breakdown.cmms_inventory_value, color: 'text-blue-400' },
-                  { label: `IcanEra (${valuation.breakdown.ican_holdings_ican?.toFixed(4)} @ ${FMT(valuation.breakdown.ican_market_price)})`,
-                    value: valuation.breakdown.ican_holdings_ugx, color: 'text-yellow-400' },
-                  { label: 'COGS (Stock Bought)',          value: -valuation.breakdown.ican_bought_stock,   color: 'text-red-400' },
-                  { label: 'Operating Expenses',           value: -valuation.breakdown.ican_operating_exp,  color: 'text-red-400' },
-                  { label: 'Salary Expenses',              value: -valuation.breakdown.ican_salary_exp,     color: 'text-red-400' },
-                ].filter(r => r.value !== 0).map(row => (
-                  <div key={row.label} className="flex justify-between items-center gap-2 py-1.5 border-b border-slate-800/50">
-                    <span className="text-slate-400 truncate flex-1">{row.label}</span>
-                    <span className={`font-semibold tabular-nums shrink-0 ${row.color}`}>
-                      {row.value >= 0 ? '+' : ''}{FMT(Math.abs(row.value))}
-                    </span>
-                  </div>
-                ))}
-
-                {valuation.blockchainTxHash && (
-                  <div className="mt-2 p-2 sm:p-3 rounded-lg bg-emerald-900/20 border border-emerald-700/30 sm:col-span-2">
-                    <p className="text-emerald-400 font-semibold">Blockchain proof</p>
-                    <p className="text-slate-400 break-all mt-0.5">{valuation.blockchainTxHash}</p>
-                  </div>
-                )}
-                {valuation.dataHash && !valuation.blockchainTxHash && (
-                  <div className="mt-2 p-2 sm:p-3 rounded-lg bg-slate-800/40 border border-slate-700/30 sm:col-span-2">
-                    <p className="text-slate-400 font-semibold">Data hash (SHA-256)</p>
-                    <p className="text-slate-500 break-all mt-0.5 text-[10px]">{valuation.dataHash}</p>
-                  </div>
-                )}
-              </div>
+              <PitchinValueGrowth
+                businessProfileId={businessProfileId}
+                current={{
+                  priceUgx: valuation.sharePriceUgx,
+                  businessValueUgx: valuation.businessValueUgx,
+                  declaredPriceUgx: valuation.originalPriceUgx
+                }}
+                fmt={FMT}
+                fmtIcan={(ugx) => ICAN_PER_SHARE(ugx, valuation.breakdown?.ican_market_price)}
+                annualInflationPct={countryPrice ? Number(countryPrice.local_inflation) : null}
+                refreshToken={valuation.sharePriceUgx}
+              />
             )}
           </>
         ) : null}
       </div>
 
+      {/* ── Statement of value + source links ── */}
+      <aside className="ls-col ls-col--side">
+        {valuation && (
+          <div className="ls-statement">
+            <p className="ls-eyebrow ls-sect__title">Statement of value</p>
+            <dl className="ls-ledger">
+              {statementRows.map(m => (
+                <div key={m.label} className="ls-ledger__row">
+                  <dt>{m.label}</dt>
+                  <span className="ls-leader" aria-hidden="true" />
+                  <dd>{m.value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <button type="button" className="ls-more" aria-expanded={showBreakdown} onClick={() => setShowBreakdown(v => !v)}>
+              {showBreakdown ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {showBreakdown ? 'Hide' : 'Show'} source breakdown
+            </button>
+
+            {showBreakdown && (
+              <>
+                <dl className="ls-ledger ls-ledger--sub">
+                  {breakdownRows.map(row => (
+                    <div key={row.label} className="ls-ledger__row">
+                      <dt>{row.label}</dt>
+                      <span className="ls-leader" aria-hidden="true" />
+                      <dd className={`ls-tone-${row.tone}`}>
+                        {row.value >= 0 ? '+' : '−'}{FMT(Math.abs(row.value))}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+
+                {valuation.blockchainTxHash && (
+                  <div className="ls-hash ls-hash--ok">
+                    <b>Blockchain proof</b>
+                    <code>{valuation.blockchainTxHash}</code>
+                  </div>
+                )}
+                {valuation.dataHash && !valuation.blockchainTxHash && (
+                  <div className="ls-hash">
+                    <b>Data hash (SHA-256)</b>
+                    <code>{valuation.dataHash}</code>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
       {/* ── Link Data Sources panel ── */}
       {!readOnly && (
-      <div className="border-t lg:border-t-0 border-slate-700/40 mt-2 lg:mt-0 lg:col-span-2">
+      <div className="ls-sources">
         <button
           onClick={() => setShowLinkPanel(v => !v)}
           className="w-full flex items-center justify-between gap-3 px-4 py-3.5 sm:px-6 sm:py-4 text-sm sm:text-base text-slate-300 hover:text-white hover:bg-slate-800/40 active:bg-slate-800/60 transition-colors"
@@ -1130,9 +1177,11 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
         )}
       </div>
       )}
+      </aside>
 
       </div>
     </div>
+
 
     {!readOnly && showTeamModal && (
       <BusinessTeamMembersModal

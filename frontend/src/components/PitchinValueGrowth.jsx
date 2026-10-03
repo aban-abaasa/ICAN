@@ -30,8 +30,6 @@ const RANGES = [
   { key: '365', label: '1Y', days: 365 }
 ];
 
-const W = 640;
-const H = 250;
 const PAD = { top: 18, right: 14, bottom: 28, left: 14 };
 
 const pct = (n) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(2)}%`;
@@ -51,7 +49,23 @@ export default function PitchinValueGrowth({
   const [error, setError] = useState('');
   const [hoverIdx, setHoverIdx] = useState(null);
   const svgRef = useRef(null);
+  const rootRef = useRef(null);
+  // Draw the chart at its real pixel width so labels stay readable on small
+  // phones instead of shrinking a fixed 640px canvas to ~270px.
+  const [W, setW] = useState(640);
+  const H = W < 420 ? 190 : 250;
   const days = RANGES.find((r) => r.key === rangeKey).days;
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(([entry]) => {
+      const w = Math.round(entry.contentRect.width);
+      if (w > 0) setW(Math.max(240, Math.min(960, w)));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!businessProfileId) return undefined;
@@ -113,7 +127,7 @@ export default function PitchinValueGrowth({
     const area = `${line} L${x(points.length - 1).toFixed(1)},${H - PAD.bottom} L${x(0).toFixed(1)},${H - PAD.bottom} Z`;
     const grid = [0, 0.25, 0.5, 0.75, 1].map((t) => PAD.top + t * (H - PAD.top - PAD.bottom));
     return { x, y, line, area, grid, declaredY: Number.isFinite(declared) && declared > 0 ? y(declared) : null };
-  }, [points, current?.declaredPriceUgx]);
+  }, [points, current?.declaredPriceUgx, W, H]);
 
   const onMove = (e) => {
     if (!geo || !svgRef.current) return;
@@ -130,7 +144,7 @@ export default function PitchinValueGrowth({
   const hoverLeftPct = hover && geo ? (geo.x(hoverIdx) / W) * 100 : 0;
 
   return (
-    <section className="ls-growth" aria-label="Real value growth">
+    <section ref={rootRef} className="ls-growth" aria-label="Real value growth">
       <header className="ls-growth__head">
         <div>
           <p className="ls-eyebrow">The ledger of growth</p>
@@ -193,8 +207,8 @@ export default function PitchinValueGrowth({
             >
               <defs>
                 <linearGradient id="ls-area" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#b8913a" stopOpacity="0.34" />
-                  <stop offset="100%" stopColor="#b8913a" stopOpacity="0.02" />
+                  <stop offset="0%" style={{ stopColor: 'var(--ls-gold-hi)' }} stopOpacity="0.34" />
+                  <stop offset="100%" style={{ stopColor: 'var(--ls-gold-hi)' }} stopOpacity="0.02" />
                 </linearGradient>
               </defs>
               {geo.grid.map((gy, i) => (
