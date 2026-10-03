@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext';
 import { consumePendingReferralCode } from './services/referralService';
 import { AuthPage } from './components/auth';
 import CountryCheckMiddleware from './components/auth/CountryCheckMiddleware';
+import MfaChallenge from './components/auth/MfaChallenge';
 import ICANCapitalEngine from './components/ICAN_Capital_Engine';
 import LandingPage from './components/LandingPage';
 import PricingPage from './components/PricingPage';
@@ -60,7 +61,7 @@ class ErrorBoundary extends React.Component {
 }
 
 const App = () => {
-  const { user, loading, isRecoveryMode, clearRecoveryMode } = useAuth();
+  const { user, loading, isRecoveryMode, clearRecoveryMode, mfaStatus } = useAuth();
   const [showLanding, setShowLanding] = useState(!user);
   const [isResetPasswordPath, setIsResetPasswordPath] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -471,6 +472,19 @@ const App = () => {
         <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <AuthPage />
         <ChatWidget />
+      </ErrorBoundary>
+    );
+  }
+
+  // Signed in, but two-step verification is on for this account and this session has not
+  // entered its code yet: nothing behind this point renders until it has.
+  if (mfaStatus === 'unknown') {
+    return <ClassicLoadingScreen />;
+  }
+  if (mfaStatus === 'required') {
+    return (
+      <ErrorBoundary>
+        <MfaChallenge />
       </ErrorBoundary>
     );
   }

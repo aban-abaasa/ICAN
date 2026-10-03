@@ -5,6 +5,8 @@
 //     (see ICAN_SHARED_WALLET_PUSH_SETUP.sql)
 //   - ican_dispatch_cmms_push_webhook on public.cmms_notifications
 //     (see ICAN_CMMS_PUSH_NOTIFICATIONS.sql)
+//   - ican_growth_dispatch_due_reminders() / ican_growth_send_test_reminder() post
+//     source 'growth' for schedule reminders (supabase/migrations/20261003090000_growth_scheduler.sql)
 //   - ican_notify_community_live(), called directly (no inbox table -
 //     nothing reads a "went live" alert back later) when a Community
 //     broadcast starts (see ICAN_COMMUNITY_LIVE_PUSH_SETUP.sql)
@@ -43,6 +45,7 @@ const SOURCE_DEFAULTS: Record<string, { title: string; url: string; app?: string
   wallet: { title: 'ICANera Wallet', url: '/wallet' },
   cmms: { title: 'ICAN CMMS', url: '/cmms' },
   community_live: { title: 'ICAN Community', url: '/?join=community-live' },
+  growth: { title: 'Prosperity Architect', url: '/?growth=1', app: 'ican' },
   bodagoera_ride: { title: 'BodaGoEra', url: '/', app: 'mybodaguy', urgent: true, ttl: 60 * 10 },
   bodagoera_message: { title: 'BodaGoEra message', url: '/', app: 'mybodaguy', ttl: 60 * 60 },
   bodagoera_call: { title: 'Incoming call', url: '/', app: 'mybodaguy', urgent: true, ttl: 45 },
