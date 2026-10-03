@@ -70,6 +70,8 @@ import { ProfilePage } from './auth/ProfilePage';
 import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
 import ReadinessPanel from './profile/ReadinessPanel';
 import GrowthPanel from './profile/GrowthPanel';
+import SecurityPanel from './profile/SecurityPanel';
+import SettingsPanel from './profile/SettingsPanel';
 import PortfolioTab from './profile/PortfolioTab';
 import ProfessionalsDirectory from './profile/ProfessionalsDirectory';
 import Pitchin from './Pitchin';
@@ -122,11 +124,8 @@ import {
   getNotificationColor,
   formatTimeAgo
 } from '../services/universalNotificationsService';
-import {
-  enableWalletPhoneAlerts,
-  disableWalletPhoneAlerts,
-  getWalletPhoneAlertsStatus
-} from '../services/walletPushService';
+import { getWalletPhoneAlertsStatus } from '../services/walletPushService';
+import { GROWTH_NOTIFICATION_SOURCE, showLocalReminder } from '../services/growthScheduleService';
 import { getUserTrustGroups } from '../services/trustService';
 import { getAllAccessibleBusinessProfiles, getContributorNames } from '../services/pitchingService';
 import { CountryService } from '../services/countryService';
@@ -1015,8 +1014,6 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [trustBoardroomOpenRequest, setTrustBoardroomOpenRequest] = useState(null);
   const [cmmsOpenRequest, setCmmsOpenRequest] = useState(null);
-  const [phoneAlertsEnabled, setPhoneAlertsEnabled] = useState(false);
-  const [phoneAlertsBusy, setPhoneAlertsBusy] = useState(false);
   
   // Account Edit State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -1060,10 +1057,6 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [velocityMetrics, setVelocityMetrics] = useState(null);
   const [actualTitheOwed, setActualTitheOwed] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [complianceData, setComplianceData] = useState(null);
-  const [scheduleData, setScheduleData] = useState(null);
-  const [mode, setMode] = useState('SE');
-  const [operatingCountry, setOperatingCountry] = useState('Uganda');
   
   // Time Period Selector State - Each can collapse independently
   const [expandedPeriods, setExpandedPeriods] = useState({
@@ -2683,12 +2676,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   }, [showAIChat]);
 
-  // Reflect the real push-subscription state in the settings checkbox.
-  useEffect(() => {
-    getWalletPhoneAlertsStatus()
-      .then((status) => setPhoneAlertsEnabled(status.enabled))
-      .catch(() => {});
-  }, []);
 
   // Tapping an OS-level wallet push notification focuses this tab (see
   // sw.js's notificationclick handler) and posts this message so the app
@@ -2713,6 +2700,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         }
         if (source === 'community_live') {
           window.dispatchEvent(new CustomEvent('ican-open-community-live'));
+          return;
+        }
+        if (source === 'growth' || actionTab === 'growth') {
+          window.dispatchEvent(new CustomEvent('ican-open-growth'));
           return;
         }
         if (url.includes('wallet')) openFeaturePanel('wallet');
@@ -2757,7 +2748,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
   // Reset danger-zone inputs when the panel is opened
   useEffect(() => {
-    if (selectedDetail?.tab === 'settings' && selectedDetail?.item === 'Danger Zone') {
+    if (selectedDetail?.tab === 'profile' && selectedDetail?.initialTab === 'settings') {
       setDeleteAccountEmail('');
       setDeleteAccountPhrase('');
       setDeleteAccountPassword('');
@@ -2853,7 +2844,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
   // Reset profile configuration feedback when profile settings panel opens
   useEffect(() => {
-    if (selectedDetail?.tab === 'settings' && (selectedDetail?.item === 'Profile Configuration' || selectedDetail?.item === 'Target Net Worth')) {
+    if (selectedDetail?.tab === 'profile' && selectedDetail?.initialTab === 'settings') {
       setProfileConfigError('');
       setProfileConfigSuccess('');
     }
@@ -2867,6 +2858,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       // Add new notification to top of list
       setNotifications(prev => [newNotification, ...prev]);
       setUnreadCount(prev => prev + 1);
+
+      // Growth reminders are also pushed to phones that enabled alerts, so only pop a
+      // local one when push is off (nobody should get two). The service-worker route
+      // is used because the Notification constructor does not work on Android.
+      if (newNotification.source === GROWTH_NOTIFICATION_SOURCE) {
+        const showLocal = () => showLocalReminder({
+          title: newNotification.title,
+          body: newNotification.message,
+          tag: `growth-${newNotification.source_id}`
+        });
+        getWalletPhoneAlertsStatus()
+          .then((status) => { if (!status.enabled) showLocal(); })
+          .catch(showLocal);
+        return;
+      }
 
       // Show browser notification if permitted
       if ('Notification' in window && Notification.permission === 'granted') {
@@ -3436,54 +3442,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       console.error('Contract analysis error:', error);
     } finally {
       setIsAnalyzingContract(false);
-    }
-  };
-
-  // Global Navigator - Compliance Check Function
-  const performComplianceCheck = async () => {
-    setIsLoading(true);
-    try {
-      // Simulate API call with realistic data
-      const compliance = {
-        compliancePercentage: 85,
-        checklist: [
-          { item: 'Business License', status: 'completed', required: true },
-          { item: 'Tax Clearance Certificate', status: 'completed', required: true },
-          { item: 'Professional Certification', status: 'pending', required: false },
-          { item: 'Regulatory Registration', status: 'completed', required: true }
-        ]
-      };
-      setComplianceData(compliance);
-      console.log(' Compliance check complete:', compliance);
-    } catch (error) {
-      console.error('Compliance check failed:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Prosperity Architect - Schedule Optimization Function
-  const optimizeSchedule = async () => {
-    setIsLoading(true);
-    try {
-      // Simulate API call with realistic recommendations
-      const schedule = {
-        optimizationScore: 82,
-        recommendations: [
-          'Block 9-11 AM for High-Value Work',
-          'Schedule Spiritual Alignment: 6-7 AM daily',
-          'Physical Alignment: 5-6 PM, 3x weekly',
-          'Networking blocks: Tuesday/Thursday 2-4 PM',
-          'Review and planning: Friday 3-4 PM'
-        ],
-        nextActions: ['Book gym membership', 'Set up morning routine', 'Block calendar for HVW']
-      };
-      setScheduleData(schedule);
-      console.log(' Schedule optimization complete:', schedule);
-    } catch (error) {
-      console.error('Schedule optimization failed:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -4933,9 +4891,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     { id: 'professionals', label: 'Professionals', icon: Users },
     { id: 'reports', label: 'Reports', icon: PieChart },
     { id: 'tithe', label: 'Tithe', icon: Heart },
-    { id: 'security', label: 'Security', icon: Shield },
-    { id: 'loancalc', label: 'Loan Calculator', icon: DollarSign },
-    { id: 'settings', label: 'Settings', icon: Sliders }
+    { id: 'loancalc', label: 'Loan Calculator', icon: DollarSign }
   ];
 
   const activeHeaderTab =
@@ -5031,6 +4987,25 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     } catch (_) { /* storage unavailable */ }
     window.addEventListener('ican-open-resume-tab', openResumeTab);
     return () => window.removeEventListener('ican-open-resume-tab', openResumeTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A tapped Growth reminder opens the app on the Growth page: straight away when a tab
+  // is already open (event from the service-worker message handler), or via ?growth=1
+  // when the push had to launch the app.
+  useEffect(() => {
+    const openGrowth = () => openDetailView('growth', 'Growth');
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('growth') === '1') {
+        params.delete('growth');
+        const rest = params.toString();
+        window.history.replaceState({}, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+        openGrowth();
+      }
+    } catch (_) { /* URL unavailable */ }
+    window.addEventListener('ican-open-growth', openGrowth);
+    return () => window.removeEventListener('ican-open-growth', openGrowth);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -5141,9 +5116,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     else if (tabId === 'professionals') { setShowProfessionalsPanel(true); setActiveBottomTab('professionals'); }
     else if (tabId === 'reports')  { setShowReportingSystem(true); }
     else if (tabId === 'tithe')    { setShowTithingCalculator(true);      setActiveBottomTab('tithe'); }
-    else if (tabId === 'security') { setShowSecurityPanel(true); }
+    else if (tabId === 'security') { setSelectedDetail({ tab: 'profile', item: 'My Profile', initialTab: 'security' }); }
     else if (tabId === 'loancalc') { setShowBusinessLoanCalculator(true); }
-    else if (tabId === 'settings') { setShowSettingsPanel(true); }
+    else if (tabId === 'settings') { setSelectedDetail({ tab: 'profile', item: 'My Profile', initialTab: 'settings' }); }
   };
 
   // High-level: THE single navigation function — always records history first
@@ -5554,6 +5529,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('profile', 'My Profile'); setShowMenuDropdown(false); }}>
                       <User /> <span>My profile</span>
                     </button>
+                    <button role="menuitem" className="icn-menu-item is-sub" onClick={() => { openDetailView('profile', 'My Profile', 'security'); setShowMenuDropdown(false); }}>
+                      <Shield /> <span>Security</span>
+                    </button>
+                    <button role="menuitem" className="icn-menu-item is-sub" onClick={() => { openDetailView('profile', 'My Profile', 'settings'); setShowMenuDropdown(false); }}>
+                      <Settings /> <span>Settings</span>
+                    </button>
 
                     <button
                       role="menuitem"
@@ -5573,10 +5554,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       {unreadCount > 0 && (
                         <span className="icn-menu-trail"><span className="icn-menu-badge">{unreadCount > 99 ? '99+' : unreadCount}</span></span>
                       )}
-                    </button>
-
-                    <button role="menuitem" className="icn-menu-item" onClick={() => navigateTo('security')}>
-                      <Shield /> <span>Security</span>
                     </button>
 
                     <p className="icn-menu-label">Career &amp; growth</p>
@@ -5606,31 +5583,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       <Percent /> <span>Loan calculator</span>
                     </button>
 
-                    <div className="icn-menu-sep" />
-
-                    <button
-                      role="menuitem"
-                      className={`icn-menu-item ${activeMenuTab === 'settings' ? 'is-active' : ''}`}
-                      onClick={() => setActiveMenuTab(activeMenuTab === 'settings' ? null : 'settings')}
-                      aria-expanded={activeMenuTab === 'settings'}
-                    >
-                      <Settings /> <span>Settings</span>
-                      <ChevronDown className="icn-menu-trail" style={{ width: 14, height: 14, transform: activeMenuTab === 'settings' ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
-                    </button>
-
-                    {activeMenuTab === 'settings' && (
-                      <>
-                        <button role="menuitem" className="icn-menu-item is-sub" onClick={() => { openDetailView('settings', 'Readiness Pillars'); setShowMenuDropdown(false); }}>
-                          <span>Readiness pillars</span>
-                        </button>
-                        <button role="menuitem" className="icn-menu-item is-sub" onClick={() => { openDetailView('settings', 'Profile Configuration'); setShowMenuDropdown(false); }}>
-                          <span>Profile configuration</span>
-                        </button>
-                        <button role="menuitem" className="icn-menu-item is-sub is-danger" onClick={() => { openDetailView('settings', 'Danger Zone'); setShowMenuDropdown(false); }}>
-                          <span>Danger zone</span>
-                        </button>
-                      </>
-                    )}
                   </div>
                 </div>
                 </>
@@ -5933,6 +5885,41 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     onLogout={() => {
                       setSelectedDetail(null);
                     }}
+                    section={['security', 'settings'].includes(selectedDetail.initialTab) ? selectedDetail.initialTab : 'profile'}
+                    onSectionChange={(next) => setSelectedDetail((prev) => (prev ? { ...prev, initialTab: next } : prev))}
+                    extraSections={{
+                      security: <SecurityPanel />,
+                      settings: (
+                        <SettingsPanel
+                          bridge={{
+                            config: {
+                              form: profileConfigFormData,
+                              onChange: handleProfileConfigFieldChange,
+                              onSave: handleSaveProfileConfiguration,
+                              saving: isSavingProfileConfig,
+                              error: profileConfigError,
+                              success: profileConfigSuccess,
+                              normalizeTarget: normalizeTargetNetWorthValue
+                            },
+                            danger: {
+                              email: deleteAccountEmail,
+                              setEmail: setDeleteAccountEmail,
+                              password: deleteAccountPassword,
+                              setPassword: setDeleteAccountPassword,
+                              phrase: deleteAccountPhrase,
+                              setPhrase: setDeleteAccountPhrase,
+                              hasPassword: deleteAccountHasPassword,
+                              error: deleteAccountError,
+                              success: deleteAccountSuccess,
+                              busy: isDeletingAccount,
+                              onDelete: handleDeleteAccount
+                            },
+                            onOpenGrowth: () => openDetailView('growth', 'Growth'),
+                            onOpenReadiness: () => openDetailView('readiness', 'Readiness')
+                          }}
+                        />
+                      )
+                    }}
                   />
                 </div>
               )}
@@ -6031,252 +6018,17 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* READINESS - GLOBAL NAVIGATOR */}
               {selectedDetail.tab === 'readiness' && selectedDetail.item === 'Readiness' && (
-                <ReadinessPanel
-                  mode={mode}
-                  setMode={setMode}
-                  operatingCountry={operatingCountry}
-                  setOperatingCountry={setOperatingCountry}
-                  performComplianceCheck={performComplianceCheck}
-                  isLoading={isLoading}
-                  complianceData={complianceData}
-                />
+                <ReadinessPanel />
               )}
 
               {/* GROWTH - PROSPERITY ARCHITECT */}
               {selectedDetail.tab === 'growth' && selectedDetail.item === 'Growth' && (
-                <GrowthPanel optimizeSchedule={optimizeSchedule} isLoading={isLoading} scheduleData={scheduleData} />
+                <GrowthPanel />
               )}
 
               {/* MY RESUME / PORTFOLIO */}
               {selectedDetail.tab === 'resume' && selectedDetail.item === 'My Resume' && (
                 <PortfolioTab />
-              )}
-
-              {/* DANGER ZONE - DELETE ACCOUNT */}
-              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Danger Zone' && (
-                <div className="space-y-4">
-                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
-                    <h3 className="text-sm font-bold text-red-300 mb-4">Danger Zone - Delete Your Account</h3>
-                    <div className="mb-4 p-3 bg-red-950/60 border border-red-500/50 rounded-lg text-xs text-red-100 space-y-2">
-                      <p className="font-bold text-red-200">Warning: you will lose everything.</p>
-                      <p>Deleting your account permanently erases your profile, wallets, balances, coin and trust transactions, business data and every other record linked to you from our database. This cannot be undone and nothing can be recovered.</p>
-                      <p>Confirm your Gmail and password below. You will be asked to confirm one last time before anything is deleted.</p>
-                    </div>
-
-                    <div className="mb-4">
-                      <label className="block text-xs text-gray-300 mb-2">Confirm your Gmail address</label>
-                      <input
-                        type="email"
-                        value={deleteAccountEmail}
-                        onChange={(e) => setDeleteAccountEmail(e.target.value)}
-                        placeholder="Enter your Gmail address"
-                        autoComplete="email"
-                        className="w-full px-3 py-2 bg-slate-800/70 border border-red-500/30 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                      />
-                    </div>
-
-                    {deleteAccountHasPassword ? (
-                      <div className="mb-4">
-                        <label className="block text-xs text-gray-300 mb-2">Enter your password to confirm</label>
-                        <input
-                          type="password"
-                          value={deleteAccountPassword}
-                          onChange={(e) => setDeleteAccountPassword(e.target.value)}
-                          placeholder="Your password"
-                          autoComplete="current-password"
-                          className="w-full px-3 py-2 bg-slate-800/70 border border-red-500/30 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                        />
-                      </div>
-                    ) : (
-                      <div className="mb-4">
-                        <p className="text-xs text-amber-300 mb-2">This account signs in with Google, so it has no password to enter. Type delete instead.</p>
-                        <label className="block text-xs text-gray-300 mb-2">Type <span className="font-mono text-red-300">delete</span> to confirm</label>
-                        <input
-                          type="text"
-                          value={deleteAccountPhrase}
-                          onChange={(e) => setDeleteAccountPhrase(e.target.value)}
-                          placeholder="delete"
-                          autoComplete="off"
-                          className="w-full px-3 py-2 bg-slate-800/70 border border-red-500/30 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                        />
-                      </div>
-                    )}
-
-                    {deleteAccountError && (
-                      <div className="mb-3 p-2 bg-red-500/20 border border-red-500/40 rounded text-xs text-red-200">
-                        {deleteAccountError}
-                      </div>
-                    )}
-
-                    {deleteAccountSuccess && (
-                      <div className="mb-3 p-2 bg-green-500/20 border border-green-500/40 rounded text-xs text-green-200">
-                        {deleteAccountSuccess}
-                      </div>
-                    )}
-
-                    <button
-                      onClick={handleDeleteAccount}
-                      disabled={isDeletingAccount}
-                      className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-800/60 text-white rounded-lg transition font-medium mb-2"
-                    >
-                      {isDeletingAccount ? 'Deleting Account...' : 'Delete My Account'}
-                    </button>
-                    <button 
-                      onClick={() => setSelectedDetail(null)}
-                      className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* SETTINGS - READINESS PILLARS */}
-              {selectedDetail.item === 'Readiness Pillars' && (
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-purple-500/30 rounded-lg p-4">
-                    <div className="space-y-3">
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Financial Capital</span>
-                          <span className="text-xs font-bold text-blue-300">100%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Transform volatility into secured wealth</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-blue-500 h-2 rounded-full" style={{width: '100%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Legal Resilience</span>
-                          <span className="text-xs font-bold text-amber-300">75%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Treasury Guardian protecting your assets</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-amber-500 h-2 rounded-full" style={{width: '75%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Regulatory Compliance</span>
-                          <span className="text-xs font-bold text-green-300">85%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Global Navigator ensuring eligibility</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-green-500 h-2 rounded-full" style={{width: '85%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Human Capital</span>
-                          <span className="text-xs font-bold text-purple-300">70%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Prosperity Architect maximizing your time</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-purple-500 h-2 rounded-full" style={{width: '70%'}}></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SETTINGS - PROFILE CONFIGURATION */}
-              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Profile Configuration' && (
-                <div className="space-y-4">
-                  <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs font-medium text-gray-300 block mb-2">Full Name</label>
-                        <input
-                          type="text"
-                          value={profileConfigFormData.fullName}
-                          onChange={(e) => handleProfileConfigFieldChange('fullName', e.target.value)}
-                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-gray-300 block mb-2">Email</label>
-                        <input
-                          type="email"
-                          value={profileConfigFormData.email}
-                          onChange={(e) => handleProfileConfigFieldChange('email', e.target.value)}
-                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                        />
-                      </div>
-                      <button
-                        onClick={() => handleSaveProfileConfiguration('full')}
-                        disabled={isSavingProfileConfig}
-                        className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 text-white rounded-lg transition font-medium text-sm"
-                      >
-                         Save Changes
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SETTINGS - TARGET NET WORTH */}
-              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Target Net Worth' && (
-                <div className="space-y-4">
-                  <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs font-medium text-gray-300 block mb-2">Target Net Worth (UGX)</label>
-                        <input
-                          type="text"
-                          value={profileConfigFormData.targetNetWorth}
-                          onChange={(e) => handleProfileConfigFieldChange('targetNetWorth', normalizeTargetNetWorthValue(e.target.value))}
-                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-gray-300 block mb-2">Timeline (Years)</label>
-                        <input
-                          type="text"
-                          value={profileConfigFormData.timelineYears}
-                          onChange={(e) => handleProfileConfigFieldChange('timelineYears', e.target.value.replace(/[^\d]/g, ''))}
-                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                        />
-                      </div>
-                      <button
-                        onClick={() => handleSaveProfileConfiguration('target')}
-                        disabled={isSavingProfileConfig}
-                        className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 text-white rounded-lg transition font-medium text-sm"
-                      >
-                         Save Target
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SETTINGS - PREFERENCES */}
-              {selectedDetail.item === 'Preferences' && (
-                <div className="space-y-4">
-                  <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-2">
-                        <span className="text-sm text-gray-300">Dark Mode</span>
-                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium"> Enabled</button>
-                      </div>
-                      <div className="flex items-center justify-between p-2">
-                        <span className="text-sm text-gray-300">Notifications</span>
-                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium"> Enabled</button>
-                      </div>
-                      <div className="flex items-center justify-between p-2">
-                        <span className="text-sm text-gray-300">Two-Factor Auth</span>
-                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium"> Enabled</button>
-                      </div>
-                      <button className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition font-medium text-sm mt-3">
-                         Save Preferences
-                      </button>
-                    </div>
-                  </div>
-                </div>
               )}
               
               {/* SECURITY - NOTIFICATIONS */}
@@ -6370,6 +6122,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             setSelectedDetail(null);
                             setApprovalsFocusId(notification.source_id || null);
                             setShowApprovalsModal(true);
+                            return;
+                          }
+
+                          // Schedule reminders from the Growth page open Growth itself.
+                          if (notification.source === GROWTH_NOTIFICATION_SOURCE) {
+                            openDetailView('growth', 'Growth');
                             return;
                           }
 
@@ -7234,100 +6992,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {/* ==========================================
                   SETTINGS - READINESS PILLARS
               ========================================== */}
-              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Readiness Pillars' && (
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-purple-500/30 rounded-lg p-4">
-                    <h3 className="text-sm font-bold text-white mb-4"> Readiness Pillars</h3>
-                    
-                    <div className="space-y-3">
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Financial Capital</span>
-                          <span className="text-xs font-bold text-blue-300">100%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Transform volatility into secured wealth</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-blue-500 h-2 rounded-full" style={{width: '100%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Legal Resilience</span>
-                          <span className="text-xs font-bold text-amber-300">50%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Treasury Guardian protecting your assets</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-amber-500 h-2 rounded-full" style={{width: '50%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Regulatory Compliance</span>
-                          <span className="text-xs font-bold text-green-300">50%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Global Navigator ensuring eligibility</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-green-500 h-2 rounded-full" style={{width: '50%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Human Capital</span>
-                          <span className="text-xs font-bold text-purple-300">50%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Prosperity Architect maximizing your time</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-purple-500 h-2 rounded-full" style={{width: '50%'}}></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Profile Configuration' && (
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-purple-500/30 rounded-lg p-4">
-                    <h3 className="text-sm font-bold text-white mb-4">Profile Configuration</h3>
-                    <div className="space-y-3">
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <p className="text-xs text-gray-400">Target Net Worth (UGX)</p>
-                        <input
-                          type="text"
-                          value={profileConfigFormData.targetNetWorth}
-                          onChange={(e) => handleProfileConfigFieldChange('targetNetWorth', normalizeTargetNetWorthValue(e.target.value))}
-                          className="mt-2 w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                        />
-                        <p className="text-xs text-purple-300 mt-2">UGX {formattedTargetNetWorth}</p>
-                        <button
-                          onClick={() => handleSaveProfileConfiguration('target')}
-                          disabled={isSavingProfileConfig}
-                          className="mt-3 w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 text-white rounded-lg transition font-medium text-sm"
-                        >
-                          {isSavingProfileConfig ? 'Saving Target...' : 'Save Target Net Worth'}
-                        </button>
-                      </div>
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <p className="text-xs text-gray-400">Legal Disclaimer</p>
-                        <p className="text-xs text-gray-300 mt-2">{profileConfigFormData.legalDisclaimer}</p>
-                      </div>
-                      {profileConfigError && (
-                        <div className="p-2 bg-red-500/20 border border-red-500/40 rounded text-xs text-red-200">
-                          {profileConfigError}
-                        </div>
-                      )}
-                      {profileConfigSuccess && (
-                        <div className="p-2 bg-green-500/20 border border-green-500/40 rounded text-xs text-green-200">
-                          {profileConfigSuccess}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -9397,223 +9061,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 );
               })()}
             </CmmsPageShell>
-          </div>
-        </div>
-      )}
-
-      {/* ── Security Modal ────────────────────────────────────────────────── */}
-      {showSecurityPanel && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
-          <div className="icn-page-dialog icn-classic w-full max-w-2xl" role="dialog" aria-modal="true" aria-label="Security" style={{minHeight: '400px'}}>
-            {/* Header */}
-            <div className="icn-page-head">
-              <div className="min-w-0">
-                <p className="icn-page-eyebrow">Account</p>
-                <h2 className="icn-page-title">Security</h2>
-                <p className="icn-page-sub">Protect your account — Uganda verified</p>
-              </div>
-              <button
-                onClick={() => setShowSecurityPanel(false)}
-                className="icn-page-close"
-                aria-label="Close security"
-              >
-                <X />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Password Section */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Lock className="w-5 h-5 text-red-400" />
-                  Password
-                </h3>
-                <button className="w-full px-4 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-200 rounded-lg transition text-sm font-medium">
-                  Change Password
-                </button>
-              </div>
-
-              {/* Two-Factor Authentication */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-orange-400" />
-                  Two-Factor Authentication
-                </h3>
-                <div className="px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-300">SMS Verification</span>
-                    <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">✓ Enabled</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Session Management */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-yellow-400" />
-                  Active Sessions
-                </h3>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  <div className="px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-sm">
-                    <div className="text-slate-300 font-medium">Chrome on Windows</div>
-                    <div className="text-xs text-slate-500 mt-1">Last active: Just now</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Login Activity */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Eye className="w-5 h-5 text-blue-400" />
-                  Recent Login Activity
-                </h3>
-                <div className="space-y-2 max-h-40 overflow-y-auto text-xs text-slate-400">
-                  <div>✓ Signed in today at 2:45 PM from Uganda</div>
-                  <div>✓ Signed in yesterday at 10:20 AM from Uganda</div>
-                  <div>✓ Signed in 2 days ago at 3:15 PM from Uganda</div>
-                </div>
-              </div>
-
-              {/* Close Button */}
-              <button 
-                onClick={() => setShowSecurityPanel(false)}
-                className="w-full px-4 py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white rounded-lg font-semibold transition"
-              >
-                Close Security Settings
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Settings Modal ────────────────────────────────────────────────── */}
-      {showSettingsPanel && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
-          <div className="icn-page-dialog icn-classic w-full max-w-2xl" role="dialog" aria-modal="true" aria-label="Settings" style={{minHeight: '400px'}}>
-            {/* Header */}
-            <div className="icn-page-head">
-              <div className="min-w-0">
-                <p className="icn-page-eyebrow">Preferences</p>
-                <h2 className="icn-page-title">Settings</h2>
-                <p className="icn-page-sub">Customize your IcanEra experience</p>
-              </div>
-              <button
-                onClick={() => setShowSettingsPanel(false)}
-                className="icn-page-close"
-                aria-label="Close settings"
-              >
-                <X />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Account Settings */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <User className="w-5 h-5 text-indigo-400" />
-                  Account
-                </h3>
-                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition flex items-center justify-between group">
-                  <span className="text-slate-300 text-sm">Email Address</span>
-                  <span className="text-slate-500 text-xs group-hover:text-slate-400">{userProfile?.email || 'user@ican.era'}</span>
-                </button>
-                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition flex items-center justify-between">
-                  <span className="text-slate-300 text-sm">Phone Number</span>
-                  <span className="text-slate-500 text-xs">{userProfile?.phone || '+256 7XX XXX XXXX'}</span>
-                </button>
-              </div>
-
-              {/* Notification Settings */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-yellow-400" />
-                  Notifications
-                </h3>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-3 px-4 py-3 bg-slate-700/20 hover:bg-slate-700/30 border border-slate-600 rounded-lg cursor-pointer transition">
-                    <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-indigo-500" />
-                    <span className="text-slate-300 text-sm flex-1">Email notifications</span>
-                  </label>
-                  <label className="flex items-center gap-3 px-4 py-3 bg-slate-700/20 hover:bg-slate-700/30 border border-slate-600 rounded-lg cursor-pointer transition">
-                    <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-indigo-500" />
-                    <span className="text-slate-300 text-sm flex-1">SMS alerts</span>
-                  </label>
-                  <label className="flex items-center gap-3 px-4 py-3 bg-slate-700/20 hover:bg-slate-700/30 border border-slate-600 rounded-lg cursor-pointer transition">
-                    <input
-                      type="checkbox"
-                      checked={phoneAlertsEnabled}
-                      disabled={phoneAlertsBusy}
-                      onChange={async (event) => {
-                        const wantsEnabled = event.target.checked;
-                        setPhoneAlertsBusy(true);
-                        try {
-                          if (wantsEnabled) {
-                            await enableWalletPhoneAlerts();
-                            setPhoneAlertsEnabled(true);
-                          } else {
-                            await disableWalletPhoneAlerts();
-                            setPhoneAlertsEnabled(false);
-                          }
-                        } catch (error) {
-                          console.error('Push notification toggle failed:', error);
-                        } finally {
-                          setPhoneAlertsBusy(false);
-                        }
-                      }}
-                      className="w-4 h-4 rounded text-indigo-500"
-                    />
-                    <span className="text-slate-300 text-sm flex-1">Push notifications (phone alerts)</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Privacy Settings */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-green-400" />
-                  Privacy
-                </h3>
-                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition text-slate-300 text-sm font-medium">
-                  View Privacy Policy
-                </button>
-                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition text-slate-300 text-sm font-medium">
-                  Data Export
-                </button>
-              </div>
-
-              {/* Appearance Settings */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Eye className="w-5 h-5 text-blue-400" />
-                  Appearance
-                </h3>
-                <div className="px-4 py-3 bg-slate-700/30 border border-slate-600 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-300 text-sm">Dark Mode</span>
-                    <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded">Always On</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Danger Zone */}
-              <div className="space-y-3 border-t border-slate-700 pt-6">
-                <h3 className="text-red-400 font-semibold text-sm">Danger Zone</h3>
-                <button className="w-full px-4 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-200 rounded-lg transition text-sm font-medium">
-                  Logout
-                </button>
-                <button className="w-full px-4 py-3 bg-red-950/40 hover:bg-red-950/60 border border-red-900 text-red-300 rounded-lg transition text-sm font-medium">
-                  Delete Account
-                </button>
-              </div>
-
-              {/* Close Button */}
-              <button 
-                onClick={() => setShowSettingsPanel(false)}
-                className="w-full px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg font-semibold transition"
-              >
-                Save & Close
-              </button>
-            </div>
           </div>
         </div>
       )}
