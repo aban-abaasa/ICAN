@@ -10,7 +10,7 @@ import { checkCanweFields } from '../../utils/canweGuard';
 
 import { DiamondSpinner } from '../IcanDiamond';
 const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
-  const { signIn, signInWithGoogle, signInWithWallet } = useAuth();
+  const { signIn, offlineSignIn, signInWithGoogle, signInWithWallet } = useAuth();
   const { actualTheme } = useTheme();
   const [formData, setFormData] = useState({
     email: '',
@@ -195,7 +195,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
         <OfflineLoginHelper
           onOfflineLogin={async (email) => {
             try {
-              await signIn(email, ''); // signIn will handle offline cache
+              await offlineSignIn(email); // explicit Quick Login on this device
               if (onSuccess) onSuccess();
             } catch (err) {
               setError(err.message);
