@@ -195,7 +195,7 @@ function Seal({ verified }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function PitchinLiveShareValue({ businessProfile, ownerUserId, readOnly = false }) {
+export default function PitchinLiveShareValue({ businessProfile, ownerUserId, readOnly = false, canAssignHelpers = false }) {
   const [valuation, setValuation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -255,6 +255,9 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
   }, [marketSnapshot?.price_ugx]);
 
   const businessProfileId = businessProfile?.id;
+  // The owner, or a co-owner in a management role, may assign people to record entries for
+  // this business. `readOnly` (the shareholder view) still hides every other owner control.
+  const canManageEntry = (!readOnly || canAssignHelpers) && !!businessProfileId;
 
   // ── Discover which entities the owner has in each linked app ─────────────
   const discoverEntities = useCallback(async () => {
@@ -385,9 +388,9 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
 
   // The owner's helper roster (people assigned to enter data on the company's behalf).
   const loadHelpers = useCallback(async () => {
-    if (!businessProfileId || readOnly) return;
+    if (!businessProfileId || !canManageEntry) return;
     setHelpers(await getBusinessTeamMembers(businessProfileId));
-  }, [businessProfileId, readOnly]);
+  }, [businessProfileId, canManageEntry]);
 
   useEffect(() => {
     if (!showManualTx) return;
@@ -403,8 +406,8 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
   }, [showBreakdown, loadHelpers]);
 
   useEffect(() => {
-    if (showManageEntry && !readOnly) loadContributors();
-  }, [showManageEntry, readOnly, loadContributors]);
+    if (showManageEntry && canManageEntry) loadContributors();
+  }, [showManageEntry, canManageEntry, loadContributors]);
 
   // Every contributor's entries in one list — the day book groups these by date.
   const allEntries = useMemo(() => contributors.flatMap((c) => c.entries), [contributors]);
@@ -557,8 +560,6 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
 
   const b = valuation?.breakdown || {};
   const n = (v) => Number(v) || 0;
-  // Owners can assign other people to record entries for this business.
-  const canManageEntry = !readOnly && !!businessProfileId;
   const statementRows = valuation ? [
     { label: 'Business value',   value: FMT(valuation.businessValueUgx) },
     { label: 'Net profit',       value: FMT(valuation.netProfitUgx) },
@@ -889,7 +890,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
 
                           <p className="ls-manage__note">
                             <Lock size={11} aria-hidden="true" />
-                            Entries a helper records are permanent — they can't be deleted, only archived by you.
+                            Entries a helper records are permanent — they can't be deleted, only archived by {readOnly ? 'the business owner' : 'you'}.
                           </p>
                         </div>
                       )}
@@ -1068,11 +1069,11 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
 
                       {/* ── Entries — day by day (default) or by who recorded them ── */}
                       <div className="mt-3 pt-2.5 border-t border-slate-800/60">
-                        <div className="flex items-center justify-between gap-2 mb-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                           <p className="text-[10px] sm:text-xs font-semibold text-slate-400 flex items-center gap-1.5">
                             <FileText size={10} className="text-amber-400" /> Entries
                           </p>
-                          <div className="ls-tabs" role="tablist" aria-label="Group entries">
+                          <div className="ls-tabs ls-tabs--compact" role="tablist" aria-label="Group entries">
                             {[{ key: 'day', label: 'By day' }, { key: 'contributor', label: 'By contributor' }].map((v) => (
                               <button
                                 key={v.key}
@@ -1350,7 +1351,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
     </div>
 
 
-    {!readOnly && showTeamModal && (
+    {canManageEntry && showTeamModal && (
       <BusinessTeamMembersModal
         profile={{ id: businessProfileId, business_name: businessProfile?.business_name || businessProfile?.name }}
         title="Transaction Helpers"
