@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Loader, CheckCircle2, Trash2, Users, UserPlus } from 'lucide-react';
+import { X, Search, Loader, CheckCircle2, Trash2, Users, UserPlus, Lock } from 'lucide-react';
 import { searchICANUsers, getBusinessTeamMembers, addBusinessTeamMember, removeBusinessTeamMember } from '../services/pitchingService';
 
-// Lets a business owner grant an existing ICAN account access to record
-// transactions for this business (no equity/ownership involved — that's
-// handled separately by the shareholder/co-owner flow).
-const BusinessTeamMembersModal = ({ profile, onClose }) => {
+// Lets a business owner assign an existing ICAN account as a helper who enters
+// data on behalf of this business (no equity/ownership involved — that's
+// handled separately by the shareholder/co-owner flow). Whatever a helper records
+// is permanent: the database refuses to delete it (MANUAL_TRANSACTION_HELPERS.sql),
+// and only the owner can archive it.
+const BusinessTeamMembersModal = ({ profile, onClose, title = 'Team Members' }) => {
   const [members, setMembers] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [query, setQuery] = useState('');
@@ -55,7 +57,7 @@ const BusinessTeamMembersModal = ({ profile, onClose }) => {
   };
 
   const handleRemove = async (member) => {
-    if (!window.confirm(`Remove ${member.member_name} from ${profile.business_name}?`)) return;
+    if (!window.confirm(`Remove ${member.member_name} from ${profile.business_name}? Entries they already recorded stay in the books and still can't be deleted.`)) return;
     const result = await removeBusinessTeamMember(member.id);
     if (result.success) {
       setMembers(prev => prev.filter(m => m.id !== member.id));
@@ -70,7 +72,7 @@ const BusinessTeamMembersModal = ({ profile, onClose }) => {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-blue-400" />
-            <h3 className="text-xl font-bold text-white">Team Members</h3>
+            <h3 className="text-xl font-bold text-white">{title}</h3>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X className="w-5 h-5" />
@@ -78,9 +80,16 @@ const BusinessTeamMembersModal = ({ profile, onClose }) => {
         </div>
 
         <p className="text-slate-400 text-sm mb-4">
-          Give an existing IcanEra account access to record transactions for{' '}
+          Assign an existing IcanEra account to enter data on behalf of{' '}
           <span className="text-white font-semibold">{profile.business_name}</span>. This does not grant
           ownership or equity.
+        </p>
+        <p className="text-amber-300/90 text-xs mb-4 flex items-start gap-1.5">
+          <Lock className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+          <span>
+            Everything a helper records is permanent. It can't be deleted — not by the helper, not by you —
+            only archived by you to save space. It keeps counting toward your share value.
+          </span>
         </p>
 
         {/* Search & add */}
@@ -132,11 +141,11 @@ const BusinessTeamMembersModal = ({ profile, onClose }) => {
 
         {/* Current members */}
         <div className="mt-5 pt-4 border-t border-slate-700">
-          <p className="text-slate-400 text-xs font-semibold mb-3">HAS TRANSACTION ACCESS</p>
+          <p className="text-slate-400 text-xs font-semibold mb-3">CAN ENTER DATA ON BEHALF OF THE COMPANY</p>
           {loadingMembers ? (
             <p className="text-slate-500 text-sm">Loading...</p>
           ) : members.length === 0 ? (
-            <p className="text-slate-500 text-sm">No team members yet. Search above to add one.</p>
+            <p className="text-slate-500 text-sm">No helpers yet. Search above to assign one.</p>
           ) : (
             <div className="space-y-2">
               {members.map(member => (
@@ -151,7 +160,7 @@ const BusinessTeamMembersModal = ({ profile, onClose }) => {
                   <button
                     onClick={() => handleRemove(member)}
                     className="text-red-400 hover:text-red-300 transition"
-                    title="Remove access"
+                    title="Remove helper"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

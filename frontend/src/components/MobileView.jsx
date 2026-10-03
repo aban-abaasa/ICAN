@@ -105,7 +105,7 @@ import DashboardUpdatesCard from './DashboardUpdatesCard';
 import BusinessTrendChart from './BusinessTrendChart';
 import CmmsActivityWidget from './CmmsActivityWidget';
 import { supabase } from '../lib/supabase/client';
-import { deleteTransaction } from '../services/supabaseTransactions';
+import { deleteTransaction, TWO_ACCOUNT_DELETE_MESSAGE } from '../services/supabaseTransactions';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
 import DataCleanupModal from './DataCleanupModal';
 import { walletAccountService } from '../services/walletAccountService';
@@ -4360,6 +4360,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
   // Delete a transaction with confirmation
   const handleDeleteTransaction = async (transactionId, description) => {
+    // A transaction that ties two accounts together (e.g. a helper's entry on
+    // behalf of a company) is permanent — the database refuses it too.
+    if (transactions.find(t => t.id === transactionId)?.involves_two_accounts) {
+      alert(TWO_ACCOUNT_DELETE_MESSAGE);
+      return;
+    }
     if (!confirm(`Are you sure you want to delete "${description}"?`)) {
       return;
     }
@@ -7669,13 +7675,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             <p className={`text-sm font-bold ${isIncome ? 'text-green-400' : 'text-red-400'}`}>
                               {isIncome ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
                             </p>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(transaction.id, transaction.description || 'Transaction'); }}
-                              className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {transaction.involves_two_accounts ? (
+                              <span
+                                className="p-1.5 text-amber-300/80"
+                                title={transaction.archived_at ? 'Archived — involves two accounts, never deleted' : 'Involves two accounts — can never be deleted'}
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                              </span>
+                            ) : (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(transaction.id, transaction.description || 'Transaction'); }}
+                                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -8520,13 +8535,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <p className={`text-xs font-bold tabular-nums ${isIncome ? 'text-green-400' : 'text-red-400'}`}>
                           {isIncome ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
                         </p>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(transaction.id, transaction.description || 'Transaction'); }}
-                          className="p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        {transaction.involves_two_accounts ? (
+                          <span
+                            className="p-1 text-amber-300/80"
+                            title={transaction.archived_at ? 'Archived — involves two accounts, never deleted' : 'Involves two accounts — can never be deleted'}
+                          >
+                            <Lock className="w-3 h-3" />
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(transaction.id, transaction.description || 'Transaction'); }}
+                            className="p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -9063,7 +9087,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       >
                         <option value="" className="bg-white text-gray-900">Select business…</option>
                         {recordBusinessProfiles.map(p => (
-                          <option key={p.id} value={p.id} className="bg-white text-gray-900">{p.business_name}</option>
+                          <option key={p.id} value={p.id} className="bg-white text-gray-900">
+                            {p.business_name}{p.isTeamMember ? ' — on behalf of the company (entries are permanent)' : p.isCoOwned ? ' — co-owned (entries are permanent)' : ''}
+                          </option>
                         ))}
                       </select>
                     )}

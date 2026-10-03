@@ -137,7 +137,9 @@ export async function getBusinessTransactionsByContributor(businessProfileId) {
       : 0;
     bucket.count += 1;
     bucket.netUgx += sign * amount;
-    bucket.entries.push(row);
+    // signedAmount: +income / −expense / 0 for buckets that don't move profit
+    // (capital assets, owner equity) — what the day book totals up.
+    bucket.entries.push({ ...row, signedAmount: sign * amount });
     if (new Date(row.created_at) > new Date(bucket.lastEntryAt)) bucket.lastEntryAt = row.created_at;
   }
 
