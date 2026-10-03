@@ -4,7 +4,8 @@ const SOURCE = {
   INVESTMENT: 'investment_notifications',
   SHAREHOLDER: 'shareholder_notifications',
   CMMS: 'cmms_notifications',
-  LEGACY: 'notifications'
+  LEGACY: 'notifications',
+  GROWTH: 'ican_growth_notifications'
 };
 
 const resolveReadState = (row) => {
@@ -58,7 +59,7 @@ const normalizeNotifications = ({ rows, source }) => {
 
     const actionTab =
       row.action_tab ||
-      (source === SOURCE.CMMS ? 'cmms' : source === SOURCE.LEGACY ? 'wallet' : 'pitchin');
+      (source === SOURCE.CMMS ? 'cmms' : source === SOURCE.LEGACY ? 'wallet' : source === SOURCE.GROWTH ? 'growth' : 'pitchin');
 
     const sourceLabel =
       source === SOURCE.CMMS
@@ -67,6 +68,8 @@ const normalizeNotifications = ({ rows, source }) => {
         ? 'Wallet/Trust'
         : source === SOURCE.SHAREHOLDER
         ? 'IcanEra Trust'
+        : source === SOURCE.GROWTH
+        ? 'Prosperity Architect'
         : 'IcanEra';
 
     return {
@@ -126,7 +129,7 @@ export const getUserNotifications = async (userId, { unreadOnly = false, limit =
     authEmail = null;
   }
 
-  const [investmentRows, shareholderRows, cmmsRows, legacyRows] = await Promise.all([
+  const [investmentRows, shareholderRows, cmmsRows, legacyRows, growthRows] = await Promise.all([
     safeFetch(() =>
       sb
         .from(SOURCE.INVESTMENT)
@@ -164,6 +167,15 @@ export const getUserNotifications = async (userId, { unreadOnly = false, limit =
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(limit)
+    ),
+    // Missing table (migration not applied) just yields no rows via safeFetch.
+    safeFetch(() =>
+      sb
+        .from(SOURCE.GROWTH)
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit)
     )
   ]);
 
@@ -171,7 +183,8 @@ export const getUserNotifications = async (userId, { unreadOnly = false, limit =
     ...normalizeNotifications({ rows: investmentRows, source: SOURCE.INVESTMENT }),
     ...normalizeNotifications({ rows: shareholderRows, source: SOURCE.SHAREHOLDER }),
     ...normalizeNotifications({ rows: cmmsRows, source: SOURCE.CMMS }),
-    ...normalizeNotifications({ rows: legacyRows, source: SOURCE.LEGACY })
+    ...normalizeNotifications({ rows: legacyRows, source: SOURCE.LEGACY }),
+    ...normalizeNotifications({ rows: growthRows, source: SOURCE.GROWTH })
   ];
 
   if (unreadOnly) {
@@ -226,6 +239,12 @@ export const markNotificationAsRead = async (notificationOrId) => {
         { status: 'read' }
       ]);
     }
+
+    if (source === SOURCE.GROWTH) {
+      return updateWithFallback(sb, SOURCE.GROWTH, sourceId, [
+        { is_read: true, read_at: new Date().toISOString() }
+      ]);
+    }
   }
 
   const notificationId = String(notificationOrId || '');
@@ -265,6 +284,12 @@ export const deleteNotification = async (notification) => {
   if (!sb || !notification?.source || !notification?.source_id) {
     return { success: false };
   }
+  // Growth reminders live in a table the shared delete RPC does not know about;
+  // row-level security already limits a user to their own rows.
+  if (notification.source === SOURCE.GROWTH) {
+    const { error: growthError } = await sb.from(SOURCE.GROWTH).delete().eq('id', notification.source_id);
+    return { success: !growthError };
+  }
   const { data, error } = await sb.rpc('ican_delete_notification', {
     p_source: notification.source,
     p_source_id: notification.source_id
@@ -278,7 +303,12 @@ export const clearAllNotifications = async (userId, { readOnly = false } = {}) =
   if (!sb || !userId) return { success: false, count: 0 };
   const { data, error } = await sb.rpc('ican_clear_notifications', { p_read_only: readOnly });
   if (error) return { success: false, count: 0, error };
-  return { success: true, count: data || 0 };
+
+  // Growth reminders are not covered by the shared RPC; clear them directly (RLS scopes to the user).
+  let growthQuery = sb.from(SOURCE.GROWTH).delete({ count: 'exact' }).eq('user_id', userId);
+  if (readOnly) growthQuery = growthQuery.eq('is_read', true);
+  const { count: growthCount } = await growthQuery;
+  return { success: true, count: (data || 0) + (growthCount || 0) };
 };
 
 export const subscribeToUserNotifications = (userId, callback) => {
@@ -340,7 +370,24 @@ export const subscribeToUserNotifications = (userId, callback) => {
     )
     .subscribe();
 
-  channels.push(investmentChannel, shareholderChannel, legacyChannel);
+  const growthChannel = sb
+    .channel(`universal-growth:${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: SOURCE.GROWTH,
+        filter: `user_id=eq.${userId}`
+      },
+      (payload) => {
+        const [normalized] = normalizeNotifications({ rows: [payload.new], source: SOURCE.GROWTH });
+        if (normalized) callback(normalized);
+      }
+    )
+    .subscribe();
+
+  channels.push(investmentChannel, shareholderChannel, legacyChannel, growthChannel);
 
   return () => {
     channels.forEach((channel) => sb.removeChannel(channel));
@@ -353,6 +400,7 @@ export const getNotificationIcon = (type, source) => {
   if (source === SOURCE.CMMS) return '🛠️';
   if (source === SOURCE.LEGACY) return '💳';
   if (source === SOURCE.SHAREHOLDER) return '🤝';
+  if (source === SOURCE.GROWTH) return '⏰';
 
   const icons = {
     new_investment: '💰',

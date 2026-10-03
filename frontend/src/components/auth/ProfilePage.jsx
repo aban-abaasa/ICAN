@@ -6,11 +6,22 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { User, Mail, Phone, Edit2, Save, X, Upload, Shield, Wallet, Key, LogOut, Plus, Camera, Trash2, Clock, Bell } from 'lucide-react';
+import { User, Mail, Phone, Edit2, Save, X, Upload, Shield, Wallet, Key, LogOut, Plus, Camera, Trash2, Clock, Bell, Settings as SettingsIcon } from 'lucide-react';
 import { StatusUploader } from '../status/StatusUploader';
 import ShareholderApprovalsCenter from '../ShareholderApprovalsCenter';
+import '../profile/growth/growth.css';
 
-export const ProfilePage = ({ onClose = null, onLogout = null }) => {
+const SECTION_TABS = [
+  { id: 'profile', label: 'Profile', Icon: User },
+  { id: 'security', label: 'Security', Icon: Shield },
+  { id: 'settings', label: 'Settings', Icon: SettingsIcon },
+];
+
+/**
+ * `extraSections` ({ security: node, settings: node }) and `onSectionChange` turn the page into
+ * Profile / Security / Settings tabs. Without them it renders exactly as before.
+ */
+export const ProfilePage = ({ onClose = null, onLogout = null, section = 'profile', onSectionChange = null, extraSections = null }) => {
   const {
     user,
     profile,
@@ -240,6 +251,29 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
           </div>
         )}
 
+        {/* Profile / Security / Settings */}
+        {extraSections && onSectionChange && (
+          <div className="gr" style={{ marginBottom: 12, padding: 0 }}>
+            <div className="gr-tabs" role="tablist" aria-label="My profile sections"
+              onKeyDown={(e) => {
+                const i = SECTION_TABS.findIndex((t) => t.id === section);
+                const next = e.key === 'ArrowRight' ? SECTION_TABS[(i + 1) % SECTION_TABS.length]
+                  : e.key === 'ArrowLeft' ? SECTION_TABS[(i + SECTION_TABS.length - 1) % SECTION_TABS.length] : null;
+                if (next) { e.preventDefault(); onSectionChange(next.id); document.getElementById(`pf-tab-${next.id}`)?.focus(); }
+              }}>
+              {SECTION_TABS.map(({ id, label, Icon }) => (
+                <button key={id} id={`pf-tab-${id}`} type="button" role="tab" className="gr-tab" aria-selected={section === id}
+                  tabIndex={section === id ? 0 : -1} onClick={() => onSectionChange(id)}>
+                  <Icon aria-hidden="true" />{label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {extraSections && section !== 'profile' && extraSections[section]}
+
+        {(section === 'profile' || !extraSections) && (<>
         {/* Main Profile Card - Mobile Optimized */}
         <div className="icn-pg-card mb-3 sm:mb-4 md:mb-6">
           {/* Profile Header Background - Responsive Height */}
@@ -495,6 +529,8 @@ export const ProfilePage = ({ onClose = null, onLogout = null }) => {
             <span>{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
           </button>
         </div>
+
+        </>)}
 
         {/* Avatar Change Modal - Mobile Optimized */}
         {showAvatarModal && (
