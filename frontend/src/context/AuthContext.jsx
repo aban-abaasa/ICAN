@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useState, useEffect } from 'react';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { offlineAuthManager } from '../lib/offlineAuthManager';
 import { syncManager } from '../lib/syncManager';
+import { isNetworkAuthError } from '../lib/authErrors';
 import { uploadToR2, resolveMediaValue } from '../services/r2StorageService';
 
 const AuthContext = createContext({});
@@ -232,6 +233,52 @@ export const AuthProvider = ({ children }) => {
            null;
   };
 
+  // Two-step verification. When the account has a verified authenticator factor but this
+  // session has not proven it yet (assurance level aal1, next level aal2), the app shows
+  // a code screen instead of the dashboard. status: 'unknown' while the check runs,
+  // 'required' until the code is accepted, otherwise 'clear'.
+  const [mfa, setMfa] = useState({ userId: null, status: 'unknown', factorId: null });
+
+  const evaluateMfa = useCallback(async (forUserId) => {
+    const client = getSupabaseClient();
+    try {
+      if (!client) throw new Error('Supabase not initialized');
+      const { data, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (error) throw error;
+      if (data?.currentLevel === 'aal1' && data?.nextLevel === 'aal2') {
+        const { data: factors } = await client.auth.mfa.listFactors();
+        const verified = (factors?.totp || [])[0]; // `totp` lists verified factors only
+        if (verified) {
+          setMfa({ userId: forUserId, status: 'required', factorId: verified.id });
+          return;
+        }
+      }
+      setMfa({ userId: forUserId, status: 'clear', factorId: null });
+    } catch (err) {
+      // Fail open: a device-cached (offline) user has no Supabase session to check, and a
+      // broken check must not lock every account out of the app.
+      console.warn('[AuthContext] Two-step check skipped:', err?.message || err);
+      setMfa({ userId: forUserId, status: 'clear', factorId: null });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user?.id) evaluateMfa(user.id);
+  }, [user?.id, evaluateMfa]);
+
+  const mfaStatus = !user ? 'clear' : mfa.userId === user.id ? mfa.status : 'unknown';
+
+  const verifyMfa = async (code) => {
+    const client = getSupabase();
+    if (!client || !mfa.factorId) throw new Error('No verification method is set up for this account.');
+    const { error } = await client.auth.mfa.challengeAndVerify({
+      factorId: mfa.factorId,
+      code: String(code || '').replace(/\D/g, ''),
+    });
+    if (error) throw error;
+    await evaluateMfa(user.id);
+  };
+
   useEffect(() => {
     const supabase = getSupabase();
     
@@ -269,6 +316,11 @@ export const AuthProvider = ({ children }) => {
 
         if (event === 'SIGNED_OUT') {
           setIsRecoveryMode(false);
+        }
+
+        if (session?.user && ['TOKEN_REFRESHED', 'USER_UPDATED', 'MFA_CHALLENGE_VERIFIED'].includes(event)) {
+          const uid = session.user.id;
+          setTimeout(() => evaluateMfa(uid), 0); // deferred: supabase-js must not be re-entered from this callback
         }
 
         setUser(session?.user ?? null);
@@ -338,8 +390,11 @@ export const AuthProvider = ({ children }) => {
 
         return data;
       } catch (error) {
-        // If online login fails, fall back to offline cached session
-        console.warn('[AuthContext] Online auth failed, trying offline cache:', error.message);
+        // Fall back to the cached session only when the network itself failed. A rejected
+        // password (or any answer from Supabase) must never open the account. The explicit
+        // "Quick Login" tap calls offlineSignIn() directly instead.
+        if (!isNetworkAuthError(error)) throw error;
+        console.warn('[AuthContext] Network unavailable, trying offline cache:', error.message);
         return await offlineSignIn(normalizedEmail);
       }
     } else {
@@ -437,6 +492,20 @@ export const AuthProvider = ({ children }) => {
     const { error } = await supabase.auth.signOut();
     
     // Clear offline session
+    if (user?.email) {
+      await offlineAuthManager.removeSession(user.email);
+    }
+
+    if (error) throw error;
+  };
+
+  // Sign out on every device (Supabase revokes all of this account's sessions)
+  const signOutEverywhere = async () => {
+    const client = getSupabase();
+    if (!client) throw new Error('Supabase not initialized');
+
+    const { error } = await client.auth.signOut({ scope: 'global' });
+
     if (user?.email) {
       await offlineAuthManager.removeSession(user.email);
     }
@@ -557,6 +626,9 @@ export const AuthProvider = ({ children }) => {
     signIn,
     signInWithWallet,
     signOut,
+    signOutEverywhere,
+    mfaStatus,
+    verifyMfa,
     resetPassword,
     updatePassword,
     clearRecoveryMode,
