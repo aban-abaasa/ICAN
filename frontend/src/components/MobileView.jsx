@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Mic,
   MicOff,
@@ -63,8 +63,11 @@ import {
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import TransactionReceiptModal from './TransactionReceiptModal';
-import ReceiptTally from './ReceiptTally';
+import ReceiptTally, { TruthBadge } from './ReceiptTally';
 import { getProofStatus, getProofLabel, getReceiptNumber } from '../utils/transactionReceipt';
+import {
+  analyzeReceiptTruth, buildReceiptTruth, formatFlags, getEvidenceLabel, getTruthStatement, shortSeal,
+} from '../utils/receiptTruth';
 import CmmsPageShell from './CmmsPageShell';
 import { ProfilePage } from './auth/ProfilePage';
 import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
@@ -353,7 +356,7 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency, onOpenRec
                         <p className="text-xs text-gray-400">
                           {new Date(transaction.created_at).toLocaleDateString()}
                         </p>
-                        {getProofStatus(transaction) !== 'system' && <span title="Receipt attached" className="text-[11px]">🧾</span>}
+                        <TruthBadge tx={transaction} />
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${
                           isBusiness
                             ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
@@ -1393,6 +1396,10 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   })();
   const txPeriodIncome  = txPeriodFiltered.filter(t => t.transaction_type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
   const txPeriodExpense = txPeriodFiltered.filter(t => t.transaction_type !== 'income').reduce((s, t) => s + (t.amount || 0), 0);
+  // Receipt truth for the period list (grades, flags, seals). Sealing hashes every row, so it
+  // is recomputed only when the records or the period change -- not on every render.
+  const periodTruth = useMemo(() => analyzeReceiptTruth(txPeriodFiltered), [transactions, txPeriod]);
+  const periodTruthRows = useMemo(() => new Map(periodTruth.rows.map((row) => [row.tx, row])), [periodTruth]);
 
   useEffect(() => {
     const mobileState = {
@@ -3814,8 +3821,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
     const filtered = owner.records;
-    const rows = [['Account Holder', 'Account', 'Business Name', 'Date', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Chain Hash', 'Receipt No.', 'Proof', 'Receipt Ref']];
-    filtered.forEach(t => {
+    const truth = analyzeReceiptTruth(filtered);
+    const rows = [['Account Holder', 'Account', 'Business Name', 'Date', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Chain Hash', 'Receipt No.', 'Proof', 'Receipt Ref', 'Evidence', 'Truth Flags', 'Receipt Seal', 'Report Seal']];
+    filtered.forEach((t, idx) => {
       const hash = txChainHashes[t.id] || t.data_hash || '';
       rows.push([
         owner.accountHolder,
@@ -3831,7 +3839,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         hash.slice(0, 20) || '',
         getReceiptNumber(t),
         getProofLabel(t),
-        t.metadata?.receipt_ref || ''
+        t.metadata?.receipt_ref || '',
+        getEvidenceLabel(truth.rows[idx].grade),
+        formatFlags(truth.rows[idx].flags),
+        truth.rows[idx].seal,
+        truth.summary.sealRoot
       ]);
     });
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -3854,7 +3866,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
     const filtered = owner.records;
-    const rows = filtered.map(t => ({
+    const truth = analyzeReceiptTruth(filtered);
+    const rows = filtered.map((t, idx) => ({
       Date: new Date(t.created_at).toLocaleDateString(),
       Type: (t.record_category || t.metadata?.record_category) === 'business' ? 'Business' : 'Personal',
       'Business Name': owner.businessName,
@@ -3868,10 +3881,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       'Chain Hash': (txChainHashes[t.id] || t.data_hash || '').slice(0, 20),
       'Receipt No.': getReceiptNumber(t),
       Proof: getProofLabel(t),
-      'Receipt Ref': t.metadata?.receipt_ref || ''
+      'Receipt Ref': t.metadata?.receipt_ref || '',
+      Evidence: getEvidenceLabel(truth.rows[idx].grade),
+      'Truth Flags': formatFlags(truth.rows[idx].flags),
+      'Receipt Seal': truth.rows[idx].seal
     }));
     const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Info: 'No transactions in this period' }]);
-    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 24 }, { wch: 22 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 22 }, { wch: 24 }, { wch: 20 }, { wch: 20 }];
+    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 24 }, { wch: 22 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 22 }, { wch: 24 }, { wch: 20 }, { wch: 20 }, { wch: 10 }, { wch: 28 }, { wch: 66 }];
     const info = XLSX.utils.aoa_to_sheet([
       ['IcanEra Transaction Report'],
       [owner.scope === 'business' ? 'Business' : 'Account', owner.title],
@@ -3880,8 +3896,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       ['Period', period],
       ['Generated', new Date().toLocaleString()],
       ['Records', filtered.length],
+      ...(truth.summary.total ? [
+        [],
+        ['Receipt Truth'],
+        ['Rating', `${truth.summary.rating} - ${truth.summary.ratingLabel}`],
+        ['Backed by receipt', `${truth.summary.backedCount} of ${truth.summary.total} entries (${truth.summary.coverageByCount}%), ${truth.summary.coverageByValue}% of the value`],
+        ['Gold / Silver / Bronze', `${truth.summary.grades.gold.count} / ${truth.summary.grades.silver.count} / ${truth.summary.grades.bronze.count}`],
+        ['Needing a closer look', truth.summary.attentionCount],
+        ['Report seal (SHA-256)', truth.summary.sealRoot],
+        ['Statement', getTruthStatement(truth.summary)],
+        ['Note', 'Gold = photo + receipt no., Silver = photo or receipt no., Bronze = system receipt only. The seal changes if any entry or receipt is edited, so keep it with your copy.'],
+      ] : []),
     ]);
-    info['!cols'] = [{ wch: 16 }, { wch: 44 }];
+    info['!cols'] = [{ wch: 22 }, { wch: 70 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
     XLSX.utils.book_append_sheet(wb, info, 'Report Info');
@@ -4003,6 +4030,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
     const filtered = owner.records;
+    const truth = analyzeReceiptTruth(filtered);
+    const truthSummary = truth.summary;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const pageW = 210;
     const dateStr = new Date().toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric' });
@@ -4067,12 +4096,60 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       y += 11;
     }
 
-    // ── Proof note — how many entries carry an attached receipt photo ──
-    {
-      const attachedCount = filtered.filter((t) => getProofStatus(t) !== 'system').length;
-      doc.setFontSize(7); doc.setTextColor(71, 85, 105); doc.setFont('helvetica', 'normal');
-      doc.text(`Receipts: ${attachedCount} of ${filtered.length} entries have a receipt photo or receipt no.; the rest carry a system receipt (RCT number in Excel/CSV exports).`.slice(0, 150), 14, y + 3);
-      y += 8;
+    // ── Receipt truth — what the receipts behind these entries say ──
+    if (truthSummary.total > 0) {
+      const boxX = 14;
+      const boxW = pageW - 28;
+      const boxH = 27;
+      doc.setFillColor(255, 251, 235);   // amber-50
+      doc.setDrawColor(217, 119, 6);     // amber-600
+      doc.roundedRect(boxX, y, boxW, boxH, 1.5, 1.5, 'FD');
+
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(146, 64, 14);
+      doc.text('RECEIPT TRUTH', boxX + 3, y + 4.5);
+      doc.text(`Rating ${truthSummary.rating} - ${truthSummary.ratingLabel}`, boxX + boxW - 3, y + 4.5, { align: 'right' });
+
+      // Gold / silver / bronze bar, sized by number of entries
+      const barX = boxX + 3;
+      const barW = boxW - 6;
+      doc.setFillColor(226, 232, 240);
+      doc.rect(barX, y + 7, barW, 2.5, 'F');
+      let barCursor = barX;
+      [['gold', [245, 158, 11]], ['silver', [148, 163, 184]], ['bronze', [180, 83, 9]]].forEach(([grade, rgb]) => {
+        const w = (truthSummary.grades[grade].count / truthSummary.total) * barW;
+        if (w <= 0) return;
+        doc.setFillColor(...rgb);
+        doc.rect(barCursor, y + 7, w, 2.5, 'F');
+        barCursor += w;
+      });
+
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
+      doc.text(
+        `Gold ${truthSummary.grades.gold.count}   Silver ${truthSummary.grades.silver.count}   Bronze ${truthSummary.grades.bronze.count}   |   ${truthSummary.backedCount} of ${truthSummary.total} entries (${truthSummary.coverageByCount}%) and ${truthSummary.coverageByValue}% of the value are backed by a receipt photo or number`.slice(0, 165),
+        boxX + 3, y + 13.2
+      );
+      doc.setFontSize(6); doc.setTextColor(100, 116, 139);
+      doc.text('Gold = photo + receipt no.   Silver = photo or receipt no.   Bronze = system receipt only   ! = needs a closer look', boxX + 3, y + 16.6);
+
+      doc.setFontSize(7);
+      if (truthSummary.attentionCount > 0) {
+        doc.setTextColor(180, 83, 9);
+        doc.setFont('helvetica', 'bold');
+        const issues = [
+          truthSummary.flagCounts.reused_proof && `${truthSummary.flagCounts.reused_proof} with a reused receipt`,
+          truthSummary.flagCounts.large_unbacked && `${truthSummary.flagCounts.large_unbacked} large with no receipt`,
+        ].filter(Boolean).join(', ');
+        doc.text(`${truthSummary.attentionCount} ${truthSummary.attentionCount === 1 ? 'entry needs' : 'entries need'} a closer look: ${issues}`.slice(0, 150), boxX + 3, y + 20.4);
+      } else {
+        doc.setTextColor(22, 101, 52);
+        doc.setFont('helvetica', 'bold');
+        doc.text('No entries flagged for a closer look.', boxX + 3, y + 20.4);
+      }
+
+      doc.setFont('courier', 'normal'); doc.setFontSize(6); doc.setTextColor(71, 85, 105);
+      doc.text(`Report seal (SHA-256): ${truthSummary.sealRoot}`, boxX + 3, y + 24.4);
+      doc.setFont('helvetica', 'normal');
+      y += boxH + 4;
     }
 
     // ── Table header — Light with green accent ──
@@ -4085,7 +4162,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       { label: 'Description', w: 42 },
       { label: 'Amount (UGX)',w: 28 },
       { label: 'Chain',       w: 16 },
-      { label: 'Proof',       w: 16 },
+      { label: 'Receipt',     w: 16 },
     ];
     doc.setFillColor(220, 252, 231);  // green-100
     doc.rect(14, y, pageW - 28, 7, 'F');
@@ -4117,7 +4194,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         (t.description || '').slice(0, 30),
         `${isIncome ? '+' : '-'}${Math.abs(t.amount||0).toLocaleString()}`,
         hash ? hash.slice(0, 6) + '…' : '',
-        getProofStatus(t) === 'attached' ? 'Photo' : getProofStatus(t) === 'reference' ? 'Ref no.' : 'System',
+        `${getEvidenceLabel(truth.rows[idx].grade)}${truth.rows[idx].flags.some((f) => f.severity === 'warn') ? ' !' : ''}`,
       ];
       cx = 14;
       cells.forEach((cell, ci) => {
@@ -4142,6 +4219,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       doc.setFontSize(7); doc.setTextColor(100, 116, 139);
       doc.text(`IcanEra · ${owner.title} · Confidential · 🔐 Blockchain Secured`.slice(0, 110), 14, 292);
       doc.text(`Page ${i} of ${pages}`, pageW - 14, 292, { align: 'right' });
+      if (truthSummary.sealRoot) {
+        doc.setFontSize(6);
+        doc.text(`Receipt seal ${shortSeal(truthSummary.sealRoot)} · ${truthSummary.backedCount}/${truthSummary.total} entries backed`, 14, 295.4);
+        doc.setFontSize(7);
+      }
     }
 
     doc.save(`IcanEra-Transactions-${owner.fileTag}-${period}-${new Date().toISOString().split('T')[0]}.pdf`);
@@ -4154,6 +4236,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const owner = await askDownloadOwner(allFiltered);
     if (!owner) return;
     const filtered = owner.records;
+    const truth = analyzeReceiptTruth(filtered);
+    const truthLine = getTruthStatement(truth.summary);
     // Create a modal to choose format and method
     const shareFormat = await new Promise((resolve) => {
       const modal = document.createElement('div');
@@ -4213,11 +4297,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         
         if (method === 'email') {
           const subject = encodeURIComponent(`IcanEra Transaction Report - ${owner.title} - ${period}`);
-          const body = encodeURIComponent(`Please find attached the transaction report for ${owner.title}, ${period}.\n\n${owner.subtitle}\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\n🔐 Secured by IcanEra`);
+          const body = encodeURIComponent(`Please find attached the transaction report for ${owner.title}, ${period}.\n\n${owner.subtitle}\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\nReceipts: ${truthLine}\n\n🔐 Secured by IcanEra`);
           window.location.href = `mailto:?subject=${subject}&body=${body}`;
           alert('📧 Opening email client. Please attach the downloaded PDF file.');
         } else if (method === 'whatsapp') {
-          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\n${owner.title}\n${owner.subtitle}\nPeriod: ${period}\nRecords: ${filtered.length}\n\n_PDF report downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
+          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\n${owner.title}\n${owner.subtitle}\nPeriod: ${period}\nRecords: ${filtered.length}\n\n🧾 ${truthLine}\n\n_PDF report downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
           window.open(`https://wa.me/?text=${text}`, '_blank');
           alert('📱 PDF downloaded. Please attach it in WhatsApp.');
         }
@@ -4228,8 +4312,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           [owner.scope === 'business' ? 'Business:' : 'Account:', owner.title],
           ['Account Holder:', owner.accountHolder],
           [`Period: ${period}`, `Generated: ${new Date().toLocaleDateString()}`],
+          ...(truth.summary.total ? [
+            ['Receipt truth:', `${truth.summary.rating} - ${truth.summary.ratingLabel}`],
+            ['', truthLine],
+            ['Report seal (SHA-256):', truth.summary.sealRoot],
+          ] : []),
           [],
-          ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Blockchain Hash', 'Receipt No.', 'Proof', 'Receipt Ref']
+          ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Blockchain Hash', 'Receipt No.', 'Proof', 'Receipt Ref', 'Evidence', 'Truth Flags', 'Receipt Seal']
         ];
 
         filtered.forEach((t, idx) => {
@@ -4249,7 +4338,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             hash,
             getReceiptNumber(t),
             getProofLabel(t),
-            t.metadata?.receipt_ref || ''
+            t.metadata?.receipt_ref || '',
+            getEvidenceLabel(truth.rows[idx].grade),
+            formatFlags(truth.rows[idx].flags),
+            truth.rows[idx].seal
           ]);
         });
         
@@ -4260,11 +4352,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         
         if (method === 'email') {
           const subject = encodeURIComponent(`IcanEra Transaction Report - ${owner.title} - ${period}`);
-          const body = encodeURIComponent(`Please find attached the transaction report for ${owner.title}, ${period}.\n\n${owner.subtitle}\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\n🔐 Secured by IcanEra`);
+          const body = encodeURIComponent(`Please find attached the transaction report for ${owner.title}, ${period}.\n\n${owner.subtitle}\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\nReceipts: ${truthLine}\n\n🔐 Secured by IcanEra`);
           window.location.href = `mailto:?subject=${subject}&body=${body}`;
           alert('📧 Opening email client. Please attach the downloaded Excel file.');
         } else if (method === 'whatsapp') {
-          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\n${owner.title}\n${owner.subtitle}\nPeriod: ${period}\nRecords: ${filtered.length}\n\n_Excel file downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
+          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\n${owner.title}\n${owner.subtitle}\nPeriod: ${period}\nRecords: ${filtered.length}\n\n🧾 ${truthLine}\n\n_Excel file downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
           window.open(`https://wa.me/?text=${text}`, '_blank');
           alert('📱 Excel downloaded. Please attach it in WhatsApp.');
         }
@@ -7273,7 +7365,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   </div>
 
                   <ReceiptTally
-                    transactions={txPeriodFiltered}
+                    truth={periodTruth}
                     formatCurrency={formatCurrency}
                     onlyMissing={showOnlyNoProof}
                     onToggleMissing={() => setShowOnlyNoProof((v) => !v)}
@@ -7328,7 +7420,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                                   {catName}
                                 </span>
                               )}
-                              {getProofStatus(transaction) !== 'system' && <span title="Receipt attached" className="text-[11px]">🧾</span>}
+                              <TruthBadge row={periodTruthRows.get(transaction)} tx={transaction} />
                               <span className="text-[10px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
                                 {fmtTxDate(transaction.created_at)}
                               </span>
@@ -8188,7 +8280,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               {chainHash.slice(0, 6)}…
                             </span>
                           )}
-                          {getProofStatus(transaction) !== 'system' && <span title="Receipt attached" className="text-[10px]">🧾</span>}
+                          <TruthBadge tx={transaction} />
                           <span className="text-[9px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
                             {fmtExpDate(transaction.created_at)}
                           </span>
@@ -9471,6 +9563,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         businessName: reportOwner.businessName,
                       };
                       const { start: periodStart, end: periodEnd } = getReportDateRange();
+                      // What the receipts behind this report's transactions say -- saved with the report.
+                      const receiptTruth = buildReceiptTruth(fm?.transactions || []);
                       const fd = {
                         revenue: income,
                         costOfGoodsSold: boughtStock,
@@ -9500,6 +9594,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         periodEnd,
                         transactionCount: fm?.count || 0,
                         categoryBreakdown: fm?.categories || {},
+                        ...(receiptTruth.total ? { receiptTruth } : {}),
                       };
                       let result;
                       if (selectedReportType === 'tax-filing') {
@@ -9711,8 +9806,33 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               addSection('Summary', Object.fromEntries(
                                 Object.entries(rpt).filter(([,v]) => typeof v !== 'object')
                               ));
+                              // Receipt truth gets its own section: the generic one would run the 64-char seal off the page
+                              const truth = rpt.receiptTruth;
+                              if (truth?.total) {
+                                if (y > 210) { doc.addPage(); y = 20; }
+                                doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(147, 51, 234);
+                                doc.text('RECEIPT TRUTH', 14, y); y += 5;
+                                doc.setDrawColor(200, 180, 240);
+                                doc.line(14, y, 196, y); y += 4;
+                                doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(50, 50, 50);
+                                [
+                                  `Rating: ${truth.rating} - ${truth.ratingLabel}`,
+                                  `Backed by a receipt photo or number: ${truth.backedCount} of ${truth.total} entries (${truth.coverageByCount}%), ${truth.coverageByValue}% of the value`,
+                                  `Gold / Silver / Bronze: ${truth.grades.gold.count} / ${truth.grades.silver.count} / ${truth.grades.bronze.count}`,
+                                  `Entries needing a closer look: ${truth.attentionCount}`,
+                                ].forEach((line) => { doc.text(doc.splitTextToSize(line, 178), 16, y); y += 5; });
+                                if (rpt.deductionsSection?.receiptBackedAmount > 0 || rpt.deductionsSection?.receiptMissingAmount > 0) {
+                                  doc.text(`Claimed deductions with a receipt: ${Math.round(rpt.deductionsSection.receiptBackedAmount).toLocaleString()} | without: ${Math.round(rpt.deductionsSection.receiptMissingAmount).toLocaleString()}`, 16, y); y += 5;
+                                }
+                                const statementLines = doc.splitTextToSize(getTruthStatement(truth, { currency: rpt.currency || 'UGX' }), 178);
+                                doc.text(statementLines, 16, y); y += statementLines.length * 4.5 + 1;
+                                doc.setFont('courier','normal'); doc.setFontSize(7);
+                                doc.text(`Report seal (SHA-256): ${truth.sealRoot}`, 16, y); y += 8;
+                                doc.setFont('helvetica','normal');
+                              }
                               // Nested objects
                               Object.entries(rpt).forEach(([k,v]) => {
+                                if (k === 'receiptTruth') return;
                                 if (v && typeof v === 'object' && !Array.isArray(v)) {
                                   addSection(k.replace(/([A-Z])/g,' $1').replace(/_/g,' ').toUpperCase(), v);
                                 }
@@ -9753,6 +9873,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                                 `Type: ${rpt.reportName || selectedReportType}\n` +
                                 `Country: ${countryName}\n` +
                                 `Generated: ${rpt.generated || new Date().toLocaleDateString()}\n\n` +
+                                (rpt.receiptTruth?.total ? `Receipts: ${getTruthStatement(rpt.receiptTruth, { currency: rpt.currency || 'UGX' })}\n\n` : '') +
                                 `--- Report Data ---\n` +
                                 lines.join('\n')
                               );

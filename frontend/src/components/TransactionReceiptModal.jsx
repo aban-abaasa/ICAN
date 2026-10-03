@@ -16,6 +16,7 @@ import {
   getReceiptText,
   signReceipt,
 } from '../utils/transactionReceipt';
+import { EVIDENCE_GRADES, getEvidenceGrade } from '../utils/receiptTruth';
 
 const pickProof = (meta = {}) => ({
   receipt_url: meta.receipt_url || null,
@@ -106,6 +107,7 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
   const lines = getReceiptLines(tx, { businessName });
   const receiptNumber = getReceiptNumber(tx);
   const proofStatus = getProofStatus(tx);
+  const evidence = EVIDENCE_GRADES[getEvidenceGrade(tx)];
   const hasImage = proofStatus === 'attached';
   const canAttach = Boolean(target);
   const isIncome = tx.transaction_type === 'income';
@@ -237,7 +239,12 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
 
         <div className={`mb-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${proofStatus !== 'system' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-300'}`}>
           {proofStatus !== 'system' ? <ShieldCheck className="h-4 w-4" /> : <FileCheck2 className="h-4 w-4" />}
-          {hasImage ? 'Proof attached — receipt image backs this transaction' : proofStatus === 'reference' ? 'Receipt number recorded as proof' : 'System receipt generated from the ledger record'}
+          <span className="min-w-0 flex-1">
+            {hasImage ? 'Proof attached — receipt image backs this transaction' : proofStatus === 'reference' ? 'Receipt number recorded as proof' : 'System receipt generated from the ledger record'}
+          </span>
+          <span className="flex-shrink-0 rounded-full bg-black/30 px-2 py-0.5 text-[10px] font-bold" title={evidence.blurb}>
+            {evidence.medal} {evidence.label}
+          </span>
         </div>
 
         {hasImage && (
