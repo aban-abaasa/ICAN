@@ -2007,6 +2007,40 @@ html {
 .ls-ledger--sub { margin-top: .25rem; }
 .ls-ledger--sub dt { font-size: .8rem; }
 .ls-ledger--sub dd { font-size: .92rem; }
+
+/* Manage entry — a tab under "Manual sales income" for assigning other people
+   to record entries for the business. */
+.ls-manage { padding: 0 0 .7rem; border-bottom: 1px solid var(--ls-line-soft); }
+.ls-classic .ls-manage__tab {
+  display: inline-flex; align-items: center; gap: .4rem; min-height: 38px; min-width: 0; padding: 0 .8rem;
+  border-radius: 999px; font-size: .74rem; font-weight: 700; letter-spacing: .05em;
+  background: var(--ls-tint) !important; color: var(--ls-gold) !important; border: 1px solid var(--ls-line) !important;
+  transition: background .15s, color .15s;
+}
+.ls-classic .ls-manage__tab:hover { background: var(--ls-tint-2) !important; }
+.ls-classic .ls-manage__tab[aria-expanded="true"] { background: var(--ls-gold) !important; color: var(--ls-btn-ink) !important; }
+.ls-manage__count { padding-left: .45rem; margin-left: .05rem; border-left: 1px solid currentColor; font-weight: 600; letter-spacing: .02em; opacity: .85; }
+.ls-manage__panel { margin-top: .6rem; padding: .8rem; border: 1px solid var(--ls-line); border-radius: 12px; background: var(--ls-paper-2); }
+.ls-manage__lead { margin: 0 0 .65rem; font-size: .8rem; line-height: 1.5; color: var(--ls-ink-2); }
+.ls-manage__empty { margin: 0 0 .65rem; font-size: .78rem; font-style: italic; color: var(--ls-faint); }
+.ls-manage__list { list-style: none; margin: 0 0 .7rem; padding: 0; border: 1px solid var(--ls-line-soft); border-radius: 10px; background: var(--ls-field); overflow: hidden; }
+.ls-manage__person { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .55rem .7rem; }
+.ls-manage__person + .ls-manage__person { border-top: 1px solid var(--ls-line-soft); }
+.ls-manage__who, .ls-manage__stat { display: flex; flex-direction: column; min-width: 0; }
+.ls-manage__who { flex: 1 1 auto; }
+.ls-manage__stat { flex: none; align-items: flex-end; text-align: right; }
+.ls-manage__who b, .ls-manage__stat b { font-size: .8rem; font-weight: 700; color: var(--ls-ink); }
+.ls-manage__who b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ls-manage__who small, .ls-manage__stat small { font-size: .68rem; color: var(--ls-faint); }
+.ls-manage__who small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ls-classic .ls-manage__assign {
+  display: flex; align-items: center; justify-content: center; gap: .45rem; width: 100%; min-height: 44px;
+  border-radius: 12px; font-size: .82rem; font-weight: 700; letter-spacing: .04em;
+  background: var(--ls-gold) !important; color: var(--ls-btn-ink) !important; border: 1px solid var(--ls-gold) !important;
+}
+.ls-classic .ls-manage__assign:hover { filter: brightness(1.08); }
+.ls-manage__note { display: flex; align-items: flex-start; gap: .4rem; margin: .65rem 0 0; font-size: .7rem; line-height: 1.45; color: var(--ls-muted); }
+.ls-manage__note > svg { flex: none; margin-top: .15rem; color: var(--ls-gold); }
 .ls-tone-up { color: var(--ls-up) !important; }
 .ls-tone-down { color: var(--ls-down) !important; }
 .ls-tone-gold { color: var(--ls-gold) !important; }

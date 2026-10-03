@@ -18,7 +18,7 @@ import {
   TrendingUp, TrendingDown, Link2, Link2Off, RefreshCw,
   Shield, ShieldCheck, ChevronDown, ChevronUp, Loader,
   Building2, Tractor, Bike, ShoppingCart, Coins,
-  FileText, CheckCircle2, Wallet, PieChart, Pencil, Users, Lock
+  FileText, CheckCircle2, Wallet, PieChart, Pencil, Users, Lock, UserPlus
 } from 'lucide-react';
 import BusinessTeamMembersModal from './BusinessTeamMembersModal';
 import PitchinValueGrowth from './PitchinValueGrowth';
@@ -216,6 +216,7 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
   const [expandedContributorId, setExpandedContributorId] = useState(null);
   const [helpers, setHelpers] = useState([]);           // business_team_members: may enter data on behalf of the company
   const [entriesView, setEntriesView] = useState('day'); // 'day' | 'contributor'
+  const [showManageEntry, setShowManageEntry] = useState(false); // "Manage entry" tab under Manual sales income
   const [archivingId, setArchivingId] = useState(null);
   const [userCountry, setUserCountry] = useState('UG');
   const [showShareEditor, setShowShareEditor] = useState(false);
@@ -394,6 +395,17 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
     loadHelpers();
   }, [showManualTx, loadContributors, loadHelpers]);
 
+  // The "Manage entry" tab under Manual sales income: the helper count shows on
+  // the tab as soon as the breakdown is open; per-person sales counts need the
+  // ledger, which is read each time the tab opens so the numbers are current.
+  useEffect(() => {
+    if (showBreakdown) loadHelpers();
+  }, [showBreakdown, loadHelpers]);
+
+  useEffect(() => {
+    if (showManageEntry && !readOnly) loadContributors();
+  }, [showManageEntry, readOnly, loadContributors]);
+
   // Every contributor's entries in one list — the day book groups these by date.
   const allEntries = useMemo(() => contributors.flatMap((c) => c.entries), [contributors]);
 
@@ -545,13 +557,15 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
 
   const b = valuation?.breakdown || {};
   const n = (v) => Number(v) || 0;
+  // Owners can assign other people to record entries for this business.
+  const canManageEntry = !readOnly && !!businessProfileId;
   const statementRows = valuation ? [
     { label: 'Business value',   value: FMT(valuation.businessValueUgx) },
     { label: 'Net profit',       value: FMT(valuation.netProfitUgx) },
     { label: 'IcanEra holdings', value: FMT(valuation.icanHoldingsValue) }
   ] : [];
   const breakdownRows = valuation ? [
-    { label: 'Manual sales income',       value: n(b.ican_sold_income),     tone: 'gold' },
+    { key: 'sales', label: 'Manual sales income', value: n(b.ican_sold_income), tone: 'gold' },
     { label: 'Manual capital assets',     value: n(b.ican_capital_assets),  tone: 'gold' },
     { label: 'AgriBone wallet revenue',   value: n(b.farm_revenue),         tone: 'up' },
     { label: 'MyBodaGuy wallet revenue',  value: n(b.boda_revenue),         tone: 'orange' },
@@ -563,7 +577,18 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
     { label: 'COGS (stock bought)',       value: -n(b.ican_bought_stock),   tone: 'down' },
     { label: 'Operating expenses',        value: -n(b.ican_operating_exp),  tone: 'down' },
     { label: 'Salary expenses',           value: -n(b.ican_salary_exp),     tone: 'down' }
-  ].filter(r => r.value !== 0) : [];
+  ].filter(r => r.value !== 0 || (r.key === 'sales' && canManageEntry)) : [];
+  // The sales row sits apart from the rest so the Manage entry tab can hang directly under it.
+  const salesRow = canManageEntry ? breakdownRows.find(r => r.key === 'sales') : null;
+  const renderLedgerRow = (row) => (
+    <div key={row.label} className="ls-ledger__row">
+      <dt>{row.label}</dt>
+      <span className="ls-leader" aria-hidden="true" />
+      <dd className={`ls-tone-${row.tone}`}>
+        {row.value >= 0 ? '+' : '−'}{FMT(Math.abs(row.value))}
+      </dd>
+    </div>
+  );
 
   return (
     <>
@@ -802,16 +827,77 @@ export default function PitchinLiveShareValue({ businessProfile, ownerUserId, re
 
             {showBreakdown && (
               <>
-                <dl className="ls-ledger ls-ledger--sub">
-                  {breakdownRows.map(row => (
-                    <div key={row.label} className="ls-ledger__row">
-                      <dt>{row.label}</dt>
-                      <span className="ls-leader" aria-hidden="true" />
-                      <dd className={`ls-tone-${row.tone}`}>
-                        {row.value >= 0 ? '+' : '−'}{FMT(Math.abs(row.value))}
-                      </dd>
+                {salesRow && (
+                  <>
+                    <dl className="ls-ledger ls-ledger--sub">{renderLedgerRow(salesRow)}</dl>
+
+                    {/* ── Manage entry — who else may record entries for this business ── */}
+                    <div className="ls-manage">
+                      <button
+                        type="button"
+                        className="ls-manage__tab"
+                        aria-expanded={showManageEntry}
+                        aria-controls="ls-manage-panel"
+                        onClick={() => setShowManageEntry(v => !v)}
+                      >
+                        <Users size={13} aria-hidden="true" />
+                        Manage entry
+                        <span className="ls-manage__count">
+                          {helpers.length === 0 ? 'Just you' : `${helpers.length} helper${helpers.length === 1 ? '' : 's'}`}
+                        </span>
+                        {showManageEntry ? <ChevronUp size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
+                      </button>
+
+                      {showManageEntry && (
+                        <div className="ls-manage__panel" id="ls-manage-panel">
+                          <p className="ls-manage__lead">
+                            Assign someone to record sales and other manual entries for this business. They get no ownership or shares.
+                          </p>
+
+                          {helpers.length === 0 ? (
+                            <p className="ls-manage__empty">Only you enter data for this business right now.</p>
+                          ) : (
+                            <ul className="ls-manage__list">
+                              {helpers.map((h) => {
+                                const mine = contributors.find((c) => c.userId === h.user_id);
+                                const total = mine?.count || 0;
+                                const sales = (mine?.entries || []).filter((e) => e.reporting_bucket === 'sold_income').length;
+                                return (
+                                  <li key={h.id} className="ls-manage__person">
+                                    <span className="ls-manage__who">
+                                      <b>{h.member_name || h.member_email}</b>
+                                      {h.member_name && <small>{h.member_email}</small>}
+                                    </span>
+                                    <span className="ls-manage__stat">
+                                      {loadingContributors && !mine ? '…' : (
+                                        <>
+                                          <b>{sales} sale{sales === 1 ? '' : 's'}</b>
+                                          <small>{total} entr{total === 1 ? 'y' : 'ies'}</small>
+                                        </>
+                                      )}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+
+                          <button type="button" className="ls-manage__assign" onClick={() => setShowTeamModal(true)}>
+                            <UserPlus size={14} aria-hidden="true" />
+                            {helpers.length === 0 ? 'Assign someone' : 'Add or remove people'}
+                          </button>
+
+                          <p className="ls-manage__note">
+                            <Lock size={11} aria-hidden="true" />
+                            Entries a helper records are permanent — they can't be deleted, only archived by you.
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  </>
+                )}
+                <dl className="ls-ledger ls-ledger--sub">
+                  {breakdownRows.filter(row => row !== salesRow).map(renderLedgerRow)}
                 </dl>
 
                 {valuation.blockchainTxHash && (
