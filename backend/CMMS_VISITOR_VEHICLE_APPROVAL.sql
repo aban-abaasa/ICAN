@@ -20,19 +20,19 @@
 --                                                              -> checked_in (exit declined)
 --      Approvals are only enforced while the company has at least one active
 --      approver. With no approvers, visitors behave exactly as before.
---   4. An optional VEHICLE PHOTO in a private bucket. The file is removed from
---      Supabase Storage once the visit is over (checked out, or entry
---      declined) so storage does not fill up. Deleting goes through the
---      Storage API (a SQL DELETE would leave the file in S3 and still bill
---      for it): the staff app and the optional /api/visitor-photo-sweep
---      endpoint call get_visitor_photos_to_purge() and then remove() the
---      files; confirm_visitor_photos_purged() clears the path once the file
---      is really gone. Uploads that never got attached to a visit are swept
---      after one day.
+--   4. An optional VEHICLE PHOTO. It is stored in Cloudflare R2 like every other
+--      upload (the existing private bucket and /api/storage routes — no new
+--      serverless function). The file is deleted once the visit is over
+--      (checked out, or entry declined) so storage does not fill up: the staff
+--      app asks get_visitor_photos_to_purge() which photos are finished, deletes
+--      each through DELETE /api/storage/object (which checks
+--      visitor_photo_purgeable() with the caller's own token), and then
+--      confirm_visitor_photos_purged() clears the stored path. Anything that
+--      fails is simply retried by the next clean-up.
 -- ============================================================================
 
 -- ------------------------------------------------------------
--- 0. COLUMNS + PRIVATE BUCKET
+-- 0. COLUMNS
 -- ------------------------------------------------------------
 ALTER TABLE public.cmms_visitor_checkin
   ADD COLUMN IF NOT EXISTS vehicle_photo_path TEXT,
@@ -41,16 +41,6 @@ ALTER TABLE public.cmms_visitor_checkin
 CREATE INDEX IF NOT EXISTS idx_cmms_visitor_vehicle_photo_path
   ON public.cmms_visitor_checkin(vehicle_photo_path)
   WHERE vehicle_photo_path IS NOT NULL;
-
--- Private bucket. The app shrinks photos to a few hundred KB before upload;
--- 2 MB is a hard ceiling in case something else uploads.
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('cmms-visitor-vehicle-photos', 'cmms-visitor-vehicle-photos', FALSE, 2097152,
-        ARRAY['image/jpeg', 'image/png', 'image/webp'])
-ON CONFLICT (id) DO UPDATE
-  SET public = FALSE,
-      file_size_limit = EXCLUDED.file_size_limit,
-      allowed_mime_types = EXCLUDED.allowed_mime_types;
 
 -- ------------------------------------------------------------
 -- 1. TABLES (no direct access: everything goes through the RPCs below)
@@ -249,14 +239,17 @@ BEGIN
 END;
 $$;
 
--- Shape of an object name this feature accepts: <folder>/<uuid>.<ext> where the
--- folder is a company id (staff upload) or a visitor-QR token (public upload).
+-- Shape of an R2 key this feature accepts, as built by /api/storage (buildKey):
+-- <folder>/<uploader id>/<timestamp>-<8 hex>-<file name>. Staff upload into
+-- cmms-visitor-vehicles; a visitor on the public QR page into
+-- cmms-visitor-vehicles-guest. Any other key (another feature's file) is refused,
+-- because the photo of a finished visit is deleted.
 CREATE OR REPLACE FUNCTION public.cmms_visitor_photo_name_ok(p_name TEXT)
 RETURNS BOOLEAN
 LANGUAGE sql IMMUTABLE
 AS $$
   SELECT COALESCE(
-    p_name ~ '^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{48})/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|jpeg|png|webp)$',
+    p_name ~ '^cmms-visitor-vehicles(-guest)?/[0-9a-zA-Z-]{1,64}/[0-9]{10,16}-[0-9a-f]{8}-[A-Za-z0-9._-]{1,100}$',
     FALSE
   );
 $$;
@@ -417,9 +410,9 @@ BEGIN
   v_photo := NULLIF(TRIM(p_vehicle_photo_path), '');
   IF v_photo IS NOT NULL AND NOT (
     public.cmms_visitor_photo_name_ok(v_photo)
-    AND split_part(v_photo, '/', 1) = p_cmms_company_id::TEXT
+    AND v_photo LIKE 'cmms-visitor-vehicles/%'
   ) THEN
-    RAISE EXCEPTION 'The vehicle photo is not valid for this company';
+    RAISE EXCEPTION 'The vehicle photo is not valid';
   END IF;
 
   SELECT location INTO v_company_location
@@ -538,9 +531,9 @@ BEGIN
   v_vehicle := NULLIF(trim(p_vehicle_number), '');
   v_photo := NULLIF(trim(p_vehicle_photo_path), '');
   IF v_photo IS NOT NULL AND NOT (
-    public.cmms_visitor_photo_name_ok(v_photo) AND split_part(v_photo, '/', 1) = v_qr.token
+    public.cmms_visitor_photo_name_ok(v_photo) AND v_photo LIKE 'cmms-visitor-vehicles-guest/%'
   ) THEN
-    RAISE EXCEPTION 'The vehicle photo is not valid for this check-in';
+    RAISE EXCEPTION 'The vehicle photo is not valid';
   END IF;
 
   SELECT * INTO v_host FROM public.cmms_users WHERE cmms_company_id = v_qr.cmms_company_id AND is_active AND lower(email) = lower(trim(p_host_contact)) LIMIT 1;
@@ -955,175 +948,68 @@ REVOKE ALL ON FUNCTION public.get_visitor_records(UUID, DATE, DATE, TEXT) FROM P
 GRANT EXECUTE ON FUNCTION public.get_visitor_records(UUID, DATE, DATE, TEXT) TO authenticated;
 
 -- ------------------------------------------------------------
--- 9. PHOTO CLEAN-UP + STORAGE POLICIES
--- A photo may be deleted once its visit is over (checked out, or entry
--- declined), or when it was never attached to a visit and is a day old.
+-- 9. PHOTO CLEAN-UP
+-- A photo may be deleted once its visit is over: checked out, or entry declined.
 -- ------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.cmms_visitor_photo_owner_company(p_name TEXT)
-RETURNS UUID
+
+-- An earlier draft kept the photos in a Supabase Storage bucket. Remove its
+-- policies and helpers if that version was ever run. (A bucket cannot be dropped
+-- from SQL; if "cmms-visitor-vehicle-photos" exists, delete it in Storage.)
+DROP POLICY IF EXISTS "cmms_visitor_vehicle_photos_insert" ON storage.objects;
+DROP POLICY IF EXISTS "cmms_visitor_vehicle_photos_select" ON storage.objects;
+DROP POLICY IF EXISTS "cmms_visitor_vehicle_photos_delete" ON storage.objects;
+DROP FUNCTION IF EXISTS public.cmms_visitor_photo_can_upload(TEXT);
+DROP FUNCTION IF EXISTS public.cmms_visitor_photo_can_view(TEXT);
+DROP FUNCTION IF EXISTS public.cmms_visitor_photo_can_purge(TEXT, TIMESTAMPTZ);
+DROP FUNCTION IF EXISTS public.cmms_visitor_photo_owner_company(TEXT);
+DROP FUNCTION IF EXISTS public.get_visitor_photos_to_purge(UUID);
+DROP FUNCTION IF EXISTS public.confirm_visitor_photos_purged(TEXT[]);
+
+-- Used by DELETE /api/storage/object, which calls it with the caller's own token:
+-- true only for active staff of the company the visit belongs to, and only once the
+-- visit is over.
+CREATE OR REPLACE FUNCTION public.visitor_photo_purgeable(p_path TEXT)
+RETURNS BOOLEAN
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
-AS $$
-  SELECT COALESCE(
-    (SELECT v.cmms_company_id FROM public.cmms_visitor_checkin v WHERE v.vehicle_photo_path = p_name LIMIT 1),
-    (SELECT q.cmms_company_id FROM public.cmms_visitor_qr_locations q WHERE q.token = split_part(p_name, '/', 1) LIMIT 1),
-    (SELECT cp.id FROM public.cmms_company_profiles cp
-      WHERE split_part(p_name, '/', 1) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-        AND cp.id::TEXT = split_part(p_name, '/', 1))
-  );
-$$;
-
--- INSERT policy helper. Staff upload into <company id>/…; a visitor on the public
--- page uploads into <their active QR token>/…. Nothing else is accepted.
-CREATE OR REPLACE FUNCTION public.cmms_visitor_photo_can_upload(p_name TEXT)
-RETURNS BOOLEAN
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
-AS $$
-DECLARE
-  v_folder TEXT := split_part(p_name, '/', 1);
-BEGIN
-  IF NOT public.cmms_visitor_photo_name_ok(p_name) THEN
-    RETURN FALSE;
-  END IF;
-  IF length(v_folder) = 36 THEN
-    RETURN public.cmms_visitor_current_staff_id(v_folder::UUID) IS NOT NULL;
-  END IF;
-  RETURN EXISTS (
-    SELECT 1 FROM public.cmms_visitor_qr_locations q WHERE q.token = v_folder AND q.is_active
-  );
-END;
-$$;
-
--- SELECT policy helper (viewing / signed URLs): a company admin, or the staff
--- member a request for this visit was assigned to. Visitor records are
--- manager-only, so the photo follows the same rule.
-CREATE OR REPLACE FUNCTION public.cmms_visitor_photo_can_view(p_name TEXT)
-RETURNS BOOLEAN
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, auth
 AS $$
   SELECT EXISTS (
     SELECT 1
       FROM public.cmms_visitor_checkin v
-     WHERE v.vehicle_photo_path = p_name
-       AND (
-         public.cmms_attendance_qr_admin(v.cmms_company_id)
-         OR EXISTS (
-           SELECT 1
-             FROM public.cmms_visitor_vehicle_approvals a
-             JOIN public.cmms_users cu ON cu.id = a.assigned_cmms_user_id AND cu.is_active
-            WHERE a.visitor_checkin_id = v.id
-              AND auth.uid() IS NOT NULL
-              AND lower(cu.email) = lower(auth.jwt() ->> 'email')
-         )
-       )
+     WHERE v.vehicle_photo_path = p_path
+       AND v.status IN ('checked_out', 'check_in_rejected')
+       AND public.cmms_visitor_current_staff_id(v.cmms_company_id) IS NOT NULL
   );
 $$;
 
--- DELETE (and the SELECT that Storage needs in order to delete) policy helper.
-CREATE OR REPLACE FUNCTION public.cmms_visitor_photo_can_purge(p_name TEXT, p_created_at TIMESTAMPTZ)
-RETURNS BOOLEAN
+CREATE OR REPLACE FUNCTION public.get_visitor_photos_to_purge(p_cmms_company_id UUID)
+RETURNS TABLE (storage_path TEXT)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
 AS $$
-DECLARE
-  v_company UUID;
-  v_status TEXT;
 BEGIN
-  SELECT v.cmms_company_id, v.status INTO v_company, v_status
-    FROM public.cmms_visitor_checkin v
-   WHERE v.vehicle_photo_path = p_name
-   LIMIT 1;
-
-  IF v_company IS NOT NULL THEN
-    RETURN v_status IN ('checked_out', 'check_in_rejected')
-       AND public.cmms_visitor_current_staff_id(v_company) IS NOT NULL;
-  END IF;
-
-  -- Not attached to any visit: only once it is clearly abandoned.
-  IF p_created_at IS NULL OR p_created_at > now() - INTERVAL '1 day' THEN
-    RETURN FALSE;
-  END IF;
-  v_company := public.cmms_visitor_photo_owner_company(p_name);
-  RETURN v_company IS NOT NULL AND public.cmms_visitor_current_staff_id(v_company) IS NOT NULL;
-END;
-$$;
-
-REVOKE ALL ON FUNCTION public.cmms_visitor_photo_owner_company(TEXT) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.cmms_visitor_photo_can_upload(TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.cmms_visitor_photo_can_view(TEXT) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION public.cmms_visitor_photo_can_purge(TEXT, TIMESTAMPTZ) FROM PUBLIC, anon;
--- Policy expressions run as the calling role, so these must be executable by it.
-GRANT EXECUTE ON FUNCTION public.cmms_visitor_photo_can_upload(TEXT) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.cmms_visitor_photo_can_view(TEXT) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.cmms_visitor_photo_can_purge(TEXT, TIMESTAMPTZ) TO authenticated;
-
-DROP POLICY IF EXISTS "cmms_visitor_vehicle_photos_insert" ON storage.objects;
-DROP POLICY IF EXISTS "cmms_visitor_vehicle_photos_select" ON storage.objects;
-DROP POLICY IF EXISTS "cmms_visitor_vehicle_photos_delete" ON storage.objects;
-
-CREATE POLICY "cmms_visitor_vehicle_photos_insert" ON storage.objects
-  FOR INSERT TO anon, authenticated
-  WITH CHECK (
-    bucket_id = 'cmms-visitor-vehicle-photos'
-    AND public.cmms_visitor_photo_can_upload(name)
-  );
-
-CREATE POLICY "cmms_visitor_vehicle_photos_select" ON storage.objects
-  FOR SELECT TO authenticated
-  USING (
-    bucket_id = 'cmms-visitor-vehicle-photos'
-    AND (public.cmms_visitor_photo_can_view(name) OR public.cmms_visitor_photo_can_purge(name, created_at))
-  );
-
-CREATE POLICY "cmms_visitor_vehicle_photos_delete" ON storage.objects
-  FOR DELETE TO authenticated
-  USING (
-    bucket_id = 'cmms-visitor-vehicle-photos'
-    AND public.cmms_visitor_photo_can_purge(name, created_at)
-  );
-
--- The list the cleaner works from. Staff pass their company; the server-side
--- sweep (service role) may pass NULL to cover every company.
-DROP FUNCTION IF EXISTS public.get_visitor_photos_to_purge(UUID);
-CREATE OR REPLACE FUNCTION public.get_visitor_photos_to_purge(p_cmms_company_id UUID DEFAULT NULL)
-RETURNS TABLE (storage_path TEXT, reason TEXT)
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
-AS $$
-DECLARE
-  v_service BOOLEAN := COALESCE(auth.jwt() ->> 'role', '') = 'service_role';
-BEGIN
-  IF NOT v_service AND (
-    p_cmms_company_id IS NULL OR public.cmms_visitor_current_staff_id(p_cmms_company_id) IS NULL
-  ) THEN
+  IF public.cmms_visitor_current_staff_id(p_cmms_company_id) IS NULL THEN
     RAISE EXCEPTION 'Only active staff of this company can clean up visitor photos';
   END IF;
 
   RETURN QUERY
-  SELECT v.vehicle_photo_path::TEXT, 'visit_closed'::TEXT
+  SELECT v.vehicle_photo_path::TEXT
     FROM public.cmms_visitor_checkin v
-   WHERE v.vehicle_photo_path IS NOT NULL
+   WHERE v.cmms_company_id = p_cmms_company_id
+     AND v.vehicle_photo_path IS NOT NULL
      AND v.status IN ('checked_out', 'check_in_rejected')
-     AND (p_cmms_company_id IS NULL OR v.cmms_company_id = p_cmms_company_id)
-  UNION ALL
-  SELECT o.name::TEXT, 'unattached'::TEXT
-    FROM storage.objects o
-   WHERE o.bucket_id = 'cmms-visitor-vehicle-photos'
-     AND o.created_at < now() - INTERVAL '1 day'
-     AND NOT EXISTS (SELECT 1 FROM public.cmms_visitor_checkin v WHERE v.vehicle_photo_path = o.name)
-     AND (p_cmms_company_id IS NULL OR public.cmms_visitor_photo_owner_company(o.name) = p_cmms_company_id)
-  LIMIT 500;
+   LIMIT 200;
 END;
 $$;
 
--- Clears the stored path only once the file is really gone from Storage, so a
--- failed or interrupted delete is simply retried by the next clean-up.
+-- Called after the files were deleted, so a failed delete leaves the path in place
+-- and the next clean-up retries it.
 CREATE OR REPLACE FUNCTION public.confirm_visitor_photos_purged(p_paths TEXT[])
 RETURNS INTEGER
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 DECLARE
-  v_service BOOLEAN := COALESCE(auth.jwt() ->> 'role', '') = 'service_role';
   v_count INTEGER;
 BEGIN
-  IF NOT v_service AND auth.uid() IS NULL THEN
+  IF auth.uid() IS NULL THEN
     RAISE EXCEPTION 'User not authenticated';
   END IF;
 
@@ -1133,20 +1019,18 @@ BEGIN
          updated_at = now()
    WHERE v.vehicle_photo_path = ANY (p_paths)
      AND v.status IN ('checked_out', 'check_in_rejected')
-     AND (v_service OR public.cmms_visitor_current_staff_id(v.cmms_company_id) IS NOT NULL)
-     AND NOT EXISTS (
-       SELECT 1 FROM storage.objects o
-        WHERE o.bucket_id = 'cmms-visitor-vehicle-photos' AND o.name = v.vehicle_photo_path
-     );
+     AND public.cmms_visitor_current_staff_id(v.cmms_company_id) IS NOT NULL;
   GET DIAGNOSTICS v_count = ROW_COUNT;
   RETURN v_count;
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.visitor_photo_purgeable(TEXT) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.get_visitor_photos_to_purge(UUID) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.confirm_visitor_photos_purged(TEXT[]) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.get_visitor_photos_to_purge(UUID) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.confirm_visitor_photos_purged(TEXT[]) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.visitor_photo_purgeable(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_visitor_photos_to_purge(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.confirm_visitor_photos_purged(TEXT[]) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 

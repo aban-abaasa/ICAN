@@ -55,10 +55,10 @@ const PublicVisitorCheckIn = () => {
   const submit = async (event) => {
     event.preventDefault();
     setState({ status: 'working', message: `Recording check-${action}...` });
-    // The photo is stored under this QR code's own folder and is deleted again once the visit is over.
+    // The photo is deleted again once the visit is over.
     let photoPath = null;
     if (action === 'in' && photo) {
-      try { photoPath = await uploadVehiclePhoto(token, photo); } catch (err) { return setState({ status: 'ready', message: err.message }); }
+      try { photoPath = await uploadVehiclePhoto(photo, { guest: true }); } catch (err) { return setState({ status: 'ready', message: err.message }); }
     }
     const args = action === 'in' ? { p_token: token, p_visitor_name: form.name.trim(), p_visitor_email: form.email.trim() || null, p_visitor_phone: form.phone.trim(), p_visitor_origin: form.origin.trim() || null, p_host_contact: form.host.trim(), p_purpose: form.purpose.trim() || null, p_latitude: position?.latitude ?? null, p_longitude: position?.longitude ?? null, p_vehicle_number: form.vehicle.trim() || null, ...(photoPath ? { p_vehicle_photo_path: photoPath } : {}) } : { p_token: token, p_visitor_name: form.name.trim(), p_visitor_phone: form.phone.trim(), p_latitude: position?.latitude ?? null, p_longitude: position?.longitude ?? null };
     const { data, error } = await supabase.rpc(action === 'in' ? 'visitor_check_in_with_qr' : 'visitor_check_out_with_qr', args);
