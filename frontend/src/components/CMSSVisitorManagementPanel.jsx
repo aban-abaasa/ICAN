@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Calendar, Info, Maximize2, Search, QrCode, Users, MapPin, AlertTriangle, CheckCircle, LogOut, RefreshCw, AlertCircle, Mail, Download, Car, ChevronDown, ChevronUp, Star } from 'lucide-react';
+import { ArrowLeft, Calendar, Info, Maximize2, Search, QrCode, Users, MapPin, AlertTriangle, CheckCircle, LogOut, RefreshCw, AlertCircle, Mail, Download, Car, ChevronDown, ChevronUp, Star, Camera, X } from 'lucide-react';
 import jsQR from 'jsqr';
 import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabase/client';
@@ -7,11 +7,26 @@ import { publicAppUrl } from '../utils/publicAppUrl';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadCmmsRecordsExcel, downloadCmmsRecordsPdf } from '../utils/cmmsRecordExports';
 import { getDepartmentVisitorRatings, getStaffVisitorRatings } from '../services/businessManagementService';
+import { getVisitorVehicleApprovals, purgeVehiclePhotos, uploadVehiclePhoto } from '../services/cmmsVisitorVehicleService';
+import CMMSVisitorVehicleApprovals, { VehiclePhoto } from './CMMSVisitorVehicleApprovals';
 
 // 16px text stops iOS zooming into the field; 44px height is a comfortable tap target on small phones.
 const VISITOR_FIELD = 'w-full h-11 px-3 text-base bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:border-blue-400 transition-all';
-const VISITOR_TAB_ACCENTS = { 'visitor-checkin': 'gold', 'visitor-records': 'navy', 'visitor-edit': 'burgundy', 'visitor-ratings': 'plum' };
-const STATUS_LABELS = { '': 'All visitors', checked_in: 'Checked in', checked_out: 'Checked out', flagged_for_review: 'Flagged' };
+const VISITOR_TAB_ACCENTS = { 'visitor-checkin': 'gold', 'visitor-records': 'navy', 'visitor-edit': 'burgundy', 'visitor-ratings': 'plum', 'visitor-approvals': 'teal' };
+const STATUS_LABELS = {
+  '': 'All visitors', checked_in: 'Checked in', checked_out: 'Checked out', flagged_for_review: 'Flagged',
+  pending_check_in_approval: 'Entry pending', pending_check_out_approval: 'Exit pending', check_in_rejected: 'Declined'
+};
+// A visitor still counts as on site while their exit waits for approval.
+const isOnSite = (record) => record.status === 'checked_in' || record.status === 'pending_check_out_approval';
+const VISIT_TONES = {
+  flagged_for_review: { bg: 'rgba(239,68,68,0.13)', color: '#dc2626', label: '🚩 Flagged' },
+  checked_out: { bg: 'rgba(16,185,129,0.15)', color: '#047857', label: '✓ Out' },
+  pending_check_in_approval: { bg: 'rgba(59,130,246,0.13)', color: '#1d4ed8', label: '⏳ Entry pending' },
+  pending_check_out_approval: { bg: 'rgba(59,130,246,0.13)', color: '#1d4ed8', label: '⏳ Exit pending' },
+  check_in_rejected: { bg: 'rgba(239,68,68,0.13)', color: '#dc2626', label: '✕ Declined' }
+};
+const ON_SITE_TONE = { bg: 'rgba(245,158,11,0.15)', color: '#b45309', label: 'On site' };
 
 const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, userRole, isCreator }) => {
   const videoRef = useRef(null);
@@ -25,6 +40,8 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
   const [hostEmail, setHostEmail] = useState('');
   const [purpose, setPurpose] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
+  const [vehiclePhoto, setVehiclePhoto] = useState(null); // { file, previewUrl }
+  const [approvalBadge, setApprovalBadge] = useState(0); // pending approvals assigned to me
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -63,12 +80,27 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
   // visitor, while only company managers can open the records/review tabs.
   const canViewVisitorRecords = userRole === 'admin' || isCreator;
 
-  const getRpcErrorMessage = (rpcError, action) => {
+  const getRpcErrorMessage = (rpcError, action, sqlFile = 'CMMS_STAFF_ATTENDANCE_VISITOR_MANAGEMENT.sql') => {
     const message = rpcError?.message || '';
     if (rpcError?.code === 'PGRST202' || /could not find the function|schema cache/i.test(message)) {
-      return `The ${action} service has not been deployed to Supabase yet. Run backend/CMMS_STAFF_ATTENDANCE_VISITOR_MANAGEMENT.sql in the Supabase SQL Editor, then retry.`;
+      return `The ${action} service has not been deployed to Supabase yet. Run backend/${sqlFile} in the Supabase SQL Editor, then retry.`;
     }
     return message || `${action} failed`;
+  };
+
+  // Previews of the chosen vehicle photo are object URLs; free each one when it is replaced or the panel closes.
+  useEffect(() => () => { if (vehiclePhoto?.previewUrl) URL.revokeObjectURL(vehiclePhoto.previewUrl); }, [vehiclePhoto]);
+
+  const chooseVehiclePhoto = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose a photo.');
+      return;
+    }
+    setError('');
+    setVehiclePhoto({ file, previewUrl: URL.createObjectURL(file) });
   };
 
   // Get user's location
@@ -100,8 +132,8 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
 
   // A QR scan can fill host/purpose; never leave those hidden in a folded section.
   useEffect(() => {
-    if (hostEmail || purpose || vehicleNumber || visitorEmail) setMoreOpen(true);
-  }, [hostEmail, purpose, vehicleNumber, visitorEmail]);
+    if (hostEmail || purpose || vehicleNumber || visitorEmail || vehiclePhoto) setMoreOpen(true);
+  }, [hostEmail, purpose, vehicleNumber, visitorEmail, vehiclePhoto]);
 
   // Load visitor records
   useEffect(() => {
@@ -133,10 +165,29 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
   }, [canViewVisitorRecords, activeSubTab, companyProfile?.id]);
 
   useEffect(() => {
-    if (!canViewVisitorRecords && activeSubTab !== 'visitor-checkin') {
+    if (!canViewVisitorRecords && activeSubTab !== 'visitor-checkin' && activeSubTab !== 'visitor-approvals') {
       setActiveSubTab('visitor-checkin');
     }
   }, [activeSubTab, canViewVisitorRecords]);
+
+  // Approvals assigned to me drive the tab badge. The same pass also removes
+  // vehicle photos of visits that are over, so leftovers never pile up in Storage.
+  const refreshApprovalBadge = async () => {
+    if (!companyProfile?.id) return false;
+    const { data, error: badgeError } = await getVisitorVehicleApprovals(companyProfile.id, 'pending');
+    setApprovalBadge(data.filter((row) => row.assigned_to_me).length);
+    return !badgeError;
+  };
+
+  useEffect(() => {
+    if (!companyProfile?.id) return undefined;
+    // Stops polling after a failure (e.g. the approvals SQL is not deployed yet) instead of failing every minute.
+    const tick = async () => { if (!(await refreshApprovalBadge())) clearInterval(timer); };
+    const timer = setInterval(tick, 60000);
+    tick();
+    purgeVehiclePhotos(companyProfile.id);
+    return () => clearInterval(timer);
+  }, [companyProfile?.id]);
 
   const loadVisitorRecords = async () => {
     if (!companyProfile) return;
@@ -172,6 +223,10 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
     setSuccess('');
 
     try {
+      // The photo goes up first; its path is then attached to the visit. It is
+      // deleted from Storage again once the visitor has checked out.
+      const vehiclePhotoPath = vehiclePhoto ? await uploadVehiclePhoto(companyProfile.id, vehiclePhoto.file) : null;
+
       const { data: result, error: checkInError } = await supabase.rpc('visitor_check_in', {
         p_cmms_company_id: companyProfile.id,
         p_visitor_name: visitorName,
@@ -182,12 +237,16 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
         p_longitude: userLocation?.longitude || null,
         p_host_email: hostEmail || null,
         p_purpose: purpose || null,
-        p_vehicle_number: vehicleNumber || null
+        p_vehicle_number: vehicleNumber || null,
+        // Only sent with a photo, so registering keeps working before the photo SQL is deployed.
+        ...(vehiclePhotoPath ? { p_vehicle_photo_path: vehiclePhotoPath } : {})
       });
 
       if (checkInError) throw checkInError;
 
-      setSuccess(`✅ Visitor ${visitorName} registered successfully`);
+      setSuccess(result?.approval_required
+        ? `⏳ Visitor ${visitorName} registered — entry is waiting for approval${result.approver_name ? ` from ${result.approver_name}` : ''}`
+        : `✅ Visitor ${visitorName} registered successfully`);
       setScannedVisitor(result);
 
       // Reset form
@@ -198,11 +257,12 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
       setHostEmail('');
       setPurpose('');
       setVehicleNumber('');
+      setVehiclePhoto(null);
 
       // Reload records
       await loadVisitorRecords();
     } catch (err) {
-      setError(getRpcErrorMessage(err, 'visitor check-in'));
+      setError(getRpcErrorMessage(err, 'visitor check-in', vehiclePhoto ? 'CMMS_VISITOR_VEHICLE_APPROVAL.sql' : undefined));
     } finally {
       setLoading(false);
     }
@@ -213,14 +273,20 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
     setError('');
 
     try {
-      const { error: checkOutError } = await supabase.rpc('visitor_check_out', {
+      const { data: result, error: checkOutError } = await supabase.rpc('visitor_check_out', {
         p_visitor_id: visitorId,
         p_location: checkInLocation || null
       });
 
       if (checkOutError) throw checkOutError;
 
-      setSuccess('✅ Visitor checked out');
+      if (result?.pending_approval) {
+        // A vehicle visit leaves only once the next approver on rotation says so.
+        setSuccess(`⏳ Exit sent${result.approver_name ? ` to ${result.approver_name}` : ''} for approval`);
+      } else {
+        setSuccess('✅ Visitor checked out');
+        await purgeVehiclePhotos(companyProfile.id);
+      }
       setCheckInLocation('');
       await loadVisitorRecords();
     } catch (err) {
@@ -471,9 +537,9 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
             ? <button type="button" onClick={() => setFullPage(false)} className="cmms-classic-btn-secondary inline-flex !h-auto !min-h-0 flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs"><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back</button>
             : <button type="button" onClick={() => setFullPage(true)} className="cmms-info-btn" title="Open this tab as a full page" aria-label="Open full page"><Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /></button>}
         </div>
-        {visitorRecords.some(r => r.status === 'checked_in') && canViewVisitorRecords && (
+        {visitorRecords.some(isOnSite) && canViewVisitorRecords && (
           <div className="flex flex-wrap gap-1.5">
-            <span className="cmms-classic-chip" style={{ animation: 'cmms-rise .45s ease both' }}>{visitorRecords.filter(r => r.status === 'checked_in').length} visitors on site</span>
+            <span className="cmms-classic-chip" style={{ animation: 'cmms-rise .45s ease both' }}>{visitorRecords.filter(isOnSite).length} visitors on site</span>
           </div>
         )}
         {headerInfo && <div className="cmms-info cmms-classic-muted"><p>Register visitors, review who came and when, flag suspicious visits, and see the ratings visitors left.</p></div>}
@@ -482,6 +548,7 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
         <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap" role="tablist" aria-label="Visitor sections" style={{ scrollbarWidth: 'none' }}>
           {[
             { id: 'visitor-checkin', label: 'Register Visitor' },
+            { id: 'visitor-approvals', label: approvalBadge ? `Approvals (${approvalBadge})` : 'Approvals' },
             canViewVisitorRecords && { id: 'visitor-records', label: 'Visitor Records' },
             canViewVisitorRecords && { id: 'visitor-edit', label: 'Review Suspicious' },
             canViewVisitorRecords && { id: 'visitor-ratings', label: 'Ratings' }
@@ -588,7 +655,7 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
               <span className="min-w-0 flex-1">
                 <span className="cmms-classic-heading cmms-sec-title block">Visit details</span>
                 <span className="block truncate text-xs cmms-classic-muted">
-                  {[hostEmail && `Host: ${hostEmail}`, purpose, vehicleNumber, visitorEmail].filter(Boolean).join(' · ') || 'Optional: email, host, purpose, vehicle'}
+                  {[hostEmail && `Host: ${hostEmail}`, purpose, vehicleNumber, vehiclePhoto && 'Photo attached', visitorEmail].filter(Boolean).join(' · ') || 'Optional: email, host, purpose, vehicle'}
                 </span>
               </span>
               <ChevronDown className={`h-4 w-4 flex-shrink-0 cmms-classic-muted transition-transform duration-300 ${moreOpen ? 'rotate-180' : ''}`} />
@@ -667,6 +734,24 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
                     />
                   </div>
                 </label>
+
+                <div className="min-w-0">
+                  <span className="mb-1.5 block text-sm font-semibold">Vehicle photo</span>
+                  {vehiclePhoto ? (
+                    <div className="flex items-center gap-3">
+                      <img src={vehiclePhoto.previewUrl} alt="Vehicle preview" className="h-20 w-28 rounded-lg border border-white/20 object-cover" />
+                      <button type="button" onClick={() => setVehiclePhoto(null)} className="!h-auto !min-h-0 !px-3 !py-1.5 text-xs cmms-classic-btn-secondary inline-flex items-center gap-1.5">
+                        <X className="h-3.5 w-3.5" /> Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="cmms-classic-btn-secondary flex min-h-[2.75rem] cursor-pointer items-center justify-center gap-2 px-4 py-2">
+                      <Camera className="h-4 w-4" aria-hidden="true" /> Take or attach photo
+                      <input type="file" accept="image/*" onChange={chooseVehiclePhoto} className="sr-only" />
+                    </label>
+                  )}
+                  <p className="mt-1 text-xs cmms-classic-muted">Optional. With a vehicle number or photo, entry and exit need approval from the next approver on rotation. The photo is deleted automatically once the visitor has checked out.</p>
+                </div>
               </div>
             )}
           </section>
@@ -807,11 +892,7 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
                 const isExpanded = expandedVisitorIds.has(record.id);
                 const initials = (record.visitor_name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
                 const checkIn = new Date(record.check_in_time);
-                const tone = record.status === 'flagged_for_review'
-                  ? { bg: 'rgba(239,68,68,0.13)', color: '#dc2626', label: '🚩 Flagged' }
-                  : record.status === 'checked_out'
-                    ? { bg: 'rgba(16,185,129,0.15)', color: '#047857', label: '✓ Out' }
-                    : { bg: 'rgba(245,158,11,0.15)', color: '#b45309', label: 'On site' };
+                const tone = VISIT_TONES[record.status] || ON_SITE_TONE;
                 return (
                   <li key={record.id} className="cmms-staff-card" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
                     <button type="button" onClick={() => toggleVisitorExpanded(record.id)} aria-expanded={isExpanded}
@@ -841,6 +922,10 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
                         <div className="cmms-field-row"><dt>Email</dt><dd>{record.visitor_email || '-'}</dd></div>
                         <div className="cmms-field-row"><dt>Phone</dt><dd>{record.visitor_phone || '-'}</dd></div>
                         <div className="cmms-field-row"><dt>Vehicle Number</dt><dd>{record.vehicle_number || '-'}</dd></div>
+                        {record.vehicle_photo_path && <div className="cmms-field-row"><dt>Vehicle Photo</dt><dd><VehiclePhoto path={record.vehicle_photo_path} alt={`Vehicle of ${record.visitor_name}`} /></dd></div>}
+                        {record.pending_approval_stage && (
+                          <div className="cmms-field-row"><dt>Approval</dt><dd>{record.pending_approval_stage === 'check_in' ? 'Entry' : 'Exit'} waiting{record.pending_approver_name ? ` for ${record.pending_approver_name}` : ''}</dd></div>
+                        )}
                         <div className="cmms-field-row"><dt>Host</dt><dd>{record.host_name || record.host_email || '-'}</dd></div>
                         <div className="cmms-field-row"><dt>Purpose</dt><dd>{record.purpose || '-'}</dd></div>
                         <div className="cmms-field-row"><dt>Location</dt><dd>{record.check_in_location || '-'}</dd></div>
@@ -855,6 +940,17 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
             </ul>
           )}
         </div>
+      )}
+
+      {/* Vehicle approvals: the next approver on rotation decides entry and exit;
+          admins also choose who is in the approver pool. */}
+      {activeSubTab === 'visitor-approvals' && (
+        <CMMSVisitorVehicleApprovals
+          companyId={companyProfile?.id}
+          canManageApprovers={canViewVisitorRecords}
+          onPendingChange={setApprovalBadge}
+          onDecided={() => { if (canViewVisitorRecords) loadVisitorRecords(); }}
+        />
       )}
 
       {/* Admin: Review Suspicious Visitors */}
