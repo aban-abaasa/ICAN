@@ -20,7 +20,7 @@ const friendlyError = (rpcError) => {
   return message || 'Something went wrong. Please try again.';
 };
 
-// The bucket is private, so a photo is only ever shown through a short-lived signed URL.
+// A photo is only ever shown through a short-lived signed R2 URL.
 export const VehiclePhoto = ({ path, alt = 'Vehicle photo' }) => {
   const [url, setUrl] = useState(null);
   const [state, setState] = useState('loading');

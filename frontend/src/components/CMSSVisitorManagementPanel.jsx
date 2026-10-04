@@ -223,9 +223,9 @@ const CMSSVisitorManagementPanel = ({ companyProfile, currentUser, cmmsUsers, us
     setSuccess('');
 
     try {
-      // The photo goes up first; its path is then attached to the visit. It is
-      // deleted from Storage again once the visitor has checked out.
-      const vehiclePhotoPath = vehiclePhoto ? await uploadVehiclePhoto(companyProfile.id, vehiclePhoto.file) : null;
+      // The photo goes up first; its key is then attached to the visit. It is
+      // deleted again once the visit is over.
+      const vehiclePhotoPath = vehiclePhoto ? await uploadVehiclePhoto(vehiclePhoto.file) : null;
 
       const { data: result, error: checkInError } = await supabase.rpc('visitor_check_in', {
         p_cmms_company_id: companyProfile.id,

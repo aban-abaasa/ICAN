@@ -24,7 +24,17 @@ import { buildKey, getUploadUrl, getDownloadUrl, deleteObject } from '../_lib/r2
 import { applyCors } from '../_lib/cors.js';
 import crypto from 'crypto';
 
-const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes', 'portfolio-chat', 'cmms-employment-documents', 'cmms-opportunities', 'transaction-receipts'];
+const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes', 'portfolio-chat', 'cmms-employment-documents', 'cmms-opportunities', 'transaction-receipts', 'cmms-visitor-vehicles'];
+
+// Vehicle photos on CMMS visitor check-ins (backend/CMMS_VISITOR_VEHICLE_APPROVAL.sql).
+// Staff upload through presign-upload into cmms-visitor-vehicles; a visitor on the public QR
+// page uploads through presign-upload-chat with purpose 'visitor-vehicle' into the guest folder.
+// Unlike every other folder, these are deleted by whichever staff member closes the visit, not
+// by the uploader, so the DELETE route asks the database (with the caller's own token) whether
+// the visit is over instead of comparing the owner id in the key.
+const VISITOR_VEHICLE_FOLDER = 'cmms-visitor-vehicles';
+const VISITOR_VEHICLE_GUEST_FOLDER = 'cmms-visitor-vehicles-guest';
+const VISITOR_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const PORTFOLIO_CHAT_GUEST_FOLDER = 'portfolio-chat-guest';
 const CHAT_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
@@ -107,17 +117,21 @@ async function presignUploadChat(req, res) {
     return res.status(429).json({ success: false, error: 'Too many uploads from this device. Please try again later.' });
   }
 
-  const { filename, contentType } = req.body || {};
+  const { filename, contentType, purpose } = req.body || {};
   if (!filename) {
     return res.status(400).json({ success: false, error: 'filename is required' });
   }
-  if (!CHAT_ALLOWED_TYPES.includes(contentType)) {
-    return res.status(400).json({ success: false, error: `contentType must be one of: ${CHAT_ALLOWED_TYPES.join(', ')}` });
+  // The public visitor QR page reuses this anonymous, rate-limited route for the vehicle photo
+  // (images only, its own folder).
+  const isVisitorPhoto = purpose === 'visitor-vehicle';
+  const allowedTypes = isVisitorPhoto ? VISITOR_PHOTO_TYPES : CHAT_ALLOWED_TYPES;
+  if (!allowedTypes.includes(contentType)) {
+    return res.status(400).json({ success: false, error: `contentType must be one of: ${allowedTypes.join(', ')}` });
   }
 
   try {
     const anonymousId = crypto.randomUUID();
-    const key = buildKey(PORTFOLIO_CHAT_GUEST_FOLDER, anonymousId, filename);
+    const key = buildKey(isVisitorPhoto ? VISITOR_VEHICLE_GUEST_FOLDER : PORTFOLIO_CHAT_GUEST_FOLDER, anonymousId, filename);
     const uploadUrl = await getUploadUrl({ key, contentType });
     return res.json({ success: true, key, uploadUrl });
   } catch (error) {
@@ -228,8 +242,29 @@ async function presignDownload(req, res) {
   }
 }
 
+// Asks the database whether a visitor-photo key belongs to a visit that is over and the caller is
+// active staff of that company. Runs as the caller (their own token), so the database's own
+// staff check decides — this function never uses a service key for it.
+async function isVisitorPhotoPurgeable(key, accessToken) {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return false;
+  try {
+    const response = await fetch(`${url}/rest/v1/rpc/visitor_photo_purgeable`, {
+      method: 'POST',
+      headers: { apikey: anonKey, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_path: key }),
+    });
+    return response.ok && (await response.json()) === true;
+  } catch (error) {
+    console.error('Error checking visitor photo state:', error);
+    return false;
+  }
+}
+
 // Route: DELETE /api/storage/object
-// Keys are namespaced folder/{userId}/... — only the owning user may delete.
+// Keys are namespaced folder/{userId}/... — only the owning user may delete
+// (visitor vehicle photos excepted, see isVisitorPhotoPurgeable above).
 async function objectHandler(req, res) {
   if (req.method !== 'DELETE') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
@@ -251,7 +286,11 @@ async function objectHandler(req, res) {
   }
 
   const [folder, ownerId] = key.split('/');
-  if (!ALLOWED_FOLDERS.includes(folder) || ownerId !== user.id) {
+  if (folder === VISITOR_VEHICLE_FOLDER || folder === VISITOR_VEHICLE_GUEST_FOLDER) {
+    if (!(await isVisitorPhotoPurgeable(key, authHeader.replace('Bearer ', '').trim()))) {
+      return res.status(403).json({ success: false, error: 'This photo can only be deleted by staff once the visit is over' });
+    }
+  } else if (!ALLOWED_FOLDERS.includes(folder) || ownerId !== user.id) {
     return res.status(403).json({ success: false, error: 'You do not own this object' });
   }
 
