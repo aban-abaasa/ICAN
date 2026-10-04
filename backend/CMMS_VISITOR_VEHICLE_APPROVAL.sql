@@ -24,11 +24,10 @@
 --      Supabase Storage once the visit is over (checked out, or entry
 --      declined) so storage does not fill up. Deleting goes through the
 --      Storage API (a SQL DELETE would leave the file in S3 and still bill
---      for it): the staff app and the optional /api/visitor-photo-sweep
---      endpoint call get_visitor_photos_to_purge() and then remove() the
---      files; confirm_visitor_photos_purged() clears the path once the file
---      is really gone. Uploads that never got attached to a visit are swept
---      after one day.
+--      for it): the staff app calls get_visitor_photos_to_purge() and then
+--      remove()s the files; confirm_visitor_photos_purged() clears the path
+--      once the file is really gone. Uploads that never got attached to a
+--      visit are swept after one day.
 -- ============================================================================
 
 -- ------------------------------------------------------------
