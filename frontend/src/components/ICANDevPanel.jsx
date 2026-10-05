@@ -11,6 +11,7 @@ import { getSupabaseClient } from '../lib/supabase/client';
 import CallDock from './calls/CallDock';
 import CallStage from './calls/CallStage';
 import ICANReferralsDevTab from './ICANReferralsDevTab';
+import ICANFranchiseDevTab from './ICANFranchiseDevTab';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { Linkify } from '../utils/linkify';
 import {
@@ -121,6 +122,7 @@ const TABS = [
   { id: 'plans',      label: 'Plans',        Icon: Star,        color: '#eab308' },
   { id: 'corporate',  label: 'Corporate',    Icon: CreditCard,  color: '#a855f7' },
   { id: 'referrals',  label: 'Referrals',    Icon: Gift,        color: '#84cc16' },
+  { id: 'franchise',  label: 'Franchise',    Icon: Network,     color: '#f59e0b' },
   { id: 'board',     label: 'Public Board', Icon: MessageCircle, color: '#14b8a6' },
   { id: 'messages',   label: 'Messages',     Icon: Mail,          color: '#0ea5e9' },
   { id: 'support',    label: 'Support Team', Icon: Shield,        color: '#22c55e' },
@@ -476,7 +478,8 @@ const SupportTeamTab = () => {
   const [newPassword, setNewPassword] = useState('');
   const [newEmails,   setNewEmails]   = useState('');
   const [newAllowedTabs, setNewAllowedTabs] = useState(['messages', 'board']);
-  const shareableTabs = TABS.filter(t => t.id !== 'support'); // never let a link grant the tab that manages links/PIN itself
+  // never let a link grant the tab that manages links/PIN itself, nor the franchise tab (partner approvals and payouts)
+  const shareableTabs = TABS.filter(t => t.id !== 'support' && t.id !== 'franchise');
   const [creating,   setCreating]   = useState(false);
   const [createError, setCreateError] = useState('');
   const [justCreated, setJustCreated] = useState(null); // { token, label }
@@ -2542,6 +2545,9 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
 
         {/* ══ REFERRALS (IcanEra + BodaGoEra — the one place they're managed) ══ */}
         {tab==='referrals' && <ICANReferralsDevTab devToken={DEV_TOKEN}/>}
+
+        {/* ══ FRANCHISE (requests, partners, rate card, payouts; needs a real admin account, not the panel token) ══ */}
+        {tab==='franchise' && <ICANFranchiseDevTab/>}
 
         {/* ══ CORPORATE (subscriptions + contract requests) ══ */}
         {tab==='corporate' && (<>
