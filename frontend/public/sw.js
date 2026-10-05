@@ -113,6 +113,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // The Era API and its developer page always go straight to the network: never cached, never answered with the app shell.
+  if (/^\/(api\/v1(\/|$)|developers(\/|$))/.test(pathname)) return;
+
   // Strategy 1: API calls - Network first with fallback to cache
   if (pathname.startsWith('/api/')) {
     return event.respondWith(networkFirstStrategy(event.request));
