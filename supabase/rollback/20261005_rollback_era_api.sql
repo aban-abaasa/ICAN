@@ -1,5 +1,6 @@
--- Rolls back the Era API: v1 (20261005100000_era_api.sql, ..100100_era_api_endpoints.sql) and v2, the business layer
--- (20261006100000_era_api_business.sql, ..100100_era_api_business_endpoints.sql). Run it once to remove both.
+-- Rolls back the Era API: v1 (20261005100000_era_api.sql, ..100100_era_api_endpoints.sql), v2, the business layer
+-- (20261006100000_era_api_business.sql, ..100100_era_api_business_endpoints.sql) and the developer accounts
+-- (20261007100000_era_api_developer_accounts.sql). Run it once to remove all of it.
 -- DESTRUCTIVE: deletes every registered developer app, key, usage count and the call log. Nothing else in the
 -- platform depends on these objects. To pause the API without losing anything, use the master switch in the
 -- developer panel's API tab instead.
@@ -14,6 +15,7 @@ BEGIN
   END LOOP;
 END $$;
 
+DROP TABLE IF EXISTS public.era_api_developers CASCADE;
 DROP TABLE IF EXISTS public.era_api_idempotency CASCADE;
 DROP TABLE IF EXISTS public.era_api_payment_links CASCADE;
 DROP TABLE IF EXISTS public.era_api_booking_intents CASCADE;
