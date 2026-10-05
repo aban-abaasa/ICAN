@@ -4,6 +4,8 @@ import { CreditCard, Printer, RefreshCw, Check, X, Loader2 } from 'lucide-react'
 import {
   getMyDigitalCard, rotateMyCardQr, setMyCardQrEnabled, listCardQrRequests,
   declineCardQrRequest, claimCardQrRequest, finishCardQrRequest, cardQrUrl, setMyCardPinPayEnabled,
+  getBusinessDigitalCard, rotateBusinessCardQr, setBusinessCardQrEnabled, listBusinessCardQrRequests,
+  approveBusinessCardQrRequest, declineBusinessCardQrRequest,
 } from '../services/digitalCardService';
 import { sendFiatToMobileMoney } from '../services/icanWalletService';
 import { walletAccountService } from '../services/walletAccountService';
@@ -16,8 +18,14 @@ const fmtNumber = (n = '') => String(n).replace(/(\d{4})(?=\d)/g, '$1 ');
  * Wallet -> Cards: the owner's digital card, its scan-to-request QR, and the
  * requests scanners have made. A request only pays out after the owner
  * confirms it here with their transaction PIN.
+ *
+ * With `business` ({ id, business_name }) it shows that business's card
+ * instead. Business cards never pay out: members approve or decline a request
+ * with the business-wallet PIN, which only records the decision.
  */
-const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
+const DigitalCardPanel = ({ userId, askPin, onPaidOut, business = null }) => {
+  const bizId = business?.id || null;
+  const holderLabel = (c) => (bizId ? c.holder_name : c.holder_name.split(' ')[0]);
   const [card, setCard] = useState(null);
   const [requests, setRequests] = useState([]);
   const [busyId, setBusyId] = useState(null);
@@ -29,14 +37,16 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
 
   const refresh = useCallback(async () => {
     try {
-      const [c, r] = await Promise.all([getMyDigitalCard(), listCardQrRequests()]);
+      const [c, r] = await Promise.all(bizId
+        ? [getBusinessDigitalCard(bizId), listBusinessCardQrRequests(bizId)]
+        : [getMyDigitalCard(), listCardQrRequests()]);
       setCard(c);
       setRequests(r);
       setError(null);
     } catch (e) {
       setError(e.message || 'Could not load your card');
     }
-  }, []);
+  }, [bizId]);
 
   useEffect(() => {
     if (!userId) return undefined;
@@ -45,7 +55,27 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
     return () => clearInterval(t);
   }, [userId, refresh]);
 
+  const approveBusiness = async (req) => {
+    setMsg(null);
+    const pin = await askPin({
+      title: 'Approve card request',
+      message: `Approve ${Number(req.amount).toLocaleString()} ${req.currency} for ${req.requester_name} (${req.recipient_phone}, ${req.recipient_network})? Enter the business wallet PIN. No money is sent: this only records your approval.`,
+    });
+    if (pin === null) return;
+    setBusyId(req.id);
+    try {
+      await approveBusinessCardQrRequest(req.id, pin);
+      setMsg({ ok: true, text: `Approved ${Number(req.amount).toLocaleString()} ${req.currency} for ${req.requester_name}. Nothing was paid out; settle it from the business wallet.` });
+    } catch (e) {
+      setMsg({ ok: false, text: e.message || 'Could not approve this request' });
+    } finally {
+      setBusyId(null);
+      refresh();
+    }
+  };
+
   const confirm = async (req) => {
+    if (bizId) return approveBusiness(req);
     setMsg(null);
     const pin = await askPin({
       title: 'Confirm card request',
@@ -83,19 +113,19 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
 
   const decline = async (req) => {
     setBusyId(req.id);
-    try { await declineCardQrRequest(req.id); } catch (e) { setMsg({ ok: false, text: e.message }); }
+    try { await (bizId ? declineBusinessCardQrRequest(req.id) : declineCardQrRequest(req.id)); } catch (e) { setMsg({ ok: false, text: e.message }); }
     setBusyId(null);
     refresh();
   };
 
   const rotate = async () => {
     if (!window.confirm('Create a new QR code? The old one stops working and open requests are cancelled.')) return;
-    try { await rotateMyCardQr(); await refresh(); setMsg({ ok: true, text: 'New QR code created. The old one no longer works.' }); }
+    try { await (bizId ? rotateBusinessCardQr(bizId) : rotateMyCardQr()); await refresh(); setMsg({ ok: true, text: 'New QR code created. The old one no longer works.' }); }
     catch (e) { setMsg({ ok: false, text: e.message }); }
   };
 
   const toggleQr = async () => {
-    try { await setMyCardQrEnabled(!card.qr_enabled); await refresh(); } catch (e) { setMsg({ ok: false, text: e.message }); }
+    try { await (bizId ? setBusinessCardQrEnabled(bizId, !card.qr_enabled) : setMyCardQrEnabled(!card.qr_enabled)); await refresh(); } catch (e) { setMsg({ ok: false, text: e.message }); }
   };
 
   const togglePinPay = async () => {
@@ -118,10 +148,10 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
       .qr img{width:24mm;height:24mm;background:#fff;padding:1mm;border-radius:1.5mm}.qr p{font-size:8px;margin:0}
       .foot{position:absolute;left:5mm;right:5mm;bottom:3mm;font-size:6px;opacity:.75}
     </style>
-    <div class="card"><div class="top"><span>IcanEra</span><span style="font-style:italic;font-size:16px">DIGITAL</span></div>
+    <div class="card"><div class="top"><span>IcanEra${bizId ? ' Business' : ''}</span><span style="font-style:italic;font-size:16px">DIGITAL</span></div>
       <div class="num">${fmtNumber(c.card_number)}</div>
       <div class="bot"><div><div style="opacity:.7;font-size:7px">CARD HOLDER</div>${esc(c.holder_name)}</div><div><div style="opacity:.7;font-size:7px">EXPIRES</div>${e}</div></div></div>
-    <div class="card"><div class="bar"></div><div class="qr">${qr ? `<img src="${qr}">` : ''}<p>Scan to request money from ${esc(c.holder_name.split(' ')[0])}. Nothing is sent until the owner confirms with their PIN.</p></div>
+    <div class="card"><div class="bar"></div><div class="qr">${qr ? `<img src="${qr}">` : ''}<p>Scan to request money from ${esc(holderLabel(c))}. Nothing is sent until ${bizId ? 'the business approves it' : 'the owner confirms with their PIN'}.</p></div>
       <div class="foot">IcanEra digital card · not a Visa/Mastercard network card</div></div>
     <script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script>`);
     w.document.close();
@@ -155,7 +185,7 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
           <div className="absolute inset-0 rounded-2xl p-5 text-white shadow-xl overflow-hidden"
             style={{ ...CARD_BG, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
             <div className="flex items-start justify-between">
-              <span className="text-sm font-semibold tracking-wide">IcanEra</span>
+              <span className="text-sm font-semibold tracking-wide">IcanEra{bizId ? ' Business' : ''}</span>
               <span className="text-2xl font-extrabold italic tracking-tight">DIGITAL</span>
             </div>
             <div className="absolute left-5 right-5" style={{ top: '42%' }}>
@@ -163,7 +193,7 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
             </div>
             <div className="absolute left-5 right-5 bottom-4 flex items-end justify-between">
               <div className="min-w-0">
-                <p className="text-[10px] uppercase opacity-70">Card holder</p>
+                <p className="text-[10px] uppercase opacity-70">{bizId ? 'Business' : 'Card holder'}</p>
                 <p className="text-sm font-semibold truncate">{card.holder_name}</p>
               </div>
               <div className="text-right">
@@ -182,13 +212,15 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
                   ? <QRCode ref={qrRef} value={cardQrUrl(card.qr_token)} size={96} level="H" />
                   : <div className="w-24 h-24 flex items-center justify-center text-[10px] text-slate-600 text-center">QR off</div>}
               </div>
-              <p className="text-[11px] leading-snug opacity-90">Scan to request money from {card.holder_name.split(' ')[0]}. Money is only sent when the owner approves with their PIN.</p>
+              <p className="text-[11px] leading-snug opacity-90">{bizId
+                ? `Scan to request money from ${card.holder_name}. Nothing is paid out; the business must approve each request with its wallet PIN.`
+                : `Scan to request money from ${holderLabel(card)}. Money is only sent when the owner approves with their PIN.`}</p>
             </div>
             <p className="absolute left-5 right-5 bottom-3 text-[9px] opacity-70">IcanEra digital card · not a Visa/Mastercard network card · ••••{card.card_number.slice(-4)}</p>
           </div>
         </div>
       </div>
-      <p className="text-xs text-gray-400">Tap or swipe the card to see the other side. This is your IcanEra digital card; it is not a Visa/Mastercard network card and cannot be used at card terminals.</p>
+      <p className="text-xs text-gray-400">Tap or swipe the card to see the other side. {bizId ? `This is ${business.business_name || 'your business'}'s IcanEra digital card; ` : 'This is your IcanEra digital card; '}it is not a Visa/Mastercard network card and cannot be used at card terminals.</p>
 
       <div className="grid grid-cols-3 gap-2">
         <button onClick={printCard} className="px-3 py-2 text-xs bg-white/10 rounded flex items-center justify-center gap-1 text-white"><Printer className="w-3 h-3" /> Print</button>
@@ -196,12 +228,12 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
         <button onClick={rotate} className="px-3 py-2 text-xs bg-white/10 rounded flex items-center justify-center gap-1 text-white"><RefreshCw className="w-3 h-3" /> New QR</button>
       </div>
 
-      <button onClick={togglePinPay} className="w-full px-3 py-2 text-xs bg-white/10 rounded text-white text-left">
+      {!bizId && <button onClick={togglePinPay} className="w-full px-3 py-2 text-xs bg-white/10 rounded text-white text-left">
         PIN approval at scan: <b>{card.pin_pay_enabled ? 'ON' : 'OFF'}</b>
         <span className="block text-gray-400">{card.pin_pay_enabled
           ? 'Whoever scans your QR can pay out right there if your transaction PIN is entered. No phone needed. Tap to turn off.'
           : 'Scans only send you a request to confirm in this wallet. Tap to turn on PIN approval at scan.'}</span>
-      </button>
+      </button>}
 
       {msg && (
         <div className={`p-3 rounded-lg border text-sm ${msg.ok ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-red-500/20 border-red-500/50 text-red-300'}`}>{msg.text}</div>
@@ -209,7 +241,7 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
 
       {/* Requests waiting for the owner */}
       <div>
-        <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2"><CreditCard className="w-4 h-4" /> Requests to confirm ({pending.length})</h4>
+        <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2"><CreditCard className="w-4 h-4" /> {bizId ? 'Requests to approve' : 'Requests to confirm'} ({pending.length})</h4>
         {pending.length === 0 && <p className="text-xs text-gray-400">No one is waiting. Requests from your QR appear here.</p>}
         <div className="space-y-2">
           {pending.map((r) => (
@@ -225,7 +257,7 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut }) => {
               <div className="flex gap-2 mt-2">
                 <button disabled={busyId === r.id} onClick={() => confirm(r)}
                   className="flex-1 px-3 py-2 text-xs bg-green-600/60 hover:bg-green-600 text-white rounded flex items-center justify-center gap-1 disabled:opacity-50">
-                  {busyId === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Confirm &amp; send
+                  {busyId === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} {bizId ? 'Approve' : 'Confirm & send'}
                 </button>
                 <button disabled={busyId === r.id} onClick={() => decline(r)}
                   className="flex-1 px-3 py-2 text-xs bg-red-600/50 hover:bg-red-600 text-white rounded flex items-center justify-center gap-1 disabled:opacity-50">

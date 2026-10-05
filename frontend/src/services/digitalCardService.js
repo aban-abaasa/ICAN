@@ -100,3 +100,44 @@ export async function submitCardQrRequest({ token, name, phone, network, amount,
   if (error) throw error;
   return data;
 }
+
+// ─── Business cards ─────────────────────────────────────────────────────────
+// Same card as a personal wallet's, one per business profile. Scans only ever
+// leave a request; nothing is paid out. Approving needs the business-wallet PIN,
+// which the database checks (5 wrong tries lock it for 15 minutes).
+
+export async function getBusinessDigitalCard(businessProfileId) {
+  const { data, error } = await supabase.rpc('get_or_create_business_digital_card', { p_business_profile_id: businessProfileId });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+}
+
+export async function rotateBusinessCardQr(businessProfileId) {
+  const { data, error } = await supabase.rpc('rotate_business_card_qr', { p_business_profile_id: businessProfileId });
+  if (error) throw error;
+  return data;
+}
+
+export async function setBusinessCardQrEnabled(businessProfileId, enabled) {
+  const { error } = await supabase.rpc('set_business_card_qr_enabled', { p_business_profile_id: businessProfileId, p_enabled: enabled });
+  if (error) throw error;
+}
+
+export async function listBusinessCardQrRequests(businessProfileId, limit = 20) {
+  const { data, error } = await supabase.from('ican_business_card_qr_requests')
+    .select('*').eq('business_profile_id', businessProfileId).order('created_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function approveBusinessCardQrRequest(id, pin) {
+  const { data, error } = await supabase.rpc('approve_business_card_qr_request', { p_request_id: id, p_pin: pin });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.message || 'Could not approve this request');
+  return data;
+}
+
+export async function declineBusinessCardQrRequest(id) {
+  const { error } = await supabase.rpc('decline_business_card_qr_request', { p_request_id: id });
+  if (error) throw error;
+}
