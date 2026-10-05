@@ -2797,3 +2797,7 @@ select.rz-input { appearance: none; background-image: linear-gradient(45deg, tra
   .pp-page .pp-avoid-break { break-inside: avoid; }
   .pp-page .rz-card { border: 0 !important; padding: 0 0 1rem !important; }
 }
+
+/* Hide the scrollbar on horizontally scrolling chip rows and tab strips */
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
