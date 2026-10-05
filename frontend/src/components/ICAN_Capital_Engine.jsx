@@ -13,6 +13,10 @@ import SHAREHub from './SHAREHub';
 import CMMSModule from './CMSSModule';
 import ICANWallet from './ICANWallet';
 import MobileView from './MobileView';
+import GrowthPanel from './profile/GrowthPanel';
+import ReadinessPanel from './profile/ReadinessPanel';
+import SecurityPanel from './profile/SecurityPanel';
+import SettingsPanel from './profile/SettingsPanel';
 import { EnhancedReportConfiguration } from './EnhancedReportConfiguration';
 import { 
   Shield, 
@@ -3487,6 +3491,7 @@ const ICANCapitalEngine = () => {
     serviceProviders: []
   });
   const [showProfilePage, setShowProfilePage] = useState(false);
+  const [profileSection, setProfileSection] = useState('profile');
   const [profileInitialTab, setProfileInitialTab] = useState('overview');
 
   // "Create your own IcanEra portfolio" from someone else's public resume
@@ -8236,48 +8241,6 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     }
   };
 
-  const performComplianceCheck = async () => {
-    setIsLoading(true);
-    try {
-      // Simulate API call
-      const compliance = {
-        compliancePercentage: Math.random() * 100,
-        checklist: [
-          { item: 'Business License', status: 'completed', required: true },
-          { item: 'Tax Clearance Certificate', status: 'pending', required: true },
-          { item: 'Professional Certification', status: 'not-started', required: false }
-        ]
-      };
-      setComplianceData(compliance);
-    } catch (error) {
-      console.error('Compliance check failed:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const optimizeSchedule = async () => {
-    setIsLoading(true);
-    try {
-      // Simulate API call
-      const schedule = {
-        optimizationScore: Math.random() * 100,
-        recommendations: [
-          'Block 9-11 AM for High-Value Work',
-          'Schedule Spiritual Alignment: 6-7 AM daily',
-          'Physical Alignment: 5-6 PM, 3x weekly',
-          'Networking blocks: Tuesday/Thursday 2-4 PM'
-        ],
-        nextActions: ['Book gym membership', 'Set up morning routine', 'Block calendar for HVW']
-      };
-      setScheduleData(schedule);
-    } catch (error) {
-      console.error('Schedule optimization failed:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // ============================================
   // NPV & IRR CALCULATION FUNCTIONS
   // ============================================
@@ -9040,146 +9003,17 @@ Data Freshness: ${reportData.metadata.dataFreshness}
   );
 
   const renderReadinessMandate = () => (
-    <div className="max-w-6xl mx-auto w-full space-y-6">
-      <div className="glass-card p-6 lg:p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <Globe className="w-6 h-6 text-green-400" />
-          <h2 className="text-xl font-semibold text-white">Global Navigator</h2>
-        </div>
-
-        <div className="mb-6">
-          <div className="flex flex-wrap items-end gap-4 mb-4">
-            <div>
-              <label className="block text-white font-medium mb-2">Operating Mode</label>
-              <select
-                value={mode}
-                onChange={(e) => setMode(e.target.value)}
-                className="px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="SE">SE - Salaried Employee</option>
-                <option value="BO">BO - Business Owner</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-white font-medium mb-2">Country</label>
-              <select
-                value={operatingCountry}
-                onChange={(e) => setOperatingCountry(e.target.value)}
-                className="px-4 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="Uganda">Uganda</option>
-                <option value="Kenya">Kenya</option>
-                <option value="Tanzania">Tanzania</option>
-                <option value="Rwanda">Rwanda</option>
-              </select>
-            </div>
-
-            <button
-              onClick={performComplianceCheck}
-              disabled={isLoading}
-              className="flex-1 min-w-[220px] py-2.5 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-            >
-              {isLoading ? 'Checking Compliance...' : 'Perform Regulatory Gap Analysis'}
-            </button>
-          </div>
-        </div>
-
-        {complianceData && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div className="bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30 rounded-lg p-4 lg:col-span-1 lg:self-start">
-              <h3 className="text-green-400 font-semibold mb-2">Compliance Status</h3>
-              <div className="text-2xl font-bold text-white">
-                {Math.round(complianceData.compliancePercentage)}% Complete
-              </div>
-            </div>
-
-            <div className="space-y-3 lg:col-span-3">
-              <h3 className="text-white font-semibold">Compliance Checklist</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {complianceData.checklist.map((item, index) => (
-                  <div key={index} className={`flex items-center gap-3 p-3 rounded-lg ${
-                    item.status === 'completed' ? 'bg-green-500 bg-opacity-20 border border-green-500 border-opacity-30' :
-                    item.status === 'pending' ? 'bg-yellow-500 bg-opacity-20 border border-yellow-500 border-opacity-30' :
-                    'bg-red-500 bg-opacity-20 border border-red-500 border-opacity-30'
-                  }`}>
-                    {item.status === 'completed' ?
-                      <CheckCircle className="w-5 h-5 text-green-400" /> :
-                      <AlertTriangle className="w-5 h-5 text-yellow-400" />
-                    }
-                    <div className="flex-1">
-                      <span className="text-white font-medium">{item.item}</span>
-                      {item.required && <span className="text-red-400 ml-2">*Required</span>}
-                    </div>
-                    <span className={`text-sm px-2 py-1 rounded ${
-                      item.status === 'completed' ? 'bg-green-600 text-white' :
-                      item.status === 'pending' ? 'bg-yellow-600 text-white' :
-                      'bg-red-600 text-white'
-                    }`}>
-                      {item.status.replace('-', ' ')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+    <div className="max-w-6xl mx-auto w-full">
+      <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
+        <ReadinessPanel onComplianceData={setComplianceData} />
       </div>
     </div>
   );
 
   const renderGrowthMandate = () => (
-    <div className="max-w-6xl mx-auto w-full space-y-6">
-      <div className="glass-card p-6 lg:p-8">
-        <div className="flex items-center gap-3 mb-6">
-          <TrendingUp className="w-6 h-6 text-purple-400" />
-          <h2 className="text-xl font-semibold text-white">Prosperity Architect</h2>
-        </div>
-
-        <div className="mb-6 flex flex-wrap items-center gap-4">
-          <p className="text-gray-300 flex-1 min-w-[260px]">
-            Optimize your schedule for maximum value creation while maintaining spiritual and physical alignment.
-          </p>
-
-          <button
-            onClick={optimizeSchedule}
-            disabled={isLoading}
-            className="py-3 px-6 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-          >
-            {isLoading ? 'Optimizing Schedule...' : 'Optimize Daily Schedule'}
-          </button>
-        </div>
-
-        {scheduleData && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-30 rounded-lg p-4 lg:self-start">
-              <h3 className="text-purple-400 font-semibold mb-2">Optimization Score</h3>
-              <div className="text-2xl font-bold text-white">
-                {Math.round(scheduleData.optimizationScore)}%
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="text-white font-semibold">Schedule Recommendations</h3>
-              {scheduleData.recommendations.map((rec, index) => (
-                <div key={index} className="flex items-start gap-3 p-3 bg-white bg-opacity-5 rounded-lg">
-                  <Clock className="w-5 h-5 text-purple-400 mt-0.5" />
-                  <span className="text-white">{rec}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="text-white font-semibold">Next Actions</h3>
-              {scheduleData.nextActions.map((action, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-30 rounded-lg">
-                  <Target className="w-5 h-5 text-blue-400" />
-                  <span className="text-white">{action}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+    <div className="max-w-6xl mx-auto w-full">
+      <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
+        <GrowthPanel onScheduleData={setScheduleData} />
       </div>
     </div>
   );
@@ -9729,11 +9563,18 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           <div className="fixed inset-0 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <ProfilePage
               initialTab={profileInitialTab}
-              onClose={() => { setShowProfilePage(false); setProfileInitialTab('overview'); }}
+              onClose={() => { setShowProfilePage(false); setProfileInitialTab('overview'); setProfileSection('profile'); }}
               onLogout={() => {
                 setShowProfilePage(false);
                 setProfileInitialTab('overview');
+                setProfileSection('profile');
                 // Logout will be handled by AuthContext and redirect will happen
+              }}
+              section={profileSection}
+              onSectionChange={setProfileSection}
+              extraSections={{
+                security: <SecurityPanel />,
+                settings: <SettingsPanel />
               }}
             />
           </div>

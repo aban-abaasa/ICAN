@@ -36,8 +36,8 @@ const ConfirmDeleteAccountPage = ({ onDone }) => {
     setLoading(true);
     try {
       const supabase = getSupabaseClient();
-      const { data, error: err } = await supabase.functions.invoke('delete-account', {
-        body: { token }
+      const { data, error: err } = await supabase.functions.invoke('request-pin-reset', {
+        body: { action: 'confirm-delete-account', token }
       });
 
       if (err) {

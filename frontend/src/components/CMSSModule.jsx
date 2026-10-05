@@ -62,6 +62,13 @@ import RequisitionWorkspace from './CMMS/RequisitionWorkspace.jsx';
 import RequisitionApprovalsTab from './CMMS/RequisitionApprovalsTab.jsx';
 import CMMSPayrollPanel from './CMMSPayrollPanel.jsx';
 import CmmsFold, { InfoTip } from './CmmsFold.jsx';
+import InventoryKindTabs from './CMMS/InventoryKindTabs.jsx';
+import AssetDetailsFields, { assetDetailsFromItem, emptyAssetDetails } from './CMMS/AssetDetailsFields.jsx';
+import AssetRegisterPanel from './CMMS/AssetRegisterPanel.jsx';
+import InventoryLedgerPanel from './CMMS/InventoryLedgerPanel.jsx';
+import BranchNetworkPanel from './CMMS/BranchNetworkPanel.jsx';
+import SupermarketLinkPanel from './CMMS/SupermarketLinkPanel.jsx';
+import { ITEM_KINDS, formatMoney, itemKindOf, netBookValue } from '../services/cmmsAssetLedgerService';
 import CMMSMySalaryPanel from './CMMSMySalaryPanel.jsx';
 import CMMSBookTransportPanel from './CMMSBookTransportPanelV2.jsx';
 import CMSSupplierPurchasePanel from './CMSSupplierPurchasePanel.jsx';
@@ -1045,6 +1052,7 @@ const CMMSModule = ({
   const [userCompanyId, setUserCompanyId] = useState(null);  // Track user's company
   const [notificationCompanyId, setNotificationCompanyId] = useState(null);  // For welcome page notifications
   const [companyMemberships, setCompanyMemberships] = useState([]);
+  const [inventoryKindFilter, setInventoryKindFilter] = useState('all');  // lives here: InventoryManager is re-created on every render of this component
   const [isSwitchingCompany, setIsSwitchingCompany] = useState(false);
   
   const [cmmsData, setCmmsData] = useState({
@@ -4021,18 +4029,26 @@ const CMMSModule = ({
     };
 
     const generateInventoryReport = () => {
-      const lowStockCount = cmmsData.inventory.filter(i => i.quantity_in_stock <= (i.reorder_level || 0)).length;
-      const totalValue = cmmsData.inventory.reduce((sum, i) => {
-        const quantity = i.quantity_in_stock || 0;
-        const price = i.unit_price || 0;
-        return sum + (quantity * price);
-      }, 0);
-      
+      // Assets and consumables are reported apart: assets at net book value,
+      // consumables at stock value. Only consumables can run low.
+      const reportAssets = cmmsData.inventory.filter(i => itemKindOf(i) === 'asset');
+      const reportConsumables = cmmsData.inventory.filter(i => itemKindOf(i) === 'consumable');
+      const lowStockCount = reportConsumables.filter(i => i.quantity_in_stock <= (i.reorder_level || 0)).length;
+      const assetNbv = reportAssets.reduce((sum, i) => sum + netBookValue(i), 0);
+      const assetCost = reportAssets.reduce((sum, i) => sum + (i.acquisition_cost ?? i.unit_price ?? 0) * (i.quantity_in_stock || 0), 0);
+      const consumableValue = reportConsumables.reduce((sum, i) => sum + (i.quantity_in_stock || 0) * (i.unit_price || 0), 0);
+      const totalValue = assetNbv + consumableValue;
+
       return {
         title: 'Inventory Status Report',
         date: new Date().toLocaleDateString(),
         totalItems: cmmsData.inventory.length,
+        assetCount: reportAssets.length,
+        consumableCount: reportConsumables.length,
         lowStockAlerts: lowStockCount,
+        assetCost,
+        assetNbv,
+        consumableValue,
         totalValue: totalValue,
         averageCost: cmmsData.inventory.length > 0 ? totalValue / cmmsData.inventory.length : 0
       };
@@ -4058,6 +4074,7 @@ const CMMSModule = ({
     };
 
     const inventoryReport = generateInventoryReport();
+    const branchReportCurrency = cmmsData.companyProfile?.currency || 'UGX';
     const requisitionReport = generateRequisitionReport();
 
     const formatUgx = (val) => `UGX ${Number(val || 0).toLocaleString()}`;
@@ -4079,14 +4096,14 @@ const CMMSModule = ({
       doc.setFontSize(11);
       doc.text(`Total Items: ${inventoryReport.totalItems}`, 14, 50);
       doc.text(`Low Stock Alerts: ${inventoryReport.lowStockAlerts}`, 14, 57);
-      doc.text(`Total Value: ${formatUgx(inventoryReport.totalValue)}`, 14, 64);
-      doc.text(`Average Cost: ${formatUgx(inventoryReport.averageCost)}`, 14, 71);
+      doc.text(`Assets (${inventoryReport.assetCount}) at net book value: ${formatUgx(inventoryReport.assetNbv)}`, 14, 64);
+      doc.text(`Consumables (${inventoryReport.consumableCount}) at stock value: ${formatUgx(inventoryReport.consumableValue)}`, 14, 71);
 
       if (items.length > 0) {
         doc.setFontSize(12);
         doc.text('Item Details', 14, 85);
 
-        const headers = ['Item Name', 'Code', 'Qty', 'Reorder Lvl', 'Unit Price', 'Stock Value'];
+        const headers = ['Item Name', 'Code', 'Qty', 'Kind', 'Unit Price', 'Value'];
         const colX = [14, 64, 104, 124, 148, 176];
         let y = 93;
 
@@ -4100,12 +4117,13 @@ const CMMSModule = ({
           if (y > 275) { doc.addPage(); y = 20; }
           const qty = item.quantity_in_stock || 0;
           const price = item.unit_price || 0;
+          const isAssetRow = itemKindOf(item) === 'asset';
           doc.text(String(item.item_name || '').slice(0, 28), colX[0], y);
           doc.text(String(item.item_code || '-').slice(0, 18), colX[1], y);
           doc.text(String(qty), colX[2], y);
-          doc.text(String(item.reorder_level || 0), colX[3], y);
+          doc.text(isAssetRow ? `Asset${item.acquisition_year ? ` ${item.acquisition_year}` : ''}` : 'Consumable', colX[3], y);
           doc.text(formatUgx(price), colX[4], y);
-          doc.text(formatUgx(qty * price), colX[5], y);
+          doc.text(formatUgx(isAssetRow ? netBookValue(item) : qty * price), colX[5], y);
           y += 5;
         });
       }
@@ -4169,17 +4187,39 @@ const CMMSModule = ({
       const invRows = (cmmsData.inventory || []).map((item) => ({
         'Item Name': item.item_name || '',
         'Item Code': item.item_code || '',
+        'Kind': itemKindOf(item) === 'asset' ? 'Asset' : 'Consumable',
         'Category': item.category || '',
         'Qty In Stock': item.quantity_in_stock || 0,
-        'Reorder Level': item.reorder_level || 0,
-        'Unit Price (UGX)': item.unit_price || 0,
-        'Stock Value (UGX)': (item.quantity_in_stock || 0) * (item.unit_price || 0),
+        'Reorder Level': itemKindOf(item) === 'asset' ? '' : (item.reorder_level || 0),
+        'Unit Price': item.unit_price || 0,
+        'Stock Value': (item.quantity_in_stock || 0) * (item.unit_price || 0),
+        'Net Book Value': itemKindOf(item) === 'asset' ? netBookValue(item) : '',
         'Supplier': item.supplier_name || '',
         'Location': item.storage_location || '',
-        'Status': (item.quantity_in_stock || 0) <= 0 ? 'OUT OF STOCK' : (item.quantity_in_stock || 0) <= (item.reorder_level || 0) ? 'LOW STOCK' : 'IN STOCK'
+        'Status': itemKindOf(item) === 'asset'
+          ? (item.asset_status || 'in_service').replace('_', ' ').toUpperCase()
+          : (item.quantity_in_stock || 0) <= 0 ? 'OUT OF STOCK' : (item.quantity_in_stock || 0) <= (item.reorder_level || 0) ? 'LOW STOCK' : 'IN STOCK'
       }));
       const invSheet = XLSX.utils.json_to_sheet(invRows.length > 0 ? invRows : [{ 'Info': 'No inventory items' }]);
       XLSX.utils.book_append_sheet(wb, invSheet, 'Inventory');
+
+      // Asset register sheet: acquisition year, depreciation, net book value
+      const assetRows = (cmmsData.inventory || []).filter((item) => itemKindOf(item) === 'asset').map((item) => ({
+        'Asset': item.item_name || '',
+        'Code': item.item_code || '',
+        'Tag': item.asset_tag || '',
+        'Serial': item.serial_number || '',
+        'Year Acquired': item.acquisition_year || '',
+        'Year Manufactured': item.manufacture_year || '',
+        'Units': item.quantity_in_stock || 0,
+        'Cost': (item.acquisition_cost ?? item.unit_price ?? 0) * (item.quantity_in_stock || 0),
+        'Useful Life (yrs)': item.useful_life_years || '',
+        'Method': item.depreciation_method || '',
+        'Net Book Value': netBookValue(item),
+        'Condition': item.asset_condition || '',
+        'Status': item.asset_status || ''
+      }));
+      if (assetRows.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(assetRows), 'Asset Register');
 
       // Requisitions sheet
       const reqRows = (cmmsData.requisitions || []).map((req) => ({
@@ -4199,8 +4239,11 @@ const CMMSModule = ({
       const summaryRows = [
         { 'Report': 'Inventory', 'Metric': 'Total Items', 'Value': inventoryReport.totalItems },
         { 'Report': 'Inventory', 'Metric': 'Low Stock Alerts', 'Value': inventoryReport.lowStockAlerts },
-        { 'Report': 'Inventory', 'Metric': 'Total Value (UGX)', 'Value': inventoryReport.totalValue },
-        { 'Report': 'Inventory', 'Metric': 'Avg Cost (UGX)', 'Value': Math.round(inventoryReport.averageCost) },
+        { 'Report': 'Inventory', 'Metric': 'Assets', 'Value': inventoryReport.assetCount },
+        { 'Report': 'Inventory', 'Metric': 'Assets at Cost', 'Value': Math.round(inventoryReport.assetCost) },
+        { 'Report': 'Inventory', 'Metric': 'Assets Net Book Value', 'Value': Math.round(inventoryReport.assetNbv) },
+        { 'Report': 'Inventory', 'Metric': 'Consumables', 'Value': inventoryReport.consumableCount },
+        { 'Report': 'Inventory', 'Metric': 'Consumables Stock Value', 'Value': Math.round(inventoryReport.consumableValue) },
         { 'Report': 'Requisitions', 'Metric': 'Total', 'Value': requisitionReport.totalRequisitions },
         { 'Report': 'Requisitions', 'Metric': 'Pending', 'Value': requisitionReport.pending },
         { 'Report': 'Requisitions', 'Metric': 'Approved', 'Value': requisitionReport.approved },
@@ -4670,12 +4713,12 @@ const CMMSModule = ({
               <div className="text-2xl md:text-3xl font-bold text-orange-300 mt-2">{inventoryReport.lowStockAlerts}</div>
             </div>
             <div className="inv-stat">
-              <div className="text-gray-400 text-xs md:text-sm">Total Inventory Value</div>
-              <div className="text-xl md:text-2xl font-bold text-green-300 mt-2">UGX {(inventoryReport.totalValue / 1000000).toFixed(1)}M</div>
+              <div className="text-gray-400 text-xs md:text-sm">Assets · net book value ({inventoryReport.assetCount})</div>
+              <div className="text-xl md:text-2xl font-bold text-green-300 mt-2">{branchReportCurrency} {(inventoryReport.assetNbv / 1000000).toFixed(1)}M</div>
             </div>
             <div className="inv-stat">
-              <div className="text-gray-400 text-xs md:text-sm">Average Item Cost</div>
-              <div className="text-xl md:text-2xl font-bold text-purple-300 mt-2">UGX {(inventoryReport.averageCost / 1000).toFixed(0)}K</div>
+              <div className="text-gray-400 text-xs md:text-sm">Consumables · stock value ({inventoryReport.consumableCount})</div>
+              <div className="text-xl md:text-2xl font-bold text-purple-300 mt-2">{branchReportCurrency} {(inventoryReport.consumableValue / 1000000).toFixed(1)}M</div>
             </div>
           </div>
         </CmmsFold>
@@ -5215,7 +5258,7 @@ const CMMSModule = ({
 
               {/* Website -- updateCompanyProfile has always written this column,
                   but no input for it existed anywhere in this form, so it could
-                  only ever be set by falling back to a linked Pitchin business
+                  only ever be set by falling back to a linked IcanEra business
                   profile's own website (CMMS_PUBLIC_BOARD_WEBSITE_FALLBACK.sql). */}
               <div className="space-y-1.5">
                 <label className="block text-gray-300 text-sm font-semibold">Website</label>
@@ -6831,6 +6874,14 @@ const CMMSModule = ({
     const [isSavingEdit, setIsSavingEdit] = useState(false);
     const [editError, setEditError] = useState(null);
     const [availableSuppliers, setAvailableSuppliers] = useState([]);
+    const kindFilter = inventoryKindFilter;       // all | asset | consumable
+    const setKindFilter = setInventoryKindFilter;
+    const [assetDetails, setAssetDetails] = useState(emptyAssetDetails());
+    const [ledgerRefresh, setLedgerRefresh] = useState(0);
+    const [businessGroup, setBusinessGroup] = useState(null);
+    const bumpLedger = useCallback(() => setLedgerRefresh(n => n + 1), []);
+    const branchCurrency = cmmsData.companyProfile?.currency || 'UGX';
+    const canAdminCompany = userRole === 'admin' || isCreator;
 
     // Item custody (staff sign-out / sign-in) — gives a proof trail of who
     // currently holds which item, separate from edit/delete permissions:
@@ -6937,6 +6988,7 @@ const CMMSModule = ({
     };
 
     const [newItem, setNewItem] = useState({
+      item_kind: 'consumable',
       item_name: '',
       category: 'Spare Parts',
       quantity_in_stock: 0,
@@ -7041,7 +7093,11 @@ const CMMSModule = ({
         console.log('📝 Calling addInventoryItem with:', { companyId, itemName: newItem.item_name });
 
         // Call Supabase service
-        const { data, error } = await cmmsService.addInventoryItem(companyId, newItem);
+        const isAssetItem = newItem.item_kind === 'asset';
+        const payload = isAssetItem
+          ? { ...newItem, ...assetDetails, acquisition_cost: newItem.unit_cost, minimum_stock_level: 0 }
+          : newItem;
+        const { data, error } = await cmmsService.addInventoryItem(companyId, payload);
 
         if (error) {
           console.error('Supabase Error:', error);
@@ -7060,6 +7116,7 @@ const CMMSModule = ({
         setCmmsData(prev => ({
           ...prev,
           inventory: [...(prev.inventory || []), {
+            ...data,
             id: data.id,
             item_code: data.item_code,
             item_name: data.item_name,
@@ -7078,9 +7135,12 @@ const CMMSModule = ({
         }));
 
         // Reset form
+        setAssetDetails(emptyAssetDetails());
+        bumpLedger();
         setNewItem({
+          item_kind: newItem.item_kind,
           item_name: '',
-          category: 'Spare Parts',
+          category: ITEM_KINDS[newItem.item_kind].categories[0],
           quantity_in_stock: 0,
           minimum_stock_level: 0,
           unit_cost: 0,
@@ -7106,6 +7166,8 @@ const CMMSModule = ({
       setEditingItemId(item.id);
       setEditError(null);
       setEditForm({
+        ...(itemKindOf(item) === 'asset' ? assetDetailsFromItem(item) : {}),
+        item_kind: itemKindOf(item),
         item_name: item.item_name || '',
         category: item.category || 'Spare Parts',
         quantity_in_stock: item.quantity_in_stock ?? 0,
@@ -7132,14 +7194,16 @@ const CMMSModule = ({
       setIsSavingEdit(true);
       setEditError(null);
       try {
-        const { data, error } = await cmmsService.updateInventoryItem(itemId, editForm);
+        const editPayload = editForm.item_kind === 'asset' ? { ...editForm, acquisition_cost: editForm.unit_cost } : editForm;
+        const { data, error } = await cmmsService.updateInventoryItem(itemId, editPayload);
         if (error) throw error;
         setCmmsData(prev => ({
           ...prev,
           inventory: prev.inventory.map(it =>
-            it.id === itemId ? { ...it, ...editForm, updated_at: new Date().toISOString() } : it
+            it.id === itemId ? { ...it, ...editForm, ...(data || {}), updated_at: new Date().toISOString() } : it
           )
         }));
+        bumpLedger();
         setEditingItemId(null);
         setEditForm({});
       } catch (err) {
@@ -7161,12 +7225,16 @@ const CMMSModule = ({
       }));
     };
 
-    const lowStockItems = cmmsData.inventory.filter(item => item.quantity_in_stock <= item.minimum_stock_level);
-    const totalInventoryValue = cmmsData.inventory.reduce((sum, item) => {
-      const quantity = item.quantity_in_stock || 0;
-      const price = item.unit_price || 0;
-      return sum + (quantity * price);
-    }, 0);
+    // Assets are valued at net book value, consumables at stock value; the two
+    // are never added together as one undifferentiated "inventory value".
+    const kindOfItem = (item) => itemKindOf(item);
+    const assetItems = cmmsData.inventory.filter(item => kindOfItem(item) === 'asset');
+    const consumableItems = cmmsData.inventory.filter(item => kindOfItem(item) === 'consumable');
+    const assetValue = assetItems.reduce((sum, item) => sum + netBookValue(item), 0);
+    const consumableValue = consumableItems.reduce((sum, item) => sum + (item.quantity_in_stock || 0) * (item.unit_price || 0), 0);
+    const visibleInventory = kindFilter === 'all' ? cmmsData.inventory : cmmsData.inventory.filter(item => kindOfItem(item) === kindFilter);
+    const lowStockItems = consumableItems.filter(item => item.quantity_in_stock <= item.minimum_stock_level);
+    const totalInventoryValue = assetValue + consumableValue;
     const escrowPercent = 5;
     const escrowPreview = Math.round(totalInventoryValue * (escrowPercent / 100));
 
@@ -7176,8 +7244,8 @@ const CMMSModule = ({
         subtitle={canEditInventory ? `${cmmsData.inventory.length} items in stock records` : 'View-only access'}
         icon={<Package className="h-4 w-4" aria-hidden="true" />}
         chips={[
-          `${cmmsData.inventory.length} items`,
-          `UGX ${(totalInventoryValue / 1000000).toFixed(1)}M value`,
+          `${assetItems.length} assets · ${consumableItems.length} consumables`,
+          `${branchCurrency} ${(totalInventoryValue / 1000000).toFixed(1)}M value`,
           `${lowStockItems.length} low stock`,
           custodyLog.length > 0 && `${custodyLog.length} signed out`
         ]}
@@ -7190,6 +7258,19 @@ const CMMSModule = ({
           </button>
         }
       >
+        <InventoryKindTabs
+          value={kindFilter}
+          onChange={(next) => {
+            setKindFilter(next);
+            if (next !== 'all' && next !== newItem.item_kind) {
+              setNewItem(prev => ({ ...prev, item_kind: next, category: ITEM_KINDS[next].categories[0] }));
+            }
+          }}
+          counts={{ all: cmmsData.inventory.length, asset: assetItems.length, consumable: consumableItems.length }}
+          values={{ all: totalInventoryValue, asset: assetValue, consumable: consumableValue }}
+          currency={branchCurrency}
+        />
+
         {/* Add Inventory Item */}
         {canEditInventory && (
           <CmmsFold
@@ -7212,6 +7293,26 @@ const CMMSModule = ({
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label className="text-xs text-gray-300">What are you adding?</label>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Item kind">
+                {Object.entries(ITEM_KINDS).map(([kind, meta]) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    role="radio"
+                    aria-checked={newItem.item_kind === kind}
+                    onClick={() => setNewItem({ ...newItem, item_kind: kind, category: meta.categories[0] })}
+                    disabled={isAddingItem}
+                    className={`rounded-lg border px-3 py-2 text-left transition-all ${newItem.item_kind === kind ? 'border-amber-400 bg-amber-500/15 text-white' : 'border-white/15 bg-white/5 text-gray-200 hover:border-white/40'}`}
+                  >
+                    <span className="block text-sm font-semibold">{meta.singular}</span>
+                    <span className="block text-[11px] text-gray-400">{meta.blurb}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
               <div className="space-y-2">
                 <label className="text-xs text-gray-300">Item Name <span className="text-red-400">*</span></label>
@@ -7228,7 +7329,7 @@ const CMMSModule = ({
               <div className="space-y-2">
                 <label className="text-xs text-gray-300">Category</label>
                 <div className="flex flex-wrap gap-2">
-                  {['Spare Parts','Tools','Materials','Equipment','Consumables'].map(cat => (
+                  {ITEM_KINDS[newItem.item_kind].categories.map(cat => (
                     <button
                       key={cat}
                       onClick={() => setNewItem({...newItem, category: cat})}
@@ -7297,6 +7398,7 @@ const CMMSModule = ({
                 <p className="text-[11px] text-gray-400">Auto-tracks low stock and escalates to repairs.</p>
               </div>
 
+              {newItem.item_kind === 'consumable' && (
               <div className="space-y-2">
                 <label className="text-xs text-gray-300">Minimum stock</label>
                 <input
@@ -7309,9 +7411,10 @@ const CMMSModule = ({
                 />
                 <p className="text-[11px] text-gray-400">Keeps buffer before hitting the maintenance cliff.</p>
               </div>
+              )}
 
               <div className="space-y-2">
-                <label className="text-xs text-gray-300">Unit Cost (UGX)</label>
+                <label className="text-xs text-gray-300">{newItem.item_kind === 'asset' ? `Cost per unit (${branchCurrency})` : `Unit Cost (${branchCurrency})`}</label>
                 <input
                   type="number"
                   placeholder="0"
@@ -7354,6 +7457,17 @@ const CMMSModule = ({
               </div>
             </div>
 
+            {newItem.item_kind === 'asset' && (
+              <AssetDetailsFields
+                value={assetDetails}
+                onChange={setAssetDetails}
+                cost={newItem.unit_cost}
+                quantity={newItem.quantity_in_stock}
+                currency={branchCurrency}
+                disabled={isAddingItem}
+              />
+            )}
+
             <button
               onClick={handleAddItem}
               disabled={isAddingItem}
@@ -7378,14 +7492,15 @@ const CMMSModule = ({
           title="Inventory items"
           icon={<Package className="h-4 w-4" aria-hidden="true" />}
           accent="navy"
-          hint={`${cmmsData.inventory.length} item${cmmsData.inventory.length === 1 ? '' : 's'}`}
+          hint={`${visibleInventory.length} ${kindFilter === 'asset' ? 'asset' : kindFilter === 'consumable' ? 'consumable' : 'item'}${visibleInventory.length === 1 ? '' : 's'}`}
           defaultOpen
         >
           <div className="space-y-2 max-h-full overflow-y-auto">
-            {cmmsData.inventory.map(item => {
+            {visibleInventory.map(item => {
               const isExpanded = expandedItems[item.id];
-              const isLowStock = item.quantity_in_stock <= item.minimum_stock_level;
-              const totalValue = item.unit_cost * item.quantity_in_stock;
+              const isAsset = kindOfItem(item) === 'asset';
+              const isLowStock = !isAsset && item.quantity_in_stock <= item.minimum_stock_level;
+              const totalValue = isAsset ? netBookValue(item) : item.unit_cost * item.quantity_in_stock;
               
               return (
                 <div
@@ -7412,14 +7527,27 @@ const CMMSModule = ({
                           <div className="text-xs text-gray-400 flex-shrink-0">
                             {item.category}
                           </div>
+                          <span className={`flex-shrink-0 rounded px-1.5 text-[10px] font-semibold uppercase ${isAsset ? 'bg-amber-500/20 text-amber-200' : 'bg-sky-500/20 text-sky-200'}`}>{isAsset ? 'Asset' : 'Consumable'}</span>
                         </div>
                         {/* Compact Summary Line */}
                         <div className="text-xs text-gray-300 mt-1">
-                          <span className="text-green-400">Stock: {item.quantity_in_stock}</span>
-                          <span className="text-gray-500 mx-1">•</span>
-                          <span className="text-blue-300">Min: {item.minimum_stock_level}</span>
-                          <span className="text-gray-500 mx-1">•</span>
-                          <span className="text-yellow-300">UGX {totalValue.toLocaleString()}</span>
+                          {isAsset ? (
+                            <>
+                              <span className="text-green-400">Qty: {item.quantity_in_stock}</span>
+                              <span className="text-gray-500 mx-1">•</span>
+                              <span className="text-blue-300">{item.acquisition_year ? `Acquired ${item.acquisition_year}` : 'Year not set'}</span>
+                              <span className="text-gray-500 mx-1">•</span>
+                              <span className="text-yellow-300">{branchCurrency} {Math.round(totalValue).toLocaleString()} net book</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-green-400">Stock: {item.quantity_in_stock}</span>
+                              <span className="text-gray-500 mx-1">•</span>
+                              <span className="text-blue-300">Min: {item.minimum_stock_level}</span>
+                              <span className="text-gray-500 mx-1">•</span>
+                              <span className="text-yellow-300">{branchCurrency} {totalValue.toLocaleString()}</span>
+                            </>
+                          )}
                           {item.supplier_name && (
                             <>
                               <span className="text-gray-500 mx-1">•</span>
@@ -7475,12 +7603,9 @@ const CMMSModule = ({
                                 onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
                                 className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
                               >
-                                <option value="Spare Parts">Spare Parts</option>
-                                <option value="Consumables">Consumables</option>
-                                <option value="Tools">Tools</option>
-                                <option value="Safety Equipment">Safety Equipment</option>
-                                <option value="Raw Materials">Raw Materials</option>
-                                <option value="Other">Other</option>
+                                {[...new Set([...(ITEM_KINDS[editForm.item_kind]?.categories || []), editForm.category].filter(Boolean))].map(cat => (
+                                  <option key={cat} value={cat}>{cat}</option>
+                                ))}
                               </select>
                             </div>
                             <div>
@@ -7493,6 +7618,7 @@ const CMMSModule = ({
                                 className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
                               />
                             </div>
+                            {editForm.item_kind !== 'asset' && (
                             <div>
                               <label className="text-gray-400 text-xs uppercase tracking-wider">Minimum Stock Level</label>
                               <input
@@ -7503,8 +7629,9 @@ const CMMSModule = ({
                                 className="w-full mt-1 px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white text-sm focus:outline-none focus:border-blue-400"
                               />
                             </div>
+                            )}
                             <div>
-                              <label className="text-gray-400 text-xs uppercase tracking-wider">Unit Cost (UGX)</label>
+                              <label className="text-gray-400 text-xs uppercase tracking-wider">{editForm.item_kind === 'asset' ? 'Cost per unit' : 'Unit Cost'} ({branchCurrency})</label>
                               <input
                                 type="number"
                                 min="0"
@@ -7558,6 +7685,16 @@ const CMMSModule = ({
                               </select>
                             </div>
                           </div>
+                          {editForm.item_kind === 'asset' && (
+                            <AssetDetailsFields
+                              value={editForm}
+                              onChange={(next) => setEditForm(f => ({ ...f, ...next }))}
+                              cost={editForm.unit_cost}
+                              quantity={editForm.quantity_in_stock}
+                              currency={branchCurrency}
+                              disabled={isSavingEdit}
+                            />
+                          )}
                           {/* Save / Cancel */}
                           <div className="flex gap-2 pt-2">
                             <button
@@ -7593,9 +7730,37 @@ const CMMSModule = ({
                           <p className="text-white font-semibold mt-1">{item.category}</p>
                         </div>
                         
+                        {isAsset && (
+                          <>
+                            <div>
+                              <p className="text-gray-400 text-xs uppercase tracking-wider">Acquired</p>
+                              <p className="text-white font-semibold mt-1">{item.acquisition_year || '—'}{item.manufacture_year ? ` · made ${item.manufacture_year}` : ''}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-400 text-xs uppercase tracking-wider">Depreciation</p>
+                              <p className="text-blue-300 font-semibold mt-1">{(item.depreciation_method || 'straight_line').replace('_', ' ')} · {item.useful_life_years || 5} yrs</p>
+                            </div>
+                            {(item.asset_tag || item.serial_number) && (
+                              <div className="col-span-2">
+                                <p className="text-gray-400 text-xs uppercase tracking-wider">Tag / Serial</p>
+                                <p className="text-gray-200 mt-1">{[item.asset_tag, item.serial_number && `S/N ${item.serial_number}`].filter(Boolean).join(' · ')}</p>
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-gray-400 text-xs uppercase tracking-wider">Condition · Status</p>
+                              <p className="text-gray-200 mt-1">{[item.asset_condition, (item.asset_status || '').replace('_', ' ')].filter(Boolean).join(' · ') || '—'}</p>
+                            </div>
+                            {item.warranty_expiry && (
+                              <div>
+                                <p className="text-gray-400 text-xs uppercase tracking-wider">Warranty</p>
+                                <p className="text-gray-200 mt-1">until {new Date(item.warranty_expiry).toLocaleDateString()}</p>
+                              </div>
+                            )}
+                          </>
+                        )}
                         {/* Stock Information */}
                         <div>
-                          <p className="text-gray-400 text-xs uppercase tracking-wider">Current Stock</p>
+                          <p className="text-gray-400 text-xs uppercase tracking-wider">{isAsset ? 'Units owned' : 'Current Stock'}</p>
                           <p className={`font-semibold mt-1 ${
                             item.quantity_in_stock <= item.minimum_stock_level ? 'text-orange-400' : 'text-green-400'
                           }`}>
@@ -7603,20 +7768,22 @@ const CMMSModule = ({
                           </p>
                         </div>
                         
+                        {!isAsset && (
                         <div>
                           <p className="text-gray-400 text-xs uppercase tracking-wider">Minimum Stock Level</p>
                           <p className="text-blue-300 font-semibold mt-1">{item.minimum_stock_level} {item.unit_of_measure || 'units'}</p>
                         </div>
+                        )}
                         
                         {/* Pricing */}
                         <div>
                           <p className="text-gray-400 text-xs uppercase tracking-wider">Unit Cost</p>
-                          <p className="text-yellow-300 font-semibold mt-1">UGX {item.unit_cost.toLocaleString()}</p>
+                          <p className="text-yellow-300 font-semibold mt-1">{branchCurrency} {Number(item.unit_cost || 0).toLocaleString()}</p>
                         </div>
                         
                         <div>
-                          <p className="text-gray-400 text-xs uppercase tracking-wider">Total Value</p>
-                          <p className="text-green-300 font-bold mt-1">UGX {totalValue.toLocaleString()}</p>
+                          <p className="text-gray-400 text-xs uppercase tracking-wider">{isAsset ? 'Net Book Value' : 'Total Value'}</p>
+                          <p className="text-green-300 font-bold mt-1">{branchCurrency} {Math.round(totalValue).toLocaleString()}</p>
                         </div>
                         
                         {/* Assigned Storeman */}
@@ -7710,6 +7877,9 @@ const CMMSModule = ({
               );
             })}
             
+            {cmmsData.inventory.length > 0 && visibleInventory.length === 0 && (
+              <div className="text-center py-6 text-gray-400 text-sm">No {kindFilter === 'asset' ? 'assets' : 'consumables'} yet.</div>
+            )}
             {cmmsData.inventory.length === 0 && (
               <div className="text-center py-8 text-gray-400">
                 <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -7765,6 +7935,70 @@ const CMMSModule = ({
               </div>
             )}
           </div>
+        </CmmsFold>
+
+        {/* Asset register — what is owned and what it is worth today */}
+        {kindFilter !== 'consumable' && (
+          <CmmsFold
+            title="Asset register"
+            icon={<Package className="h-4 w-4" aria-hidden="true" />}
+            accent="gold"
+            hint={`${assetItems.length} asset${assetItems.length === 1 ? '' : 's'}`}
+            info="Fixed assets with their acquisition year, accumulated depreciation and net book value. Post a year's depreciation once and it is written to the ledger permanently."
+          >
+            <AssetRegisterPanel companyId={cmmsData.companyProfile?.id} canEdit={canEditInventory} currency={branchCurrency} refreshKey={ledgerRefresh}
+              onChanged={() => { bumpLedger(); loadCompanyData(cmmsData.companyProfile?.id); }} />
+          </CmmsFold>
+        )}
+
+        {/* Transaction ledger — the truth data source for business reports */}
+        <CmmsFold
+          title="Transaction ledger"
+          icon={<RotateCcw className="h-4 w-4" aria-hidden="true" />}
+          accent="teal"
+          hint="Every movement"
+          info="Every purchase, restock, issue, transfer, depreciation and disposal is recorded by the database itself and can never be edited or deleted. Business reports read from here."
+        >
+          <InventoryLedgerPanel
+            companyId={cmmsData.companyProfile?.id}
+            branchCompanyIds={(businessGroup?.branches || []).filter(b => b.access === 'full').map(b => b.company_id)}
+            baseCurrency={businessGroup?.group?.base_currency || branchCurrency}
+            refreshKey={ledgerRefresh}
+            canEdit={canEditInventory}
+          />
+        </CmmsFold>
+
+        {/* Branches — one business, each branch running its own CMMS */}
+        <CmmsFold
+          title="Branches"
+          icon={<Package className="h-4 w-4" aria-hidden="true" />}
+          accent="plum"
+          hint={businessGroup?.branches?.length ? `${businessGroup.branches.length} in the business` : 'Single branch'}
+          info="Branches come from the ownership tree in the Pitchin business profile. Each runs its own CMMS and shares as much of it as it agrees to."
+        >
+          <BranchNetworkPanel
+            companyId={cmmsData.companyProfile?.id}
+            currentBranchLabel={cmmsData.companyProfile?.branch_name || cmmsData.companyProfile?.company_name}
+            onGroupLoaded={setBusinessGroup}
+          />
+        </CmmsFold>
+
+        {/* Supermarket — store room to shop floor */}
+        <CmmsFold
+          title="Supermarket link"
+          icon={<Package className="h-4 w-4" aria-hidden="true" />}
+          accent="emerald"
+          hint={cmmsData.companyProfile?.supermarket_id ? 'Linked' : 'Not linked'}
+          hintTone={cmmsData.companyProfile?.supermarket_id ? 'ok' : undefined}
+          info="Map consumables to products on supermartkera.icanera.space and move stock between the store room and the shop floor with a signed record on both sides."
+        >
+          <SupermarketLinkPanel
+            companyId={cmmsData.companyProfile?.id}
+            items={cmmsData.inventory}
+            canAdmin={canAdminCompany}
+            canEdit={canEditInventory}
+            onChanged={() => { bumpLedger(); loadCompanyData(cmmsData.companyProfile?.id); }}
+          />
         </CmmsFold>
 
         {/* Sign-Out Modal */}

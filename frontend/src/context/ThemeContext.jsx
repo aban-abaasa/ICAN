@@ -448,7 +448,7 @@ const applyThemeImmediate = (themeId) => {
 
       /* ==================== TRANSPARENT ICON BUTTONS ====================
          Opt-out for icon-only buttons that must stay see-through regardless
-         of theme (e.g. the video overlay action rail in Pitchin) -- the
+         of theme (e.g. the video overlay action rail in IcanEra) -- the
          blanket "button" rule above otherwise paints every button with the
          theme's surface color, which is wrong for controls layered on top
          of video/image content. */

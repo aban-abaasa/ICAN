@@ -827,7 +827,7 @@ const CMMSAnnouncementsPanel = ({
                 layout the public page's hero actually uses -- so this is a
                 rough live preview of the real thing, not just two unrelated
                 upload boxes. This logo is the board's OWN, and always wins
-                over the fallback to a linked Pitchin business profile's logo
+                over the fallback to a linked IcanEra business profile's logo
                 (see CMMS_PUBLIC_BOARD_PITCHIN_FALLBACKS.sql) -- set it here
                 and it doesn't depend on that other form's own Submit. */}
             <div className="relative w-full h-32 sm:h-40 mb-10">
@@ -951,10 +951,10 @@ const CMMSAnnouncementsPanel = ({
           <div className="cmms-classic-divider">
             <h3 className="cmms-classic-heading mb-1">Products &amp; services</h3>
             <p className="text-sm cmms-classic-muted mb-3">
-              Link one of your own ICANera Dropship storefronts to show its products on your public board. Visitors can browse for free; paying uses their own ICANera wallet, same as your storefront's normal checkout.
+              Link one of your own IcanEra Dropship storefronts to show its products on your public board. Visitors can browse for free; paying uses their own IcanEra wallet, same as your storefront's normal checkout.
             </p>
             {myBusinessProfiles.length === 0 ? (
-              <p className="text-sm cmms-classic-muted">You don't have a Dropship storefront yet under this ICANera account. Set one up from Business &rarr; Dropship, then come back here to link it.</p>
+              <p className="text-sm cmms-classic-muted">You don't have a Dropship storefront yet under this IcanEra account. Set one up from Business &rarr; Dropship, then come back here to link it.</p>
             ) : (
               <>
                 <select

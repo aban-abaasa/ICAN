@@ -6,6 +6,7 @@
 
 import { supabase as supabaseClient } from '../lib/supabase/client';
 import { COUNTRIES } from '../constants/countries';
+import { analyzeReceiptTruth, getEvidenceGrade, toReceiptStamp, getTruthStatement } from '../utils/receiptTruth';
 
 // Vite exposes browser environment variables through import.meta.env.
 // Do not reference process.env: process is not defined in the browser bundle.
@@ -334,7 +335,9 @@ export const buildFinancialDataFromTransactions = (transactions = [], options = 
       deductions.push({
         category: bucket || tx?.metadata?.category || tx?.transaction_type || 'business_expenses',
         amount,
-        description: tx?.description || tx?.note || ''
+        description: tx?.description || tx?.note || '',
+        // Tax authorities ask for receipts behind claimed deductions.
+        evidence: getEvidenceGrade(tx)
       });
     }
   });
@@ -380,6 +383,8 @@ export const buildFinancialDataFromTransactions = (transactions = [], options = 
     // Raw buckets for custom report sections
     buckets,
     deductions,
+    // What the receipts behind these exact transactions say (evidence grades, flags, seal).
+    receiptTruth: analyzeReceiptTruth(filtered).summary,
     reportPeriod,
     transactionCount: filtered.length,
     periodStart: start ? start.toISOString() : null,
@@ -561,7 +566,10 @@ export const runTransactionArchivingCycle = async ({
       continue;
     }
 
-    const archiveItems = dayTransactions.map((tx) => ({
+    // Every archived entry keeps its own receipt facts (number, evidence grade,
+    // flags, seal) next to the amounts, so the archive stays checkable later.
+    const dayTruth = analyzeReceiptTruth(dayTransactions);
+    const archiveItems = dayTransactions.map((tx, index) => ({
       id: tx.id || null,
       created_at: tx.created_at || tx.date || tx.timestamp || null,
       transaction_type: tx.transaction_type || tx.type || 'unknown',
@@ -569,7 +577,8 @@ export const runTransactionArchivingCycle = async ({
       currency: tx.currency || 'UGX',
       description: tx.description || tx.note || '',
       category: tx.category || tx.metadata?.category || null,
-      metadata: tx.metadata || {}
+      metadata: tx.metadata || {},
+      receipt: toReceiptStamp(dayTruth.rows[index])
     }));
 
     const report = await generateIncomeStatement(financialData, countryCode, userId, {
@@ -582,6 +591,7 @@ export const runTransactionArchivingCycle = async ({
         periodEnd: end.toISOString(),
         transactionCount: financialData.transactionCount,
         dailyTransactionItems: archiveItems,
+        receiptStatement: getTruthStatement(financialData.receiptTruth),
         financeBrainPillars: FINANCE_KNOWLEDGE_BRAIN.pillars
       }
     });
@@ -637,6 +647,14 @@ export const generateTaxReturn = async (financialData, countryCode = 'UG', userI
   const totalTaxLiability = incomeTax + capitalGainsTax;
   const taxPayable = Math.max(0, totalTaxLiability - taxPaid);
 
+  // How much of the claimed deductions has a receipt photo/number behind it.
+  // Only entries that carry an evidence grade are counted either way.
+  const sumByEvidence = (isMatch) => deductions
+    .filter((d) => d.evidence && isMatch(d.evidence))
+    .reduce((sum, d) => sum + (d.amount || 0), 0);
+  const deductionsWithReceipts = sumByEvidence((grade) => grade !== 'bronze');
+  const deductionsWithoutReceipts = sumByEvidence((grade) => grade === 'bronze');
+
   // Call OpenAI for tax optimization recommendations
   const aiAnalysis = await callOpenAIForAnalysis(
     `Analyze this tax return for ${regulations.country_name}:
@@ -662,6 +680,7 @@ export const generateTaxReturn = async (financialData, countryCode = 'UG', userI
     dataSource: regulations.source,
     sourceCitation: regulations.source_citation,
     lastVerifiedAt: regulations.last_verified_at,
+    receiptTruth: financialData.receiptTruth || null,
 
     // Income Section
     incomeSection: {
@@ -681,9 +700,12 @@ export const generateTaxReturn = async (financialData, countryCode = 'UG', userI
           category: d.category,
           amount: d.amount,
           description: d.description || '',
+          evidence: d.evidence || null,
           compliant: true
         })),
       totalDeductions: deductibleAmount,
+      receiptBackedAmount: deductionsWithReceipts,
+      receiptMissingAmount: deductionsWithoutReceipts,
       nonDeductible: deductions
         .filter(d => !(regulations.deductible_expenses || []).includes(d.category))
         .reduce((sum, d) => sum + (d.amount || 0), 0),
@@ -831,6 +853,7 @@ export const generateBalanceSheet = async (financialData, countryCode = 'UG', us
     dataSource: regulations.source,
     sourceCitation: regulations.source_citation,
     lastVerifiedAt: regulations.last_verified_at,
+    receiptTruth: financialData.receiptTruth || null,
 
     // Assets Section
     assets: {
@@ -967,6 +990,7 @@ export const generateIncomeStatement = async (financialData, countryCode = 'UG',
     dataSource: regulations.source,
     sourceCitation: regulations.source_citation,
     lastVerifiedAt: regulations.last_verified_at,
+    receiptTruth: financialData.receiptTruth || null,
 
     // Revenue Section
     revenue: {
@@ -1105,6 +1129,7 @@ export const generateCountryComplianceReport = async (financialData, countryCode
     dataSource: regulations.source,
     sourceCitation: regulations.source_citation,
     lastVerifiedAt: regulations.last_verified_at,
+    receiptTruth: financialData.receiptTruth || null,
     generatedDate: new Date().toISOString()
   };
 };
@@ -1165,7 +1190,20 @@ const downloadCSV = (report) => {
   // Simplified CSV export
   let csv = 'Report Type,Country,Date\n';
   csv += `${report.type},${report.country},${report.generatedDate}\n\n`;
-  
+
+  const truth = report.receiptTruth;
+  if (truth?.total) {
+    const cell = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    csv += 'Receipt truth,\n';
+    csv += `Rating,${cell(`${truth.rating} - ${truth.ratingLabel}`)}\n`;
+    csv += `Entries,${truth.total}\n`;
+    csv += `Backed by receipt photo or number,${cell(`${truth.backedCount} (${truth.coverageByCount}% of entries, ${truth.coverageByValue}% of value)`)}\n`;
+    csv += `Gold / Silver / Bronze,${cell(`${truth.grades.gold.count} / ${truth.grades.silver.count} / ${truth.grades.bronze.count}`)}\n`;
+    csv += `Entries needing a closer look,${truth.attentionCount}\n`;
+    csv += `Report seal (SHA-256),${truth.sealRoot}\n`;
+    csv += `Statement,${cell(getTruthStatement(truth, { currency: report.currency || 'UGX' }))}\n\n`;
+  }
+
   const element = document.createElement('a');
   element.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   element.download = `${report.type}_${new Date().toISOString().slice(0, 10)}.csv`;

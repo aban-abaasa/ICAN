@@ -1,6 +1,6 @@
 /**
  * 📰 LANDING UPDATES SERVICE
- * Public, read-only announcements feed for the ICANera landing page
+ * Public, read-only announcements feed for the IcanEra landing page
  * (public.landing_updates). Content is authored via the Supabase SQL
  * editor / dashboard — there is no in-app authoring UI.
  */

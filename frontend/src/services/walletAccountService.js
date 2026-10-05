@@ -28,6 +28,36 @@ const verifyPIN = (pin, hash) => {
   return hashPIN(pin) === hash;
 };
 
+/**
+ * The one PIN-reset email path, shared by PINRecoveryModal ("Forgot PIN") and
+ * new-account setup so both behave identically: try the request-pin-reset Edge
+ * Function (dedicated Resend email) and, if it fails or is not configured, use
+ * Supabase Auth's own recovery email. Either link lands on
+ * /reset-password?flow=pin (ResetPinPage). Throws if no email could be sent.
+ */
+export const requestPinResetEmail = async (supabase, { accountType, accountId, email, extraParams = {} }) => {
+  const redirectTo = new URL('/reset-password', window.location.origin);
+  redirectTo.searchParams.set('accountType', accountType);
+  redirectTo.searchParams.set('flow', 'pin');
+  if (accountType === 'business' && accountId) redirectTo.searchParams.set('accountId', accountId);
+  Object.entries(extraParams).forEach(([key, value]) => redirectTo.searchParams.set(key, value));
+
+  const { data, error: invokeError } = await supabase.functions.invoke('request-pin-reset', {
+    body: {
+      accountType,
+      ...(accountType === 'business' && accountId ? { accountId } : {}),
+      redirectTo: redirectTo.toString()
+    }
+  });
+  if (invokeError || !data?.success) {
+    console.warn('request-pin-reset failed, falling back to Auth mailer:', invokeError || data?.message);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectTo.toString()
+    });
+    if (resetError) throw resetError;
+  }
+};
+
 class WalletAccountService {
   constructor() {
     this.supabase = null;
@@ -264,6 +294,130 @@ class WalletAccountService {
         success: false,
         error: error.message || 'An error occurred while creating wallet account'
       };
+    }
+  }
+
+  /**
+   * Set up a personal wallet account through the emailed PIN link instead of
+   * a 6-digit code. The code path needs the request-pin-reset Edge Function's
+   * RESEND_API_KEY secret; this path works without it because it falls back to
+   * Supabase Auth's own recovery email.
+   *
+   * 1. Saves the profile (name, phone, email, currency, biometrics) onto the
+   *    bare user_accounts row the signup trigger already created — no PIN yet.
+   * 2. Emails the same recovery link "Forgot PIN" uses (requestPinResetEmail),
+   *    landing on /reset-password?flow=pin, where ResetPinPage sets the PIN via
+   *    reset_wallet_pin_from_recovery().
+   *
+   * The link is always sent to the signed-in Auth email, since that is the
+   * only address Auth can issue a recovery session for.
+   * @returns {Promise<{success: boolean, sentTo?: string, error?: string}>}
+   */
+  async sendPinSetupLink(params) {
+    const {
+      userId,
+      authEmail,
+      accountHolderName,
+      phoneNumber,
+      email,
+      preferredCurrency = 'USD',
+      biometrics = {}
+    } = params;
+
+    try {
+      if (!userId || !authEmail || !accountHolderName || !phoneNumber || !email) {
+        return { success: false, error: 'Fill in your name, phone number and email first.' };
+      }
+
+      this.supabase = getSupabaseClient();
+
+      const existingAccount = await this.checkUserAccount(userId);
+      if (!existingAccount) {
+        return { success: false, error: 'No wallet account was found for this user. Please contact support.' };
+      }
+      if (existingAccount.pin_hash) {
+        return { success: false, error: 'You already have a wallet PIN. Use "Forgot PIN" to reset it.' };
+      }
+
+      const { error: updateError } = await this.supabase
+        .from('user_accounts')
+        .update({
+          account_holder_name: accountHolderName,
+          phone_number: phoneNumber,
+          email,
+          preferred_currency: preferredCurrency,
+          fingerprint_enabled: biometrics.fingerprintEnabled || false,
+          phone_pin_enabled: biometrics.phonePhoneEnabled || false,
+          biometric_enabled: (biometrics.fingerprintEnabled || biometrics.phonePhoneEnabled) || false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingAccount.id);
+      if (updateError) {
+        console.error('❌ Error saving wallet profile before PIN link:', updateError);
+        return { success: false, error: updateError.message || 'Failed to save your wallet details' };
+      }
+
+      await this._ensureCurrencyWallets(userId);
+
+      await requestPinResetEmail(this.supabase, {
+        accountType: 'personal',
+        email: authEmail,
+        extraParams: { purpose: 'setup' }
+      });
+
+      return { success: true, sentTo: authEmail };
+    } catch (error) {
+      console.error('❌ Error in sendPinSetupLink:', error);
+      return { success: false, error: error.message || 'Failed to send the PIN setup link' };
+    }
+  }
+
+  /**
+   * Is a PIN set on this business's iCanEra business wallet? Read from
+   * ican_business_wallet_settings (shareholders can read it) without pulling
+   * the hash itself. Returns null if the status could not be read.
+   * @param {string} businessProfileId - business_profiles.id
+   * @returns {Promise<{pinSet: boolean, lockedUntil: string|null}|null>}
+   */
+  async getBusinessWalletPinStatus(businessProfileId) {
+    try {
+      this.supabase = getSupabaseClient();
+      const { data, error } = await this.supabase
+        .from('ican_business_wallet_settings')
+        .select('pin_set_at, pin_locked_until')
+        .eq('business_profile_id', businessProfileId)
+        .maybeSingle();
+      if (error) {
+        console.error('❌ Error reading business wallet PIN status:', error);
+        return null;
+      }
+      return { pinSet: !!data?.pin_set_at, lockedUntil: data?.pin_locked_until || null };
+    } catch (error) {
+      console.error('❌ Error in getBusinessWalletPinStatus:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Check a business-wallet PIN server-side (bcrypt, 5 wrong tries lock it for
+   * 15 minutes) via verify_pitchin_business_wallet_pin — see
+   * backend/BUSINESS_WALLET_PIN_VERIFY.sql.
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  async verifyBusinessWalletPin(businessProfileId, pin) {
+    if (!this.validatePIN(pin)) return { success: false, error: 'PIN must be 4-6 digits' };
+    try {
+      this.supabase = getSupabaseClient();
+      const { data, error } = await this.supabase.rpc('verify_pitchin_business_wallet_pin', {
+        p_business_profile_id: businessProfileId,
+        p_pin: pin
+      });
+      if (error) return { success: false, error: error.message || 'Could not check the PIN' };
+      return data?.success
+        ? { success: true }
+        : { success: false, error: data?.message || 'Incorrect PIN' };
+    } catch (error) {
+      return { success: false, error: error.message || 'Could not check the PIN' };
     }
   }
 

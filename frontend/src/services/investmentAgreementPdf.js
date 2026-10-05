@@ -67,7 +67,7 @@ export const downloadInvestmentAgreementPdf = async (d) => {
   pdf.setTextColor(...GOLD);
   pdf.setFont('times', 'bold');
   pdf.setFontSize(11);
-  pdf.text('ICANERA  ·  PITCHIN', W / 2, y, { align: 'center' });
+  pdf.text('ICANERA', W / 2, y, { align: 'center' });
   y += 11;
   pdf.setTextColor(...INK);
   pdf.setFontSize(24);
@@ -202,7 +202,7 @@ export const downloadInvestmentAgreementPdf = async (d) => {
     pdf.circle(cx, cy, 17.2);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(7);
-    pdf.text('ICANERA · PITCHIN', cx, cy - 8, { align: 'center' });
+    pdf.text('ICANERA', cx, cy - 8, { align: 'center' });
     pdf.setFontSize(15);
     pdf.text('SEALED', cx, cy + 1.5, { align: 'center' });
     pdf.setFontSize(6.5);
@@ -226,7 +226,7 @@ export const downloadInvestmentAgreementPdf = async (d) => {
   pdf.setTextColor(110);
   pdf.splitTextToSize(
     qrImage
-      ? 'Scan the QR code to confirm this agreement and its signatures on the ICANera platform. The seal code on the page must match this one.'
+      ? 'Scan the QR code to confirm this agreement and its signatures on the IcanEra platform. The seal code on the page must match this one.'
       : 'Signature record unavailable for this copy.',
     cw - 50 - 38
   ).forEach((line, i) => pdf.text(line, textX, blockTop + 19 + i * 4));
@@ -243,7 +243,7 @@ export const downloadInvestmentAgreementPdf = async (d) => {
   pdf.setFontSize(9);
   pdf.setTextColor(120);
   pdf.splitTextToSize(
-    'Electronically signed and sealed on the ICANera platform. Funds are held in escrow until 60% of registered members approve, and refunded automatically if approval is not reached within 3 days.',
+    'Electronically signed and sealed on the IcanEra platform. Funds are held in escrow until 60% of registered members approve, and refunded automatically if approval is not reached within 3 days.',
     cw
   ).forEach((line) => { pdf.text(line, m, y); y += 4.5; });
 

@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { Zap, CheckCircle, AlertTriangle } from 'lucide-react';
+import ReceiptTruthPanel from './ReceiptTruthPanel';
 
 const ReportPreviewCard = ({ report }) => {
   if (!report) return null;
@@ -128,6 +129,9 @@ const ReportPreviewCard = ({ report }) => {
           </>
         )}
       </div>
+
+      {/* What the receipts behind these transactions say */}
+      <ReceiptTruthPanel report={report} />
 
       {/* AI Insights Section */}
       {aiInsights && (

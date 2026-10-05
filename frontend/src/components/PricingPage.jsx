@@ -29,7 +29,7 @@ const TIERS = [
     popular: false,
     features: [
       'CMMS content posting',
-      '2,000 MB Pitchin video storage / business / mo',
+      '2,000 MB IcanEra video storage / business / mo',
       'Employee self-service portal',
       'Staff attendance check-in/out',
       'Public visitor check-in (QR code, no account needed)',
@@ -48,7 +48,7 @@ const TIERS = [
     popular: false,
     features: [
       'Everything in Team, plus:',
-      '5,000 MB Pitchin video storage / business / mo',
+      '5,000 MB IcanEra video storage / business / mo',
       'Job postings with applicant pipeline (screen → interview → hire)',
       'Public application status follow-up (reference code, no account)',
       'Live video interviews for candidates',
@@ -69,7 +69,7 @@ const TIERS = [
     popular: true,
     features: [
       'Everything in Business, plus:',
-      '15,000 MB Pitchin video storage / business / mo',
+      '15,000 MB IcanEra video storage / business / mo',
       'Business Opportunities & Bidding marketplace — source outside companies & freelancers',
       'Convert a winning bid into a paid Service Provider Contract',
       'Secure report sharing with OTP-protected links',
@@ -89,7 +89,7 @@ const TIERS = [
     popular: false,
     features: [
       'Everything in Corporate, plus:',
-      'Unlimited Pitchin video storage',
+      'Unlimited IcanEra video storage',
       'Custom integrations & API',
       'SLA guarantee',
       'Onboarding & training',
@@ -102,9 +102,9 @@ const STARTING_PRICE_IC = TIERS[0].price;
 const FAQ = [
   { q: 'How does the free trial work?', a: 'Your first 30 days are free. To start, keep at least the first renewal amount in your business wallet. Nothing is charged during the trial.' },
   { q: 'How am I billed after the trial?', a: 'Monthly, straight from your business IcanEra Coin wallet. No card is needed. The price is flat for your tier, not per employee.' },
-  { q: 'What if my wallet is short at renewal?', a: 'Pitchin stays on for a 5-day grace period so you can top up before anything is paused.' },
+  { q: 'What if my wallet is short at renewal?', a: 'IcanEra stays on for a 5-day grace period so you can top up before anything is paused.' },
   { q: 'What if my team grows?', a: 'Your headcount decides the tier. When you cross a tier boundary you move to the next flat price, with no per-seat charges in between.' },
-  { q: 'What counts toward storage?', a: `Pitchin videos, up to ${MAX_PITCH_VIDEO_MB} MB each. Going past your monthly pool is billed at ${OVERAGE_IC_PER_MB} IC/MB.` },
+  { q: 'What counts toward storage?', a: `IcanEra videos, up to ${MAX_PITCH_VIDEO_MB} MB each. Going past your monthly pool is billed at ${OVERAGE_IC_PER_MB} IC/MB.` },
 ];
 
 const tierFor = (employees) => TIERS.find((t) => employees <= t.max) || TIERS[TIERS.length - 1];
@@ -234,7 +234,7 @@ const PricingPage = ({ onBack, onGetStarted }) => {
           <p className={`mt-2 text-xs ${mutedText}`}>
             Includes{' '}
             <strong className={headingText}>
-              {activeTier.storageMB != null ? `${formatMB(activeTier.storageMB)} Pitchin video storage for your business` : 'unlimited Pitchin video storage for your business'}
+              {activeTier.storageMB != null ? `${formatMB(activeTier.storageMB)} IcanEra video storage for your business` : 'unlimited IcanEra video storage for your business'}
             </strong>{' '}
             this month
           </p>
@@ -325,9 +325,9 @@ const PricingPage = ({ onBack, onGetStarted }) => {
 
         <p className={`text-center mt-10 text-xs leading-relaxed ${mutedText}`}>
           Flat monthly price per tier, starting at {STARTING_PRICE_IC} IC &middot; Save 15&ndash;20% with annual billing<br />
-          Each Pitchin video is capped at {MAX_PITCH_VIDEO_MB} MB per upload &middot; Storage beyond your monthly pool is billed at {OVERAGE_IC_PER_MB} IC/MB ({OVERAGE_IC_PER_MB * 1000} IC per GB)<br />
+          Each IcanEra video is capped at {MAX_PITCH_VIDEO_MB} MB per upload &middot; Storage beyond your monthly pool is billed at {OVERAGE_IC_PER_MB} IC/MB ({OVERAGE_IC_PER_MB * 1000} IC per GB)<br />
           First 30 days are free. After that, your plan is billed monthly straight out of your business&rsquo;s IcanEra Coin wallet &mdash; no card needed.
-          If your wallet balance is short at renewal, Pitchin stays on for a 5-day grace period so you can top up before anything is paused.
+          If your wallet balance is short at renewal, IcanEra stays on for a 5-day grace period so you can top up before anything is paused.
         </p>
       </div>
     </div>

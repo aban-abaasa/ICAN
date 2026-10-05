@@ -2,6 +2,10 @@ import React, { Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { injectSpeedInsights } from '@vercel/speed-insights';
 import './index.css';
+// The IcanEra diamond: one loading indicator for the whole app (see diamond.css).
+import './components/diamond.css';
+import { installDiamondStyles } from './components/diamondArt';
+import { ClassicLoadingScreen } from './components/SplashScreen';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 // Dependency-free on purpose (no Supabase import) — see referralCapture.js.
@@ -10,6 +14,8 @@ import { captureReferralFromUrl } from './services/referralCapture';
 // A shared referral link (/?ref=CODE) can land on any page, signed in or not:
 // remember the code now, App redeems it once the visitor has an account.
 captureReferralFromUrl();
+
+installDiamondStyles();
 
 // Vercel Speed Insights (no-op outside a Vercel deployment). Called once here
 // rather than as a component so it covers every branch rendered below.
@@ -43,7 +49,7 @@ const statusShareMatch = window.location.pathname.match(/^\/status\/([^/]+)/);
 const portfolioShareMatch = window.location.pathname.match(/^\/portfolio\/([^/]+)/);
 // A dropship storefront link (e.g. https://icanera.space/store/<businessProfileId>)
 // must be browsable by anyone, signed in or not -- same reasoning as the
-// Pitchin/status share links above. Only checkout (a real ICANera payment)
+// Pitchin/status share links above. Only checkout (a real IcanEra payment)
 // prompts sign-in, in place, without losing the cart.
 const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
 // A CMMS company's public notice board (announcements + job postings) at
@@ -163,7 +169,9 @@ const PublicDocumentVerify = lazyWithReloadOnChunkFailure(() => import('./compon
 const PublicAgreementVerify = lazyWithReloadOnChunkFailure(() => import('./components/PublicAgreementVerify'));
 const PublicServiceProviderContract = lazyWithReloadOnChunkFailure(() => import('./components/PublicServiceProviderContract'));
 const PhoneAlertsPrompt = lazyWithReloadOnChunkFailure(() => import('./components/PhoneAlertsPrompt'));
-const Loading = () => <div className="min-h-screen bg-slate-950" />;
+// First paint while the app's chunks load: the opening diamond, the same screen
+// App shows while it checks the session, so startup never flashes a blank page.
+const Loading = () => <ClassicLoadingScreen />;
 
 // Without this, ANY uncaught error during first render (a chunk failure that
 // survived the retry above, or an unrelated bug) unmounts everything and

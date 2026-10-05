@@ -96,7 +96,14 @@ const LIVE_CSS = `
 
 const STEP_COLORS = ['#6366f1', '#0ea5e9', '#f59e0b', '#10b981', '#ec4899'];
 
-const BusinessProfileDocuments = forwardRef(({ businessProfile, onDocumentsComplete, onCancel, hideSkip = false, liveData = null }, ref) => {
+// A section counts as unfilled when it is blank or still holds a template placeholder such as
+// "[Please describe your target market]" or "$[amount]". Real writing is never overwritten.
+const isUnfilled = (value) => {
+  const t = String(value || '').trim();
+  return !t || /\[[^\]]{6,}\]/.test(t);
+};
+
+const BusinessProfileDocuments = forwardRef(({ businessProfile, onDocumentsComplete, onCancel, hideSkip = false, liveData = null, draft = null }, ref) => {
   const [documents, setDocuments] = useState({
     businessPlan: { content: '', file: null, completed: false },
     financialProjection: { content: '', file: null, completed: false },
@@ -139,6 +146,22 @@ const BusinessProfileDocuments = forwardRef(({ businessProfile, onDocumentsCompl
     setDocsLoaded(false);
     Promise.resolve(loadDocuments()).finally(() => setDocsLoaded(true));
   }, [businessProfile?.id]);
+
+  // "Fill from my idea" draft: pre-fill the written sections that are still empty.
+  useEffect(() => {
+    if (!draft || !docsLoaded) return;
+    setDocuments((prev) => {
+      const next = { ...prev };
+      if (draft.businessPlan && isUnfilled(prev.businessPlan.content)) next.businessPlan = { ...prev.businessPlan, content: draft.businessPlan };
+      if (draft.financials && isUnfilled(prev.financialProjection.content)) next.financialProjection = { ...prev.financialProjection, content: draft.financials };
+      const vp = { ...prev.valueProposition };
+      ['wants', 'fears', 'needs'].forEach((field) => {
+        if (draft[field] && isUnfilled(prev.valueProposition[field])) vp[field] = draft[field];
+      });
+      next.valueProposition = vp;
+      return next;
+    });
+  }, [draft, docsLoaded]);
 
   // Check if all documents are complete and notify parent
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Mic,
   MicOff,
@@ -49,6 +49,7 @@ import {
   Plus,
   Globe,
   Target,
+  Network,
   Clock,
   Percent,
   Sparkles,
@@ -62,10 +63,20 @@ import {
   Loader2
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
+import TransactionReceiptModal from './TransactionReceiptModal';
+import ReceiptTally, { TruthBadge } from './ReceiptTally';
+import { getProofStatus, getProofLabel, getReceiptNumber } from '../utils/transactionReceipt';
+import {
+  analyzeReceiptTruth, buildReceiptTruth, formatFlags, getEvidenceLabel, getTruthStatement, shortSeal,
+} from '../utils/receiptTruth';
+import CmmsPageShell from './CmmsPageShell';
 import { ProfilePage } from './auth/ProfilePage';
 import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
 import ReadinessPanel from './profile/ReadinessPanel';
+import FranchisePanel from './franchise/FranchisePanel';
 import GrowthPanel from './profile/GrowthPanel';
+import SecurityPanel from './profile/SecurityPanel';
+import SettingsPanel from './profile/SettingsPanel';
 import PortfolioTab from './profile/PortfolioTab';
 import ProfessionalsDirectory from './profile/ProfessionalsDirectory';
 import Pitchin from './Pitchin';
@@ -101,7 +112,7 @@ import DashboardUpdatesCard from './DashboardUpdatesCard';
 import BusinessTrendChart from './BusinessTrendChart';
 import CmmsActivityWidget from './CmmsActivityWidget';
 import { supabase } from '../lib/supabase/client';
-import { deleteTransaction } from '../services/supabaseTransactions';
+import { deleteTransaction, TWO_ACCOUNT_DELETE_MESSAGE } from '../services/supabaseTransactions';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
 import DataCleanupModal from './DataCleanupModal';
 import { walletAccountService } from '../services/walletAccountService';
@@ -118,14 +129,12 @@ import {
   getNotificationColor,
   formatTimeAgo
 } from '../services/universalNotificationsService';
-import {
-  enableWalletPhoneAlerts,
-  disableWalletPhoneAlerts,
-  getWalletPhoneAlertsStatus
-} from '../services/walletPushService';
+import { getWalletPhoneAlertsStatus } from '../services/walletPushService';
+import { GROWTH_NOTIFICATION_SOURCE, showLocalReminder } from '../services/growthScheduleService';
 import { getUserTrustGroups } from '../services/trustService';
 import { getAllAccessibleBusinessProfiles, getContributorNames } from '../services/pitchingService';
 import { CountryService } from '../services/countryService';
+import { DiamondSpinner } from './IcanDiamond';
 import {
   getPendingSharedContent,
   getSharedFiles,
@@ -177,7 +186,7 @@ const getWalletTabLabel = (tabName = '') => {
 };
 
 // Recent Transactions Collapsible Component
-const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
+const RecentTransactionsCollapsible = ({ transactions, formatCurrency, onOpenReceipt }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [period, setPeriod] = useState('week'); // 'today' | 'week' | 'month' | 'year'
 
@@ -327,7 +336,14 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
               const recCat = transaction.record_category || transaction.metadata?.record_category || 'personal';
               const isBusiness = recCat === 'business';
               return (
-                <div key={transaction.id} className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30">
+                <div
+                  key={transaction.id}
+                  role={onOpenReceipt ? 'button' : undefined}
+                  tabIndex={onOpenReceipt ? 0 : undefined}
+                  onClick={onOpenReceipt ? () => onOpenReceipt(transaction) : undefined}
+                  onKeyDown={onOpenReceipt ? (e) => { if (e.key === 'Enter') onOpenReceipt(transaction); } : undefined}
+                  className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30 cursor-pointer active:bg-slate-800/60"
+                >
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                       transaction.transaction_type === 'income' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
@@ -342,6 +358,7 @@ const RecentTransactionsCollapsible = ({ transactions, formatCurrency }) => {
                         <p className="text-xs text-gray-400">
                           {new Date(transaction.created_at).toLocaleDateString()}
                         </p>
+                        <TruthBadge tx={transaction} />
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${
                           isBusiness
                             ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
@@ -390,7 +407,7 @@ const FeatureCardWithSlideshow = ({
       ? card.slideWords
       : [card.subtitle || card.title];
   const activeSlideWord = slideWords[currentImageIndex % slideWords.length];
-  const usePitchinLikeLayout = forcePitchinLayout || card.title === 'Pitchin';
+  const usePitchinLikeLayout = forcePitchinLayout || card.title === 'IcanEra';
 
   useEffect(() => {
     setCurrentImageIndex(0);
@@ -445,7 +462,7 @@ const FeatureCardWithSlideshow = ({
 
             </div>
 
-            {card.title === 'Pitchin' && card.actions && (
+            {card.title === 'IcanEra' && card.actions && (
               <div className="mt-3 flex items-center gap-2">
                 {card.actions.map((action, idx) => (
                   <button
@@ -462,13 +479,13 @@ const FeatureCardWithSlideshow = ({
             )}
           </div>
 
-          {card.title === 'Pitchin' && onExplore && (
+          {card.title === 'IcanEra' && onExplore && (
             <button
               onClick={() => onExplore(card.title, 'launch')}
               className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-purple-600/90 hover:bg-purple-500 backdrop-blur-md px-6 py-3 rounded-full flex items-center gap-2 transition-all active:scale-95 shadow-2xl shadow-purple-500/50"
             >
               <Play className="w-5 h-5 text-white" />
-              <span className="text-white font-bold text-sm">Launch Pitchin</span>
+              <span className="text-white font-bold text-sm">Launch IcanEra</span>
             </button>
           )}
 
@@ -527,7 +544,7 @@ const FeatureCardWithSlideshow = ({
           </div>
 
           {/* Action buttons for Pitchin card */}
-          {card.title === 'Pitchin' && card.actions && (
+          {card.title === 'IcanEra' && card.actions && (
             <div className="flex items-center gap-2">
               {card.actions.map((action, idx) => (
                 <button
@@ -576,13 +593,13 @@ const FeatureCardWithSlideshow = ({
           </div>
 
           {/* Quick action overlay for Pitchin */}
-          {card.title === 'Pitchin' && onExplore && (
+          {card.title === 'IcanEra' && onExplore && (
             <button
               onClick={() => onExplore(card.title, 'launch')}
               className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-purple-600/90 hover:bg-purple-500 backdrop-blur-md px-6 py-3 rounded-full flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-purple-500/50"
             >
               <Play className="w-5 h-5 text-white" />
-              <span className="text-white font-bold text-sm">Launch Pitchin</span>
+              <span className="text-white font-bold text-sm">Launch IcanEra</span>
             </button>
           )}
 
@@ -829,6 +846,8 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [tithePayMsg, setTithePayMsg] = useState(null); // { type: 'ok'|'err', text }
   const [transactionType, setTransactionType] = useState(null); // 'business' or 'personal'
   const [showRecordTypeModal, setShowRecordTypeModal] = useState(false);
+  const [receiptTransaction, setReceiptTransaction] = useState(null);
+  const [showOnlyNoProof, setShowOnlyNoProof] = useState(false);
   const [recordTypeChoice, setRecordTypeChoice] = useState(''); // dropdown selection inside the Record Transaction modal
   const [recordBusinessChoice, setRecordBusinessChoice] = useState('');
   const [recordBusinessProfiles, setRecordBusinessProfiles] = useState([]);
@@ -897,7 +916,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     onConfirm: null
   });
 
-  // Supermarketa hands off to ICANera as
+  // Supermarketa hands off to IcanEra as
   // ?business_profile_id=<uuid>&source_app=supermarketa#cmms. Previously the
   // hash was not consumed, so the user landed on the default Manage Business
   // view instead of CMMS.
@@ -1000,8 +1019,6 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [trustBoardroomOpenRequest, setTrustBoardroomOpenRequest] = useState(null);
   const [cmmsOpenRequest, setCmmsOpenRequest] = useState(null);
-  const [phoneAlertsEnabled, setPhoneAlertsEnabled] = useState(false);
-  const [phoneAlertsBusy, setPhoneAlertsBusy] = useState(false);
   
   // Account Edit State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -1045,10 +1062,6 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [velocityMetrics, setVelocityMetrics] = useState(null);
   const [actualTitheOwed, setActualTitheOwed] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [complianceData, setComplianceData] = useState(null);
-  const [scheduleData, setScheduleData] = useState(null);
-  const [mode, setMode] = useState('SE');
-  const [operatingCountry, setOperatingCountry] = useState('Uganda');
   
   // Time Period Selector State - Each can collapse independently
   const [expandedPeriods, setExpandedPeriods] = useState({
@@ -1303,6 +1316,8 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [deleteAccountEmail, setDeleteAccountEmail] = useState('');
   const [deleteAccountPhrase, setDeleteAccountPhrase] = useState('');
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+  const [deleteAccountHasPassword, setDeleteAccountHasPassword] = useState(true);
   const [deleteAccountError, setDeleteAccountError] = useState('');
   const [deleteAccountSuccess, setDeleteAccountSuccess] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -1383,6 +1398,10 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   })();
   const txPeriodIncome  = txPeriodFiltered.filter(t => t.transaction_type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
   const txPeriodExpense = txPeriodFiltered.filter(t => t.transaction_type !== 'income').reduce((s, t) => s + (t.amount || 0), 0);
+  // Receipt truth for the period list (grades, flags, seals). Sealing hashes every row, so it
+  // is recomputed only when the records or the period change -- not on every render.
+  const periodTruth = useMemo(() => analyzeReceiptTruth(txPeriodFiltered), [transactions, txPeriod]);
+  const periodTruthRows = useMemo(() => new Map(periodTruth.rows.map((row) => [row.tx, row])), [periodTruth]);
 
   useEffect(() => {
     const mobileState = {
@@ -2666,12 +2685,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   }, [showAIChat]);
 
-  // Reflect the real push-subscription state in the settings checkbox.
-  useEffect(() => {
-    getWalletPhoneAlertsStatus()
-      .then((status) => setPhoneAlertsEnabled(status.enabled))
-      .catch(() => {});
-  }, []);
 
   // Tapping an OS-level wallet push notification focuses this tab (see
   // sw.js's notificationclick handler) and posts this message so the app
@@ -2696,6 +2709,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         }
         if (source === 'community_live') {
           window.dispatchEvent(new CustomEvent('ican-open-community-live'));
+          return;
+        }
+        if (source === 'growth' || actionTab === 'growth') {
+          window.dispatchEvent(new CustomEvent('ican-open-growth'));
           return;
         }
         if (url.includes('wallet')) openFeaturePanel('wallet');
@@ -2740,11 +2757,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
   // Reset danger-zone inputs when the panel is opened
   useEffect(() => {
-    if (selectedDetail?.tab === 'settings' && selectedDetail?.item === 'Danger Zone') {
+    if (selectedDetail?.tab === 'profile' && selectedDetail?.initialTab === 'settings') {
       setDeleteAccountEmail('');
       setDeleteAccountPhrase('');
+      setDeleteAccountPassword('');
       setDeleteAccountError('');
       setDeleteAccountSuccess('');
+      supabase?.auth.getUser().then(({ data }) => {
+        const providers = data?.user?.app_metadata?.providers;
+        setDeleteAccountHasPassword(!Array.isArray(providers) || providers.includes('email'));
+      }).catch(() => {});
     }
   }, [selectedDetail]);
 
@@ -2831,7 +2853,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
   // Reset profile configuration feedback when profile settings panel opens
   useEffect(() => {
-    if (selectedDetail?.tab === 'settings' && (selectedDetail?.item === 'Profile Configuration' || selectedDetail?.item === 'Target Net Worth')) {
+    if (selectedDetail?.tab === 'profile' && selectedDetail?.initialTab === 'settings') {
       setProfileConfigError('');
       setProfileConfigSuccess('');
     }
@@ -2845,6 +2867,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       // Add new notification to top of list
       setNotifications(prev => [newNotification, ...prev]);
       setUnreadCount(prev => prev + 1);
+
+      // Growth reminders are also pushed to phones that enabled alerts, so only pop a
+      // local one when push is off (nobody should get two). The service-worker route
+      // is used because the Notification constructor does not work on Android.
+      if (newNotification.source === GROWTH_NOTIFICATION_SOURCE) {
+        const showLocal = () => showLocalReminder({
+          title: newNotification.title,
+          body: newNotification.message,
+          tag: `growth-${newNotification.source_id}`
+        });
+        getWalletPhoneAlertsStatus()
+          .then((status) => { if (!status.enabled) showLocal(); })
+          .catch(showLocal);
+        return;
+      }
 
       // Show browser notification if permitted
       if ('Notification' in window && Notification.permission === 'granted') {
@@ -3417,54 +3454,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   };
 
-  // Global Navigator - Compliance Check Function
-  const performComplianceCheck = async () => {
-    setIsLoading(true);
-    try {
-      // Simulate API call with realistic data
-      const compliance = {
-        compliancePercentage: 85,
-        checklist: [
-          { item: 'Business License', status: 'completed', required: true },
-          { item: 'Tax Clearance Certificate', status: 'completed', required: true },
-          { item: 'Professional Certification', status: 'pending', required: false },
-          { item: 'Regulatory Registration', status: 'completed', required: true }
-        ]
-      };
-      setComplianceData(compliance);
-      console.log(' Compliance check complete:', compliance);
-    } catch (error) {
-      console.error('Compliance check failed:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Prosperity Architect - Schedule Optimization Function
-  const optimizeSchedule = async () => {
-    setIsLoading(true);
-    try {
-      // Simulate API call with realistic recommendations
-      const schedule = {
-        optimizationScore: 82,
-        recommendations: [
-          'Block 9-11 AM for High-Value Work',
-          'Schedule Spiritual Alignment: 6-7 AM daily',
-          'Physical Alignment: 5-6 PM, 3x weekly',
-          'Networking blocks: Tuesday/Thursday 2-4 PM',
-          'Review and planning: Friday 3-4 PM'
-        ],
-        nextActions: ['Book gym membership', 'Set up morning routine', 'Block calendar for HVW']
-      };
-      setScheduleData(schedule);
-      console.log(' Schedule optimization complete:', schedule);
-    } catch (error) {
-      console.error('Schedule optimization failed:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleProfileConfigFieldChange = (field, value) => {
     setProfileConfigFormData((prev) => ({
       ...prev,
@@ -3570,25 +3559,30 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     }
   };
 
-  // Danger Zone - request an emailed deletion link (see backend/routes/
-  // emailRoutes.js POST /api/email/request-account-deletion and backend/
-  // DELETE_ACCOUNT_EMAIL_SELFSERVICE.sql). Typing the Gmail + "delete my
-  // account" here only asks for that link to be sent — it never deletes
-  // anything itself. Opening the link (ConfirmDeleteAccountPage) is what
-  // actually redeems the token and deletes the account.
+  // Danger Zone - delete the account right away. The user confirms their Gmail
+  // and password (Google-only accounts type "delete" instead); the
+  // request-pin-reset Edge Function re-verifies the password server-side and
+  // then deletes the account. No email is sent.
   const handleDeleteAccount = async () => {
     setDeleteAccountError('');
     setDeleteAccountSuccess('');
 
     const email = deleteAccountEmail.trim().toLowerCase();
-    const phrase = deleteAccountPhrase.trim().toLowerCase();
 
     if (!email) {
       setDeleteAccountError('Please enter your Gmail address to confirm account deletion.');
       return;
     }
-    if (phrase !== 'delete my account') {
-      setDeleteAccountError('Please type "delete my account" exactly to confirm.');
+    if (deleteAccountHasPassword && !deleteAccountPassword) {
+      setDeleteAccountError('Please enter your password to delete your account.');
+      return;
+    }
+    if (!deleteAccountHasPassword && deleteAccountPhrase.trim().toLowerCase() !== 'delete') {
+      setDeleteAccountError('Please type "delete" to confirm.');
+      return;
+    }
+
+    if (!window.confirm('FINAL WARNING: this permanently deletes your account and EVERYTHING linked to it (profile, wallets, balances, transactions, business data). This cannot be undone. Delete everything now?')) {
       return;
     }
 
@@ -3607,32 +3601,27 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         throw new Error('That email does not match your account\'s registered Gmail.');
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('Session verification failed. Please sign in again.');
-      }
-
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-      const response = await fetch(`${backendUrl}/api/email/request-account-deletion`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ confirmEmail: email, confirmPhrase: phrase })
+      const { data, error: invokeError } = await supabase.functions.invoke('request-pin-reset', {
+        body: {
+          action: 'delete-account-now',
+          confirmEmail: email,
+          password: deleteAccountPassword,
+          confirmPhrase: deleteAccountPhrase.trim().toLowerCase()
+        }
       });
-
-      const data = await response.json();
+      if (invokeError && !data) throw new Error(invokeError.message || 'Failed to delete account.');
       if (!data?.success) {
-        throw new Error(data?.message || 'Failed to send deletion link.');
+        throw new Error(data?.message || 'Failed to delete account.');
       }
 
-      setDeleteAccountSuccess(`A deletion link was sent to ${user.email}. Open it from that inbox to permanently delete your account.`);
+      setDeleteAccountSuccess('Your account has been deleted.');
       setDeleteAccountEmail('');
       setDeleteAccountPhrase('');
+      setDeleteAccountPassword('');
+      await supabase.auth.signOut();
     } catch (error) {
       console.error('Delete account error:', error);
-      setDeleteAccountError(error.message || 'Unable to send deletion link right now.');
+      setDeleteAccountError(error.message || 'Unable to delete your account right now.');
     } finally {
       setIsDeletingAccount(false);
     }
@@ -3834,8 +3823,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
     const filtered = owner.records;
-    const rows = [['Account Holder', 'Account', 'Business Name', 'Date', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Chain Hash']];
-    filtered.forEach(t => {
+    const truth = analyzeReceiptTruth(filtered);
+    const rows = [['Account Holder', 'Account', 'Business Name', 'Date', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Chain Hash', 'Receipt No.', 'Proof', 'Receipt Ref', 'Evidence', 'Truth Flags', 'Receipt Seal', 'Report Seal']];
+    filtered.forEach((t, idx) => {
       const hash = txChainHashes[t.id] || t.data_hash || '';
       rows.push([
         owner.accountHolder,
@@ -3848,7 +3838,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         t.metadata?.quantity ?? '',
         t.metadata?.unit_price ?? '',
         Math.abs(t.amount || 0),
-        hash.slice(0, 20) || ''
+        hash.slice(0, 20) || '',
+        getReceiptNumber(t),
+        getProofLabel(t),
+        t.metadata?.receipt_ref || '',
+        getEvidenceLabel(truth.rows[idx].grade),
+        formatFlags(truth.rows[idx].flags),
+        truth.rows[idx].seal,
+        truth.summary.sealRoot
       ]);
     });
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -3871,7 +3868,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
     const filtered = owner.records;
-    const rows = filtered.map(t => ({
+    const truth = analyzeReceiptTruth(filtered);
+    const rows = filtered.map((t, idx) => ({
       Date: new Date(t.created_at).toLocaleDateString(),
       Type: (t.record_category || t.metadata?.record_category) === 'business' ? 'Business' : 'Personal',
       'Business Name': owner.businessName,
@@ -3882,10 +3880,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       Quantity: t.metadata?.quantity ?? '',
       'Unit Price (UGX)': t.metadata?.unit_price ?? '',
       'Amount (UGX)': Math.abs(t.amount || 0),
-      'Chain Hash': (txChainHashes[t.id] || t.data_hash || '').slice(0, 20)
+      'Chain Hash': (txChainHashes[t.id] || t.data_hash || '').slice(0, 20),
+      'Receipt No.': getReceiptNumber(t),
+      Proof: getProofLabel(t),
+      'Receipt Ref': t.metadata?.receipt_ref || '',
+      Evidence: getEvidenceLabel(truth.rows[idx].grade),
+      'Truth Flags': formatFlags(truth.rows[idx].flags),
+      'Receipt Seal': truth.rows[idx].seal
     }));
     const ws = XLSX.utils.json_to_sheet(rows.length ? rows : [{ Info: 'No transactions in this period' }]);
-    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 24 }, { wch: 22 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 22 }];
+    ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 24 }, { wch: 22 }, { wch: 10 }, { wch: 18 }, { wch: 32 }, { wch: 10 }, { wch: 16 }, { wch: 14 }, { wch: 22 }, { wch: 24 }, { wch: 20 }, { wch: 20 }, { wch: 10 }, { wch: 28 }, { wch: 66 }];
     const info = XLSX.utils.aoa_to_sheet([
       ['IcanEra Transaction Report'],
       [owner.scope === 'business' ? 'Business' : 'Account', owner.title],
@@ -3894,8 +3898,19 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       ['Period', period],
       ['Generated', new Date().toLocaleString()],
       ['Records', filtered.length],
+      ...(truth.summary.total ? [
+        [],
+        ['Receipt Truth'],
+        ['Rating', `${truth.summary.rating} - ${truth.summary.ratingLabel}`],
+        ['Backed by receipt', `${truth.summary.backedCount} of ${truth.summary.total} entries (${truth.summary.coverageByCount}%), ${truth.summary.coverageByValue}% of the value`],
+        ['Gold / Silver / Bronze', `${truth.summary.grades.gold.count} / ${truth.summary.grades.silver.count} / ${truth.summary.grades.bronze.count}`],
+        ['Needing a closer look', truth.summary.attentionCount],
+        ['Report seal (SHA-256)', truth.summary.sealRoot],
+        ['Statement', getTruthStatement(truth.summary)],
+        ['Note', 'Gold = photo + receipt no., Silver = photo or receipt no., Bronze = system receipt only. The seal changes if any entry or receipt is edited, so keep it with your copy.'],
+      ] : []),
     ]);
-    info['!cols'] = [{ wch: 16 }, { wch: 44 }];
+    info['!cols'] = [{ wch: 22 }, { wch: 70 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
     XLSX.utils.book_append_sheet(wb, info, 'Report Info');
@@ -4017,6 +4032,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
     const filtered = owner.records;
+    const truth = analyzeReceiptTruth(filtered);
+    const truthSummary = truth.summary;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const pageW = 210;
     const dateStr = new Date().toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric' });
@@ -4081,6 +4098,62 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       y += 11;
     }
 
+    // ── Receipt truth — what the receipts behind these entries say ──
+    if (truthSummary.total > 0) {
+      const boxX = 14;
+      const boxW = pageW - 28;
+      const boxH = 27;
+      doc.setFillColor(255, 251, 235);   // amber-50
+      doc.setDrawColor(217, 119, 6);     // amber-600
+      doc.roundedRect(boxX, y, boxW, boxH, 1.5, 1.5, 'FD');
+
+      doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(146, 64, 14);
+      doc.text('RECEIPT TRUTH', boxX + 3, y + 4.5);
+      doc.text(`Rating ${truthSummary.rating} - ${truthSummary.ratingLabel}`, boxX + boxW - 3, y + 4.5, { align: 'right' });
+
+      // Gold / silver / bronze bar, sized by number of entries
+      const barX = boxX + 3;
+      const barW = boxW - 6;
+      doc.setFillColor(226, 232, 240);
+      doc.rect(barX, y + 7, barW, 2.5, 'F');
+      let barCursor = barX;
+      [['gold', [245, 158, 11]], ['silver', [148, 163, 184]], ['bronze', [180, 83, 9]]].forEach(([grade, rgb]) => {
+        const w = (truthSummary.grades[grade].count / truthSummary.total) * barW;
+        if (w <= 0) return;
+        doc.setFillColor(...rgb);
+        doc.rect(barCursor, y + 7, w, 2.5, 'F');
+        barCursor += w;
+      });
+
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(71, 85, 105);
+      doc.text(
+        `Gold ${truthSummary.grades.gold.count}   Silver ${truthSummary.grades.silver.count}   Bronze ${truthSummary.grades.bronze.count}   |   ${truthSummary.backedCount} of ${truthSummary.total} entries (${truthSummary.coverageByCount}%) and ${truthSummary.coverageByValue}% of the value are backed by a receipt photo or number`.slice(0, 165),
+        boxX + 3, y + 13.2
+      );
+      doc.setFontSize(6); doc.setTextColor(100, 116, 139);
+      doc.text('Gold = photo + receipt no.   Silver = photo or receipt no.   Bronze = system receipt only   ! = needs a closer look', boxX + 3, y + 16.6);
+
+      doc.setFontSize(7);
+      if (truthSummary.attentionCount > 0) {
+        doc.setTextColor(180, 83, 9);
+        doc.setFont('helvetica', 'bold');
+        const issues = [
+          truthSummary.flagCounts.reused_proof && `${truthSummary.flagCounts.reused_proof} with a reused receipt`,
+          truthSummary.flagCounts.large_unbacked && `${truthSummary.flagCounts.large_unbacked} large with no receipt`,
+        ].filter(Boolean).join(', ');
+        doc.text(`${truthSummary.attentionCount} ${truthSummary.attentionCount === 1 ? 'entry needs' : 'entries need'} a closer look: ${issues}`.slice(0, 150), boxX + 3, y + 20.4);
+      } else {
+        doc.setTextColor(22, 101, 52);
+        doc.setFont('helvetica', 'bold');
+        doc.text('No entries flagged for a closer look.', boxX + 3, y + 20.4);
+      }
+
+      doc.setFont('courier', 'normal'); doc.setFontSize(6); doc.setTextColor(71, 85, 105);
+      doc.text(`Report seal (SHA-256): ${truthSummary.sealRoot}`, boxX + 3, y + 24.4);
+      doc.setFont('helvetica', 'normal');
+      y += boxH + 4;
+    }
+
     // ── Table header — Light with green accent ──
     const cols = [
       { label: '#',           w: 8  },
@@ -4088,9 +4161,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       { label: 'Type',        w: 16 },
       { label: 'Category',    w: 14 },
       { label: 'Qty',         w: 10 },
-      { label: 'Description', w: 54 },
-      { label: 'Amount (UGX)',w: 30 },
-      { label: 'Chain',       w: 18 },
+      { label: 'Description', w: 42 },
+      { label: 'Amount (UGX)',w: 28 },
+      { label: 'Chain',       w: 16 },
+      { label: 'Receipt',     w: 16 },
     ];
     doc.setFillColor(220, 252, 231);  // green-100
     doc.rect(14, y, pageW - 28, 7, 'F');
@@ -4119,9 +4193,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         isBiz ? 'Biz' : 'Pers',
         (t.metadata?.category || t.metadata?.categoryName || '').slice(0, 10),
         t.metadata?.quantity ? `${t.metadata.quantity}×` : '',
-        (t.description || '').slice(0, 40),
+        (t.description || '').slice(0, 30),
         `${isIncome ? '+' : '-'}${Math.abs(t.amount||0).toLocaleString()}`,
-        hash ? hash.slice(0, 8) + '…' : '',
+        hash ? hash.slice(0, 6) + '…' : '',
+        `${getEvidenceLabel(truth.rows[idx].grade)}${truth.rows[idx].flags.some((f) => f.severity === 'warn') ? ' !' : ''}`,
       ];
       cx = 14;
       cells.forEach((cell, ci) => {
@@ -4146,6 +4221,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       doc.setFontSize(7); doc.setTextColor(100, 116, 139);
       doc.text(`IcanEra · ${owner.title} · Confidential · 🔐 Blockchain Secured`.slice(0, 110), 14, 292);
       doc.text(`Page ${i} of ${pages}`, pageW - 14, 292, { align: 'right' });
+      if (truthSummary.sealRoot) {
+        doc.setFontSize(6);
+        doc.text(`Receipt seal ${shortSeal(truthSummary.sealRoot)} · ${truthSummary.backedCount}/${truthSummary.total} entries backed`, 14, 295.4);
+        doc.setFontSize(7);
+      }
     }
 
     doc.save(`IcanEra-Transactions-${owner.fileTag}-${period}-${new Date().toISOString().split('T')[0]}.pdf`);
@@ -4158,6 +4238,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const owner = await askDownloadOwner(allFiltered);
     if (!owner) return;
     const filtered = owner.records;
+    const truth = analyzeReceiptTruth(filtered);
+    const truthLine = getTruthStatement(truth.summary);
     // Create a modal to choose format and method
     const shareFormat = await new Promise((resolve) => {
       const modal = document.createElement('div');
@@ -4217,11 +4299,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         
         if (method === 'email') {
           const subject = encodeURIComponent(`IcanEra Transaction Report - ${owner.title} - ${period}`);
-          const body = encodeURIComponent(`Please find attached the transaction report for ${owner.title}, ${period}.\n\n${owner.subtitle}\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\n🔐 Secured by IcanEra`);
+          const body = encodeURIComponent(`Please find attached the transaction report for ${owner.title}, ${period}.\n\n${owner.subtitle}\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\nReceipts: ${truthLine}\n\n🔐 Secured by IcanEra`);
           window.location.href = `mailto:?subject=${subject}&body=${body}`;
           alert('📧 Opening email client. Please attach the downloaded PDF file.');
         } else if (method === 'whatsapp') {
-          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\n${owner.title}\n${owner.subtitle}\nPeriod: ${period}\nRecords: ${filtered.length}\n\n_PDF report downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
+          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\n${owner.title}\n${owner.subtitle}\nPeriod: ${period}\nRecords: ${filtered.length}\n\n🧾 ${truthLine}\n\n_PDF report downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
           window.open(`https://wa.me/?text=${text}`, '_blank');
           alert('📱 PDF downloaded. Please attach it in WhatsApp.');
         }
@@ -4232,8 +4314,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           [owner.scope === 'business' ? 'Business:' : 'Account:', owner.title],
           ['Account Holder:', owner.accountHolder],
           [`Period: ${period}`, `Generated: ${new Date().toLocaleDateString()}`],
+          ...(truth.summary.total ? [
+            ['Receipt truth:', `${truth.summary.rating} - ${truth.summary.ratingLabel}`],
+            ['', truthLine],
+            ['Report seal (SHA-256):', truth.summary.sealRoot],
+          ] : []),
           [],
-          ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Blockchain Hash']
+          ['#', 'Date', 'Time', 'Type', 'Category', 'Description', 'Quantity', 'Unit Price (UGX)', 'Amount (UGX)', 'Blockchain Hash', 'Receipt No.', 'Proof', 'Receipt Ref', 'Evidence', 'Truth Flags', 'Receipt Seal']
         ];
 
         filtered.forEach((t, idx) => {
@@ -4250,7 +4337,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             t.metadata?.quantity ?? '',
             t.metadata?.unit_price ?? '',
             t.transaction_type === 'income' ? t.amount : -t.amount,
-            hash
+            hash,
+            getReceiptNumber(t),
+            getProofLabel(t),
+            t.metadata?.receipt_ref || '',
+            getEvidenceLabel(truth.rows[idx].grade),
+            formatFlags(truth.rows[idx].flags),
+            truth.rows[idx].seal
           ]);
         });
         
@@ -4261,11 +4354,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         
         if (method === 'email') {
           const subject = encodeURIComponent(`IcanEra Transaction Report - ${owner.title} - ${period}`);
-          const body = encodeURIComponent(`Please find attached the transaction report for ${owner.title}, ${period}.\n\n${owner.subtitle}\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\n🔐 Secured by IcanEra`);
+          const body = encodeURIComponent(`Please find attached the transaction report for ${owner.title}, ${period}.\n\n${owner.subtitle}\n${filtered.length} transactions\nGenerated: ${new Date().toLocaleDateString()}\n\nReceipts: ${truthLine}\n\n🔐 Secured by IcanEra`);
           window.location.href = `mailto:?subject=${subject}&body=${body}`;
           alert('📧 Opening email client. Please attach the downloaded Excel file.');
         } else if (method === 'whatsapp') {
-          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\n${owner.title}\n${owner.subtitle}\nPeriod: ${period}\nRecords: ${filtered.length}\n\n_Excel file downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
+          const text = encodeURIComponent(`📊 *IcanEra Transaction Report*\n\n${owner.title}\n${owner.subtitle}\nPeriod: ${period}\nRecords: ${filtered.length}\n\n🧾 ${truthLine}\n\n_Excel file downloaded - please attach it manually_\n\n🔐 Secured by IcanEra`);
           window.open(`https://wa.me/?text=${text}`, '_blank');
           alert('📱 Excel downloaded. Please attach it in WhatsApp.');
         }
@@ -4320,6 +4413,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
   // Delete a transaction with confirmation
   const handleDeleteTransaction = async (transactionId, description) => {
+    // A transaction that ties two accounts together (e.g. a helper's entry on
+    // behalf of a company) is permanent — the database refuses it too.
+    if (transactions.find(t => t.id === transactionId)?.involves_two_accounts) {
+      alert(TWO_ACCOUNT_DELETE_MESSAGE);
+      return;
+    }
     if (!confirm(`Are you sure you want to delete "${description}"?`)) {
       return;
     }
@@ -4750,7 +4849,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   // Carousel content with images
   const carouselCards = [
     {
-      title: 'Pitchin',
+      title: 'IcanEra',
       subtitle: 'Part 3: Invest in Businesses',
       color: 'from-purple-600 to-pink-600',
       icon: Briefcase,
@@ -4862,7 +4961,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   };
 
   const handleFeatureExplore = (title, action) => {
-    const tabMap = { Pitchin: 'pitchin', Wallet: 'wallet', Trust: 'trust', CMMS: 'cmms', Trade: 'wallet', Tithe: 'tithe', Reports: 'reports' };
+    const tabMap = { IcanEra: 'pitchin', Wallet: 'wallet', Trust: 'trust', CMMS: 'cmms', Trade: 'wallet', Tithe: 'tithe', Reports: 'reports' };
     if (tabMap[title]) {
       navigateTo(tabMap[title]);
     } else if (title === 'Expense & Income') {
@@ -4892,9 +4991,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     { id: 'professionals', label: 'Professionals', icon: Users },
     { id: 'reports', label: 'Reports', icon: PieChart },
     { id: 'tithe', label: 'Tithe', icon: Heart },
-    { id: 'security', label: 'Security', icon: Shield },
-    { id: 'loancalc', label: 'Loan Calculator', icon: DollarSign },
-    { id: 'settings', label: 'Settings', icon: Sliders }
+    { id: 'loancalc', label: 'Loan Calculator', icon: DollarSign }
   ];
 
   const activeHeaderTab =
@@ -4990,6 +5087,25 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     } catch (_) { /* storage unavailable */ }
     window.addEventListener('ican-open-resume-tab', openResumeTab);
     return () => window.removeEventListener('ican-open-resume-tab', openResumeTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A tapped Growth reminder opens the app on the Growth page: straight away when a tab
+  // is already open (event from the service-worker message handler), or via ?growth=1
+  // when the push had to launch the app.
+  useEffect(() => {
+    const openGrowth = () => openDetailView('growth', 'Growth');
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('growth') === '1') {
+        params.delete('growth');
+        const rest = params.toString();
+        window.history.replaceState({}, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+        openGrowth();
+      }
+    } catch (_) { /* URL unavailable */ }
+    window.addEventListener('ican-open-growth', openGrowth);
+    return () => window.removeEventListener('ican-open-growth', openGrowth);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -5100,9 +5216,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     else if (tabId === 'professionals') { setShowProfessionalsPanel(true); setActiveBottomTab('professionals'); }
     else if (tabId === 'reports')  { setShowReportingSystem(true); }
     else if (tabId === 'tithe')    { setShowTithingCalculator(true);      setActiveBottomTab('tithe'); }
-    else if (tabId === 'security') { setShowSecurityPanel(true); }
+    else if (tabId === 'security') { setSelectedDetail({ tab: 'profile', item: 'My Profile', initialTab: 'security' }); }
     else if (tabId === 'loancalc') { setShowBusinessLoanCalculator(true); }
-    else if (tabId === 'settings') { setShowSettingsPanel(true); }
+    else if (tabId === 'settings') { setSelectedDetail({ tab: 'profile', item: 'My Profile', initialTab: 'settings' }); }
   };
 
   // High-level: THE single navigation function — always records history first
@@ -5220,7 +5336,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         raw_entry_text: transaction.originalText || transaction.rawInput || null,
         entry_mode: resolvedCategory === 'business' ? 'professional_business' : 'personal_quick',
         quantity: transaction.quantity || null,
-        unit_price: transaction.unitPrice || null
+        unit_price: transaction.unitPrice || null,
+        receipt_url: transaction.receiptUrl || null,
+        receipt_attached_at: transaction.receiptAttachedAt || null,
+        receipt_ref: transaction.receiptRef || null
       }
     };
     setTransactions(prev => [formattedTransaction, ...prev]);
@@ -5312,7 +5431,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         // Pass selected business profile so this transaction feeds PitchIn share valuation
         business_profile_id: transaction.businessProfileId || null,
         quantity: transaction.quantity || null,
-        unit_price: transaction.unitPrice || null
+        unit_price: transaction.unitPrice || null,
+        receipt_url: transaction.receiptUrl || null,
+        receipt_attached_at: transaction.receiptAttachedAt || null,
+        receipt_ref: transaction.receiptRef || null
       });
 
       if (result.success) {
@@ -5490,14 +5612,28 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* Classic account menu */}
               {showMenuDropdown && (
-                <div className="icn-menu absolute right-0 top-full mt-2 z-50 w-64" role="menu">
+                <>
+                {/* Tap anywhere outside to dismiss */}
+                <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setShowMenuDropdown(false)} />
+                <div className="icn-menu absolute right-0 top-full mt-2 z-50" role="menu" onKeyDown={(e) => { if (e.key === 'Escape') setShowMenuDropdown(false); }}>
                   <div className="icn-menu-head">
-                    <p className="icn-menu-eyebrow">Signed in</p>
-                    <p className="icn-menu-name">{displayName || 'My account'}</p>
+                    <span className="icn-menu-avatar"><HeaderAvatar url={avatarUrl} name={displayName} /></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="icn-menu-eyebrow">Signed in</p>
+                      <p className="icn-menu-name">{displayName || 'My account'}</p>
+                    </div>
+                    <button type="button" className="icn-menu-close" aria-label="Close menu" onClick={() => setShowMenuDropdown(false)}>✕</button>
                   </div>
                   <div className="icn-menu-body">
+                    <p className="icn-menu-label">Account</p>
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('profile', 'My Profile'); setShowMenuDropdown(false); }}>
                       <User /> <span>My profile</span>
+                    </button>
+                    <button role="menuitem" className="icn-menu-item is-sub" onClick={() => { openDetailView('profile', 'My Profile', 'security'); setShowMenuDropdown(false); }}>
+                      <Shield /> <span>Security</span>
+                    </button>
+                    <button role="menuitem" className="icn-menu-item is-sub" onClick={() => { openDetailView('profile', 'My Profile', 'settings'); setShowMenuDropdown(false); }}>
+                      <Settings /> <span>Settings</span>
                     </button>
 
                     <button
@@ -5520,11 +5656,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       )}
                     </button>
 
-                    <button role="menuitem" className="icn-menu-item" onClick={() => navigateTo('security')}>
-                      <Shield /> <span>Security</span>
-                    </button>
-
-                    <div className="icn-menu-sep" />
+                    <p className="icn-menu-label">Career &amp; growth</p>
 
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('readiness', 'Readiness'); setShowMenuDropdown(false); }}>
                       <Target /> <span>Readiness</span>
@@ -5535,11 +5667,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('resume', 'My Resume'); setShowMenuDropdown(false); }}>
                       <Briefcase /> <span>My resume</span>
                     </button>
+                    <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('franchise', 'Franchise'); setShowMenuDropdown(false); }}>
+                      <Network /> <span>Franchise</span>
+                    </button>
                     <button role="menuitem" className="icn-menu-item" onClick={() => { navigateTo('professionals'); setShowMenuDropdown(false); }}>
                       <Users /> <span>Professionals</span>
                     </button>
 
-                    <div className="icn-menu-sep" />
+                    <p className="icn-menu-label">Tools</p>
 
                     <button role="menuitem" className="icn-menu-item" onClick={() => navigateTo('reports')}>
                       <BarChart3 /> <span>Reports</span>
@@ -5551,33 +5686,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       <Percent /> <span>Loan calculator</span>
                     </button>
 
-                    <div className="icn-menu-sep" />
-
-                    <button
-                      role="menuitem"
-                      className={`icn-menu-item ${activeMenuTab === 'settings' ? 'is-active' : ''}`}
-                      onClick={() => setActiveMenuTab(activeMenuTab === 'settings' ? null : 'settings')}
-                      aria-expanded={activeMenuTab === 'settings'}
-                    >
-                      <Settings /> <span>Settings</span>
-                      <ChevronDown className="icn-menu-trail" style={{ width: 14, height: 14, transform: activeMenuTab === 'settings' ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
-                    </button>
-
-                    {activeMenuTab === 'settings' && (
-                      <>
-                        <button role="menuitem" className="icn-menu-item is-sub" onClick={() => { openDetailView('settings', 'Readiness Pillars'); setShowMenuDropdown(false); }}>
-                          <span>Readiness pillars</span>
-                        </button>
-                        <button role="menuitem" className="icn-menu-item is-sub" onClick={() => { openDetailView('settings', 'Profile Configuration'); setShowMenuDropdown(false); }}>
-                          <span>Profile configuration</span>
-                        </button>
-                        <button role="menuitem" className="icn-menu-item is-sub is-danger" onClick={() => { openDetailView('settings', 'Danger Zone'); setShowMenuDropdown(false); }}>
-                          <span>Danger zone</span>
-                        </button>
-                      </>
-                    )}
                   </div>
                 </div>
+                </>
               )}
               </div>
             </div>
@@ -5826,41 +5937,49 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </button>
       </div>
 
-      {/* ====== DETAIL PAGE - SETTINGS ONLY ====== */}
-      {selectedDetail && (
+      {/* ====== DETAIL PAGE (avatar-menu destinations) — classic ebony & gold sheet ====== */}
+      {selectedDetail && (() => {
+        const isOwnProfilePage = selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile';
+        const detailEyebrow = {
+          profile: 'Account', security: 'Account', readiness: 'Career & growth',
+          growth: 'Career & growth', resume: 'Career & growth', settings: 'Settings',
+        }[selectedDetail.tab] || 'IcanEra';
+        return (
         <div
-          className={`fixed inset-0 bg-black/60 z-40 flex ${isWebDashboard ? 'items-center justify-center p-4' : 'items-end'}`}
+          className={`fixed inset-0 bg-black/70 backdrop-blur-[2px] z-40 flex ${isWebDashboard ? 'items-center justify-center p-4' : 'items-end'}`}
           onClick={() => setSelectedDetail(null)}
         >
           <div
-            className={`bg-gradient-to-br from-slate-900 to-purple-900 ${isWebDashboard
-              ? 'rounded-t-2xl rounded-2xl w-full max-w-3xl max-h-[85vh] pl-6 pr-8 pt-6'
-              : selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile'
-                ? 'w-full h-[100dvh] max-h-[100dvh] rounded-none p-0'
-                : 'w-full max-h-[calc(100dvh-env(safe-area-inset-top))] rounded-t-2xl pb-[calc(7rem+env(safe-area-inset-bottom))] pl-6 pr-8 pt-[calc(1.5rem+env(safe-area-inset-top))]'
+            role="dialog"
+            aria-modal="true"
+            aria-label={selectedDetail.item}
+            className={`icn-sheet icn-classic ${isWebDashboard
+              ? 'rounded-2xl w-full max-w-3xl max-h-[85vh]'
+              : isOwnProfilePage
+                ? 'w-full h-[100dvh] max-h-[100dvh] rounded-none'
+                : 'w-full max-h-[calc(100dvh-env(safe-area-inset-top))] rounded-t-2xl'
             } overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header - Settings Only */}
-            {!(selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile') && (
-              <div className="flex items-center justify-between mb-6 pb-4 border-b border-purple-500/20">
-              <div>
-                <h2 className="text-2xl font-bold text-purple-300">
-                   {selectedDetail.item}
-                </h2>
-              </div>
-              <button
-                onClick={() => setSelectedDetail(null)}
-                className="text-2xl leading-none text-gray-400 hover:text-white transition"
-                aria-label="Close details"
-              >
-                ×
-              </button>
+            {/* Classic masthead: eyebrow, serif title, gold rule with diamond */}
+            {!isOwnProfilePage && (
+              <div className="icn-page-head">
+                <div className="min-w-0">
+                  <p className="icn-page-eyebrow">{detailEyebrow}</p>
+                  <h2 className="icn-page-title">{selectedDetail.item}</h2>
+                </div>
+                <button
+                  onClick={() => setSelectedDetail(null)}
+                  className="icn-page-close"
+                  aria-label="Close details"
+                >
+                  <X />
+                </button>
               </div>
             )}
 
             {/* Content - Single Column */}
-            <div className="space-y-4">
+            <div className={isOwnProfilePage ? 'space-y-4' : `space-y-4 px-4 sm:px-6 pt-5 ${isWebDashboard ? 'pb-6' : 'pb-[calc(7rem+env(safe-area-inset-bottom))]'}`}>
               {/* MY PROFILE */}
               {selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile' && (
                 <div className="overflow-hidden rounded-lg">
@@ -5868,6 +5987,41 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     onClose={() => setSelectedDetail(null)}
                     onLogout={() => {
                       setSelectedDetail(null);
+                    }}
+                    section={['security', 'settings'].includes(selectedDetail.initialTab) ? selectedDetail.initialTab : 'profile'}
+                    onSectionChange={(next) => setSelectedDetail((prev) => (prev ? { ...prev, initialTab: next } : prev))}
+                    extraSections={{
+                      security: <SecurityPanel />,
+                      settings: (
+                        <SettingsPanel
+                          bridge={{
+                            config: {
+                              form: profileConfigFormData,
+                              onChange: handleProfileConfigFieldChange,
+                              onSave: handleSaveProfileConfiguration,
+                              saving: isSavingProfileConfig,
+                              error: profileConfigError,
+                              success: profileConfigSuccess,
+                              normalizeTarget: normalizeTargetNetWorthValue
+                            },
+                            danger: {
+                              email: deleteAccountEmail,
+                              setEmail: setDeleteAccountEmail,
+                              password: deleteAccountPassword,
+                              setPassword: setDeleteAccountPassword,
+                              phrase: deleteAccountPhrase,
+                              setPhrase: setDeleteAccountPhrase,
+                              hasPassword: deleteAccountHasPassword,
+                              error: deleteAccountError,
+                              success: deleteAccountSuccess,
+                              busy: isDeletingAccount,
+                              onDelete: handleDeleteAccount
+                            },
+                            onOpenGrowth: () => openDetailView('growth', 'Growth'),
+                            onOpenReadiness: () => openDetailView('readiness', 'Readiness')
+                          }}
+                        />
+                      )
                     }}
                   />
                 </div>
@@ -5967,233 +6121,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* READINESS - GLOBAL NAVIGATOR */}
               {selectedDetail.tab === 'readiness' && selectedDetail.item === 'Readiness' && (
-                <ReadinessPanel
-                  mode={mode}
-                  setMode={setMode}
-                  operatingCountry={operatingCountry}
-                  setOperatingCountry={setOperatingCountry}
-                  performComplianceCheck={performComplianceCheck}
-                  isLoading={isLoading}
-                  complianceData={complianceData}
-                />
+                <ReadinessPanel />
               )}
 
               {/* GROWTH - PROSPERITY ARCHITECT */}
               {selectedDetail.tab === 'growth' && selectedDetail.item === 'Growth' && (
-                <GrowthPanel optimizeSchedule={optimizeSchedule} isLoading={isLoading} scheduleData={scheduleData} />
+                <GrowthPanel />
+              )}
+
+              {/* FRANCHISE - PARTNER CONSOLE */}
+              {selectedDetail.tab === 'franchise' && selectedDetail.item === 'Franchise' && (
+                <FranchisePanel />
               )}
 
               {/* MY RESUME / PORTFOLIO */}
               {selectedDetail.tab === 'resume' && selectedDetail.item === 'My Resume' && (
                 <PortfolioTab />
-              )}
-
-              {/* DANGER ZONE - DELETE ACCOUNT */}
-              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Danger Zone' && (
-                <div className="space-y-4">
-                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
-                    <h3 className="text-sm font-bold text-red-300 mb-4">Danger Zone - Delete Your Account</h3>
-                    <p className="text-xs text-gray-300 mb-4">This action cannot be undone. All your data will be permanently deleted. We'll email a confirmation link to your Gmail — your account is only deleted once you open that link.</p>
-
-                    <div className="mb-4">
-                      <label className="block text-xs text-gray-300 mb-2">Confirm your Gmail address</label>
-                      <input
-                        type="email"
-                        value={deleteAccountEmail}
-                        onChange={(e) => setDeleteAccountEmail(e.target.value)}
-                        placeholder="Enter your Gmail address"
-                        autoComplete="email"
-                        className="w-full px-3 py-2 bg-slate-800/70 border border-red-500/30 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                      />
-                    </div>
-
-                    <div className="mb-4">
-                      <label className="block text-xs text-gray-300 mb-2">Type <span className="font-mono text-red-300">delete my account</span> to confirm</label>
-                      <input
-                        type="text"
-                        value={deleteAccountPhrase}
-                        onChange={(e) => setDeleteAccountPhrase(e.target.value)}
-                        placeholder="delete my account"
-                        autoComplete="off"
-                        className="w-full px-3 py-2 bg-slate-800/70 border border-red-500/30 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
-                      />
-                    </div>
-
-                    {deleteAccountError && (
-                      <div className="mb-3 p-2 bg-red-500/20 border border-red-500/40 rounded text-xs text-red-200">
-                        {deleteAccountError}
-                      </div>
-                    )}
-
-                    {deleteAccountSuccess && (
-                      <div className="mb-3 p-2 bg-green-500/20 border border-green-500/40 rounded text-xs text-green-200">
-                        {deleteAccountSuccess}
-                      </div>
-                    )}
-
-                    <button
-                      onClick={handleDeleteAccount}
-                      disabled={isDeletingAccount}
-                      className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-800/60 text-white rounded-lg transition font-medium mb-2"
-                    >
-                      {isDeletingAccount ? 'Sending Deletion Link...' : 'Send Deletion Link'}
-                    </button>
-                    <button 
-                      onClick={() => setSelectedDetail(null)}
-                      className="w-full px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* SETTINGS - READINESS PILLARS */}
-              {selectedDetail.item === 'Readiness Pillars' && (
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-purple-500/30 rounded-lg p-4">
-                    <div className="space-y-3">
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Financial Capital</span>
-                          <span className="text-xs font-bold text-blue-300">100%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Transform volatility into secured wealth</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-blue-500 h-2 rounded-full" style={{width: '100%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Legal Resilience</span>
-                          <span className="text-xs font-bold text-amber-300">75%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Treasury Guardian protecting your assets</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-amber-500 h-2 rounded-full" style={{width: '75%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Regulatory Compliance</span>
-                          <span className="text-xs font-bold text-green-300">85%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Global Navigator ensuring eligibility</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-green-500 h-2 rounded-full" style={{width: '85%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Human Capital</span>
-                          <span className="text-xs font-bold text-purple-300">70%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Prosperity Architect maximizing your time</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-purple-500 h-2 rounded-full" style={{width: '70%'}}></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SETTINGS - PROFILE CONFIGURATION */}
-              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Profile Configuration' && (
-                <div className="space-y-4">
-                  <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs font-medium text-gray-300 block mb-2">Full Name</label>
-                        <input
-                          type="text"
-                          value={profileConfigFormData.fullName}
-                          onChange={(e) => handleProfileConfigFieldChange('fullName', e.target.value)}
-                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-gray-300 block mb-2">Email</label>
-                        <input
-                          type="email"
-                          value={profileConfigFormData.email}
-                          onChange={(e) => handleProfileConfigFieldChange('email', e.target.value)}
-                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                        />
-                      </div>
-                      <button
-                        onClick={() => handleSaveProfileConfiguration('full')}
-                        disabled={isSavingProfileConfig}
-                        className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 text-white rounded-lg transition font-medium text-sm"
-                      >
-                         Save Changes
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SETTINGS - TARGET NET WORTH */}
-              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Target Net Worth' && (
-                <div className="space-y-4">
-                  <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs font-medium text-gray-300 block mb-2">Target Net Worth (UGX)</label>
-                        <input
-                          type="text"
-                          value={profileConfigFormData.targetNetWorth}
-                          onChange={(e) => handleProfileConfigFieldChange('targetNetWorth', normalizeTargetNetWorthValue(e.target.value))}
-                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-gray-300 block mb-2">Timeline (Years)</label>
-                        <input
-                          type="text"
-                          value={profileConfigFormData.timelineYears}
-                          onChange={(e) => handleProfileConfigFieldChange('timelineYears', e.target.value.replace(/[^\d]/g, ''))}
-                          className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                        />
-                      </div>
-                      <button
-                        onClick={() => handleSaveProfileConfiguration('target')}
-                        disabled={isSavingProfileConfig}
-                        className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 text-white rounded-lg transition font-medium text-sm"
-                      >
-                         Save Target
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SETTINGS - PREFERENCES */}
-              {selectedDetail.item === 'Preferences' && (
-                <div className="space-y-4">
-                  <div className="bg-slate-900/50 border border-purple-500/30 rounded-lg p-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-2">
-                        <span className="text-sm text-gray-300">Dark Mode</span>
-                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium"> Enabled</button>
-                      </div>
-                      <div className="flex items-center justify-between p-2">
-                        <span className="text-sm text-gray-300">Notifications</span>
-                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium"> Enabled</button>
-                      </div>
-                      <div className="flex items-center justify-between p-2">
-                        <span className="text-sm text-gray-300">Two-Factor Auth</span>
-                        <button className="px-3 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium"> Enabled</button>
-                      </div>
-                      <button className="w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg transition font-medium text-sm mt-3">
-                         Save Preferences
-                      </button>
-                    </div>
-                  </div>
-                </div>
               )}
               
               {/* SECURITY - NOTIFICATIONS */}
@@ -6287,6 +6230,12 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             setSelectedDetail(null);
                             setApprovalsFocusId(notification.source_id || null);
                             setShowApprovalsModal(true);
+                            return;
+                          }
+
+                          // Schedule reminders from the Growth page open Growth itself.
+                          if (notification.source === GROWTH_NOTIFICATION_SOURCE) {
+                            openDetailView('growth', 'Growth');
                             return;
                           }
 
@@ -7151,104 +7100,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {/* ==========================================
                   SETTINGS - READINESS PILLARS
               ========================================== */}
-              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Readiness Pillars' && (
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-purple-500/30 rounded-lg p-4">
-                    <h3 className="text-sm font-bold text-white mb-4"> Readiness Pillars</h3>
-                    
-                    <div className="space-y-3">
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Financial Capital</span>
-                          <span className="text-xs font-bold text-blue-300">100%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Transform volatility into secured wealth</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-blue-500 h-2 rounded-full" style={{width: '100%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Legal Resilience</span>
-                          <span className="text-xs font-bold text-amber-300">50%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Treasury Guardian protecting your assets</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-amber-500 h-2 rounded-full" style={{width: '50%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Regulatory Compliance</span>
-                          <span className="text-xs font-bold text-green-300">50%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Global Navigator ensuring eligibility</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-green-500 h-2 rounded-full" style={{width: '50%'}}></div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">Human Capital</span>
-                          <span className="text-xs font-bold text-purple-300">50%</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-2">Prosperity Architect maximizing your time</p>
-                        <div className="w-full bg-slate-700 rounded-full h-2">
-                          <div className="bg-purple-500 h-2 rounded-full" style={{width: '50%'}}></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selectedDetail.tab === 'settings' && selectedDetail.item === 'Profile Configuration' && (
-                <div className="space-y-4">
-                  <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-purple-500/30 rounded-lg p-4">
-                    <h3 className="text-sm font-bold text-white mb-4">Profile Configuration</h3>
-                    <div className="space-y-3">
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <p className="text-xs text-gray-400">Target Net Worth (UGX)</p>
-                        <input
-                          type="text"
-                          value={profileConfigFormData.targetNetWorth}
-                          onChange={(e) => handleProfileConfigFieldChange('targetNetWorth', normalizeTargetNetWorthValue(e.target.value))}
-                          className="mt-2 w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded text-white text-sm"
-                        />
-                        <p className="text-xs text-purple-300 mt-2">UGX {formattedTargetNetWorth}</p>
-                        <button
-                          onClick={() => handleSaveProfileConfiguration('target')}
-                          disabled={isSavingProfileConfig}
-                          className="mt-3 w-full px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-60 text-white rounded-lg transition font-medium text-sm"
-                        >
-                          {isSavingProfileConfig ? 'Saving Target...' : 'Save Target Net Worth'}
-                        </button>
-                      </div>
-                      <div className="bg-slate-900/50 p-3 rounded">
-                        <p className="text-xs text-gray-400">Legal Disclaimer</p>
-                        <p className="text-xs text-gray-300 mt-2">{profileConfigFormData.legalDisclaimer}</p>
-                      </div>
-                      {profileConfigError && (
-                        <div className="p-2 bg-red-500/20 border border-red-500/40 rounded text-xs text-red-200">
-                          {profileConfigError}
-                        </div>
-                      )}
-                      {profileConfigSuccess && (
-                        <div className="p-2 bg-green-500/20 border border-green-500/40 rounded text-xs text-green-200">
-                          {profileConfigSuccess}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ====== FINANCIAL TRENDS PANEL ======
           Inline, always-visible replacement for the old Progress/Analytics
@@ -7384,7 +7240,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               onDrill={handleTrendDrill}
             />
 
-            {/* Live ICANera price chart — real, not a shortcut into the wallet */}
+            {/* Live IcanEra price chart — real, not a shortcut into the wallet */}
             <div className="mt-4">
               <IcanPriceChartWidget />
             </div>
@@ -7518,9 +7374,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     </div>
                   </div>
 
+                  <ReceiptTally
+                    truth={periodTruth}
+                    formatCurrency={formatCurrency}
+                    onlyMissing={showOnlyNoProof}
+                    onToggleMissing={() => setShowOnlyNoProof((v) => !v)}
+                  />
+
                   {/* Transaction rows */}
                   <div className="space-y-2 max-h-80 overflow-y-auto pr-0.5">
-                    {txPeriodFiltered.slice(0, 30).map((transaction) => {
+                    {(showOnlyNoProof ? txPeriodFiltered.filter((t) => getProofStatus(t) === 'system') : txPeriodFiltered).slice(0, 30).map((transaction) => {
                       const recCat    = transaction.record_category || transaction.metadata?.record_category || 'personal';
                       const isBiz     = recCat === 'business';
                       const isIncome  = transaction.transaction_type === 'income';
@@ -7530,7 +7393,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       return (
                         <div
                           key={transaction.id}
-                          className="flex items-center gap-3 p-3 rounded-xl border transition-all group"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setReceiptTransaction(transaction)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') setReceiptTransaction(transaction); }}
+                          className="flex items-center gap-3 p-3 rounded-xl border transition-all group cursor-pointer"
                           style={{ backgroundColor: 'var(--color-bgSecondary)', borderColor: 'var(--color-border)' }}
                         >
                           {/* Category emoji / fallback icon */}
@@ -7563,6 +7430,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                                   {catName}
                                 </span>
                               )}
+                              <TruthBadge row={periodTruthRows.get(transaction)} tx={transaction} />
                               <span className="text-[10px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
                                 {fmtTxDate(transaction.created_at)}
                               </span>
@@ -7574,13 +7442,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                             <p className={`text-sm font-bold ${isIncome ? 'text-green-400' : 'text-red-400'}`}>
                               {isIncome ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
                             </p>
-                            <button
-                              onClick={() => handleDeleteTransaction(transaction.id, transaction.description || 'Transaction')}
-                              className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {transaction.involves_two_accounts ? (
+                              <span
+                                className="p-1.5 text-amber-300/80"
+                                title={transaction.archived_at ? 'Archived — involves two accounts, never deleted' : 'Involves two accounts — can never be deleted'}
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                              </span>
+                            ) : (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(transaction.id, transaction.description || 'Transaction'); }}
+                                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -7669,7 +7546,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       </div>
 
       {/* Recent Transactions Section - Keep for backup */}
-      {transactions.length > 0 && false && <RecentTransactionsCollapsible transactions={transactions} formatCurrency={formatCurrency} />}
+      {transactions.length > 0 && false && <RecentTransactionsCollapsible transactions={transactions} formatCurrency={formatCurrency} onOpenReceipt={setReceiptTransaction} />}
 
       {/* ====== UPDATES SECTION - HORIZONTAL SCROLLING ====== */}
       <div className="px-4 py-6">
@@ -8365,7 +8242,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   return (
                     <div
                       key={transaction.id}
-                      className="flex items-center gap-2 p-2.5 rounded-lg border transition-all group"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setReceiptTransaction(transaction)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') setReceiptTransaction(transaction); }}
+                      className="flex items-center gap-2 p-2.5 rounded-lg border transition-all group cursor-pointer"
                       style={{
                         backgroundColor: 'var(--color-bgSecondary)',
                         borderColor: isBiz && chainHash ? 'rgba(59,130,246,0.25)' : 'var(--color-border)'
@@ -8409,6 +8290,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               {chainHash.slice(0, 6)}…
                             </span>
                           )}
+                          <TruthBadge tx={transaction} />
                           <span className="text-[9px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
                             {fmtExpDate(transaction.created_at)}
                           </span>
@@ -8420,13 +8302,22 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         <p className={`text-xs font-bold tabular-nums ${isIncome ? 'text-green-400' : 'text-red-400'}`}>
                           {isIncome ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
                         </p>
-                        <button
-                          onClick={() => handleDeleteTransaction(transaction.id, transaction.description || 'Transaction')}
-                          className="p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        {transaction.involves_two_accounts ? (
+                          <span
+                            className="p-1 text-amber-300/80"
+                            title={transaction.archived_at ? 'Archived — involves two accounts, never deleted' : 'Involves two accounts — can never be deleted'}
+                          >
+                            <Lock className="w-3 h-3" />
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(transaction.id, transaction.description || 'Transaction'); }}
+                            className="p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -8752,7 +8643,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Professionals Directory Panel */}
       {showProfessionalsPanel && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-[#241511] to-slate-950 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
+          className={`icn-page-surface icn-classic fixed inset-x-0 z-30 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
           style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <ProfessionalsDirectory />
@@ -8963,7 +8854,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       >
                         <option value="" className="bg-white text-gray-900">Select business…</option>
                         {recordBusinessProfiles.map(p => (
-                          <option key={p.id} value={p.id} className="bg-white text-gray-900">{p.business_name}</option>
+                          <option key={p.id} value={p.id} className="bg-white text-gray-900">
+                            {p.business_name}{p.isTeamMember ? ' — on behalf of the company (entries are permanent)' : p.isCoOwned ? ' — co-owned (entries are permanent)' : ''}
+                          </option>
                         ))}
                       </select>
                     )}
@@ -8982,35 +8875,51 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         </div>
       )}
 
-      {/* ── Tithe Panel — full screen, like Pitchin/Trust/CMMS ─────────────── */}
+      {/* ── Tithe Panel — full screen, classic CMMS-payroll look ─────────────── */}
       {showTithingCalculator && (
         <div
-          className={`fixed inset-x-0 flex flex-col bg-gradient-to-b from-amber-50 to-yellow-50 overflow-hidden ${isWebDashboard ? 'z-30' : 'top-0 z-[60]'}`}
-          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
+          className={`cmms-page-classic fixed inset-x-0 overflow-y-auto ${isWebDashboard ? 'z-30' : 'top-0 z-[60]'}`}
+          style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset, paddingTop: isWebDashboard ? 0 : 'env(safe-area-inset-top)' }}
         >
-          {/* Header */}
-          <div
-            className="flex-shrink-0 bg-gradient-to-r from-yellow-600 to-amber-500 px-4 pb-3 flex items-center gap-3"
-            style={{ paddingTop: isWebDashboard ? '0.75rem' : 'calc(env(safe-area-inset-top) + 0.75rem)' }}
-          >
-            <button
-              onClick={() => navigateTo('dashboard')}
-              className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/15 hover:bg-white/25 active:scale-90 transition-all flex-shrink-0"
-              aria-label="Go back"
+          <div className="tithe-scope min-h-full p-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <CmmsPageShell
+              title="Tithe Calculator"
+              subtitle="Steward faithfully — Uganda giving tracker"
+              icon={<span aria-hidden="true">🙏</span>}
+              hideFullPage
+              actions={
+                <button type="button" onClick={() => navigateTo('dashboard')} className="cmms-classic-btn-secondary inline-flex !h-auto !min-h-0 flex-shrink-0 items-center gap-1.5 !px-3 !py-1.5 text-xs" aria-label="Go back">
+                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back
+                </button>
+              }
+              chips={[
+                tithingMetrics.monthLabel,
+                tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data',
+                tithingMetrics.combinedTithe > 0 && `Due UGX ${Math.round(tithingMetrics.remainingCombined || 0).toLocaleString()}`,
+              ]}
+              info={'Tithe is worked out from the income and business profit recorded in the period you pick. Use Quick for the overall picture, Business or Personal to adjust the rate, and Pay In to record what you have given.'}
+              tabs={[
+                { id: 'quick', label: '⚡ Quick', accent: 'gold' },
+                { id: 'business', label: '💼 Business', accent: 'navy' },
+                { id: 'personal', label: '👤 Personal', accent: 'emerald' },
+                { id: 'pay-in', label: '💳 Pay In', accent: 'burgundy' },
+              ]}
+              tab={selectedTithingTab}
+              onTab={(tab) => {
+                setSelectedTithingTab(tab);
+                if (tab === 'pay-in') {
+                  // Use remaining after already-paid tithe (not gross income-based)
+                  const due = Math.round(tithingMetrics.remainingCombined || 0);
+                  if (due > 0) setTithePaymentAmount(String(due));
+                  setTithePaymentType('combined');
+                  clampPaymentDateToSelectedPeriod();
+                }
+              }}
             >
-              <ChevronLeft className="w-5 h-5 text-white" />
-            </button>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-base font-bold text-white leading-tight">🙏 Tithe Calculator</h2>
-              <p className="text-yellow-100 text-[10px] mt-0.5">Steward faithfully — Uganda giving tracker</p>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* Period selector — which stretch of time this whole calculator looks at */}
-              <div className="bg-white rounded-xl p-3 shadow-sm">
-                <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Tithe Period</label>
-                <div className="flex gap-1.5 flex-wrap">
+              <section className="cmms-accent-gold space-y-2.5">
+                <p className="cmms-classic-label">Tithe period</p>
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap cmms-tabs-compact" role="tablist" aria-label="Tithe period" style={{ scrollbarWidth: 'none' }}>
                   {[
                     { id: 'this_month',   label: 'This Month' },
                     { id: 'last_month',   label: 'Last Month' },
@@ -9020,596 +8929,266 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   ].map(p => (
                     <button
                       key={p.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={tithePeriodPreset === p.id}
                       onClick={() => { setTithePeriodPreset(p.id); if (p.id !== 'custom') clampPaymentDateToSelectedPeriod(); }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${tithePeriodPreset === p.id ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      className={`cmms-ptab cmms-accent-gold ${tithePeriodPreset === p.id ? 'is-active' : ''}`}
                     >
                       {p.label}
                     </button>
                   ))}
                 </div>
                 {tithePeriodPreset === 'custom' && (
-                  <div className="flex gap-2 mt-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                     <input
                       type="date"
+                      aria-label="Period start"
                       value={tithePeriodCustomStart}
                       max={tithePeriodCustomEnd || undefined}
                       onChange={e => { setTithePeriodCustomStart(e.target.value); if (e.target.value && tithePeriodCustomEnd) clampPaymentDateToSelectedPeriod(); }}
-                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="cmms-classic-field min-w-0 !px-2 !py-1.5 !text-xs"
                     />
-                    <span className="text-xs text-gray-400 self-center">to</span>
+                    <span className="cmms-classic-muted text-xs">to</span>
                     <input
                       type="date"
+                      aria-label="Period end"
                       value={tithePeriodCustomEnd}
                       min={tithePeriodCustomStart || undefined}
                       max={new Date().toISOString().split('T')[0]}
                       onChange={e => { setTithePeriodCustomEnd(e.target.value); if (tithePeriodCustomStart && e.target.value) clampPaymentDateToSelectedPeriod(); }}
-                      className="flex-1 px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      className="cmms-classic-field min-w-0 !px-2 !py-1.5 !text-xs"
                     />
                   </div>
                 )}
                 {tithePeriodPreset === 'custom' && (!tithePeriodCustomStart || !tithePeriodCustomEnd) && (
-                  <p className="text-[10px] text-amber-600 mt-1.5">Pick both dates — showing "{tithingMetrics.monthLabel}" until then.</p>
+                  <p className="tithe-notice tithe-notice-warn text-xs" role="status">Pick both dates — showing "{tithingMetrics.monthLabel}" until then.</p>
                 )}
-              </div>
+              </section>
 
-              {/* Tab switcher */}
-              <div className="flex gap-2 bg-amber-100 rounded-xl p-1">
-                {['quick', 'business', 'personal', 'pay-in'].map(tab => (
-                  <button key={tab} onClick={() => {
-                    setSelectedTithingTab(tab);
-                    if (tab === 'pay-in') {
-                      // Use remaining after already-paid tithe (not gross income-based)
-                      const due = Math.round(tithingMetrics.remainingCombined || 0);
-                      if (due > 0) setTithePaymentAmount(String(due));
-                      setTithePaymentType('combined');
-                      clampPaymentDateToSelectedPeriod();
-                    }
-                  }}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold capitalize transition ${selectedTithingTab === tab ? 'bg-white text-amber-700 shadow' : 'text-amber-600 hover:text-amber-800'}`}>
-                    {tab === 'quick' ? '⚡ Quick' : tab === 'business' ? '💼 Business' : tab === 'personal' ? '👤 Personal' : '💳 Pay In'}
-                  </button>
-                ))}
-              </div>
+              <div className="cmms-ornament" aria-hidden="true" />
 
               {selectedTithingTab === 'quick' && (
-                <div className="space-y-3">
-                  {/* Live data banner */}
-                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
-                    <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? `${tithingMetrics.monthLabel} — based on this period's transactions` : 'No transactions loaded yet'}</span>
+                <div className="space-y-4">
+                  <p className="tithe-notice tithe-notice-ok text-xs font-semibold" role="status" style={tithingMetrics.hasRealData ? undefined : { borderColor: 'rgba(100,116,139,.4)', background: 'rgba(100,116,139,.12)', color: 'inherit' }}>
+                    {tithingMetrics.hasRealData ? `🟢 Live · ${tithingMetrics.monthLabel} — based on this period's transactions` : '⚪ No transactions loaded yet'}
+                  </p>
+
+                  {/* Combined tithe — calculated from current income, not database historical debt */}
+                  <div className="cmms-classic-card cmms-accent-gold p-4 text-center">
+                    <p className="cmms-classic-label">Combined tithe due</p>
+                    <p className="tithe-total mt-1" style={{ color: '#b8892b' }}>UGX {(tithingMetrics.combinedTithe || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                    <p className="cmms-classic-muted text-xs">calculated from current income</p>
                   </div>
 
-                  {/* 🔧 FIXED: Separate personal and business income display */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm space-y-3">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{tithingMetrics.monthLabel} Financials</p>
-                    
-                    {/* Personal Income */}
-                    <div className="border-b pb-2">
-                      <div className="text-xs text-gray-400 mb-1">💼 Personal Income (Salary)</div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Salary/Wages</span>
-                        <span className="font-semibold text-green-600">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
-                      </div>
+                  <div className="tithe-ledger">
+                    <div className="tithe-figure">
+                      <p className="tithe-figure-label">Personal tithe</p>
+                      <p className="tithe-figure-value tithe-ok">UGX {(tithingMetrics.personalTithe || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                      <p className="tithe-figure-sub">from income</p>
                     </div>
-                    
-                    {/* Business Income & Expenses */}
-                    <div className="border-b pb-2">
-                      <div className="text-xs text-gray-400 mb-1">🏪 Business Income & Expenses</div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Business Sales</span>
-                        <span className="font-semibold text-green-600">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Business Expenses</span>
-                        <span className="font-semibold text-red-500">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
-                      </div>
-                      <div className="flex justify-between text-sm font-bold border-t pt-1 mt-1">
-                        <span className="text-gray-700">Business Profit</span>
-                        <span className={tithingMetrics.businessProfit >= 0 ? 'text-blue-600' : 'text-red-600'}>
-                          UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Total Summary */}
-                    <div className="bg-gray-50 rounded-lg p-2">
-                      <div className="flex justify-between text-sm font-bold">
-                        <span className="text-gray-700">Total Net Worth Change</span>
-                        <span className={tithingMetrics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}>
-                          UGX {(tithingMetrics.netProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}
-                        </span>
-                      </div>
+                    <div className="tithe-figure" style={{ animationDelay: '70ms' }}>
+                      <p className="tithe-figure-label">Business tithe</p>
+                      <p className="tithe-figure-value tithe-info">UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                      <p className="tithe-figure-sub">from profit</p>
                     </div>
                   </div>
 
-                  {/* Combined tithe - SHOW CALCULATED (based on current income), not database historical debt */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm text-center">
-                    <p className="text-xs text-gray-500 mb-1">Combined tithe due (calculated from current income)</p>
-                    <div className="text-3xl font-bold text-amber-600">UGX {(tithingMetrics.combinedTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white rounded-xl p-4 shadow-sm text-center">
-                      <div className="text-sm text-gray-500">Personal Tithe</div>
-                      <div className="text-xl font-bold text-green-600">UGX {(tithingMetrics.personalTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                      <div className="text-xs text-gray-400">calculated from income</div>
-                    </div>
-                    <div className="bg-white rounded-xl p-4 shadow-sm text-center">
-                      <div className="text-sm text-gray-500">Business Tithe</div>
-                      <div className="text-xl font-bold text-blue-600">UGX {(tithingMetrics.businessTithe || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</div>
-                      <div className="text-xs text-gray-400">calculated from profit</div>
-                    </div>
-                  </div>
-                  <div className="bg-amber-100 rounded-xl p-3 text-xs text-amber-800 border border-amber-200">
+                  <section className="cmms-classic-card cmms-accent-emerald p-4">
+                    <h3 className="cmms-classic-heading mb-1">{tithingMetrics.monthLabel} financials</h3>
+                    <p className="cmms-classic-eyebrow mt-2">💼 Personal income (salary)</p>
+                    <div className="tithe-row"><span className="cmms-classic-muted">Salary / wages</span><span className="font-semibold tithe-ok">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <p className="cmms-classic-eyebrow mt-3">🏪 Business income &amp; expenses</p>
+                    <div className="tithe-row"><span className="cmms-classic-muted">Business sales</span><span className="font-semibold tithe-ok">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <div className="tithe-row"><span className="cmms-classic-muted">Business expenses</span><span className="font-semibold tithe-bad">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <div className="tithe-row tithe-row-total"><span className="cmms-classic-heading">Business profit</span><span className={tithingMetrics.businessProfit >= 0 ? 'tithe-info' : 'tithe-bad'}>UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <div className="tithe-row tithe-row-total"><span className="cmms-classic-heading">Net worth change</span><span className={tithingMetrics.netProfit >= 0 ? 'tithe-ok' : 'tithe-bad'}>UGX {(tithingMetrics.netProfit || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                  </section>
+
+                  <div className="cmms-classic-callout p-3 text-xs">
                     📖 <strong>Malachi 3:10</strong> — "Bring the whole tithe into the storehouse... and see if I will not open the floodgates of heaven."
                   </div>
                 </div>
               )}
 
               {selectedTithingTab === 'business' && (
-                <div className="space-y-3">
-                  {/* Live data banner */}
-                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
-                    <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? `Business profit for ${tithingMetrics.monthLabel}` : 'No transactions loaded yet'}</span>
+                <div className="space-y-4">
+                  <p className="tithe-notice tithe-notice-ok text-xs font-semibold" role="status" style={tithingMetrics.hasRealData ? undefined : { borderColor: 'rgba(100,116,139,.4)', background: 'rgba(100,116,139,.12)', color: 'inherit' }}>
+                    {tithingMetrics.hasRealData ? `🟢 Live · Business profit for ${tithingMetrics.monthLabel}` : '⚪ No transactions loaded yet'}
+                  </p>
+                  <section className="cmms-classic-card cmms-accent-navy p-4">
+                    <label className="cmms-classic-label block">Business tithe rate (%)
+                      <input type="range" min="5" max="20" value={businessTithingRate} onChange={e => setBusinessTithingRate(Number(e.target.value))} className="mt-2 w-full" />
+                    </label>
+                    <div className="mt-1 flex justify-between text-xs cmms-classic-muted"><span>5%</span><span className="font-bold" style={{ color: '#b8892b' }}>{businessTithingRate}%</span><span>20%</span></div>
+                  </section>
+                  <section className="cmms-classic-card cmms-accent-navy p-4">
+                    <div className="tithe-row"><span className="cmms-classic-muted">Business sales ({tithingMetrics.monthLabel})</span><span className="font-semibold tithe-ok">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <div className="tithe-row"><span className="cmms-classic-muted">Business expenses ({tithingMetrics.monthLabel})</span><span className="font-semibold tithe-bad">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                    <div className="tithe-row tithe-row-total"><span className="cmms-classic-heading">Business profit</span><span className={(tithingMetrics.businessProfit || 0) >= 0 ? 'tithe-info' : 'tithe-bad'}>UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                  </section>
+                  <div className="cmms-classic-card cmms-accent-gold p-4 text-center">
+                    <p className="cmms-classic-label">Tithe due {actualTitheOwed && actualTitheOwed.business !== undefined ? '(from database)' : '(calculated)'}</p>
+                    <p className="tithe-total mt-1" style={{ color: '#b8892b' }}>UGX {(actualTitheOwed && actualTitheOwed.business !== undefined ? actualTitheOwed.business : (tithingMetrics.businessTithe || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                   </div>
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Business Tithe Rate (%)</label>
-                    <input type="range" min="5" max="20" value={businessTithingRate}
-                      onChange={e => setBusinessTithingRate(Number(e.target.value))}
-                      className="w-full accent-amber-500" />
-                    <div className="flex justify-between text-xs text-gray-400 mt-1"><span>5%</span><span className="font-bold text-amber-600">{businessTithingRate}%</span><span>20%</span></div>
-                  </div>
-                  {/* 🔧 FIXED: Show only business income for business tithe */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm space-y-2">
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Business Sales ({tithingMetrics.monthLabel})</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.businessIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Business Expenses ({tithingMetrics.monthLabel})</span><span className="font-semibold text-red-500">UGX {(tithingMetrics.businessExpenses || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm border-t pt-2"><span className="text-gray-700 font-bold">Business Profit</span><span className={`font-bold ${(tithingMetrics.businessProfit || 0) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>UGX {(tithingMetrics.businessProfit || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm text-xs text-gray-500 mt-1"><span>Tithe Due {actualTitheOwed && actualTitheOwed.business !== undefined ? '(from database)' : '(calculated)'}</span><span className="font-bold text-amber-600 text-lg">UGX {(actualTitheOwed && actualTitheOwed.business !== undefined ? actualTitheOwed.business : (tithingMetrics.businessTithe || 0)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                  </div>
-                  <div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-800 border border-blue-200">
-                    💡 <strong>Tithe on Profit:</strong> Business tithe is calculated on net profit (revenue minus expenses), not gross revenue.
+                  <div className="tithe-notice tithe-notice-info text-xs">
+                    💡 <strong>Tithe on profit:</strong> business tithe is calculated on net profit (revenue minus expenses), not gross revenue.
                   </div>
                 </div>
               )}
 
               {selectedTithingTab === 'personal' && (
-                <div className="space-y-3">
-                  {/* Live data banner */}
-                  <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${tithingMetrics.hasRealData ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
-                    <span>{tithingMetrics.hasRealData ? '🟢 Live' : '⚪ No data'}</span>
-                    <span>{tithingMetrics.hasRealData ? `Salary for ${tithingMetrics.monthLabel}` : 'No transactions loaded yet'}</span>
+                <div className="space-y-4">
+                  <p className="tithe-notice tithe-notice-ok text-xs font-semibold" role="status" style={tithingMetrics.hasRealData ? undefined : { borderColor: 'rgba(100,116,139,.4)', background: 'rgba(100,116,139,.12)', color: 'inherit' }}>
+                    {tithingMetrics.hasRealData ? `🟢 Live · Salary for ${tithingMetrics.monthLabel}` : '⚪ No transactions loaded yet'}
+                  </p>
+                  <section className="cmms-classic-card cmms-accent-emerald p-4">
+                    <label className="cmms-classic-label block">Personal tithe rate (%)
+                      <input type="range" min="5" max="20" value={personalTithingRate} onChange={e => setPersonalTithingRate(Number(e.target.value))} className="mt-2 w-full" />
+                    </label>
+                    <div className="mt-1 flex justify-between text-xs cmms-classic-muted"><span>5%</span><span className="font-bold" style={{ color: '#b8892b' }}>{personalTithingRate}%</span><span>20%</span></div>
+                  </section>
+                  <section className="cmms-classic-card cmms-accent-emerald p-4">
+                    <div className="tithe-row"><span className="cmms-classic-muted">Salary / wages ({tithingMetrics.monthLabel})</span><span className="font-semibold tithe-ok">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                  </section>
+                  <div className="cmms-classic-card cmms-accent-gold p-4 text-center">
+                    <p className="cmms-classic-label">Tithe due {actualTitheOwed && actualTitheOwed.personal !== undefined ? '(from database)' : '(calculated)'}</p>
+                    <p className="tithe-total mt-1" style={{ color: '#b8892b' }}>UGX {(actualTitheOwed && actualTitheOwed.personal !== undefined ? actualTitheOwed.personal : (tithingMetrics.personalTithe || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
                   </div>
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Personal Tithe Rate (%)</label>
-                    <input type="range" min="5" max="20" value={personalTithingRate}
-                      onChange={e => setPersonalTithingRate(Number(e.target.value))}
-                      className="w-full accent-amber-500" />
-                    <div className="flex justify-between text-xs text-gray-400 mt-1"><span>5%</span><span className="font-bold text-amber-600">{personalTithingRate}%</span><span>20%</span></div>
-                  </div>
-                  {/* 🔧 FIXED: Show only personal/salary income for personal tithe */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm space-y-2">
-                    <div className="flex justify-between text-sm"><span className="text-gray-500">Salary/Wages ({tithingMetrics.monthLabel})</span><span className="font-semibold text-green-600">UGX {(tithingMetrics.personalIncome || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                    <div className="flex justify-between text-sm border-t pt-2"><span className="text-gray-500">Tithe Due {actualTitheOwed && actualTitheOwed.personal !== undefined ? '(from database)' : '(calculated)'}</span><span className="font-bold text-green-600 text-lg">UGX {(actualTitheOwed && actualTitheOwed.personal !== undefined ? actualTitheOwed.personal : (tithingMetrics.personalTithe || 0)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div>
-                  </div>
-                  <div className="bg-green-50 rounded-xl p-3 text-xs text-green-800 border border-green-200">
-                    💡 <strong>Tithe on Income:</strong> Personal tithe is calculated on salary/wages and personal income only.
+                  <div className="tithe-notice tithe-notice-ok text-xs">
+                    💡 <strong>Tithe on income:</strong> personal tithe is calculated on salary/wages and personal income only.
                   </div>
                 </div>
               )}
 
-              {/* 🔧 NEW: Pay In Tithe Tab */}
-              {selectedTithingTab === 'pay-in' && (
-                <div className="space-y-3">
-                  {/* Summary of tithe due - SHOW CALCULATED based on current income */}
-                  <div className={`rounded-xl p-4 shadow-sm border ${tithingMetrics.remainingCombined === 0 && tithingMetrics.combinedTithe > 0 ? 'bg-green-50 border-green-300' : 'bg-gradient-to-br from-amber-100 to-yellow-100 border-amber-300'}`}>
-                    <div className="text-xs text-amber-700 mb-1 font-semibold uppercase tracking-wide">
-                      {tithingMetrics.monthLabel} — Remaining Tithe
-                    </div>
-                    <div className={`text-3xl font-bold ${tithingMetrics.remainingCombined === 0 && tithingMetrics.combinedTithe > 0 ? 'text-green-700' : 'text-amber-900'}`}>
-                      UGX {Math.round(tithingMetrics.remainingCombined || 0).toLocaleString()}
-                    </div>
-                    <div className="text-xs text-amber-700 mt-2 space-y-1">
-                      <div>
-                        Personal: <span className="font-semibold">UGX {Math.round(tithingMetrics.remainingPersonal || 0).toLocaleString()}</span>
-                        <span className="text-gray-400 ml-1">of {Math.round(tithingMetrics.personalTithe || 0).toLocaleString()}</span>
-                      </div>
-                      <div>
-                        Business: <span className="font-semibold">UGX {Math.round(tithingMetrics.remainingBusiness || 0).toLocaleString()}</span>
-                        <span className="text-gray-400 ml-1">of {Math.round(tithingMetrics.businessTithe || 0).toLocaleString()}</span>
-                      </div>
-                      {tithingMetrics.totalTithePaid > 0 && (
-                        <div className="text-green-600 font-semibold pt-1 border-t border-amber-200">
-                          ✓ Paid this month: UGX {Math.round(tithingMetrics.totalTithePaid).toLocaleString()}
-                        </div>
-                      )}
-                    </div>
-                    {tithingMetrics.remainingCombined === 0 && tithingMetrics.combinedTithe > 0 && (
-                      <div className="text-sm text-green-700 font-bold mt-2">🎉 All tithes cleared for {tithingMetrics.monthLabel}!</div>
+              {/* Pay In Tithe Tab */}
+              {selectedTithingTab === 'pay-in' && (() => {
+                const cleared = tithingMetrics.remainingCombined === 0 && tithingMetrics.combinedTithe > 0;
+                const paidPct = tithingMetrics.combinedTithe > 0 ? Math.min(100, Math.round(((tithingMetrics.totalTithePaid || 0) / tithingMetrics.combinedTithe) * 100)) : 0;
+                return (
+                <div className="space-y-4">
+                  {/* Summary of tithe due - calculated from current income */}
+                  <section className="cmms-classic-card cmms-accent-gold p-4 text-center">
+                    <p className="cmms-classic-label">{tithingMetrics.monthLabel} — remaining tithe</p>
+                    <p className={`tithe-total mt-1 ${cleared ? 'tithe-ok' : ''}`} style={cleared ? undefined : { color: '#b8892b' }}>UGX {Math.round(tithingMetrics.remainingCombined || 0).toLocaleString()}</p>
+                    {tithingMetrics.combinedTithe > 0 && (
+                      <div className="tithe-meter mt-3" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={paidPct} aria-label="Share of tithe paid"><span style={{ width: `${paidPct}%` }} /></div>
                     )}
-                    {tithingMetrics.combinedTithe === 0 && (
-                      <div className="text-xs text-gray-500 mt-2">No income recorded this month yet.</div>
-                    )}
-                  </div>
-
-                  {/* 🔧 FIXED: Use calculated tithe for the quick-fill button */}
-                  {/* Payment amount input */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">Payment Amount (UGX)</label>
-                    <input 
-                      type="number" 
-                      value={tithePaymentAmount}
-                      onChange={e => setTithePaymentAmount(e.target.value)}
-                      placeholder="Enter amount to pay"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                    <button 
-                      onClick={() => setTithePaymentAmount(String(Math.round(tithingMetrics.remainingCombined || 0)))}
-                      className="text-xs text-amber-600 hover:text-amber-700 mt-2 font-semibold"
-                    >
-                      Use full tithe due
-                    </button>
-                  </div>
-
-                  {/* Payment type */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">Payment Type</label>
-                    <select
-                      value={tithePaymentType}
-                      onChange={e => { setTithePaymentType(e.target.value); if (e.target.value !== 'personal') setTithePaySourceTxId(''); }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="combined">Combined Tithe</option>
-                      <option value="personal">Personal Tithe — per income</option>
-                      <option value="business">Business Tithe — pay any time</option>
-                    </select>
-                    {tithePaymentType === 'business' && (
-                      <p className="text-xs text-gray-500 mt-2">You decide when to pay this — weekly, monthly, or whenever suits the business.</p>
-                    )}
-                  </div>
-
-                  {/* Personal: tie this payment to one specific income so it's tithed exactly once */}
-                  {tithePaymentType === 'personal' && (() => {
-                    const isBizTx = (t) => t.metadata?.record_category === 'business' || t.metadata?.reporting_bucket === 'sold_income' || t.metadata?.category === 'business';
-                    const personalIncomeTxs = transactions
-                      .filter(t => t.transaction_type === 'income' && !isBizTx(t))
-                      .slice(0, 30);
-                    const titheedSourceIds = new Set(
-                      transactions
-                        .filter(t => t.metadata?.record_category === 'tithe' && t.metadata?.source_transaction_id)
-                        .map(t => t.metadata.source_transaction_id)
-                    );
-                    return (
-                      <div className="bg-white rounded-xl p-4 shadow-sm">
-                        <label className="block text-xs font-semibold text-gray-700 mb-2">Which Income? (optional — ties this payment to one income)</label>
-                        <select
-                          value={tithePaySourceTxId}
-                          onChange={e => {
-                            const id = e.target.value;
-                            setTithePaySourceTxId(id);
-                            const tx = personalIncomeTxs.find(t => t.id === id);
-                            if (tx) setTithePaymentAmount(String(Math.round(tx.amount * 0.1)));
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        >
-                          <option value="">— General personal tithe (not tied to one income) —</option>
-                          {personalIncomeTxs.map(t => {
-                            const already = titheedSourceIds.has(t.id);
-                            return (
-                              <option key={t.id} value={t.id} disabled={already}>
-                                {already ? '✓ Already tithed — ' : ''}{t.description || 'Income'} · UGX {t.amount.toLocaleString()} (10% = {Math.round(t.amount * 0.1).toLocaleString()})
-                              </option>
-                            );
-                          })}
-                        </select>
-                        {tithePaySourceTxId && (
-                          <p className="text-xs text-green-600 mt-1">🔒 This payment will be locked to that income — it can't be tithed twice.</p>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Cash or Wallet */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">Paid With</label>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setTithePaymentMethod('wallet')}
-                        className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${tithePaymentMethod === 'wallet' ? 'bg-amber-500 text-white border-amber-500' : 'bg-gray-50 text-gray-600 border-gray-300'}`}>
-                        💳 Wallet
-                      </button>
-                      <button type="button" onClick={() => setTithePaymentMethod('cash')}
-                        className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${tithePaymentMethod === 'cash' ? 'bg-amber-500 text-white border-amber-500' : 'bg-gray-50 text-gray-600 border-gray-300'}`}>
-                        💵 Cash (given by hand)
-                      </button>
+                    {cleared && <p className="tithe-ok mt-2 text-sm font-bold">🎉 All tithes cleared for {tithingMetrics.monthLabel}!</p>}
+                    {tithingMetrics.combinedTithe === 0 && <p className="cmms-classic-muted mt-2 text-xs">No income recorded this month yet.</p>}
+                  </section>
+                  <div className="tithe-ledger">
+                    <div className="tithe-figure">
+                      <p className="tithe-figure-label">Personal left</p>
+                      <p className="tithe-figure-value">UGX {Math.round(tithingMetrics.remainingPersonal || 0).toLocaleString()}</p>
+                      <p className="tithe-figure-sub">of {Math.round(tithingMetrics.personalTithe || 0).toLocaleString()}</p>
                     </div>
-                    {tithePaymentMethod === 'cash' && (
-                      <p className="text-xs text-gray-500 mt-2">Recorded as given — your wallet balance won't be touched.</p>
-                    )}
+                    <div className="tithe-figure" style={{ animationDelay: '70ms' }}>
+                      <p className="tithe-figure-label">Business left</p>
+                      <p className="tithe-figure-value">UGX {Math.round(tithingMetrics.remainingBusiness || 0).toLocaleString()}</p>
+                      <p className="tithe-figure-sub">of {Math.round(tithingMetrics.businessTithe || 0).toLocaleString()}</p>
+                    </div>
                   </div>
+                  {tithingMetrics.totalTithePaid > 0 && (
+                    <p className="tithe-notice tithe-notice-ok text-xs font-semibold">✓ Paid this period: UGX {Math.round(tithingMetrics.totalTithePaid).toLocaleString()}</p>
+                  )}
 
-                  {/* Giving date — the giver's own choice */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">Giving Date</label>
-                    <input
-                      type="date"
-                      value={tithePaymentDate}
-                      max={new Date().toISOString().split('T')[0]}
-                      onChange={e => setTithePaymentDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
+                  <section className="cmms-classic-card cmms-accent-burgundy space-y-4 p-4">
+                    <h3 className="cmms-classic-heading">Record a payment</h3>
 
-                  {/* Payment recipient - OPTIONAL */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">
-                      Recipient/Church/Organization (Optional)
+                    <label className="cmms-classic-label block">Payment amount (UGX)
+                      <input type="number" value={tithePaymentAmount} onChange={e => setTithePaymentAmount(e.target.value)} placeholder="Enter amount to pay" className="cmms-classic-field mt-1 normal-case tracking-normal font-normal" />
+                      <button type="button" onClick={() => setTithePaymentAmount(String(Math.round(tithingMetrics.remainingCombined || 0)))} className="mt-2 text-xs font-semibold normal-case tracking-normal !bg-transparent" style={{ color: '#b8892b', background: 'transparent', border: 0, boxShadow: 'none', padding: 0 }}>Use full tithe due</button>
                     </label>
-                    <input 
-                      type="text" 
-                      value={tithePaymentRecipient}
-                      onChange={e => setTithePaymentRecipient(e.target.value)}
-                      placeholder="e.g., Mt. Zion Church, Local Ministry"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                    {tithePaymentRecipient.trim() === '' && (
-                      <p className="text-xs text-gray-500 mt-1">💡 Defaults to 'Tithe Fund' if not specified</p>
-                    )}
-                  </div>
 
-                  {/* Payment notes */}
-                  <div className="bg-white rounded-xl p-4 shadow-sm">
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">Notes (Optional)</label>
-                    <textarea 
-                      value={tithePaymentNotes}
-                      onChange={e => setTithePaymentNotes(e.target.value)}
-                      placeholder="Add any notes about this tithe payment"
-                      rows="2"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
+                    <label className="cmms-classic-label block">Payment type
+                      <select value={tithePaymentType} onChange={e => { setTithePaymentType(e.target.value); if (e.target.value !== 'personal') setTithePaySourceTxId(''); }} className="cmms-classic-field mt-1 normal-case tracking-normal font-normal">
+                        <option value="combined">Combined Tithe</option>
+                        <option value="personal">Personal Tithe — per income</option>
+                        <option value="business">Business Tithe — pay any time</option>
+                      </select>
+                      {tithePaymentType === 'business' && <span className="cmms-classic-muted mt-1 block text-xs normal-case tracking-normal font-normal">You decide when to pay this — weekly, monthly, or whenever suits the business.</span>}
+                    </label>
 
-                  {/* Success/Error messages */}
-                  {tithePaymentSuccess && (
-                    <div className="bg-green-50 rounded-xl p-3 text-sm text-green-800 border border-green-200">
-                      ✅ {tithePaymentSuccess}
+                    {/* Personal: tie this payment to one specific income so it's tithed exactly once */}
+                    {tithePaymentType === 'personal' && (() => {
+                      const isBizTx = (t) => t.metadata?.record_category === 'business' || t.metadata?.reporting_bucket === 'sold_income' || t.metadata?.category === 'business';
+                      const personalIncomeTxs = transactions
+                        .filter(t => t.transaction_type === 'income' && !isBizTx(t))
+                        .slice(0, 30);
+                      const titheedSourceIds = new Set(
+                        transactions
+                          .filter(t => t.metadata?.record_category === 'tithe' && t.metadata?.source_transaction_id)
+                          .map(t => t.metadata.source_transaction_id)
+                      );
+                      return (
+                        <label className="cmms-classic-label block">Which income? (optional — ties this payment to one income)
+                          <select
+                            value={tithePaySourceTxId}
+                            onChange={e => {
+                              const id = e.target.value;
+                              setTithePaySourceTxId(id);
+                              const tx = personalIncomeTxs.find(t => t.id === id);
+                              if (tx) setTithePaymentAmount(String(Math.round(tx.amount * 0.1)));
+                            }}
+                            className="cmms-classic-field mt-1 normal-case tracking-normal font-normal"
+                          >
+                            <option value="">— General personal tithe (not tied to one income) —</option>
+                            {personalIncomeTxs.map(t => {
+                              const already = titheedSourceIds.has(t.id);
+                              return (
+                                <option key={t.id} value={t.id} disabled={already}>
+                                  {already ? '✓ Already tithed — ' : ''}{t.description || 'Income'} · UGX {t.amount.toLocaleString()} (10% = {Math.round(t.amount * 0.1).toLocaleString()})
+                                </option>
+                              );
+                            })}
+                          </select>
+                          {tithePaySourceTxId && <span className="tithe-ok mt-1 block text-xs normal-case tracking-normal font-normal">🔒 This payment will be locked to that income — it can't be tithed twice.</span>}
+                        </label>
+                      );
+                    })()}
+
+                    {/* Cash or Wallet */}
+                    <div>
+                      <p className="cmms-classic-label">Paid with</p>
+                      <div className="mt-1.5 flex gap-2" role="tablist" aria-label="Payment method">
+                        <button type="button" role="tab" aria-selected={tithePaymentMethod === 'wallet'} onClick={() => setTithePaymentMethod('wallet')} className={`cmms-ptab cmms-accent-burgundy flex-1 justify-center ${tithePaymentMethod === 'wallet' ? 'is-active' : ''}`}>💳 Wallet</button>
+                        <button type="button" role="tab" aria-selected={tithePaymentMethod === 'cash'} onClick={() => setTithePaymentMethod('cash')} className={`cmms-ptab cmms-accent-burgundy flex-1 justify-center ${tithePaymentMethod === 'cash' ? 'is-active' : ''}`}>💵 Cash</button>
+                      </div>
+                      {tithePaymentMethod === 'cash' && <p className="cmms-classic-muted mt-1.5 text-xs">Given by hand — recorded as given, your wallet balance won't be touched.</p>}
                     </div>
-                  )}
-                  {tithePaymentError && (
-                    <div className="bg-red-50 rounded-xl p-3 text-sm text-red-800 border border-red-200">
-                      ❌ {tithePaymentError}
-                    </div>
-                  )}
 
-                  {/* Submit button */}
-                  <button 
-                    onClick={() => handlePayTithe()}
-                    disabled={isSubmittingTithe || !tithePaymentAmount}
-                    className={`w-full py-3 rounded-xl font-bold text-white transition ${
-                      isSubmittingTithe || !tithePaymentAmount
-                        ? 'bg-gray-400 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600'
-                    }`}
-                  >
-                    {isSubmittingTithe ? 'Processing...' : `${tithePaymentMethod === 'cash' ? '💵' : '💳'} Record Tithe Payment`}
-                  </button>
+                    {/* Giving date — the giver's own choice */}
+                    <label className="cmms-classic-label block">Giving date
+                      <input type="date" value={tithePaymentDate} max={new Date().toISOString().split('T')[0]} onChange={e => setTithePaymentDate(e.target.value)} className="cmms-classic-field mt-1 normal-case tracking-normal font-normal" />
+                    </label>
 
-                  <div className="bg-amber-50 rounded-xl p-3 text-xs text-amber-800 border border-amber-200">
+                    {/* Payment recipient - OPTIONAL */}
+                    <label className="cmms-classic-label block">Recipient / church / organization (optional)
+                      <input type="text" value={tithePaymentRecipient} onChange={e => setTithePaymentRecipient(e.target.value)} placeholder="e.g., Mt. Zion Church, Local Ministry" className="cmms-classic-field mt-1 normal-case tracking-normal font-normal" />
+                      {tithePaymentRecipient.trim() === '' && <span className="cmms-classic-muted mt-1 block text-xs normal-case tracking-normal font-normal">💡 Defaults to 'Tithe Fund' if not specified</span>}
+                    </label>
+
+                    {/* Payment notes */}
+                    <label className="cmms-classic-label block">Notes (optional)
+                      <textarea value={tithePaymentNotes} onChange={e => setTithePaymentNotes(e.target.value)} placeholder="Add any notes about this tithe payment" rows="2" className="cmms-classic-field mt-1 normal-case tracking-normal font-normal" />
+                    </label>
+
+                    {tithePaymentSuccess && <p className="tithe-notice tithe-notice-ok" role="status">✅ {tithePaymentSuccess}</p>}
+                    {tithePaymentError && <p className="tithe-notice tithe-notice-bad" role="alert">❌ {tithePaymentError}</p>}
+
+                    <button type="button" onClick={() => handlePayTithe()} disabled={isSubmittingTithe || !tithePaymentAmount} className="cmms-classic-btn-primary w-full px-4 py-3">
+                      {isSubmittingTithe ? 'Processing…' : `${tithePaymentMethod === 'cash' ? '💵' : '💳'} Record tithe payment`}
+                    </button>
+                  </section>
+
+                  <div className="cmms-classic-callout p-3 text-xs">
                     📖 <strong>Malachi 3:10</strong> — "Bring the whole tithe into the storehouse... and see if I will not open the floodgates of heaven and pour out so much blessing."
                   </div>
                 </div>
-              )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Security Modal ────────────────────────────────────────────────── */}
-      {showSecurityPanel && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
-          <div className="bg-gradient-to-br from-slate-950 to-red-950 rounded-2xl w-full max-w-2xl shadow-2xl border border-red-500/30" style={{minHeight: '400px'}}>
-            {/* Header */}
-            <div className="bg-gradient-to-r from-red-700 to-red-600 rounded-t-2xl px-5 py-4 flex items-center justify-between sticky top-0 z-10">
-              <div>
-                <h2 className="text-xl font-bold text-white">🔐 Security Settings</h2>
-                <p className="text-red-100 text-xs mt-0.5">Protect your account — Uganda verified</p>
-              </div>
-              <button 
-                onClick={() => setShowSecurityPanel(false)} 
-                className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Password Section */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Lock className="w-5 h-5 text-red-400" />
-                  Password
-                </h3>
-                <button className="w-full px-4 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-200 rounded-lg transition text-sm font-medium">
-                  Change Password
-                </button>
-              </div>
-
-              {/* Two-Factor Authentication */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-orange-400" />
-                  Two-Factor Authentication
-                </h3>
-                <div className="px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-300">SMS Verification</span>
-                    <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">✓ Enabled</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Session Management */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-yellow-400" />
-                  Active Sessions
-                </h3>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  <div className="px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg text-sm">
-                    <div className="text-slate-300 font-medium">Chrome on Windows</div>
-                    <div className="text-xs text-slate-500 mt-1">Last active: Just now</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Login Activity */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Eye className="w-5 h-5 text-blue-400" />
-                  Recent Login Activity
-                </h3>
-                <div className="space-y-2 max-h-40 overflow-y-auto text-xs text-slate-400">
-                  <div>✓ Signed in today at 2:45 PM from Uganda</div>
-                  <div>✓ Signed in yesterday at 10:20 AM from Uganda</div>
-                  <div>✓ Signed in 2 days ago at 3:15 PM from Uganda</div>
-                </div>
-              </div>
-
-              {/* Close Button */}
-              <button 
-                onClick={() => setShowSecurityPanel(false)}
-                className="w-full px-4 py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-white rounded-lg font-semibold transition"
-              >
-                Close Security Settings
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Settings Modal ────────────────────────────────────────────────── */}
-      {showSettingsPanel && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto" style={{scrollBehavior: 'smooth', paddingTop: '180px'}}>
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl border border-slate-700/50" style={{minHeight: '400px'}}>
-            {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-t-2xl px-5 py-4 flex items-center justify-between sticky top-0 z-10">
-              <div>
-                <h2 className="text-xl font-bold text-white">⚙️ Settings</h2>
-                <p className="text-indigo-100 text-xs mt-0.5">Customize your IcanEra experience</p>
-              </div>
-              <button 
-                onClick={() => setShowSettingsPanel(false)} 
-                className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Account Settings */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <User className="w-5 h-5 text-indigo-400" />
-                  Account
-                </h3>
-                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition flex items-center justify-between group">
-                  <span className="text-slate-300 text-sm">Email Address</span>
-                  <span className="text-slate-500 text-xs group-hover:text-slate-400">{userProfile?.email || 'user@ican.era'}</span>
-                </button>
-                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition flex items-center justify-between">
-                  <span className="text-slate-300 text-sm">Phone Number</span>
-                  <span className="text-slate-500 text-xs">{userProfile?.phone || '+256 7XX XXX XXXX'}</span>
-                </button>
-              </div>
-
-              {/* Notification Settings */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-yellow-400" />
-                  Notifications
-                </h3>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-3 px-4 py-3 bg-slate-700/20 hover:bg-slate-700/30 border border-slate-600 rounded-lg cursor-pointer transition">
-                    <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-indigo-500" />
-                    <span className="text-slate-300 text-sm flex-1">Email notifications</span>
-                  </label>
-                  <label className="flex items-center gap-3 px-4 py-3 bg-slate-700/20 hover:bg-slate-700/30 border border-slate-600 rounded-lg cursor-pointer transition">
-                    <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-indigo-500" />
-                    <span className="text-slate-300 text-sm flex-1">SMS alerts</span>
-                  </label>
-                  <label className="flex items-center gap-3 px-4 py-3 bg-slate-700/20 hover:bg-slate-700/30 border border-slate-600 rounded-lg cursor-pointer transition">
-                    <input
-                      type="checkbox"
-                      checked={phoneAlertsEnabled}
-                      disabled={phoneAlertsBusy}
-                      onChange={async (event) => {
-                        const wantsEnabled = event.target.checked;
-                        setPhoneAlertsBusy(true);
-                        try {
-                          if (wantsEnabled) {
-                            await enableWalletPhoneAlerts();
-                            setPhoneAlertsEnabled(true);
-                          } else {
-                            await disableWalletPhoneAlerts();
-                            setPhoneAlertsEnabled(false);
-                          }
-                        } catch (error) {
-                          console.error('Push notification toggle failed:', error);
-                        } finally {
-                          setPhoneAlertsBusy(false);
-                        }
-                      }}
-                      className="w-4 h-4 rounded text-indigo-500"
-                    />
-                    <span className="text-slate-300 text-sm flex-1">Push notifications (phone alerts)</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Privacy Settings */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-green-400" />
-                  Privacy
-                </h3>
-                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition text-slate-300 text-sm font-medium">
-                  View Privacy Policy
-                </button>
-                <button className="w-full text-left px-4 py-3 bg-slate-700/30 hover:bg-slate-700/50 border border-slate-600 rounded-lg transition text-slate-300 text-sm font-medium">
-                  Data Export
-                </button>
-              </div>
-
-              {/* Appearance Settings */}
-              <div className="space-y-3">
-                <h3 className="text-white font-semibold flex items-center gap-2">
-                  <Eye className="w-5 h-5 text-blue-400" />
-                  Appearance
-                </h3>
-                <div className="px-4 py-3 bg-slate-700/30 border border-slate-600 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-300 text-sm">Dark Mode</span>
-                    <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded">Always On</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Danger Zone */}
-              <div className="space-y-3 border-t border-slate-700 pt-6">
-                <h3 className="text-red-400 font-semibold text-sm">Danger Zone</h3>
-                <button className="w-full px-4 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-200 rounded-lg transition text-sm font-medium">
-                  Logout
-                </button>
-                <button className="w-full px-4 py-3 bg-red-950/40 hover:bg-red-950/60 border border-red-900 text-red-300 rounded-lg transition text-sm font-medium">
-                  Delete Account
-                </button>
-              </div>
-
-              {/* Close Button */}
-              <button 
-                onClick={() => setShowSettingsPanel(false)}
-                className="w-full px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg font-semibold transition"
-              >
-                Save & Close
-              </button>
-            </div>
+                );
+              })()}
+            </CmmsPageShell>
           </div>
         </div>
       )}
@@ -9617,15 +9196,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Reports Panel - always a real full page, same placement as Wallet/Trust/Pitchin */}
       {showReportingSystem && (
         <div
-          className={`fixed inset-x-0 z-30 bg-gradient-to-b from-slate-900 to-indigo-950 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
+          className={`icn-page-surface icn-classic fixed inset-x-0 z-30 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
           style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="flex flex-col min-h-full">
             {/* Header */}
-            <div className="bg-gradient-to-r from-rose-700 to-pink-600 px-5 py-4 flex items-center justify-between shrink-0">
-              <div>
-                <h2 className="text-xl font-bold text-white">📊 Financial Reports</h2>
-                <p className="text-rose-100 text-xs mt-0.5">AI-powered reports — Uganda compliant</p>
+            <div className="icn-page-head shrink-0">
+              <div className="min-w-0">
+                <p className="icn-page-eyebrow">Tools</p>
+                <h2 className="icn-page-title">Financial Reports</h2>
+                <p className="icn-page-sub">AI-powered reports — Uganda compliant</p>
               </div>
               <button
                 onClick={() => {
@@ -9633,9 +9213,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   setReportFilteredMetrics(null);
                   setGeneratedReportData(null);
                 }}
-                className="text-white/70 hover:text-white p-1 transition hover:bg-white/10 rounded"
+                className="icn-page-close"
+                aria-label="Close reports"
               >
-                <X className="w-6 h-6" />
+                <X />
               </button>
             </div>
 
@@ -9755,10 +9336,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 {/* Live metrics for the period */}
                 {isLoadingReportMetrics && (
                   <div className="flex items-center gap-2 text-xs text-purple-300">
-                    <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                    </svg>
+                    <DiamondSpinner className="animate-spin w-3 h-3" />
                     Loading period data...
                   </div>
                 )}
@@ -9995,6 +9573,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         businessName: reportOwner.businessName,
                       };
                       const { start: periodStart, end: periodEnd } = getReportDateRange();
+                      // What the receipts behind this report's transactions say -- saved with the report.
+                      const receiptTruth = buildReceiptTruth(fm?.transactions || []);
                       const fd = {
                         revenue: income,
                         costOfGoodsSold: boughtStock,
@@ -10024,6 +9604,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         periodEnd,
                         transactionCount: fm?.count || 0,
                         categoryBreakdown: fm?.categories || {},
+                        ...(receiptTruth.total ? { receiptTruth } : {}),
                       };
                       let result;
                       if (selectedReportType === 'tax-filing') {
@@ -10071,11 +9652,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       const userId = userProfile?.id;
                       if (!userId) throw new Error('User not authenticated');
 
-                      // Delete all transactions for this user
+                      // Delete this user's transactions — permanent ones (two accounts,
+                      // IcanEra wallet, CMMS) are kept; the database refuses to delete them.
                       const { error: txError } = await supabase
                         .from('ican_transactions')
                         .delete()
-                        .eq('user_id', userId);
+                        .eq('user_id', userId)
+                        .eq('involves_two_accounts', false);
                       if (txError) throw txError;
 
                       // Delete all financial reports for this user
@@ -10233,8 +9816,33 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                               addSection('Summary', Object.fromEntries(
                                 Object.entries(rpt).filter(([,v]) => typeof v !== 'object')
                               ));
+                              // Receipt truth gets its own section: the generic one would run the 64-char seal off the page
+                              const truth = rpt.receiptTruth;
+                              if (truth?.total) {
+                                if (y > 210) { doc.addPage(); y = 20; }
+                                doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(147, 51, 234);
+                                doc.text('RECEIPT TRUTH', 14, y); y += 5;
+                                doc.setDrawColor(200, 180, 240);
+                                doc.line(14, y, 196, y); y += 4;
+                                doc.setFontSize(9); doc.setFont('helvetica','normal'); doc.setTextColor(50, 50, 50);
+                                [
+                                  `Rating: ${truth.rating} - ${truth.ratingLabel}`,
+                                  `Backed by a receipt photo or number: ${truth.backedCount} of ${truth.total} entries (${truth.coverageByCount}%), ${truth.coverageByValue}% of the value`,
+                                  `Gold / Silver / Bronze: ${truth.grades.gold.count} / ${truth.grades.silver.count} / ${truth.grades.bronze.count}`,
+                                  `Entries needing a closer look: ${truth.attentionCount}`,
+                                ].forEach((line) => { doc.text(doc.splitTextToSize(line, 178), 16, y); y += 5; });
+                                if (rpt.deductionsSection?.receiptBackedAmount > 0 || rpt.deductionsSection?.receiptMissingAmount > 0) {
+                                  doc.text(`Claimed deductions with a receipt: ${Math.round(rpt.deductionsSection.receiptBackedAmount).toLocaleString()} | without: ${Math.round(rpt.deductionsSection.receiptMissingAmount).toLocaleString()}`, 16, y); y += 5;
+                                }
+                                const statementLines = doc.splitTextToSize(getTruthStatement(truth, { currency: rpt.currency || 'UGX' }), 178);
+                                doc.text(statementLines, 16, y); y += statementLines.length * 4.5 + 1;
+                                doc.setFont('courier','normal'); doc.setFontSize(7);
+                                doc.text(`Report seal (SHA-256): ${truth.sealRoot}`, 16, y); y += 8;
+                                doc.setFont('helvetica','normal');
+                              }
                               // Nested objects
                               Object.entries(rpt).forEach(([k,v]) => {
+                                if (k === 'receiptTruth') return;
                                 if (v && typeof v === 'object' && !Array.isArray(v)) {
                                   addSection(k.replace(/([A-Z])/g,' $1').replace(/_/g,' ').toUpperCase(), v);
                                 }
@@ -10275,6 +9883,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                                 `Type: ${rpt.reportName || selectedReportType}\n` +
                                 `Country: ${countryName}\n` +
                                 `Generated: ${rpt.generated || new Date().toLocaleDateString()}\n\n` +
+                                (rpt.receiptTruth?.total ? `Receipts: ${getTruthStatement(rpt.receiptTruth, { currency: rpt.currency || 'UGX' })}\n\n` : '') +
                                 `--- Report Data ---\n` +
                                 lines.join('\n')
                               );
@@ -10339,6 +9948,18 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           />
         );
       })()}
+
+      {receiptTransaction && (
+        <TransactionReceiptModal
+          transaction={receiptTransaction}
+          businessName={recordBusinessProfiles.find((p) => p.id === (receiptTransaction.business_profile_id || receiptTransaction.metadata?.business_profile_id))?.business_name || null}
+          onClose={() => setReceiptTransaction(null)}
+          onProofAttached={(updated) => {
+            setReceiptTransaction(updated);
+            setTransactions((prev) => prev.map((t) => (t.id === updated.id ? { ...t, metadata: updated.metadata } : t)));
+          }}
+        />
+      )}
 
       {/* Smart Transaction Entry Modal */}
       <SmartTransactionEntry

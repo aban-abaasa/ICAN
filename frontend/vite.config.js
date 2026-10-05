@@ -99,6 +99,9 @@ export default defineConfig({
     // raw React module would then become two different hook dispatchers.
     dedupe: ['react', 'react-dom'],
     alias: [
+      // Spinner icons (Loader, Loader2, …) render the IcanEra diamond; see the
+      // wrapper for how, and why it imports the real package by subpath.
+      { find: /^lucide-react$/, replacement: path.resolve(__dirname, './src/lib/lucide-react.js') },
       { find: '@', replacement: path.resolve(__dirname, './src') },
       { find: '@components', replacement: path.resolve(__dirname, './src/components') },
       { find: '@context', replacement: path.resolve(__dirname, './src/context') },
@@ -118,7 +121,7 @@ export default defineConfig({
       'react-dom',
       'react-router-dom',
       '@supabase/supabase-js',
-      'lucide-react'
+      'lucide-react/dist/esm/lucide-react.js'
     ],
     // ffmpeg.wasm loads its own WASM binary at runtime from a Blob URL;
     // letting Vite pre-bundle it breaks the dynamic import chain.

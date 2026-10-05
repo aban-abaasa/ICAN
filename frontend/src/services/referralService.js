@@ -1,5 +1,5 @@
 /**
- * ICANera Referrals — ported from Supermarkera's referralService.js.
+ * IcanEra Referrals — ported from Supermarkera's referralService.js.
  *
  * Same shape (a ?ref=CODE link is remembered, then redeemed once the visitor is
  * signed in) but the rules are enforced on the server, because the reward is

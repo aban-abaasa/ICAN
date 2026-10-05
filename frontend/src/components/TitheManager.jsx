@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, BarChart3, Lock, Eye, EyeOff, Check, AlertCircle } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase';
+import CmmsPageShell from './CmmsPageShell';
+import TransactionReceiptModal from './TransactionReceiptModal';
+import { titheToReceiptTx, makeReceiptNumber } from '../utils/transactionReceipt';
 
 /**
  * TitheManager Component
@@ -46,6 +49,10 @@ export default function TitheManager() {
 
   // Data state
   const [tithes, setTithes] = useState([]);
+  // Receipt auto-generated for every tithe payment; opens right after paying
+  // and from any tithe row. Autographed (name + SHA-256 seal) by the modal.
+  const [titheReceipt, setTitheReceipt] = useState(null);
+  const openTitheReceipt = (payment) => setTitheReceipt(titheToReceiptTx(payment));
   const [unpaidTithes, setUnpaidTithes] = useState([]);
   const [summary, setSummary] = useState(null);
   const [auditTrail, setAuditTrail] = useState([]);
@@ -333,6 +340,11 @@ export default function TitheManager() {
       if (!result.success) throw new Error(result.message);
 
       setSuccess(`✅ Tithe recorded! ${result.message}`);
+      openTitheReceipt({
+        id: result.tithe_record_id, amount, date: form.givingDate || new Date(),
+        givingType: form.givingType, recipientType: form.recipientType,
+        paymentMethod: form.paymentMethod, titheType: form.titheType, isAnonymous: form.isAnonymous
+      });
       
       // Reset form and refresh data
       setForm({
@@ -498,9 +510,16 @@ export default function TitheManager() {
             giving_type: form.givingType,
             recipient_type: form.recipientType,
             is_anonymous: form.isAnonymous,
-            record_category: 'tithe'
+            record_category: 'tithe',
+            tithe_id: result.tithe_record_id,
+            receipt_number: makeReceiptNumber(new Date(), result.tithe_record_id)
           }
         });
+      openTitheReceipt({
+        id: result.tithe_record_id, amount, currency: selectedTransaction.currency, date: new Date(),
+        givingType: form.givingType, recipientType: form.recipientType,
+        paymentMethod: form.paymentMethod, titheType: isPersonal ? 'personal' : 'business', isAnonymous: form.isAnonymous
+      });
 
       // Mark in local guard so UI immediately reflects no double-tithe
       setAlreadyTithedTxIds(prev => new Set([...prev, selectedTransaction.id]));
@@ -594,7 +613,8 @@ export default function TitheManager() {
               giving_type: tithe.giving_type,
               recipient_type: tithe.recipient_type,
               is_anonymous: tithe.is_anonymous,
-              record_category: 'tithe'
+              record_category: 'tithe',
+              receipt_number: makeReceiptNumber(new Date(), tithe.id)
             }
           });
 
@@ -605,7 +625,15 @@ export default function TitheManager() {
 
       await Promise.all(settlePromises);
 
-      setSuccess(`✅ Settled ${selectedForPayment.length} tithe(s) for ${totalAmount.toLocaleString()} UGX - Recorded in reports!`);
+      setSuccess(`✅ Settled ${selectedForPayment.length} tithe(s) for ${totalAmount.toLocaleString()} UGX - Recorded in reports! A receipt was generated for each — open them from Your Tithes.`);
+      if (selectedForPayment.length === 1) {
+        const t = selectedForPayment[0];
+        openTitheReceipt({
+          id: t.id, amount: t.amount, currency: t.currency, date: new Date(),
+          givingType: t.giving_type, recipientType: t.recipient_type,
+          paymentMethod: t.payment_method, titheType: t.tithe_type, isAnonymous: t.is_anonymous
+        });
+      }
       setSelectedForPayment([]);
 
       // Refresh all data including current tithe owed from database
@@ -659,14 +687,14 @@ export default function TitheManager() {
       (titheData || []).forEach(t => {
         if (t.tithe_type === 'business') {
           bizPaid += Number(t.amount) || 0;
-          bizHistory.push({ amount: t.amount, giving_type: t.giving_type, date: t.giving_date });
+          bizHistory.push({ id: t.tithe_id, amount: t.amount, giving_type: t.giving_type, date: t.giving_date });
           return;
         }
         const notes = t.notes_encrypted || t.notes || '';
         const srcId = t.source_transaction_id || (String(notes).match(/TX:([a-z0-9\-]+)/i) || [])[1];
         if (srcId) {
           if (!map[srcId]) map[srcId] = [];
-          map[srcId].push({ amount: t.amount, giving_type: t.giving_type, date: t.giving_date });
+          map[srcId].push({ id: t.tithe_id, amount: t.amount, giving_type: t.giving_type, date: t.giving_date });
         }
       });
       setCalcTitheMap(map);
@@ -717,7 +745,13 @@ export default function TitheManager() {
       // Update local map without refetching
       setCalcTitheMap(prev => {
         const existing = prev[calcSelected.id] || [];
-        return { ...prev, [calcSelected.id]: [...existing, { amount, giving_type: calcForm.givingType, date: new Date().toISOString() }] };
+        return { ...prev, [calcSelected.id]: [...existing, { id: result.tithe_record_id, amount, giving_type: calcForm.givingType, date: new Date().toISOString() }] };
+      });
+      openTitheReceipt({
+        id: result.tithe_record_id, amount, date: new Date(),
+        givingType: calcForm.givingType, recipientType: calcForm.recipientType,
+        paymentMethod: calcForm.paymentMethod, titheType: 'personal', isAnonymous: calcForm.isAnonymous,
+        description: `${calcForm.givingType} from "${calcSelected.description || 'income'}"`
       });
 
       if (calcForm.paymentMethod === 'wallet') fetchWalletBalance();
@@ -765,7 +799,12 @@ export default function TitheManager() {
       if (!result?.success) throw new Error(result?.message || 'Failed');
 
       setCalcBizPaid(prev => prev + amount);
-      setCalcBizHistory(prev => [{ amount, giving_type: calcBizForm.givingType, date: calcBizForm.givingDate }, ...prev]);
+      setCalcBizHistory(prev => [{ id: result.tithe_record_id, amount, giving_type: calcBizForm.givingType, date: calcBizForm.givingDate }, ...prev]);
+      openTitheReceipt({
+        id: result.tithe_record_id, amount, date: calcBizForm.givingDate,
+        givingType: calcBizForm.givingType, recipientType: calcBizForm.recipientType,
+        paymentMethod: calcBizForm.paymentMethod, titheType: 'business', isAnonymous: calcBizForm.isAnonymous
+      });
       if (calcBizForm.paymentMethod === 'wallet') fetchWalletBalance();
 
       setCalcBizMsg({ type: 'ok', text: `✅ ${amount.toLocaleString()} UGX business tithe recorded${calcBizForm.paymentMethod === 'cash' ? ' as cash' : ' from wallet'} for ${new Date(calcBizForm.givingDate).toLocaleDateString()}` });
@@ -1324,6 +1363,20 @@ export default function TitheManager() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  openTitheReceipt({
+                    id: tithe.tithe_id, amount: tithe.amount, currency: tithe.currency, date: tithe.giving_date,
+                    givingType: tithe.giving_type, recipientType: tithe.recipient_type,
+                    paymentMethod: tithe.payment_method, titheType: tithe.tithe_type, isAnonymous: tithe.is_anonymous
+                  });
+                }}
+                className="text-purple-300 hover:text-purple-200 p-2 text-sm transition"
+                title="View receipt"
+              >
+                🧾
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
                   handleRemoveTithe(tithe.tithe_id);
                 }}
                 disabled={loading}
@@ -1501,15 +1554,9 @@ export default function TitheManager() {
 
     return (
       <div className="space-y-5">
-        {/* ── Hero header ── */}
-        <div className="rounded-2xl p-5 border border-amber-500/20" style={{ background: 'linear-gradient(135deg, #1c1008 0%, #2d1a00 100%)' }}>
-          <h2 className="text-2xl font-extrabold text-amber-300 mb-0.5">🙏 Tithe Calculator</h2>
-          <p className="text-xs text-amber-700/80 font-medium tracking-wide uppercase">Steward faithfully · Uganda Giving Tracker</p>
-
-          {calcLoading && calcIncomeTx.length === 0 && (
-            <p className="text-xs text-amber-500/60 mt-3 animate-pulse">Loading your income records…</p>
-          )}
-        </div>
+        {calcLoading && calcIncomeTx.length === 0 && (
+          <p className="tithe-notice tithe-notice-warn text-xs animate-pulse" role="status">Loading your income records…</p>
+        )}
 
         {/* ── Personal / Business switch ── */}
         <div className="flex gap-2">
@@ -1696,7 +1743,13 @@ export default function TitheManager() {
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Payment History</h3>
                 <div className="space-y-1.5">
                   {personalHistory.map((r, i) => (
-                    <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/30">
+                    <div
+                      key={i}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openTitheReceipt({ id: r.id, amount: r.amount, date: r.date, givingType: r.giving_type, recipientType: 'church', paymentMethod: null, titheType: 'personal', description: `${r.giving_type} from "${r.txDesc}"` })}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/30 cursor-pointer active:bg-slate-800/70"
+                    >
                       <span className="text-base flex-shrink-0">🙏</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-white truncate">{r.txDesc}</p>
@@ -1823,7 +1876,13 @@ export default function TitheManager() {
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Payment History</h3>
                 <div className="space-y-1.5">
                   {calcBizHistory.map((r, i) => (
-                    <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/30">
+                    <div
+                      key={i}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openTitheReceipt({ id: r.id, amount: r.amount, date: r.date, givingType: r.giving_type, recipientType: 'church', paymentMethod: null, titheType: 'business' })}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/30 cursor-pointer active:bg-slate-800/70"
+                    >
                       <span className="text-base flex-shrink-0">🏢</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-white truncate capitalize">{r.giving_type}</p>
@@ -1848,66 +1907,55 @@ export default function TitheManager() {
   // ============================================================
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
+    <div className="cmms-page-classic tithe-scope tithe-web min-h-screen p-4 md:p-6">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
-            <span className="text-3xl">⛪</span>
-            Tithe Management System
-          </h1>
-          <p className="text-gray-400">Record, track, and manage your charitable giving with blockchain security</p>
-        </div>
-
+        <CmmsPageShell
+          title="Tithe Management"
+          subtitle="Record, track and manage your giving with blockchain security"
+          icon={<span aria-hidden="true">⛪</span>}
+          hideFullPage
+          chips={[
+            summary && `${summary.total_tithes} tithe${summary.total_tithes === 1 ? '' : 's'}`,
+            summary && `Given UGX ${(summary.total_amount || 0).toLocaleString()}`,
+            `Wallet UGX ${showBalance ? (walletBalance || 0).toLocaleString() : '••••'}`,
+          ]}
+          info="Steward faithfully — Uganda giving tracker. Use the Calculator to see what each income owes, then record, settle or review your tithes. Every entry is protected by the blockchain audit trail."
+          tabs={[
+            { id: 'calculator', label: '🙏 Calculator', accent: 'gold' },
+            { id: 'add', label: '➕ Add Tithe', accent: 'emerald' },
+            { id: 'settle', label: '💰 Settle', accent: 'navy' },
+            { id: 'pay', label: '💳 Pay Tithe', accent: 'burgundy' },
+            { id: 'view', label: '👁️ View', accent: 'teal' },
+            { id: 'analytics', label: '📊 Analytics', accent: 'plum' },
+            { id: 'audit', label: '🔒 Audit', accent: 'gold' },
+          ]}
+          tab={formMode}
+          onTab={(id) => {
+            setFormMode(id);
+            if (id === 'calculator') {
+              fetchCalcData();
+            } else if (id === 'pay') {
+              fetchFilteredTransactions(transactionFilter);
+              loadAlreadyTithedMap();
+            } else if (id === 'settle') {
+              fetchUnpaidTithes();
+            }
+          }}
+        >
         {/* Messages */}
         {error && (
-          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" />
+          <p className="tithe-notice tithe-notice-bad flex items-center gap-2" role="alert">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
             {error}
-          </div>
+          </p>
         )}
 
         {success && (
-          <div className="mb-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg text-green-300 flex items-center gap-2">
-            <Check className="w-5 h-5" />
+          <p className="tithe-notice tithe-notice-ok flex items-center gap-2" role="status">
+            <Check className="w-5 h-5 flex-shrink-0" />
             {success}
-          </div>
+          </p>
         )}
-
-        {/* Navigation Tabs */}
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {[
-            { id: 'calculator', label: '🙏 Tithe Calculator', icon: Plus },
-            { id: 'add', label: '➕ Add Tithe', icon: Plus },
-            { id: 'settle', label: '💰 Settle Tithes', icon: Plus },
-            { id: 'pay', label: '💳 Pay Tithe', icon: Plus },
-            { id: 'view', label: '👁️ View Tithes', icon: Eye },
-            { id: 'analytics', label: '📊 Analytics', icon: BarChart3 },
-            { id: 'audit', label: '🔒 Blockchain Audit', icon: Lock }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setFormMode(tab.id);
-                if (tab.id === 'calculator') {
-                  fetchCalcData();
-                } else if (tab.id === 'pay') {
-                  fetchFilteredTransactions(transactionFilter);
-                  loadAlreadyTithedMap();
-                } else if (tab.id === 'settle') {
-                  fetchUnpaidTithes();
-                }
-              }}
-              className={`px-4 py-2 rounded-lg font-medium transition ${
-                formMode === tab.id
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-slate-800 text-gray-300 hover:bg-slate-700'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
 
         {/* Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1996,7 +2044,9 @@ export default function TitheManager() {
             )}
           </div>
         </div>
+        </CmmsPageShell>
       </div>
+      {titheReceipt && <TransactionReceiptModal transaction={titheReceipt} onClose={() => setTitheReceipt(null)} />}
     </div>
   );
 }

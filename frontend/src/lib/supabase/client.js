@@ -95,6 +95,23 @@ export const getSupabaseClient = () => {
   return initializeSupabase();
 };
 
+/**
+ * A throwaway client that shares nothing with the app's real session (no storage, no
+ * auto-refresh). Used to check a password the user types, e.g. "current password" on
+ * a password change, without replacing or disturbing the signed-in session. Callers
+ * must signOut() it when done so the check does not leave a session behind.
+ */
+export const createEphemeralSupabaseClient = () => {
+  const runtimeConfig = typeof window !== 'undefined' ? (window.__APP_RUNTIME_CONFIG__ || {}) : {};
+  const hasRuntime = Boolean(runtimeConfig.supabaseUrl || runtimeConfig.supabaseAnonKey);
+  const url = hasRuntime ? runtimeConfig.supabaseUrl : import.meta.env.VITE_SUPABASE_URL;
+  const key = hasRuntime ? runtimeConfig.supabaseAnonKey : import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'ican-ephemeral-auth' },
+  });
+};
+
 // Export as both named and default export for compatibility
 export const supabase = getSupabaseClient();
 export default supabase;

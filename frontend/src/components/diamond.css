@@ -1,0 +1,175 @@
+/* ==========================================================================
+   IcanEra diamond — loaders everywhere.
+   Geometry and palette live in diamondArt.js; this file is how it moves.
+
+   Three consumers:
+   1. .ican-gem        the full stone (opening / stage): halo, glow, sparkles,
+                       fire, glint and a floor shadow that narrows edge-on.
+   2. .ican-gem-mini   the same stone as a small spinner (lucide Loader shim).
+   3. Legacy spinners  Tailwind "ring" spinners (<div class="animate-spin
+                       rounded-full border-…">) and a few bespoke ones, restyled
+                       in place so no call site has to change.
+
+   A turning stone is two planes at 90° (::before / ::after for the small
+   ones) so it never goes edge-on. Colours are not Tailwind classes: the
+   app-wide theme override repaints those.
+   ========================================================================== */
+
+:root { --ican-gem-img: var(--ican-gem-img-light); }
+:root:is([data-theme="dark"], [data-theme="purple"], [data-theme="green"], [data-theme="ocean"], [data-theme="sienna"]) {
+  --ican-gem-img: var(--ican-gem-img-dark);
+}
+.ican-gem-mini[data-tone="dark"] { --ican-gem-img: var(--ican-gem-img-dark); }
+.ican-gem-mini[data-tone="light"] { --ican-gem-img: var(--ican-gem-img-light); }
+
+/* ── 1. The full stone ─────────────────────────────────────────────────── */
+.ican-gem {
+  --gem-dur: 3.6s;
+  --gem-edge: #5b6f98;
+  --gem-halo: rgba(110, 150, 225, .30);
+  --gem-glow: rgba(120, 160, 230, .55);
+  --gem-shadow: rgba(31, 36, 51, .5);
+  --gem-spark: #ffffff;
+  --gem-spark-edge: #5b6f98;
+  position: relative; display: inline-block; flex: none;
+  width: var(--gem-s, 56px); height: var(--gem-s, 56px);
+}
+.ican-gem--medium { --gem-dur: 2.6s; }
+:root:is([data-theme="dark"], [data-theme="purple"], [data-theme="green"], [data-theme="ocean"], [data-theme="sienna"]) .ican-gem,
+:root .ican-gem[data-tone="dark"] {
+  --gem-edge: #b9cbea;
+  --gem-halo: rgba(190, 215, 255, .30);
+  --gem-glow: rgba(190, 220, 255, .65);
+  --gem-shadow: rgba(150, 190, 255, .42);
+  --gem-spark-edge: rgba(255, 255, 255, 0);
+}
+:root .ican-gem[data-tone="light"] {
+  --gem-edge: #5b6f98;
+  --gem-halo: rgba(110, 150, 225, .30);
+  --gem-glow: rgba(120, 160, 230, .55);
+  --gem-shadow: rgba(31, 36, 51, .5);
+  --gem-spark-edge: #5b6f98;
+}
+
+.ican-gem__halo {
+  position: absolute; inset: -16%; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, var(--gem-halo) 0%, transparent 66%);
+  animation: ican-gem-halo var(--gem-dur) ease-in-out infinite;
+}
+.ican-gem__persp {
+  position: absolute; inset: 0; perspective: calc(var(--gem-s, 56px) * 4.7);
+  animation: ican-gem-float var(--gem-dur) ease-in-out infinite, ican-gem-flash var(--gem-dur) ease-in-out infinite;
+}
+.ican-gem__spin { position: absolute; inset: 0; transform-style: preserve-3d; animation: ican-gem-turn var(--gem-dur) linear infinite; }
+.ican-gem__stone { position: absolute; inset: 0; transform-style: preserve-3d; }
+.ican-gem__face {
+  position: absolute; left: 0; top: 6.67%; width: 100%; height: 86.67%; overflow: visible;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+}
+.ican-gem__face--back { transform: rotateY(180deg); }
+.ican-gem__facet { stroke: var(--gem-edge); stroke-width: 1.3; stroke-linejoin: round; }
+.ican-gem__fire { opacity: .5; animation: ican-gem-fire var(--gem-dur) linear infinite; animation-delay: var(--gem-phase, 0s); }
+.ican-gem__glint { animation: ican-gem-glint var(--gem-dur) ease-in-out infinite; animation-delay: var(--gem-phase, 0s); }
+.ican-gem__spark {
+  position: absolute; height: auto; aspect-ratio: 1; overflow: visible; pointer-events: none; opacity: 0;
+  fill: var(--gem-spark); stroke: var(--gem-spark-edge); stroke-width: .8;
+  filter: drop-shadow(0 0 3px var(--gem-glow));
+  animation: ican-gem-twinkle 2.4s ease-in-out infinite;
+}
+.ican-gem__spark--b { fill: #dccbff; animation-delay: 1s; }
+.ican-gem__spark--c { fill: #ffe9a6; animation-delay: 1.7s; }
+.ican-gem__shadow {
+  position: absolute; left: 20%; right: 20%; bottom: 0; height: 5%; border-radius: 50%; pointer-events: none;
+  background: var(--gem-shadow); filter: blur(calc(var(--gem-s, 56px) * .03));
+  animation: ican-gem-shadow var(--gem-dur) ease-in-out infinite;
+}
+
+@keyframes ican-gem-turn { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+@keyframes ican-gem-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4%); } }
+@keyframes ican-gem-flash {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 calc(var(--gem-s, 56px) * .04) var(--gem-glow)); }
+  25%, 75% { filter: brightness(1.16) drop-shadow(0 0 calc(var(--gem-s, 56px) * .07) var(--gem-glow)); }
+  50% { filter: brightness(.94) drop-shadow(0 0 calc(var(--gem-s, 56px) * .04) var(--gem-glow)); }
+}
+/* the gradient repeats every 150 units, so one period is a seamless loop */
+@keyframes ican-gem-fire { from { transform: translateX(0); } to { transform: translateX(150px); } }
+@keyframes ican-gem-glint {
+  0%, 52% { transform: translateX(0); opacity: 0; }
+  60% { opacity: 1; }
+  100% { transform: translateX(200px); opacity: 0; }
+}
+@keyframes ican-gem-twinkle {
+  0%, 100% { opacity: 0; transform: scale(.3) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(45deg); }
+}
+@keyframes ican-gem-shadow {
+  0%, 100% { transform: scaleX(1); opacity: .4; }
+  25%, 75% { transform: scaleX(.22); opacity: .18; }
+  50% { transform: scaleX(1); opacity: .4; }
+}
+@keyframes ican-gem-halo { 0%, 100% { opacity: .7; transform: scale(.94); } 50% { opacity: 1; transform: scale(1.06); } }
+
+/* ── 2. The small spinner ──────────────────────────────────────────────── */
+/* :where() keeps width/height at zero specificity so Tailwind w-4 h-4 win,
+   exactly as they do over a lucide icon's width/height attributes. */
+:where(.ican-gem-mini) {
+  display: inline-block; flex: none; vertical-align: middle;
+  width: var(--gem-s, 1em); height: var(--gem-s, 1em);
+}
+.ican-gem-mini {
+  position: relative; transform-style: preserve-3d;
+  animation: ican-gem-turn-p var(--gem-dur, 1.8s) linear infinite;
+}
+.ican-gem-mini[data-spin="off"] { animation: none; }
+.ican-gem-mini::before, .ican-gem-mini::after {
+  content: ''; position: absolute; inset: 0;
+  background: var(--ican-gem-img) center / contain no-repeat;
+}
+.ican-gem-mini::after { transform: rotateY(90deg); }
+@keyframes ican-gem-turn-p {
+  from { transform: perspective(var(--gem-p, 140px)) rotateY(0deg); }
+  to { transform: perspective(var(--gem-p, 140px)) rotateY(360deg); }
+}
+
+/* ── 3. Legacy spinners, restyled in place ─────────────────────────────── */
+/* Tailwind rings: an empty div/span that is animate-spin + rounded-full.
+   (Not position/display: those spinners are centred with mx-auto, absolutely
+   positioned, etc. The animated transform already makes each one the
+   containing block for its two planes.) */
+:is(div, span).animate-spin.rounded-full:empty {
+  transform-style: preserve-3d;
+  animation: ican-gem-turn-p 1.8s linear infinite;
+  border: 0 !important; background: none !important; box-shadow: none !important;
+}
+:is(div, span).animate-spin.rounded-full:empty::before,
+:is(div, span).animate-spin.rounded-full:empty::after {
+  content: ''; position: absolute; inset: 0;
+  background: var(--ican-gem-img) center / contain no-repeat;
+}
+:is(div, span).animate-spin.rounded-full:empty::after { transform: rotateY(90deg); }
+
+/* Bespoke CSS spinners (CountrySetup, UnifiedApprovalModal, IcanTrading). */
+html :is(.spinner-mini, .uam-spinner, .spinner-circle, .spinner) {
+  position: relative; transform-style: preserve-3d;
+  animation: ican-gem-turn-p 1.8s linear infinite;
+  border: 0 !important; background: none !important; box-shadow: none !important;
+}
+html :is(.spinner-mini, .uam-spinner, .spinner-circle, .spinner)::before,
+html :is(.spinner-mini, .uam-spinner, .spinner-circle, .spinner)::after {
+  content: ''; position: absolute; inset: 0;
+  background: var(--ican-gem-img) center / contain no-repeat;
+}
+html :is(.spinner-mini, .uam-spinner, .spinner-circle, .spinner)::after { transform: rotateY(90deg); }
+
+/* ── Reduced motion: no turning — a gentle pulse still says "working" ─── */
+@media (prefers-reduced-motion: reduce) {
+  .ican-gem__persp, .ican-gem__spin, .ican-gem__fire, .ican-gem__glint, .ican-gem__halo, .ican-gem__shadow, .ican-gem__spark { animation: none; }
+  .ican-gem__spark { opacity: .8; transform: none; }
+  .ican-gem { animation: ican-gem-pulse 2s ease-in-out infinite; }
+  .ican-gem-mini:not([data-spin="off"]),
+  :is(div, span).animate-spin.rounded-full:empty,
+  html :is(.spinner-mini, .uam-spinner, .spinner-circle, .spinner) {
+    animation: ican-gem-pulse 1.6s ease-in-out infinite; transform: translateZ(0);
+  }
+}
+@keyframes ican-gem-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }

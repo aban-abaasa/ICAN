@@ -42,13 +42,12 @@ import { cardTransactionService } from '../services/cardTransactionService';
 import { walletService } from '../services/walletService';
 import paymentMethodDetector from '../services/paymentMethodDetector';
 import agentService from '../services/agentService';
-import { walletAccountService, hashPIN } from '../services/walletAccountService';
+import { walletAccountService, hashPIN, requestPinResetEmail } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
 import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFiatToMobileMoney, sendFiatToBank, detectUgandaMobileNetwork } from '../services/icanWalletService';
 import { listUgandaBanks } from '../services/digitalCardService';
 import { payIcanRequest, parseIcanPayCode, getIcanPaymentRequest } from '../services/icanPaymentRequestService';
 import { getSupabaseClient } from '../lib/supabase/client';
-import { getBackendUrl } from '../lib/backendUrl';
 import { getUserTrustGroups } from '../services/trustService';
 import { CountryService } from '../services/countryService';
 import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
@@ -69,8 +68,12 @@ import icanCoinBlockchainService from '../services/icanCoinBlockchainService';
 import ReceiveMoneyModal from './ReceiveMoneyModal';
 import PayMoneyModal from './PayMoneyModal';
 import IcanPaymentReceiptModal from './IcanPaymentReceiptModal';
+import TransactionReceiptModal from './TransactionReceiptModal';
+import { walletTxToReceiptTx } from '../utils/transactionReceipt';
 import PINRecoveryModal from './PINRecoveryModal';
 import EmailVerifyStep from './EmailVerifyStep';
+import WalletAccessModal from './WalletAccessModal';
+import BusinessWalletAccessModal from './BusinessWalletAccessModal';
 import { usePinPrompt } from './PinPromptDialog';
 
 // Big balances (14,378,412 UGX) overflow the balance card, so the headline shows
@@ -224,8 +227,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // A short typed code is used here (not a link) so the multi-field
   // creation form doesn't lose its state to a redirect.
   const [personalOtp, setPersonalOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
-  const [showCreatePin, setShowCreatePin] = useState(false);
   const [businessOtp, setBusinessOtp] = useState({ sent: false, verified: false, code: '', loading: false, error: null });
+  // Personal wallet setup through the emailed PIN link (works without the Resend secret).
+  const [personalPinLink, setPersonalPinLink] = useState({ sentTo: null, loading: false, error: null });
+  const [businessPinLink, setBusinessPinLink] = useState({ sentTo: null, loading: false, error: null });
   // Same email-OTP gate, reused for the "Edit Account Information" form —
   // changing the email to a new address requires re-verifying that address
   // before the change is saved (otherwise a hijacked session could silently
@@ -259,6 +264,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [showReceiveMoneyModal, setShowReceiveMoneyModal] = useState(false);
   const [showPayMoneyModal, setShowPayMoneyModal] = useState(false);
   const [paymentReceipt, setPaymentReceipt] = useState(null);
+  const [walletReceiptTx, setWalletReceiptTx] = useState(null);
   
   // Payment Cards State
   const [paymentCards, setPaymentCards] = useState([]);
@@ -319,7 +325,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // 📑 Trade Modal Tabs
   const [activeTradeTab, setActiveTradeTab] = useState('wallet'); // 'wallet', 'chart', 'buy', 'sell', 'book', 'history', 'dropship'
   const [showMobileTradeMenu, setShowMobileTradeMenu] = useState(false);
-  // 🛍️ Dropship — resell any store's inventory at your own price, paid via ICANera wallet
+  // 🛍️ Dropship — resell any store's inventory at your own price, paid via IcanEra wallet
   const [selectedDropshipId, setSelectedDropshipId] = useState(null);
   const [newDropshipName, setNewDropshipName] = useState('');
   const [creatingDropship, setCreatingDropship] = useState(false);
@@ -2497,7 +2503,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
   // 📧 Email verification (OTP) before first-time PIN creation — shared by
   // both the personal and business "Create Account" forms.
-  const requestAccountEmailOtp = async (email, accountType, setOtpState) => {
+  const requestAccountEmailOtp = async (email, accountType, setOtpState, onEmailUnavailable) => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setOtpState(prev => ({ ...prev, error: 'Enter a valid email address first' }));
       return;
@@ -2509,22 +2515,72 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error('Your session expired — please sign in again.');
 
-      const backendUrl = getBackendUrl();
-      const response = await fetch(`${backendUrl}/api/email/request-account-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ email, accountType })
+      // Reuses the request-pin-reset Edge Function (Resend) — no extra Vercel function.
+      const { data, error: invokeError } = await supabase.functions.invoke('request-pin-reset', {
+        body: { action: 'account-otp', email, accountType }
       });
-      const data = await response.json().catch(() => null);
+      if (invokeError && !data) throw new Error(invokeError.message || 'Failed to send verification code');
       if (!data?.success) {
         // Server-configuration wording is for operators, not for people signing up.
-        const shown = /missing .*configuration/i.test(data?.message || '') ? null : data?.message;
-        throw new Error(shown || 'Email verification is temporarily unavailable. Please try again shortly.');
+        // Every other message (including the "failed to send" default) is passed on
+        // unchanged so the PIN-link fallback below still recognises it.
+        if (/missing .*configuration/i.test(data?.message || '')) {
+          throw new Error('Email verification is temporarily unavailable. Please try again shortly.');
+        }
+        throw new Error(data?.message || 'Failed to send verification code');
       }
 
       setOtpState(prev => ({ ...prev, sent: true, loading: false }));
     } catch (error) {
-      setOtpState(prev => ({ ...prev, loading: false, error: error.message || 'Failed to send verification code' }));
+      const message = error.message || 'Failed to send verification code';
+      // Resend isn't configured (or delivery failed): hand over to the PIN
+      // link flow, which uses Supabase's own mailer, instead of dead-ending.
+      if (onEmailUnavailable && /not configured|could not send|failed to send|non-2xx/i.test(message)) {
+        setOtpState(prev => ({ ...prev, loading: false, error: null }));
+        await onEmailUnavailable();
+        return;
+      }
+      setOtpState(prev => ({ ...prev, loading: false, error: message }));
+    }
+  };
+
+  // Changing the email invalidates any code/link already sent for the old one.
+  const handlePersonalEmailChange = (value) => {
+    setAccountCreationForm((prev) => ({ ...prev, email: value }));
+    if (personalOtp.sent || personalOtp.verified) {
+      setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+    }
+    if (personalPinLink.sentTo || personalPinLink.error) {
+      setPersonalPinLink({ sentTo: null, loading: false, error: null });
+    }
+  };
+
+  // 🔗 Personal wallet setup via the emailed PIN reset link: saves the profile
+  // on the auto-created account row, then emails a link where the PIN is set.
+  const handleSendPersonalPinLink = async () => {
+    setPersonalPinLink({ sentTo: null, loading: true, error: null });
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Your session expired — please sign in again.');
+
+      const result = await walletAccountService.sendPinSetupLink({
+        userId: user.id,
+        authEmail: user.email,
+        accountHolderName: accountCreationForm.accountHolderName.trim(),
+        phoneNumber: accountCreationForm.phoneNumber.trim(),
+        email: accountCreationForm.email.trim() || user.email,
+        preferredCurrency: registeredCurrency,
+        biometrics: {
+          fingerprintEnabled: accountCreationForm.fingerprintEnabled || false,
+          phonePhoneEnabled: accountCreationForm.phonePhoneEnabled || false
+        }
+      });
+      if (!result.success) throw new Error(result.error);
+
+      setPersonalPinLink({ sentTo: result.sentTo, loading: false, error: null });
+    } catch (error) {
+      setPersonalPinLink({ sentTo: null, loading: false, error: error.message || 'Failed to send the PIN setup link' });
     }
   };
 
@@ -2552,6 +2608,109 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       setOtpState(prev => ({ ...prev, verified: true, loading: false }));
     } catch (error) {
       setOtpState(prev => ({ ...prev, loading: false, error: error.message || 'Verification failed' }));
+    }
+  };
+
+  // Show a finished (PIN set) account: swap the setup card for the account
+  // card and close the creation form.
+  const applyFinishedAccount = (account) => {
+    setUserAccount(account);
+    setPersonalPinLink({ sentTo: null, loading: false, error: null });
+    setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+    setAccountMessage({ type: 'success', text: `✅ Wallet ready! Account #: ${account.account_number}` });
+    setTimeout(() => setShowAccountCreation(false), 1200);
+  };
+
+  // The PIN is often set somewhere else (the emailed link opens in another tab
+  // or the installed app), so this screen can be stale. While the wallet still
+  // has no PIN, re-check when the user comes back to it and — with the setup
+  // form open — every few seconds, then continue on its own.
+  useEffect(() => {
+    if (!currentUserId || userAccount?.pin_hash) return undefined;
+    let cancelled = false;
+    const check = async () => {
+      if (document.visibilityState === 'hidden') return;
+      const account = await walletAccountService.checkUserAccount(currentUserId);
+      if (!cancelled && account?.pin_hash) applyFinishedAccount(account);
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    const timer = showAccountCreation ? setInterval(check, 5000) : null;
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('focus', check);
+      if (timer) clearInterval(timer);
+    };
+  }, [currentUserId, userAccount?.pin_hash, showAccountCreation]);
+
+  // After the emailed link: pick up the PIN that was set (possibly in another
+  // tab or on another device) and carry on into the wallet.
+  const handleContinueAfterPinLink = async () => {
+    setPersonalPinLink(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Your session expired — please sign in again.');
+
+      const account = await walletAccountService.checkUserAccount(user.id);
+      if (!account?.pin_hash) {
+        setPersonalPinLink(prev => ({
+          ...prev,
+          loading: false,
+          error: "We can't see your PIN yet. Open the link in your email, set the PIN, then press Continue again."
+        }));
+        return;
+      }
+
+      applyFinishedAccount(account);
+    } catch (error) {
+      setPersonalPinLink(prev => ({ ...prev, loading: false, error: error.message || 'Could not check your wallet' }));
+    }
+  };
+
+  // Business: the PIN lives with the iCanEra business wallet, so just refresh
+  // the business list and close the form.
+  const handleContinueAfterBusinessPinLink = async () => {
+    setBusinessPinLink({ sentTo: null, loading: false, error: null });
+    setBusinessOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+    setEditingBusinessProfile(null);
+    await loadBusinessAccountProfiles();
+    onRefreshProfiles?.();
+  };
+
+  // Changing the business form's email invalidates any code/link sent for the old one.
+  const handleBusinessEmailChange = (value) => {
+    setAccountEditForm((prev) => ({ ...prev, email: value }));
+    if (businessOtp.sent || businessOtp.verified) {
+      setBusinessOtp({ sent: false, verified: false, code: '', loading: false, error: null });
+    }
+    if (businessPinLink.sentTo || businessPinLink.error) {
+      setBusinessPinLink({ sentTo: null, loading: false, error: null });
+    }
+  };
+
+  // 🔗 Business wallet PIN via the emailed PIN reset link — the same email and
+  // landing page "Forgot PIN" uses for a business. The iCanEra business wallet
+  // already exists for the profile; ResetPinPage sets its PIN through
+  // reset_business_wallet_pin_from_recovery (highest-ownership shareholder only).
+  const handleSendBusinessPinLink = async (businessProfile) => {
+    setBusinessPinLink({ sentTo: null, loading: true, error: null });
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error('Your session expired — please sign in again.');
+      if (!businessProfile?.id) throw new Error('Choose which business to set up.');
+
+      await requestPinResetEmail(supabase, {
+        accountType: 'business',
+        accountId: businessProfile.id,
+        email: user.email,
+        extraParams: { purpose: 'setup' }
+      });
+      setBusinessPinLink({ sentTo: user.email, loading: false, error: null });
+    } catch (error) {
+      setBusinessPinLink({ sentTo: null, loading: false, error: error.message || 'Failed to send the PIN setup link' });
     }
   };
 
@@ -3666,7 +3825,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const tabOn = { background: 'linear-gradient(90deg, rgba(196,160,82,0.14), transparent)', color: 'var(--color-text)', border: '1px solid transparent', borderBottom: `2px solid ${GOLD}`, borderRadius: 0, boxShadow: 'none', fontWeight: 600 };
   const flat = { background: 'transparent', border: 'none', borderBottom: `1px solid ${HAIR}`, borderRadius: 0, boxShadow: 'none' };
   const walletUi = {
-    headerCard: { ...flat, paddingLeft: 0, paddingRight: 0 },
+    // marginTop 0: the <style> tag above is the first child, so space-y-6 would otherwise push the header down
+    headerCard: { ...flat, paddingLeft: 0, paddingRight: 0, marginTop: 0 },
     headerIcon: { background: 'transparent', border: `1px solid ${GOLD}`, boxShadow: 'none', color: GOLD },
     title: { fontFamily: SERIF, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)' },
     subtitle: { color: 'var(--color-textSecondary)', fontWeight: 400, fontStyle: 'italic', fontFamily: SERIF },
@@ -3704,12 +3864,24 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     }
   };
 
+  const mobileTabLabel = {
+    overview: 'Overview',
+    trade: 'Trade',
+    transactions: 'Transactions',
+    withdraw: 'Withdraw',
+    agent: '🏪 Agent Terminal',
+    cards: 'Cards',
+    shop: 'Shop',
+    business: 'Business Accounts',
+    trust: 'Trust Account',
+    settings: 'Settings'
+  }[activeTab];
+
   return (
     <div
       ref={walletRootRef}
-      className={`wallet-creative-skin w-full space-y-6 ${activeTab !== 'overview' ? 'cmms-fullpage fixed inset-0 z-50 overflow-y-auto p-4 md:p-8' : ''}`}
+      className={`wallet-creative-skin w-full ${activeTab !== 'overview' ? 'cmms-fullpage fixed inset-0 z-50 overflow-y-auto space-y-3 md:space-y-6 p-3 md:p-8' : 'space-y-6'}`}
     >
-      <div className="flex justify-end"><ICANWalletInbox /></div>
       <style>{`
         /* CMMS classic skin: open page, gold hairlines, no rainbow boxes */
         .wallet-creative-skin { font-family: "Georgia", "Iowan Old Style", "Palatino Linotype", serif; }
@@ -3780,6 +3952,23 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         .wallet-creative-skin table tbody tr:hover > td { background: rgba(196, 160, 82, 0.09); }
 
         /* header: gold hairline with a centred diamond, as in CMMS */
+        /* full-page tabs: no spare band above the header, the tab owns the screen */
+        .wallet-creative-skin.cmms-fullpage { padding-top: max(0.5rem, env(safe-area-inset-top, 0px)) !important; }
+
+        /* web: one sticky top bar (Back, title, tabs, bell) and content centred at a readable width */
+        @media (min-width: 768px) {
+          .wallet-creative-skin.cmms-fullpage { padding-top: 0 !important; }
+          .wallet-creative-skin.cmms-fullpage > :not(.fixed):not(style) {
+            width: 100%; max-width: 76rem; margin-left: auto; margin-right: auto;
+          }
+          .wallet-creative-skin.cmms-fullpage .wallet-top-header {
+            position: sticky; top: 0; z-index: 40;
+            background-color: var(--color-bg, #0a0f1c) !important;
+          }
+          .wallet-tabs-compact { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+          .wallet-tabs-compact button { flex-shrink: 0; white-space: nowrap; padding: 0.4rem 0.8rem; font-size: 0.875rem; }
+        }
+
         .wallet-creative-skin .wallet-top-header {
           position: relative;
           border-bottom: 0 !important;
@@ -4447,9 +4636,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           }
         }
       `}</style>{/* Header Card */}
-      <div className="solid-card wallet-top-header p-4 md:p-6" style={walletUi.headerCard}>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-          <div className="flex items-center gap-4">
+      <div className={`solid-card wallet-top-header ${activeTab !== 'overview' ? 'py-2 md:py-3 md:flex md:items-center md:gap-4' : 'p-4 md:p-6'}`} style={walletUi.headerCard}>
+        <div className={`flex ${activeTab !== 'overview' ? 'items-center' : 'items-start'} md:items-center justify-between gap-2 md:gap-3 ${activeTab !== 'overview' ? 'mb-0 md:contents' : 'mb-4'}`}>
+          <div className="flex items-center gap-4 min-w-0">
             {activeTab !== 'overview' && (
               <button
                 onClick={() => setActiveTab('overview')}
@@ -4460,20 +4649,35 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 Back
               </button>
             )}
-            <div className="p-3 rounded-lg" style={walletUi.headerIcon}>
+            <div className={activeTab !== 'overview' ? 'hidden md:block p-2 rounded-lg' : 'p-3 rounded-lg'} style={walletUi.headerIcon}>
               <Wallet className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <h2 className="text-2xl md:text-3xl font-bold" style={walletUi.title}>IcanEra Wallet</h2>
-              <p className="text-sm md:text-base" style={walletUi.subtitle}>Manage global currency with confidence</p>
+            <div className={activeTab !== 'overview' ? 'hidden md:block' : ''}>
+              <h2 className={activeTab !== 'overview' ? 'text-xl font-bold whitespace-nowrap' : 'text-2xl md:text-3xl font-bold'} style={walletUi.title}>IcanEra Wallet</h2>
+              {activeTab === 'overview' && <p className="text-sm md:text-base" style={walletUi.subtitle}>Manage global currency with confidence</p>}
             </div>
           </div>
+          {/* Full-page tabs on phones: the tab switcher shares the Back/bell row instead of taking its own */}
+          {activeTab !== 'overview' && (
+            <button
+              onClick={() => setShowMobileNavMenu(!showMobileNavMenu)}
+              className="md:hidden flex-1 min-w-0 px-3 py-2 rounded-lg flex items-center justify-between gap-2 text-white"
+              style={walletUi.tabOverviewActive}
+            >
+              <span className="flex items-center gap-2 truncate">
+                <Menu className="w-4 h-4 flex-shrink-0" />
+                {mobileTabLabel}
+              </span>
+              <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${showMobileNavMenu ? 'rotate-180' : ''}`} />
+            </button>
+          )}
+          <div className={`flex-shrink-0 ${activeTab !== 'overview' ? 'md:order-3' : ''}`}><ICANWalletInbox /></div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="relative">
+        <div className={`relative ${activeTab !== 'overview' ? 'md:order-2 md:flex-1 md:min-w-0' : ''}`}>
           {/* Desktop View - every tab visible in the header, nothing hidden behind a menu */}
-          <div className="hidden md:flex gap-2 flex-wrap items-center">
+          <div className={`hidden md:flex gap-2 flex-wrap items-center ${activeTab !== 'overview' ? 'wallet-tabs-compact' : ''}`}>
             <button
               onClick={() => setActiveTab('overview')}
               className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
@@ -4599,7 +4803,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           </div>
 
           {/* Mobile View - collapses to the current tab + a toggle menu */}
-          <div className="flex md:hidden items-center gap-2">
+          <div className={activeTab === 'overview' ? 'flex md:hidden items-center gap-2' : 'hidden'}>
             <button
               onClick={() => setShowMobileNavMenu(!showMobileNavMenu)}
               className="flex-1 px-4 py-2 rounded-lg flex items-center justify-between gap-2 text-white"
@@ -4607,16 +4811,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             >
               <span className="flex items-center gap-2 truncate">
                 <Menu className="w-4 h-4 flex-shrink-0" />
-                {activeTab === 'overview' && 'Overview'}
-                {activeTab === 'trade' && 'Trade'}
-                {activeTab === 'transactions' && 'Transactions'}
-                {activeTab === 'withdraw' && 'Withdraw'}
-                {activeTab === 'agent' && '🏪 Agent Terminal'}
-                {activeTab === 'cards' && 'Cards'}
-                {activeTab === 'shop' && 'Shop'}
-                {activeTab === 'business' && 'Business Accounts'}
-                {activeTab === 'trust' && 'Trust Account'}
-                {activeTab === 'settings' && 'Settings'}
+                {mobileTabLabel}
               </span>
               <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${showMobileNavMenu ? 'rotate-180' : ''}`} />
             </button>
@@ -5069,6 +5264,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   </div>
                 )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => { setWalletReceiptTx(walletTxToReceiptTx(tx)); setSelectedWalletTx(null); }}
+                className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white"
+              >
+                🧾 View receipt
+              </button>
             </div>
           </div>
         );
@@ -5410,6 +5613,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                             {Number(profile.ican_wallet.ican_balance || 0).toLocaleString()} IcanEra
                           </span>
                         </p>
+                        <button
+                          onClick={() => setEditingBusinessProfile(profile)}
+                          className="w-full mt-2 px-3 py-2 bg-gradient-to-r from-cyan-500/40 to-blue-500/40 hover:from-cyan-500/60 hover:to-blue-500/60 text-cyan-300 hover:text-cyan-200 rounded text-xs font-semibold transition-all border border-cyan-500/50 hover:border-cyan-500/80"
+                        >
+                          🔑 Wallet PIN &amp; access
+                        </button>
                       </div>
                     ) : profile.user_accounts && profile.user_accounts.length > 0 ? (
                       <div className="bg-slate-700/50 rounded-lg p-3 border border-cyan-500/20">
@@ -5583,141 +5792,38 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         </div>
       )}
 
-      {/* Edit Business Account Modal */}
+      {/* Business Wallet Access — enter the business PIN, or get the setup link */}
       {editingBusinessProfile && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[200] p-4 pt-20 sm:pt-4">
-          <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl border border-cyan-500/50 w-full max-w-md p-6 shadow-2xl">
-            <h2 className="text-2xl font-bold text-white mb-1">
-              {editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0 ? 'Update Wallet Account' : 'Create Wallet Account'}
-            </h2>
-            <p className="text-gray-400 text-sm mb-4">{editingBusinessProfile.business_name}</p>
-            
-            <div className="space-y-4">
-              {/* Account Holder Name */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Account Holder Name</label>
-                <input
-                  type="text"
-                  value={accountEditForm.accountHolderName}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, accountHolderName: e.target.value })}
-                  placeholder="Enter account holder name"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
-                />
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Email Address</label>
-                <input
-                  type="email"
-                  value={accountEditForm.email}
-                  disabled={businessOtp.verified}
-                  onChange={(e) => {
-                    setAccountEditForm({ ...accountEditForm, email: e.target.value });
-                    if (businessOtp.sent || businessOtp.verified) {
-                      setBusinessOtp({ sent: false, verified: false, code: '', loading: false, error: null });
-                    }
-                  }}
-                  placeholder="Enter email address"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-60"
-                />
-              </div>
-
-              {/* Phone Number */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Phone Number</label>
-                <input
-                  type="tel"
-                  value={accountEditForm.phoneNumber}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, phoneNumber: e.target.value })}
-                  placeholder="Enter phone number"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all"
-                />
-              </div>
-
-              {/* Preferred Currency */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Preferred Currency</label>
-                <input
-                  type="text"
-                  value={localCurrencyLabel}
-                  readOnly
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-800/60 border border-cyan-500/30 text-cyan-200 focus:outline-none"
-                />
-              </div>
-
-              {/* Email verification — only required the first time a wallet
-                  (and its PIN) is created for this business; not shown when
-                  just editing an existing business wallet's details. */}
-              {(!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0) && (
-                <div className="rounded-lg border border-slate-600/60 bg-slate-900/30 p-4">
-                  <h3 className="mb-3 font-serif text-base text-white">Verify your email</h3>
-                  <EmailVerifyStep
-                    compact
-                    email={accountEditForm.email}
-                    state={businessOtp}
-                    setState={setBusinessOtp}
-                    onSend={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp)}
-                    onVerify={() => verifyAccountEmailOtp(businessOtp.code, 'business', setBusinessOtp)}
-                    onChangeEmail={() => setBusinessOtp({ sent: false, verified: false, code: '', loading: false, error: null })}
-                  />
-                </div>
-              )}
-
-              {/* PIN */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Create PIN (4-6 digits)</label>
-                <input
-                  type="password"
-                  value={accountEditForm.newPin}
-                  disabled={(!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0) && !businessOtp.verified}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, newPin: e.target.value })}
-                  placeholder="Enter 4-6 digit PIN"
-                  maxLength="6"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-60"
-                />
-              </div>
-
-              {/* Confirm PIN */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2">Confirm PIN</label>
-                <input
-                  type="password"
-                  value={accountEditForm.confirmNewPin}
-                  disabled={(!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0) && !businessOtp.verified}
-                  onChange={(e) => setAccountEditForm({ ...accountEditForm, confirmNewPin: e.target.value })}
-                  placeholder="Confirm your PIN"
-                  maxLength="6"
-                  className="w-full px-4 py-2.5 rounded-lg bg-slate-700/50 border border-cyan-500/30 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-60"
-                />
-              </div>
-            </div>
-
-            {/* Buttons */}
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setEditingBusinessProfile(null)}
-                disabled={accountCreationLoading}
-                className="flex-1 px-4 py-2.5 rounded-lg border border-gray-500/50 text-gray-400 hover:text-gray-300 hover:border-gray-500 transition-all disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0) {
-                    handleUpdateBusinessWallet(editingBusinessProfile);
-                  } else {
-                    handleCreateBusinessWallet(editingBusinessProfile);
-                  }
-                }}
-                disabled={accountCreationLoading || !accountEditForm.accountHolderName || !accountEditForm.email || !accountEditForm.phoneNumber || (!editingBusinessProfile.user_accounts || editingBusinessProfile.user_accounts.length === 0 ? (!accountEditForm.newPin || !accountEditForm.confirmNewPin || !businessOtp.verified) : false)}
-                className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {accountCreationLoading ? 'Saving...' : (editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0 ? 'Update Account' : 'Create Account')}
-              </button>
-            </div>
-          </div>
-        </div>
+        <BusinessWalletAccessModal
+          profile={editingBusinessProfile}
+          userEmail={userEmail}
+          localCurrencyLabel={localCurrencyLabel}
+          form={accountEditForm}
+          setForm={setAccountEditForm}
+          onEmailChange={handleBusinessEmailChange}
+          otp={businessOtp}
+          setOtp={setBusinessOtp}
+          pinLink={businessPinLink}
+          creating={accountCreationLoading}
+          onClose={() => setEditingBusinessProfile(null)}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (editingBusinessProfile.user_accounts && editingBusinessProfile.user_accounts.length > 0) {
+              handleUpdateBusinessWallet(editingBusinessProfile);
+            } else {
+              handleCreateBusinessWallet(editingBusinessProfile);
+            }
+          }}
+          onSendCode={() => requestAccountEmailOtp(accountEditForm.email, 'business', setBusinessOtp, () => handleSendBusinessPinLink(editingBusinessProfile))}
+          onVerifyCode={() => verifyAccountEmailOtp(businessOtp.code, 'business', setBusinessOtp)}
+          onSendLink={() => handleSendBusinessPinLink(editingBusinessProfile)}
+          onUnlocked={handleContinueAfterBusinessPinLink}
+          onForgotPin={() => {
+            setEditingBusinessProfile(null);
+            setPinRecoveryAccountType('business');
+            setShowPINRecovery(true);
+          }}
+        />
       )}
 
       {/* Settings Tab - Compact Collapsible */}
@@ -7146,237 +7252,34 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         />
       )}
 
-      {/* 🎯 CREATE WALLET ACCOUNT MODAL */}
-      {showAccountCreation && (() => {
-        // Colours come only from the classic kit / .acct-* theme variables in
-        // index.css (never fixed Tailwind colours) so every colour mode reads.
-        const inputCls = 'acct-input w-full rounded-lg border px-4 py-3 disabled:opacity-60';
-        const pinLength = accountCreationForm.pin.length;
-        const detailsDone = accountCreationForm.accountHolderName.trim().length > 1
-          && accountCreationForm.phoneNumber.trim().length >= 9
-          && accountCreationForm.email.trim().length > 3;
-
-        // A numbered step heading; the number turns into a tick once the step is complete.
-        const stepHead = (n, title, { done = false, locked = false, hint = null } = {}) => (
-          <div className="mb-4 flex items-start gap-3">
-            <span aria-hidden="true" className={`acct-step mt-0.5 ${done ? 'is-done' : locked ? 'is-locked' : ''}`}>
-              {done ? '✓' : n}
-            </span>
-            <div>
-              <h3 className={`cmms-classic-heading text-lg leading-tight ${locked ? 'acct-locked' : ''}`}>{title}</h3>
-              {hint && <p className="cmms-classic-muted mt-0.5 text-xs">{hint}</p>}
-            </div>
-          </div>
-        );
-
-        // Accessible on/off switch row for the optional biometric choices.
-        const switchRow = (label, description, checked, toggle) => (
-          <button
-            type="button"
-            role="switch"
-            aria-checked={checked}
-            onClick={toggle}
-            className="flex w-full items-center justify-between gap-4 rounded-lg border px-4 py-3 text-left"
-          >
-            <span>
-              <span className="block text-sm font-semibold">{label}</span>
-              <span className="cmms-classic-muted block text-xs">{description}</span>
-            </span>
-            <span className={`acct-switch-track ${checked ? 'is-on' : ''}`} />
-          </button>
-        );
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4">
-            <div className="cmms-classic-card acct-classic max-h-[92vh] w-full max-w-xl overflow-y-auto p-5 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="create-account-title">
-              <header className="mb-6">
-                <p className="cmms-classic-eyebrow mb-2">IcanEra Wallet</p>
-                <h2 id="create-account-title" className="cmms-classic-heading text-2xl sm:text-3xl">Open your wallet account</h2>
-                <p className="cmms-classic-muted mt-2 text-sm">Four short steps. Your PIN protects every transaction you make.</p>
-                <div className="cmms-classic-hairline mt-5" />
-              </header>
-
-              {accountMessage && (
-                <div
-                  role="alert"
-                  className={`acct-alert mb-6 ${accountMessage.type === 'success' ? 'is-ok' : 'is-error'}`}
-                >
-                  {accountMessage.text}
-                </div>
-              )}
-
-              <form onSubmit={handleCreateAccount} className="space-y-6">
-                {/* 1 — Details */}
-                <section>
-                  {stepHead(1, 'Your details', { done: detailsDone })}
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="acct-name" className="cmms-classic-label mb-1.5">Full name</label>
-                      <input
-                        id="acct-name"
-                        type="text"
-                        autoComplete="name"
-                        value={accountCreationForm.accountHolderName}
-                        onChange={(e) => setAccountCreationForm({ ...accountCreationForm, accountHolderName: e.target.value })}
-                        placeholder="As it appears on your ID"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="acct-phone" className="cmms-classic-label mb-1.5">Phone number</label>
-                      <input
-                        id="acct-phone"
-                        type="tel"
-                        autoComplete="tel"
-                        value={accountCreationForm.phoneNumber}
-                        onChange={(e) => setAccountCreationForm({ ...accountCreationForm, phoneNumber: e.target.value })}
-                        placeholder="+256…"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="acct-email" className="cmms-classic-label mb-1.5">Email address</label>
-                      <input
-                        id="acct-email"
-                        type="email"
-                        autoComplete="email"
-                        value={accountCreationForm.email}
-                        disabled={personalOtp.verified}
-                        onChange={(e) => {
-                          setAccountCreationForm({ ...accountCreationForm, email: e.target.value });
-                          if (personalOtp.sent || personalOtp.verified) {
-                            setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
-                          }
-                        }}
-                        placeholder="you@example.com"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="acct-currency" className="cmms-classic-label mb-1.5">Wallet currency</label>
-                      <input
-                        id="acct-currency"
-                        type="text"
-                        value={localCurrencyLabel}
-                        readOnly
-                        className="acct-input w-full rounded-lg border px-4 py-3 opacity-80"
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                {/* 2 — Verify email */}
-                <section className="cmms-classic-divider">
-                  {stepHead(2, 'Verify your email', { done: personalOtp.verified })}
-                  <EmailVerifyStep
-                    email={accountCreationForm.email}
-                    state={personalOtp}
-                    setState={setPersonalOtp}
-                    onSend={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp)}
-                    onVerify={() => verifyAccountEmailOtp(personalOtp.code, 'personal', setPersonalOtp)}
-                    onChangeEmail={() => setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null })}
-                  />
-                </section>
-
-                {/* 3 — PIN */}
-                <section className="cmms-classic-divider">
-                  {stepHead(3, 'Set your PIN', {
-                    done: personalOtp.verified && pinLength >= 4,
-                    locked: !personalOtp.verified,
-                    hint: personalOtp.verified
-                      ? 'Choose 4 to 6 digits. You will use it to approve transactions.'
-                      : 'Available once your email is verified.',
-                  })}
-                  <div className={personalOtp.verified ? '' : 'pointer-events-none opacity-50'}>
-                    <label htmlFor="acct-pin" className="cmms-classic-label mb-1.5">Transaction PIN</label>
-                    <div className="relative">
-                      <input
-                        id="acct-pin"
-                        type={showCreatePin ? 'text' : 'password'}
-                        inputMode="numeric"
-                        autoComplete="new-password"
-                        value={accountCreationForm.pin}
-                        disabled={!personalOtp.verified}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(/\D/g, '');
-                          if (value.length <= 6) {
-                            setAccountCreationForm({ ...accountCreationForm, pin: value });
-                          }
-                        }}
-                        placeholder="4–6 digits"
-                        maxLength="6"
-                        className={`${inputCls} pr-16 text-center font-mono text-xl tracking-[0.4em] disabled:cursor-not-allowed`}
-                      />
-                      <button
-                        type="button"
-                        tabIndex={personalOtp.verified ? 0 : -1}
-                        onClick={() => setShowCreatePin((s) => !s)}
-                        className="acct-link icon-btn-transparent absolute right-3 top-1/2 -translate-y-1/2 text-xs"
-                        aria-label={showCreatePin ? 'Hide PIN' : 'Show PIN'}
-                      >
-                        {showCreatePin ? 'Hide' : 'Show'}
-                      </button>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <div className="flex gap-1.5" aria-hidden="true">
-                        {[0, 1, 2, 3, 4, 5].map((i) => (
-                          <span key={i} className={`acct-dot ${i < pinLength ? 'is-on' : ''}`} />
-                        ))}
-                      </div>
-                      <p className="cmms-classic-muted text-xs">
-                        {pinLength === 0 ? '4 to 6 digits' : pinLength < 4 ? `${4 - pinLength} more to go` : 'Looks good'}
-                      </p>
-                    </div>
-                  </div>
-                </section>
-
-                {/* 4 — Biometrics (optional) */}
-                <section className="cmms-classic-divider">
-                  {stepHead(4, 'Biometric security', { hint: 'Optional. You can change this later in settings.' })}
-                  <div className="space-y-2">
-                    {switchRow(
-                      'Fingerprint',
-                      'Unlock transactions with your fingerprint',
-                      accountCreationForm.fingerprintEnabled,
-                      () => setAccountCreationForm({ ...accountCreationForm, fingerprintEnabled: !accountCreationForm.fingerprintEnabled }),
-                    )}
-                    {switchRow(
-                      'Phone PIN or biometric',
-                      "Authenticate with your device's own lock",
-                      accountCreationForm.phonePhoneEnabled,
-                      () => setAccountCreationForm({ ...accountCreationForm, phonePhoneEnabled: !accountCreationForm.phonePhoneEnabled }),
-                    )}
-                  </div>
-                </section>
-
-                {/* Actions */}
-                <div className="cmms-classic-divider">
-                  {!personalOtp.verified && (
-                    <p className="cmms-classic-muted mb-3 text-center text-xs">Verify your email above to create your account.</p>
-                  )}
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowAccountCreation(false)}
-                      disabled={accountCreationLoading}
-                      className="cmms-classic-btn-secondary flex-1 px-4 py-3 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={accountCreationLoading || !personalOtp.verified}
-                      className="cmms-classic-btn-primary flex-1 px-4 py-3 disabled:cursor-not-allowed"
-                    >
-                      {accountCreationLoading ? 'Creating account…' : 'Create account'}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-        );
-      })()}
+      {/* 🎯 WALLET ACCESS MODAL — enter your PIN, or get the setup link / set up the wallet */}
+      {showAccountCreation && (
+        <WalletAccessModal
+          userId={currentUserId}
+          userEmail={userEmail}
+          localCurrencyLabel={localCurrencyLabel}
+          accountMessage={accountMessage}
+          form={accountCreationForm}
+          setForm={setAccountCreationForm}
+          onEmailChange={handlePersonalEmailChange}
+          otp={personalOtp}
+          setOtp={setPersonalOtp}
+          pinLink={personalPinLink}
+          creating={accountCreationLoading}
+          onClose={() => setShowAccountCreation(false)}
+          onSubmit={handleCreateAccount}
+          onSendCode={() => requestAccountEmailOtp(accountCreationForm.email, 'personal', setPersonalOtp, handleSendPersonalPinLink)}
+          onVerifyCode={() => verifyAccountEmailOtp(personalOtp.code, 'personal', setPersonalOtp)}
+          onSendLink={handleSendPersonalPinLink}
+          onContinue={handleContinueAfterPinLink}
+          onUnlocked={applyFinishedAccount}
+          onForgotPin={() => {
+            setShowAccountCreation(false);
+            setPinRecoveryAccountType('personal');
+            setShowPINRecovery(true);
+          }}
+        />
+      )}
 
       {/* WITHDRAW MODAL */}
       {activeModal === 'withdraw' && (
@@ -7645,13 +7548,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       {activeTab === 'trade' && (
         <div className="pt-4 md:pt-6">
           <div className={`trade-page w-full ${activeTradeTab === 'chart' ? '' : 'max-w-6xl mx-auto'} flex flex-col`}>
-            {/* Classic page header */}
-            <div className="flex items-center justify-between gap-3 pb-4 mb-1" style={{ borderBottom: '1px solid rgba(196,160,82,0.45)' }}>
+            {/* Classic page header — slims to a single line on the chart so the chart gets the page */}
+            <div className={`flex items-center justify-between gap-3 ${activeTradeTab === 'chart' ? 'pb-1.5' : 'pb-4 mb-1'}`} style={{ borderBottom: '1px solid rgba(196,160,82,0.45)' }}>
               <div className="min-w-0">
-                <p className="text-[11px] uppercase tracking-[0.18em] font-bold" style={{ color: '#c4a052' }}>
-                  Professional trading · real-time market data
-                </p>
-                <h2 className="text-2xl sm:text-3xl mt-1 break-words" style={{ color: 'var(--color-text)', fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}>
+                {activeTradeTab !== 'chart' && (
+                  <p className="text-[11px] uppercase tracking-[0.18em] font-bold" style={{ color: '#c4a052' }}>
+                    Professional trading · real-time market data
+                  </p>
+                )}
+                <h2 className={`${activeTradeTab === 'chart' ? 'text-base truncate' : 'text-xl sm:text-3xl mt-1 break-words'}`} style={{ color: 'var(--color-text)', fontFamily: '"Playfair Display", Georgia, serif', fontWeight: 600 }}>
                   IcanEra Trading Center
                 </h2>
               </div>
@@ -7674,7 +7579,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
             {/* Tab bar — underlined, scrolls sideways on any screen, stays pinned while the page scrolls */}
             <div
-              className="sticky top-0 z-20 -mx-1 px-1 mb-5 flex gap-1 overflow-x-auto"
+              className={`sticky top-0 z-20 -mx-1 px-1 ${activeTradeTab === 'chart' ? 'mb-0' : 'mb-5'} flex gap-1 overflow-x-auto`}
               style={{ background: 'var(--color-bg)', borderBottom: '1px solid rgba(196,160,82,0.35)' }}
               role="tablist"
             >
@@ -7694,7 +7599,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     role="tab"
                     aria-selected={on}
                     onClick={() => setActiveTradeTab(id)}
-                    className="inline-flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap transition"
+                    className={`flex-1 min-w-0 sm:flex-none flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-0.5 sm:gap-2 px-1 sm:px-4 ${activeTradeTab === 'chart' ? 'py-1.5 sm:py-2' : 'py-2 sm:py-3'} text-[10px] leading-tight sm:text-sm sm:leading-normal text-center sm:text-left whitespace-normal sm:whitespace-nowrap transition`}
                     style={{
                       background: on ? 'linear-gradient(180deg, transparent, rgba(196,160,82,0.16))' : 'transparent',
                       color: on ? 'var(--color-text)' : 'var(--color-textSecondary)',
@@ -7704,15 +7609,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                       marginBottom: -1
                     }}
                   >
-                    <Icon className="w-4 h-4" style={{ color: on ? '#c4a052' : undefined }} />
-                    {label}
+                    <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" style={{ color: on ? '#c4a052' : undefined }} />
+                    <span className="min-w-0">{label}</span>
                   </button>
                 );
               })}
             </div>
 
             {/* Tab Content — each tab is a full page */}
-            <div className="pb-10">
+            <div className={activeTradeTab === 'chart' ? 'pb-0' : 'pb-10'}>
               {/* Wallet Tab */}
               {activeTradeTab === 'wallet' && (() => {
                 const lastCandle = candleData && candleData.length > 0 ? candleData[candleData.length - 1] : null;
@@ -7768,9 +7673,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
               {/* 📊 CHART TAB - Just the chart */}
               {activeTradeTab === 'chart' && (
-                <div className="space-y-3">
+                <div className="space-y-0">
                   {chartOrderDraftOpen && (
-                    <div className="bg-slate-800 border border-amber-500/50 rounded-xl p-3 flex flex-wrap items-center gap-2">
+                    <div className="bg-slate-900 border-b border-amber-500/50 px-3 py-2 flex flex-wrap items-center gap-2">
                       <div className="flex gap-1.5">
                         <button
                           type="button"
@@ -7830,7 +7735,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   )}
 
                   {instantDraftOpen && (
-                    <div className="bg-slate-800 border border-sky-500/50 rounded-xl p-3 flex flex-wrap items-center gap-2">
+                    <div className="bg-slate-900 border-b border-sky-500/50 px-3 py-2 flex flex-wrap items-center gap-2">
                       <span className="text-xs font-semibold text-sky-400">⚡ Instant trade @ LIVE price</span>
                       <div className="flex gap-1.5">
                         <button
@@ -7882,7 +7787,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   )}
 
                   {manageOrderTarget && (
-                    <div className="bg-slate-800 border border-amber-500/50 rounded-xl p-3 flex flex-wrap items-center gap-2">
+                    <div className="bg-slate-900 border-b border-amber-500/50 px-3 py-2 flex flex-wrap items-center gap-2">
                       <span className="text-xs font-semibold text-amber-400">
                         📌 Booked {manageOrderTarget.order_type === 'buy' ? 'Buy' : 'Sell'}: {parseFloat(manageOrderTarget.ican_amount).toLocaleString()} ICAN @ UGX {parseFloat(manageOrderTarget.target_price_ugx).toLocaleString()}
                       </span>
@@ -7913,7 +7818,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     </div>
                   )}
 
-                  <div className="tp-keep h-[calc(100dvh-15rem)] min-h-[420px] bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
+                  <div className="tp-keep h-[calc(100dvh-11.5rem)] min-h-[420px] bg-slate-950 overflow-hidden">
                     {candleData && candleData.length > 0 ? (
                       <div className="h-full w-full">
                         <CandlestickChart
@@ -7959,14 +7864,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
               {/* Buy Tab */}
               {activeTradeTab === 'buy' && (
-                <div className="trade-tab-content bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                <div className="trade-tab-content">
                   <BuyIcan onSuccess={handleInstantBuySuccess} />
                 </div>
               )}
 
               {/* Sell Tab */}
               {activeTradeTab === 'sell' && (
-                <div className="trade-tab-content bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                <div className="trade-tab-content">
                   <SellIcan onSuccess={handleInstantSellSuccess} />
                 </div>
               )}
@@ -8193,7 +8098,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-white">Dropship</h3>
-                      <p className="text-sm text-slate-400">List any store's products at your own price. Paid via your ICANera wallet.</p>
+                      <p className="text-sm text-slate-400">List any store's products at your own price. Paid via your IcanEra wallet.</p>
                     </div>
                   </div>
 
@@ -8309,6 +8214,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         }}
       />
       <IcanPaymentReceiptModal receipt={paymentReceipt} onClose={() => setPaymentReceipt(null)} />
+      {walletReceiptTx && (
+        <TransactionReceiptModal
+          transaction={walletReceiptTx}
+          onClose={() => setWalletReceiptTx(null)}
+          onProofAttached={(updated) => setWalletReceiptTx(updated)}
+        />
+      )}
       {pinDialog}
     </div>
   );

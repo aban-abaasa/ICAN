@@ -11,6 +11,8 @@ import { getSupabaseClient } from '../lib/supabase/client';
 import CallDock from './calls/CallDock';
 import CallStage from './calls/CallStage';
 import ICANReferralsDevTab from './ICANReferralsDevTab';
+import ICANFranchiseDevTab from './ICANFranchiseDevTab';
+import ICANEraApiDevTab from './ICANEraApiDevTab';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { Linkify } from '../utils/linkify';
 import {
@@ -121,6 +123,8 @@ const TABS = [
   { id: 'plans',      label: 'Plans',        Icon: Star,        color: '#eab308' },
   { id: 'corporate',  label: 'Corporate',    Icon: CreditCard,  color: '#a855f7' },
   { id: 'referrals',  label: 'Referrals',    Icon: Gift,        color: '#84cc16' },
+  { id: 'franchise',  label: 'Franchise',    Icon: Network,     color: '#f59e0b' },
+  { id: 'api',        label: 'API',          Icon: Zap,         color: '#38bdf8' },
   { id: 'board',     label: 'Public Board', Icon: MessageCircle, color: '#14b8a6' },
   { id: 'messages',   label: 'Messages',     Icon: Mail,          color: '#0ea5e9' },
   { id: 'support',    label: 'Support Team', Icon: Shield,        color: '#22c55e' },
@@ -476,7 +480,9 @@ const SupportTeamTab = () => {
   const [newPassword, setNewPassword] = useState('');
   const [newEmails,   setNewEmails]   = useState('');
   const [newAllowedTabs, setNewAllowedTabs] = useState(['messages', 'board']);
-  const shareableTabs = TABS.filter(t => t.id !== 'support'); // never let a link grant the tab that manages links/PIN itself
+  // never let a link grant the tab that manages links/PIN itself, nor the franchise tab (partner approvals and payouts),
+  // nor the API tab (it approves outside developers and can switch the whole API off)
+  const shareableTabs = TABS.filter(t => t.id !== 'support' && t.id !== 'franchise' && t.id !== 'api');
   const [creating,   setCreating]   = useState(false);
   const [createError, setCreateError] = useState('');
   const [justCreated, setJustCreated] = useState(null); // { token, label }
@@ -1712,7 +1718,7 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
                     { label:'Active wallets',   val:fmt(wallets.length),    color:'#06b6d4' },
                     { label:'CMMS companies',   val:fmt(companies.length),  color:'#6366f1' },
                     { label:'Total members',    val:fmt(totalMembers),      color:'#6366f1' },
-                    { label:'Pitchin pitches',  val:fmt(businesses.length), color:'#10b981' },
+                    { label:'IcanEra pitches',  val:fmt(businesses.length), color:'#10b981' },
                     { label:'Trust groups',     val:fmt(groups.length),     color:'#f59e0b' },
                     { label:'Active agents',    val:`${activeAgents} / ${agents.length}`, color:'#f97316' },
                     { label:'Txns recorded',    val:fmt(txs.length),        color:'#ec4899' },
@@ -2540,8 +2546,14 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
           </>)}
         </>)}
 
-        {/* ══ REFERRALS (ICANera + BodaGoEra — the one place they're managed) ══ */}
+        {/* ══ REFERRALS (IcanEra + BodaGoEra — the one place they're managed) ══ */}
         {tab==='referrals' && <ICANReferralsDevTab devToken={DEV_TOKEN}/>}
+
+        {/* ══ FRANCHISE (requests, partners, rate card, payouts; needs a real admin account, not the panel token) ══ */}
+        {tab==='franchise' && <ICANFranchiseDevTab/>}
+
+        {/* ══ API (outside developers: requests, keys, endpoint kill switches; needs a real admin account, not the panel token) ══ */}
+        {tab==='api' && <ICANEraApiDevTab/>}
 
         {/* ══ CORPORATE (subscriptions + contract requests) ══ */}
         {tab==='corporate' && (<>

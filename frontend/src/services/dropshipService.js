@@ -4,7 +4,7 @@
  * A dropshipper picks products from any store, lists them at their own
  * price, and dropship_checkout() fulfills from the source store's real
  * inventory, pays the store its real wholesale amount, and pays the
- * reseller their markup — all via the ICANera wallet.
+ * reseller their markup — all via the IcanEra wallet.
  */
 
 import { supabase } from '../lib/supabase';

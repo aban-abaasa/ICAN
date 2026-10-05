@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   X, ShieldCheck, Briefcase, Award, GraduationCap, FolderKanban, Rocket,
   FlaskConical, Presentation, Loader2, Sparkles, MapPin, Phone, Mail,
-  Users, PhoneCall, Video, MessageCircle, ExternalLink, ArrowRight, MessageSquare, FileText,
+  Users, PhoneCall, Video, MessageCircle, ExternalLink, ArrowRight, MessageSquare, FileText, Printer,
 } from 'lucide-react';
 import { fmtRelativeTime } from '../landing/relativeTime';
 import { getOrCreatePortfolioGuestId } from '../../utils/portfolioGuestId';
@@ -57,12 +57,17 @@ function DescriptionBlock({ text }) {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
   if (lines.length > 1) {
     return (
-      <ul className="mt-1.5 space-y-1 list-disc list-inside text-sm text-slate-400">
-        {lines.map((line, i) => <li key={i}>{line}</li>)}
+      <ul className="mt-2 space-y-1.5 text-sm text-slate-400 leading-relaxed">
+        {lines.map((line, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="mt-[0.55rem] w-1 h-1 rounded-full bg-[#c4a052] flex-shrink-0" aria-hidden="true" />
+            <span className="min-w-0 break-words">{line}</span>
+          </li>
+        ))}
       </ul>
     );
   }
-  return <p className="text-sm text-slate-400 mt-1.5">{text}</p>;
+  return <p className="text-sm text-slate-400 mt-2 leading-relaxed break-words">{text}</p>;
 }
 
 // One read-only "Update" card on the public resume page — the owner's own
@@ -74,7 +79,7 @@ function StatusCard({ status, onOpenImage }) {
   const kind = !hasMedia ? 'text' : status.media_type === 'video' ? 'video' : 'image';
 
   return (
-    <div className="relative w-32 h-56 shrink-0 snap-start rounded-xl overflow-hidden border border-slate-800 bg-slate-900">
+    <div className="relative w-32 h-56 shrink-0 snap-start rounded-xl overflow-hidden border border-[#c4a052]/30 bg-slate-900">
       {kind === 'video' && (
         <video src={status.media_url} className="w-full h-full object-cover" muted playsInline preload="none" controls />
       )}
@@ -112,12 +117,15 @@ function StatusCard({ status, onOpenImage }) {
 }
 
 function SectionHeading({ children }) {
-  return (
-    <h2 className="text-base font-semibold text-slate-100 mb-3 pb-2 border-b border-slate-800 flex items-center gap-2">
-      <span className="w-1 h-4 rounded-full bg-indigo-500" />
-      {children}
-    </h2>
-  );
+  return <div className="rz-section-title"><h2 className="rz-serif text-lg font-bold text-white">{children}</h2></div>;
+}
+
+function ContactPill({ icon: Icon, href, children }) {
+  const cls = 'inline-flex items-center gap-2 min-h-[40px] max-w-full px-3.5 py-1.5 rounded-full border border-[#c4a052]/30 bg-[#c4a052]/[0.06] text-sm text-slate-300 break-all';
+  const inner = (<><Icon className="w-4 h-4 text-[#c4a052] flex-shrink-0" /><span className="min-w-0">{children}</span></>);
+  return href
+    ? <a href={href} className={`${cls} hover:border-[#c4a052]/70 hover:text-white transition-colors`}>{inner}</a>
+    : <span className={cls}>{inner}</span>;
 }
 
 /**
@@ -230,114 +238,111 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
       });
   }, [data?.portfolio?.links]);
 
+  const firstName = data?.profile?.full_name?.split(' ')[0] || 'them';
+
   const content = (
-    <div className="relative min-h-[100dvh] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-200 overflow-hidden">
-      {/* Subtle ambient glow — restrained, professional accent rather than a busy gradient */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-24 -left-24 w-72 h-72 bg-indigo-600/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/3 -right-24 w-80 h-80 bg-teal-500/10 rounded-full blur-3xl" />
-      </div>
+    <div className="rz pp-page relative min-h-[100dvh] text-slate-200 overflow-hidden">
+      {/* Overlay chrome — slim sticky bar so the close button is always reachable */}
+      {isOverlay && (
+        <div className="pp-noprint sticky top-0 z-30 flex items-center justify-between gap-3 px-4 pb-2.5 pt-[calc(0.65rem+env(safe-area-inset-top))] pp-bar">
+          <p className="rz-eyebrow">IcanEra · Resume</p>
+          <button onClick={onClose} className="icn-page-close" aria-label="Close resume"><X /></button>
+        </div>
+      )}
 
-      <div className="relative max-w-3xl mx-auto px-4 py-8 sm:py-12">
-        {isOverlay && (
-          <button onClick={onClose} className="mb-4 p-2 rounded-lg hover:bg-white/5 transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        )}
-
+      <div className="relative max-w-3xl mx-auto px-4 pt-5 pb-10 sm:pt-10 sm:pb-14">
         {isLoading && (
-          <div className="flex items-center justify-center py-24 text-slate-400">
-            <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading portfolio...
+          <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+            <Loader2 className="w-6 h-6 animate-spin text-[#c4a052]" />
+            <p className="rz-serif text-[#e6c980]">Loading resume…</p>
           </div>
         )}
 
         {!isLoading && notFound && (
           <div className="text-center py-24 animate-fadeIn">
-            <p className="text-xl font-semibold mb-2 text-slate-100">Profile not found</p>
-            <p className="text-slate-400 text-sm">This IcanEra portfolio link isn't available or was made private.</p>
+            <Users className="w-10 h-10 mx-auto mb-4 text-[#c4a052]/70" />
+            <p className="rz-serif text-2xl font-bold mb-2 text-white">Profile not found</p>
+            <p className="text-slate-400 text-sm">This IcanEra resume link isn't available or was made private.</p>
           </div>
         )}
 
         {!isLoading && data && (
           <>
-            <div className="flex items-center gap-4 mb-3 animate-fadeInDown">
-              <div className="relative flex-shrink-0">
-                {data.profile.avatar_url ? (
-                  <img
-                    src={data.profile.avatar_url}
-                    alt={data.profile.full_name}
-                    className="w-24 h-24 rounded-full object-cover ring-2 ring-slate-700 cursor-pointer"
-                    onClick={() => setLightbox({ src: data.profile.avatar_url, alt: data.profile.full_name })}
-                  />
-                ) : (
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-slate-700 to-indigo-700 flex items-center justify-center text-3xl font-bold text-white ring-2 ring-slate-700">
-                    {(data.profile.full_name || 'U').charAt(0)}
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-2xl font-bold text-white truncate">
-                    {data.profile.full_name}
-                  </h1>
-                  {data.profile.is_verified ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
-                      <ShieldCheck className="w-3.5 h-3.5" /> Verified
-                    </span>
+            {/* Masthead */}
+            <header className="rz-card animate-fadeInDown">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 text-center sm:text-left">
+                <div className="flex-shrink-0">
+                  {data.profile.avatar_url ? (
+                    <img
+                      src={data.profile.avatar_url}
+                      alt={data.profile.full_name}
+                      className="w-28 h-28 sm:w-32 sm:h-32 rounded-full object-cover border-2 border-[#c4a052]/70 shadow-xl cursor-pointer"
+                      onClick={() => setLightbox({ src: data.profile.avatar_url, alt: data.profile.full_name })}
+                    />
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/60 border border-slate-700 text-slate-400 text-xs font-medium">
-                      <ShieldCheck className="w-3.5 h-3.5" /> Not yet verified
-                    </span>
+                    <div className="rz-serif w-28 h-28 sm:w-32 sm:h-32 rounded-full flex items-center justify-center text-4xl font-bold text-[#1c1408] bg-gradient-to-br from-[#e6c980] to-[#a17c28] shadow-xl">
+                      {(data.profile.full_name || 'U').charAt(0).toUpperCase()}
+                    </div>
                   )}
                 </div>
-                <p className="text-indigo-300/80 text-sm">@{data.profile.handle}</p>
-                {data.portfolio?.headline && (
-                  <p className="text-slate-300 mt-1 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                    {data.portfolio.headline}
-                  </p>
-                )}
+                <div className="min-w-0 flex-1">
+                  <p className="rz-eyebrow">Curriculum Vitae</p>
+                  <h1 className="rz-serif text-3xl sm:text-4xl font-bold text-white leading-tight break-words mt-0.5">
+                    {data.profile.full_name}
+                  </h1>
+                  <div className="mt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                    <span className="text-sm font-medium text-[#c4a052]">@{data.profile.handle}</span>
+                    {data.profile.is_verified ? (
+                      <span className="rz-badge text-emerald-300 bg-emerald-500/10 border border-emerald-500/30">
+                        <ShieldCheck className="w-3.5 h-3.5" /> Verified
+                      </span>
+                    ) : (
+                      <span className="rz-badge text-slate-400 bg-slate-500/10 border border-slate-500/25">
+                        <ShieldCheck className="w-3.5 h-3.5" /> Not yet verified
+                      </span>
+                    )}
+                  </div>
+                  {data.portfolio?.headline && (
+                    <p className="mt-3 text-base text-slate-300 leading-relaxed break-words">{data.portfolio.headline}</p>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Resume-style contact line */}
-            {contactLine.length > 0 && (
-              <div
-                className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-slate-400 animate-fadeIn"
-                style={{ animationDelay: '0.05s', animationFillMode: 'backwards' }}
-              >
-                {data.portfolio.location && (
-                  <span className="inline-flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-indigo-400" /> {data.portfolio.location}</span>
-                )}
-                {data.portfolio.phone && (
-                  <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-indigo-400" /> {data.portfolio.phone}</span>
-                )}
-                {data.portfolio.contact_email && (
-                  <span className="inline-flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-indigo-400" /> {data.portfolio.contact_email}</span>
-                )}
-              </div>
-            )}
+              {(contactLine.length > 0 || links.length > 0) && <div className="rz-rule" />}
 
-            {/* Links — LinkedIn, personal site, GitHub, anything the owner added */}
-            {links.length > 0 && (
-              <div
-                className="flex flex-wrap items-center gap-2 mb-6 animate-fadeIn"
-                style={{ animationDelay: '0.06s', animationFillMode: 'backwards' }}
-              >
-                {links.map((link) => (
-                  <a
-                    key={link.label}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/60 border border-slate-700 text-xs text-slate-300 hover:border-indigo-400/60 hover:text-white transition-colors"
-                  >
-                    <ExternalLink className="w-3 h-3" /> {link.label}
-                  </a>
-                ))}
+              {contactLine.length > 0 && (
+                <div className="flex flex-wrap justify-center sm:justify-start gap-2">
+                  {data.portfolio.location && <ContactPill icon={MapPin}>{data.portfolio.location}</ContactPill>}
+                  {data.portfolio.phone && <ContactPill icon={Phone} href={`tel:${data.portfolio.phone.replace(/\s+/g, '')}`}>{data.portfolio.phone}</ContactPill>}
+                  {data.portfolio.contact_email && <ContactPill icon={Mail} href={`mailto:${data.portfolio.contact_email}`}>{data.portfolio.contact_email}</ContactPill>}
+                </div>
+              )}
+
+              {/* Links — LinkedIn, personal site, GitHub, anything the owner added */}
+              {links.length > 0 && (
+                <div className={`flex flex-wrap justify-center sm:justify-start gap-2 ${contactLine.length > 0 ? 'mt-2' : ''}`}>
+                  {links.map((link) => (
+                    <a
+                      key={link.label}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rz-btn rz-btn-ghost rz-btn-sm"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> {link.label}
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              <div className="pp-noprint mt-4 flex justify-center sm:justify-end">
+                <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-[#e6c980] transition-colors min-h-[36px] px-2">
+                  <Printer className="w-3.5 h-3.5" /> Save as PDF / print
+                </button>
               </div>
-            )}
-            {links.length === 0 && contactLine.length === 0 && <div className="mb-6" />}
+            </header>
+
+            <div className="mt-6 space-y-8">
 
             {/* Owner's own live Updates (24h status posts) — scoped server-side
                 to this profile's user_id, and RLS further restricts a
@@ -349,8 +354,8 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                 same row, so they don't have to leave this page to see
                 messages visitors have sent them here. */}
             {(data.statuses?.length > 0 || isOwnProfile) && (
-              <div
-                className={`mb-8 animate-fadeInUp ${isOwnProfile ? 'grid grid-cols-1 sm:grid-cols-2 gap-4 items-start' : ''}`}
+              <section
+                className={`pp-noprint animate-fadeInUp ${isOwnProfile ? 'grid grid-cols-1 sm:grid-cols-2 gap-4 items-start' : ''}`}
                 style={{ animationDelay: '0.07s', animationFillMode: 'backwards' }}
               >
                 {data.statuses?.length > 0 && (
@@ -363,61 +368,54 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                     </div>
                   </div>
                 )}
-                {isOwnProfile && <PortfolioMessagesInbox userId={data.profile.id} />}
-              </div>
+                {isOwnProfile && <div className="rz-dark"><PortfolioMessagesInbox userId={data.profile.id} /></div>}
+              </section>
             )}
 
-            {/* Call / community-chat action bar — lets a client reach this
-                professional directly from their resume page. */}
+            {/* Get in touch — call / message / certificate request. Lets a
+                client reach this professional directly from their resume page. */}
             {!isOwnProfile && (
-              <div
-                className="mb-6 p-3 rounded-xl bg-slate-900/70 border border-slate-800 animate-fadeIn"
+              <section
+                className="pp-noprint rz-card animate-fadeIn"
                 style={{ animationDelay: '0.08s', animationFillMode: 'backwards' }}
               >
                 {call.callState === 'idle' ? (
-                  <div className="flex flex-wrap items-center gap-2">
+                  <>
+                    <div className="rz-section-title !mb-3"><h2 className="rz-serif text-lg font-bold text-white">Get in touch</h2></div>
                     {!user && (
-                      <input
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        placeholder="Your name (for calls & messages)"
-                        className="min-w-0 flex-1 px-3 py-2 bg-slate-950/60 border border-slate-700 rounded-lg text-white placeholder-slate-500 text-xs focus:outline-none focus:border-indigo-500/60"
-                      />
+                      <div className="mb-3">
+                        <label className="rz-label" htmlFor="pp-guest-name">Your name</label>
+                        <input
+                          id="pp-guest-name"
+                          value={guestName}
+                          onChange={(e) => setGuestName(e.target.value)}
+                          placeholder="So they know who is calling or writing"
+                          className="rz-input"
+                        />
+                      </div>
                     )}
-                    <button
-                      onClick={() => call.startCall(false, viewerName, `community:${data.profile.id}`)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg transition-colors"
-                    >
-                      <PhoneCall className="w-3.5 h-3.5" /> Call {data.profile.full_name?.split(' ')[0] || 'them'}
+                    <button onClick={() => setShowChat(true)} className="rz-btn rz-btn-primary w-full">
+                      <MessageCircle className="w-4 h-4" /> Message {firstName}
                     </button>
-                    <button
-                      onClick={() => call.startCall(true, viewerName, `community:${data.profile.id}`)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-medium rounded-lg transition-colors"
-                    >
-                      <Video className="w-3.5 h-3.5" /> Video Call
-                    </button>
-                    <button
-                      onClick={() => setShowChat(true)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-medium rounded-lg transition-colors"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" /> Message {data.profile.full_name?.split(' ')[0] || 'them'}
-                    </button>
-                    <button
-                      onClick={() => setShowCertificateRequest(true)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-medium rounded-lg transition-colors"
-                    >
-                      <FileText className="w-3.5 h-3.5" /> Request Certificate
-                    </button>
-                  </div>
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      <button onClick={() => call.startCall(false, viewerName, `community:${data.profile.id}`)} className="rz-btn rz-btn-ghost rz-btn-sm !flex-col !gap-1 !py-2 !h-auto">
+                        <PhoneCall className="w-4 h-4" /> <span>Call</span>
+                      </button>
+                      <button onClick={() => call.startCall(true, viewerName, `community:${data.profile.id}`)} className="rz-btn rz-btn-ghost rz-btn-sm !flex-col !gap-1 !py-2 !h-auto">
+                        <Video className="w-4 h-4" /> <span>Video</span>
+                      </button>
+                      <button onClick={() => setShowCertificateRequest(true)} className="rz-btn rz-btn-ghost rz-btn-sm !flex-col !gap-1 !py-2 !h-auto">
+                        <FileText className="w-4 h-4" /> <span>Certificate</span>
+                      </button>
+                    </div>
+                    <p className="rz-hint mt-3">
+                      Calls connect only while {firstName === 'them' ? 'they have' : `${firstName} has`} IcanEra open — if there's no answer, send a message instead.
+                    </p>
+                  </>
                 ) : (
-                  <CallDock call={call} dark tint="indigo" />
+                  <div className="rz-dark"><CallDock call={call} dark tint="indigo" /></div>
                 )}
-                {call.callState === 'idle' && (
-                  <p className="text-[11px] text-slate-500 mt-2">
-                    Calls connect only while {data.profile.full_name?.split(' ')[0] || 'they'} has IcanEra open — if there's no answer, send a message instead.
-                  </p>
-                )}
-              </div>
+              </section>
             )}
 
             {showChat && !isOwnProfile && (
@@ -443,40 +441,28 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
             )}
 
             {data.portfolio?.summary && (
-              <div
-                className="mb-6 animate-fadeInUp"
-                style={{ animationDelay: '0.1s', animationFillMode: 'backwards' }}
-              >
+              <section className="animate-fadeInUp" style={{ animationDelay: '0.1s', animationFillMode: 'backwards' }}>
                 <SectionHeading>Professional Summary</SectionHeading>
-                <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">{data.portfolio.summary}</p>
-              </div>
+                <p className="text-slate-300 leading-relaxed whitespace-pre-wrap break-words">{data.portfolio.summary}</p>
+              </section>
             )}
 
             {data.portfolio?.skills?.length > 0 && (
-              <div
-                className="mb-8 animate-fadeInUp"
-                style={{ animationDelay: '0.2s', animationFillMode: 'backwards' }}
-              >
+              <section className="animate-fadeInUp" style={{ animationDelay: '0.2s', animationFillMode: 'backwards' }}>
                 <SectionHeading>Core Competencies &amp; Technical Skills</SectionHeading>
                 <div className="flex flex-wrap gap-2">
                   {data.portfolio.skills.map((skill) => (
-                    <span
-                      key={skill}
-                      className="px-3 py-1 bg-slate-800/70 border border-slate-700 rounded-full text-xs text-slate-200 hover:border-indigo-400/60 hover:text-white transition-colors cursor-default"
-                    >
-                      {skill}
-                    </span>
+                    <span key={skill} className="rz-chip">{skill}</span>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
 
             {data.items.length === 0 && !data.portfolio?.summary && !data.portfolio?.skills?.length && (
-              <div
-                className="mb-8 p-5 rounded-xl border border-dashed border-slate-700 bg-slate-900/40 text-center text-sm text-slate-400 animate-fadeIn"
-                style={{ animationDelay: '0.15s', animationFillMode: 'backwards' }}
-              >
-                {data.profile.full_name} hasn't added their resume details yet — check back soon.
+              <div className="rz-card rz-empty animate-fadeIn">
+                <FileText className="w-8 h-8 mx-auto text-[#c4a052]/70" />
+                <p className="rz-serif">Resume coming soon</p>
+                <p className="text-sm">{data.profile.full_name} hasn't added their resume details yet — check back soon.</p>
               </div>
             )}
 
@@ -484,76 +470,53 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
               const sectionItems = section.types.flatMap((t) => itemsByType[t] || []);
               if (sectionItems.length === 0) return null;
               return (
-                <div
+                <section
                   key={section.key}
-                  className="mb-8 animate-fadeInUp"
+                  className="animate-fadeInUp"
                   style={{ animationDelay: `${0.3 + sIdx * 0.05}s`, animationFillMode: 'backwards' }}
                 >
                   <SectionHeading>{section.title}</SectionHeading>
-                  <div className="space-y-3">
+                  <ol className="rz-timeline">
                     {sectionItems.map((item) => {
-                      const Icon = ITEM_ICONS[item.item_type] || Briefcase;
                       const dateRange = formatDateRange(item);
                       return (
-                        <div
-                          key={item.id}
-                          className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-indigo-500/40 transition-colors duration-300"
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="p-1.5 rounded-lg bg-slate-800 flex-shrink-0 mt-0.5">
-                              <Icon className="w-4 h-4 text-indigo-400" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium text-white leading-snug">
-                                {item.title}
-                                {item.org_name && <span className="font-normal text-indigo-300/80"> | {item.org_name}</span>}
-                                {dateRange && <span className="font-normal text-slate-500"> ({dateRange})</span>}
-                              </p>
-                              {item.source === 'cmms' && (
-                                <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30">
-                                  Auto · CMMS
-                                </span>
-                              )}
-                              <DescriptionBlock text={item.description} />
-                            </div>
-                          </div>
-                        </div>
+                        <li key={item.id} className="pp-avoid-break">
+                          {dateRange && <p className="text-[0.7rem] font-semibold tracking-wider uppercase text-[#e6c980]">{dateRange}</p>}
+                          <h3 className="rz-serif text-lg font-bold text-white leading-snug break-words">{item.title}</h3>
+                          {item.org_name && <p className="text-sm text-slate-300 break-words">{item.org_name}</p>}
+                          {item.source === 'cmms' && (
+                            <span className="rz-badge mt-1.5 text-blue-300 bg-blue-500/10 border border-blue-500/30">Auto · CMMS</span>
+                          )}
+                          <DescriptionBlock text={item.description} />
+                        </li>
                       );
                     })}
-                  </div>
-                </div>
+                  </ol>
+                </section>
               );
             })}
 
             {data.references?.length > 0 && (
-              <div
-                className="mb-8 animate-fadeInUp"
-                style={{ animationDelay: '0.55s', animationFillMode: 'backwards' }}
-              >
+              <section className="animate-fadeInUp" style={{ animationDelay: '0.55s', animationFillMode: 'backwards' }}>
                 <SectionHeading>References</SectionHeading>
                 <div className="grid sm:grid-cols-2 gap-3">
                   {data.references.map((ref) => (
-                    <div key={ref.id} className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
-                      <Users className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5" />
-                      <div className="min-w-0">
-                        <p className="font-medium text-white leading-snug">{ref.name}</p>
-                        {(ref.title || ref.organization) && (
-                          <p className="text-sm text-indigo-300/80">{[ref.title, ref.organization].filter(Boolean).join(' — ')}</p>
-                        )}
-                        {(ref.email || ref.phone) && (
-                          <p className="text-xs text-slate-400 mt-1">{[ref.email, ref.phone].filter(Boolean).join(' · ')}</p>
-                        )}
+                    <div key={ref.id} className="pp-avoid-break p-4 rounded-xl bg-[#c4a052]/[0.05] border border-[#c4a052]/25">
+                      <h3 className="rz-serif text-base font-bold text-white leading-snug break-words">{ref.name}</h3>
+                      {(ref.title || ref.organization) && (
+                        <p className="text-sm text-[#e6c980]/90 mt-0.5 break-words">{[ref.title, ref.organization].filter(Boolean).join(' — ')}</p>
+                      )}
+                      <div className="mt-2 space-y-1 text-sm text-slate-400">
+                        {ref.email && <a href={`mailto:${ref.email}`} className="flex items-center gap-1.5 hover:text-white break-all"><Mail className="w-3.5 h-3.5 text-[#c4a052] flex-shrink-0" />{ref.email}</a>}
+                        {ref.phone && <a href={`tel:${ref.phone.replace(/\s+/g, '')}`} className="flex items-center gap-1.5 hover:text-white"><Phone className="w-3.5 h-3.5 text-[#c4a052] flex-shrink-0" />{ref.phone}</a>}
                       </div>
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
 
-            <div
-              className="animate-fadeInUp"
-              style={{ animationDelay: '0.6s', animationFillMode: 'backwards' }}
-            >
+            <div className="pp-noprint rz-dark animate-fadeInUp" style={{ animationDelay: '0.6s', animationFillMode: 'backwards' }}>
               <RatingWidget
                 rateeUserId={data.profile.id}
                 ratingSummary={data.ratingSummary}
@@ -564,22 +527,24 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
 
             {/* Recommend IcanEra — invite the visitor to build the same page */}
             {!isOwnProfile && (
-              <div
-                className="mt-8 p-5 rounded-xl border border-indigo-500/20 text-center animate-fadeIn"
+              <section
+                className="pp-noprint rz-card text-center animate-fadeIn"
                 style={{ animationDelay: '0.65s', animationFillMode: 'backwards' }}
               >
-                <button
-                  onClick={startOwnPortfolio}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  Create Your Own on IcanEra <ArrowRight className="w-4 h-4" />
+                <p className="rz-eyebrow">IcanEra</p>
+                <p className="rz-serif text-xl font-bold text-white mt-1">Build a resume like this one</p>
+                <p className="text-sm text-slate-400 mt-1 mb-4">Free, shareable, and ready in minutes.</p>
+                <button onClick={startOwnPortfolio} className="rz-btn rz-btn-primary">
+                  Create your own <ArrowRight className="w-4 h-4" />
                 </button>
-              </div>
+              </section>
             )}
-
-            <div className="mt-10 text-center text-xs text-slate-600">
-              Powered by <span className="font-semibold text-indigo-400">IcanEra</span>
             </div>
+
+            <footer className="mt-10 text-center">
+              <div className="rz-rule" />
+              <p className="text-xs text-slate-500">Powered by <span className="rz-serif font-bold text-[#e6c980]">IcanEra</span></p>
+            </footer>
           </>
         )}
       </div>

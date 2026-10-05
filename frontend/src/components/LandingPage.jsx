@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown, X, Menu, Image as ImageIcon, Globe, Lock, Send, User, Mail, ThumbsUp, Briefcase } from 'lucide-react';
+import { ChevronRight, Play, Zap, Shield, TrendingUp, Users, ArrowRight, ChevronDown, X, Menu, Image as ImageIcon, Globe, Lock, Send, User, Mail, ThumbsUp, Briefcase, Search } from 'lucide-react';
 import ThemeSwitcher from './ThemeSwitcher';
 import { PWAInstallButton } from './PWAInstallButton';
 import CommunityStoriesCarousel from './landing/CommunityStoriesCarousel';
@@ -8,7 +8,9 @@ import WalletMockTrader from './landing/WalletMockTrader';
 import TrustGroupsPreview from './landing/TrustGroupsPreview';
 import DropshipPreview from './landing/DropshipPreview';
 import CMMSNoticeBoardPreview from './landing/CMMSNoticeBoardPreview';
+import FranchiseSection from './landing/FranchiseSection';
 import ProfessionalsCarousel from './landing/ProfessionalsCarousel';
+import LandingSearch from './landing/LandingSearch';
 import { useTheme, isDarkFamilyTheme } from '../context/ThemeContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import {
@@ -96,6 +98,7 @@ const LandingPage = ({ onGetStarted }) => {
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [platformStats, setPlatformStats] = useState(null);
   const [isNavMoreOpen, setIsNavMoreOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Real posters shown individually (name + message count); every guest
   // post (no user_id) folds into one aggregate "Guests" entry instead of
@@ -234,6 +237,67 @@ const LandingPage = ({ onGetStarted }) => {
     }
   };
 
+  // Open a footer panel (About, Careers, Privacy...) and bring the footer into view.
+  const openFooterSection = (key) => {
+    setExpandedFooterSection(key);
+    setExpandedFooterItem(null);
+    scrollToSection('site-footer');
+  };
+
+  // Everything the landing search can reach. Sections that live on this page
+  // scroll; the developer portal is a standalone page so it is a plain link.
+  const searchItems = [
+    { id: 'try-live', group: 'Jump to', label: 'Try it live', description: 'Explore real community stories and activity', keywords: ['demo', 'explore', 'stories'], onSelect: () => scrollToSection('live-explore') },
+    { id: 'business-tools', group: 'Jump to', label: 'Business tools', description: 'Manage your team, hiring and website in one place', keywords: ['suite', 'cmms', 'employment', 'hiring', 'payroll', 'website'], onSelect: () => scrollToSection('business-suite') },
+    { id: 'pitchin', group: 'Jump to', label: 'PitchIn', description: 'Investment marketplace for pitches and capital', keywords: ['invest', 'investment', 'capital', 'pitch', 'marketplace'], onSelect: () => scrollToSection('pitchin-preview') },
+    { id: 'wallet', group: 'Jump to', label: 'Wallet & icaneracoin', description: 'Send and receive money across the globe', keywords: ['trade', 'coin', 'blockchain', 'money', 'transactions', 'mock'], onSelect: () => scrollToSection('wallet-mock-trader') },
+    { id: 'trust-groups', group: 'Jump to', label: 'Trust groups', description: 'Savings groups and SACCOs', keywords: ['sacco', 'savings', 'community', 'group'], onSelect: () => scrollToSection('trust-groups-preview') },
+    { id: 'dropship', group: 'Jump to', label: 'Dropshipping', description: 'Sell products without holding stock', keywords: ['shop', 'store', 'sell', 'supplier', 'products'], onSelect: () => scrollToSection('dropship-preview') },
+    { id: 'professionals', group: 'Jump to', label: 'Professionals', description: 'Find talent and professional portfolios', keywords: ['talent', 'hire', 'jobs', 'portfolio', 'freelance'], onSelect: () => scrollToSection('professionals') },
+    { id: 'notices', group: 'Jump to', label: 'Company notice board', description: 'Public announcements from companies', keywords: ['cmms', 'notices', 'announcements', 'news'], onSelect: () => scrollToSection('cmms-notices-preview') },
+    { id: 'platforms', group: 'Jump to', label: 'Features & platforms', description: 'What IcanEra can do', keywords: ['features', 'apps', 'tools'], onSelect: () => scrollToSection('platforms') },
+    { id: 'pricing', group: 'Jump to', label: 'Pricing', description: 'Plans and what they include', keywords: ['price', 'plans', 'cost', 'subscription', 'fees'], onSelect: goToPricing },
+    { id: 'franchise', group: 'Jump to', label: 'Franchise', description: 'Run IcanEra in your area and request a franchise', keywords: ['agent', 'partner', 'partnership', 'business opportunity'], onSelect: () => scrollToSection('franchise') },
+    { id: 'testimonials', group: 'Jump to', label: 'Testimonials', description: 'What users say about IcanEra', keywords: ['reviews', 'stories', 'feedback'], onSelect: () => scrollToSection('testimonials') },
+    { id: 'community', group: 'Jump to', label: 'Community board', description: 'Post a message, ask a question or reply', keywords: ['forum', 'chat', 'message', 'help', 'ask', 'discussion'], onSelect: () => scrollToSection('community-board') },
+
+    { id: 'dev-portal', group: 'Developers', label: 'Developer API portal', description: 'Docs, live playground and API keys', keywords: ['developers', 'developer', 'api', 'docs', 'documentation', 'build', 'integrate', 'sdk', 'about developers'], href: '/developers/' },
+    { id: 'dev-playground', group: 'Developers', label: 'Try the API live', description: 'Send a real request from your browser', keywords: ['developers', 'api', 'sandbox', 'playground', 'test', 'endpoints'], href: '/developers/#playground' },
+    { id: 'dev-key', group: 'Developers', label: 'Get a free API key', description: 'Start building on the Era', keywords: ['developers', 'api', 'key', 'token', 'access'], href: '/developers/#keys' },
+    { id: 'dev-careers', group: 'Developers', label: 'Engineering careers', description: 'Join the team building IcanEra', keywords: ['developers', 'jobs', 'engineer', 'hiring', 'work', 'about developers'], onSelect: () => openFooterSection('careers') },
+
+    { id: 'signin', group: 'Account', label: 'Sign in', description: 'Open your IcanEra account', keywords: ['login', 'log in', 'account'], onSelect: handleSignIn },
+    { id: 'signup', group: 'Account', label: 'Create account', description: 'Get started with IcanEra', keywords: ['join', 'register', 'sign up', 'signup', 'get started'], onSelect: handleCreateAccount },
+
+    { id: 'about', group: 'About & info', label: 'About IcanEra', description: 'Our mission and what we build', keywords: ['mission', 'company', 'who we are'], onSelect: () => openFooterSection('about') },
+    { id: 'blog', group: 'About & info', label: 'Blog & resources', description: 'Guides on wealth, wallets and SACCOs', keywords: ['articles', 'guides', 'learn', 'tips'], onSelect: () => openFooterSection('blog') },
+    { id: 'careers', group: 'About & info', label: 'Careers', description: 'Open roles across engineering, product and sales', keywords: ['jobs', 'work', 'hiring', 'positions'], onSelect: () => openFooterSection('careers') },
+    { id: 'privacy', group: 'About & info', label: 'Privacy policy', description: 'How your data is protected', keywords: ['data', 'security', 'cookies', 'gdpr'], onSelect: () => openFooterSection('privacy') },
+    { id: 'terms', group: 'About & info', label: 'Terms of service', description: 'Rights and responsibilities of users', keywords: ['legal', 'conditions', 'rules', 'disputes'], onSelect: () => openFooterSection('terms') },
+
+    { id: 'whatsapp', group: 'Contact', label: 'WhatsApp', description: 'Chat with the IcanEra team', keywords: ['support', 'help', 'phone', 'chat', 'contact'], href: 'https://wa.me/256770381864', external: true },
+    { id: 'email', group: 'Contact', label: 'Email', description: 'icaneraera@gmail.com', keywords: ['support', 'help', 'mail', 'gmail', 'contact'], href: 'https://mail.google.com/mail/?view=cm&fs=1&to=icaneraera@gmail.com', external: true },
+    { id: 'x', group: 'Contact', label: 'X (Twitter)', description: '@icaneraera', keywords: ['twitter', 'social'], href: 'https://twitter.com/icaneraera', external: true },
+    { id: 'instagram', group: 'Contact', label: 'Instagram', description: '@icaneraera', keywords: ['social', 'photos'], href: 'https://instagram.com/icaneraera', external: true },
+    { id: 'tiktok', group: 'Contact', label: 'TikTok', description: 'Watch IcanEra videos', keywords: ['social', 'video'], href: 'https://vm.tiktok.com/ZS9DdJXheFCMh-RwwOK/', external: true }
+  ];
+
+  // Ctrl/Cmd+K opens search from anywhere; "/" does too unless the visitor is typing.
+  useEffect(() => {
+    const onKey = (e) => {
+      const isShortcut = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k';
+      const target = e.target;
+      const typing = target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+      if (isShortcut || (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey)) {
+        e.preventDefault();
+        setIsNavMoreOpen(false);
+        setIsSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // Image slides with descriptions - IMPROVED with real, authentic messaging
   const slides = [
     {
@@ -247,7 +311,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Easy transaction logging - the busier you are, the faster you capture'
     },
     {
-      image: '/images/IcanEra expense.png',
+      image: '/images/ICANera expense.png',
       title: 'Your Financial Picture',
       subtitle: 'Dashboard & Analytics',
       description: 'See your complete financial overview at a glance. Real-time analytics show income, expenses, profit, and growth trends.',
@@ -283,7 +347,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Stop begging banks - let your community fund your dreams'
     },
     {
-      image: '/images/IcanEra pitchin.png',
+      image: '/images/ICANera pitchin.png',
       title: 'Invest In Businesses You Believe In',
       subtitle: 'PitchIn - Investor View',
       description: 'Own a piece of promising businesses. See real returns through dividends. Your money works for you.',
@@ -292,7 +356,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Become an investor - own real businesses, earn real returns'
     },
     {
-      image: '/images/IcanEra pitchin 8.png',
+      image: '/images/ICANera pitchin 8.png',
       title: 'AI Finds Perfect Matches',
       subtitle: 'Smart Investment Matching',
       description: 'AI analyzes every pitch and matches you with businesses aligned to your financial goals and values.',
@@ -310,7 +374,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'From losing track to complete control of your operations'
     },
     {
-      image: '/images/IcanEra CMMS.png',
+      image: '/images/ICANera CMMS.png',
       title: 'Manage Teams & Approvals',
       subtitle: 'Department Workflows',
       description: 'Set up roles, permissions, and approval chains. Everyone knows what they\'re doing and why.',
@@ -319,7 +383,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Professional operations management built for growth'
     },
     {
-      image: '/images/IcanEra CMMS1.png',
+      image: '/images/ICANera CMMS1.png',
       title: 'Enterprise-Grade Operations',
       subtitle: 'Advanced CMMS',
       description: 'Advanced features for serious operations. Analytics, automation, and integration for your complex needs.',
@@ -355,7 +419,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Your path to global financial opportunities starts here'
     },
     {
-      image: '/images/IcanEra trust.png',
+      image: '/images/ICANera trust.png',
       title: 'Trust Backed By Blockchain',
       subtitle: 'Verified Transactions',
       description: 'Every transaction blockchain-verified. No fraud, no disputes, no hidden fees. Complete transparency.',
@@ -364,7 +428,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Technology that proves trust, not just promises it'
     },
     {
-      image: '/images/IcanEra trust 2.png',
+      image: '/images/ICANera trust 2.png',
       title: 'Smart Contracts Automate Trust',
       subtitle: 'Advanced Trust System',
       description: 'Smart contracts enforce agreements automatically. No waiting, no lawyers, no middlemen taking their cut.',
@@ -382,7 +446,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'The platform that thinks like you - holistic financial control'
     },
     {
-      image: '/images/IcanEra 3.png',
+      image: '/images/ICANera 3.png',
       title: 'Unlock Premium Features',
       subtitle: 'IcanEra Premium',
       description: 'Premium features for power users - advanced analytics, priority support, exclusive opportunities.',
@@ -391,7 +455,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Premium tools for financial champions'
     },
     {
-      image: '/images/IcanEra tithe.png',
+      image: '/images/ICANera tithe.png',
       title: 'Align Faith With Finances',
       subtitle: 'Tithe Management',
       description: 'Give back meaningfully with automatic tithe calculations and community impact tracking. Your giving, your values, your impact.',
@@ -401,7 +465,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Spiritual giving made simple and transparent'
     },
     {
-      image: '/images/IcanEra tith2.png',
+      image: '/images/ICANera tith2.png',
       title: 'Generous Giving, Real Impact',
       subtitle: 'Tithe Pro',
       description: 'Advanced giving tools for offerings, donations, and community support. See the impact of your generosity.',
@@ -410,7 +474,7 @@ const LandingPage = ({ onGetStarted }) => {
       realMessage: 'Your generosity, amplified and tracked'
     },
     {
-      image: '/images/IcanEra i.png',
+      image: '/images/ICANera i.png',
       title: 'Built On Solid Foundation',
       subtitle: 'IcanEra Core Technology',
       description: 'The foundation powering all IcanEra features. Secure, scalable, designed for billions of transactions.',
@@ -429,7 +493,7 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Track every transaction with precision'
     },
     {
-      image: '/images/IcanEra expense.png',
+      image: '/images/ICANera expense.png',
       title: 'Financial Dashboard',
       subtitle: 'Advanced tracking',
       description: 'Real-time financial insights'
@@ -453,13 +517,13 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Share your vision'
     },
     {
-      image: '/images/IcanEra pitchin.png',
+      image: '/images/ICANera pitchin.png',
       title: 'PitchIn Pro',
       subtitle: 'Professional platform',
       description: 'Connect with investors'
     },
     {
-      image: '/images/IcanEra pitchin 8.png',
+      image: '/images/ICANera pitchin 8.png',
       title: 'Smart Matching',
       subtitle: 'AI-powered',
       description: 'Find perfect investors'
@@ -471,13 +535,13 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Enterprise protection'
     },
     {
-      image: '/images/IcanEra CMMS.png',
+      image: '/images/ICANera CMMS.png',
       title: 'CMMS System',
       subtitle: 'Management tools',
       description: 'Resource optimization'
     },
     {
-      image: '/images/IcanEra CMMS1.png',
+      image: '/images/ICANera CMMS1.png',
       title: 'CMMS Pro',
       subtitle: 'Enterprise edition',
       description: 'Advanced operations'
@@ -501,13 +565,13 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Readiness assessment'
     },
     {
-      image: '/images/IcanEra trust.png',
+      image: '/images/ICANera trust.png',
       title: 'Trust Platform',
       subtitle: 'Blockchain verified',
       description: 'Transparent transfers'
     },
     {
-      image: '/images/IcanEra trust 2.png',
+      image: '/images/ICANera trust 2.png',
       title: 'Trust Pro',
       subtitle: 'Smart contracts',
       description: 'Automated trust mgmt'
@@ -519,19 +583,19 @@ const LandingPage = ({ onGetStarted }) => {
       description: 'Integrated experience'
     },
     {
-      image: '/images/IcanEra 3.png',
+      image: '/images/ICANera 3.png',
       title: 'IcanEra Premium',
       subtitle: 'Elite features',
       description: 'Power users'
     },
     {
-      image: '/images/IcanEra tithe.png',
+      image: '/images/ICANera tithe.png',
       title: 'Tithe Management',
       subtitle: 'Spiritual giving',
       description: 'Smart contributions'
     },
     {
-      image: '/images/IcanEra tith2.png',
+      image: '/images/ICANera tith2.png',
       title: 'Tithe Pro',
       subtitle: 'Advanced giving',
       description: 'Community support'
@@ -1005,6 +1069,13 @@ const LandingPage = ({ onGetStarted }) => {
         .ican-landing-light nav button.ican-nav-link:hover { color: #14532d !important; }
         .ican-landing-dark nav button.ican-nav-link { color: #e7e5e4 !important; }
         .ican-landing-dark nav button.ican-nav-link:hover { color: #fcd34d !important; }
+        /* search buttons: same reason as the nav links -- keep the global
+           button paint off them so they read as outlined controls */
+        .ican-landing button.ican-search-btn,
+        .ican-landing button.ican-search-btn:hover,
+        .ican-landing button.ican-search-btn:focus { background: transparent !important; box-shadow: none !important; }
+        .ican-landing input.ican-search-input,
+        .ican-landing input.ican-search-input:focus { background: transparent !important; border: 0 !important; box-shadow: none !important; outline: none !important; }
         /* scrollbar-friendly selection colour */
         .ican-landing ::selection { background: #14532d; color: #f7f3e8; }
       `}</style>
@@ -1028,7 +1099,7 @@ const LandingPage = ({ onGetStarted }) => {
               switcher, and auth buttons for the same row. Full pill row
               only returns at xl+, where the whole row actually fits
               without any of it wrapping. */}
-          <div className="hidden md:flex xl:hidden items-center gap-2">
+          <div className="hidden md:flex 2xl:hidden items-center gap-2">
             <button
               onClick={() => scrollToSection('live-explore')}
               className={`px-3 py-2 ican-cove-tab border-2 text-sm font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-emerald-100 border-emerald-300/55 bg-emerald-900/25 hover:bg-emerald-800/35 hover:border-emerald-200/80' : 'text-emerald-900 border-emerald-400/55 bg-emerald-100 hover:bg-emerald-200/90 hover:border-emerald-500/75'}`}
@@ -1045,10 +1116,18 @@ const LandingPage = ({ onGetStarted }) => {
               </button>
               {isNavMoreOpen && (
                 <div className={`absolute left-0 mt-2 w-48 rounded-lg border shadow-2xl backdrop-blur-xl z-50 animate-fadeIn overflow-hidden ${isDarkTheme ? 'bg-slate-900/95 border-slate-600/50' : 'bg-white/95 border-slate-300/70'}`}>
+                  <button
+                    onClick={() => { setIsNavMoreOpen(false); setIsSearchOpen(true); }}
+                    className={`lg:hidden ican-search-btn flex w-full items-center gap-2 border-b px-4 py-2.5 text-left text-sm font-semibold transition-colors ${isDarkTheme ? 'border-slate-600/50 text-slate-200 hover:bg-slate-700/50' : 'border-slate-300/70 text-slate-700 hover:bg-slate-100'}`}
+                  >
+                    <Search className="h-4 w-4" aria-hidden="true" />
+                    Search
+                  </button>
                   {[
                     { label: 'Features', section: 'platforms' },
                     { label: 'Platforms', section: 'platforms' },
                     { label: 'Pricing', section: null },
+                    { label: 'Franchise', section: 'franchise' },
                     { label: 'Testimonials', section: 'testimonials' },
                     { label: 'Community', section: 'community-board' }
                   ].map((item) => (
@@ -1067,11 +1146,12 @@ const LandingPage = ({ onGetStarted }) => {
               )}
             </div>
           </div>
-          <div className="hidden xl:flex items-center gap-5 2xl:gap-9 font-serif">
+          <div className="hidden 2xl:flex items-center gap-4 3xl:gap-9 font-serif">
             {[
               { label: 'Features', go: () => scrollToSection('platforms') },
               { label: 'Platforms', go: () => scrollToSection('platforms') },
               { label: 'Pricing', go: goToPricing },
+              { label: 'Franchise', go: () => scrollToSection('franchise') },
               { label: 'Testimonials', go: () => scrollToSection('testimonials') },
               { label: 'Community', go: () => scrollToSection('community-board') },
               { label: 'Try It Live', go: () => scrollToSection('live-explore') }
@@ -1079,16 +1159,27 @@ const LandingPage = ({ onGetStarted }) => {
               <button
                 key={item.label}
                 onClick={item.go}
-                className={`ican-nav-link group relative whitespace-nowrap px-1 py-1 text-base 2xl:text-lg font-semibold tracking-wide transition-colors ${isDarkTheme ? 'text-stone-200 hover:text-amber-300' : 'text-[#1f1a12] hover:text-emerald-900'}`}
+                className={`ican-nav-link group relative whitespace-nowrap px-1 py-1 text-base 3xl:text-lg font-semibold tracking-wide transition-colors ${isDarkTheme ? 'text-stone-200 hover:text-amber-300' : 'text-[#1f1a12] hover:text-emerald-900'}`}
               >
                 {item.label}
                 <span className="absolute inset-x-0 -bottom-0.5 h-[2px] origin-center scale-x-0 bg-current transition-transform duration-300 group-hover:scale-x-100" />
               </button>
             ))}
           </div>
-          <div className="ml-auto min-w-0 pl-4 xl:pl-8">
+          <div className="ml-auto min-w-0 pl-2 xl:pl-4 3xl:pl-8">
             {/* Compact account actions keep the mobile header on one line. */}
             <div className="flex items-center justify-end gap-1 sm:gap-2 md:gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSearchOpen(true)}
+                aria-label="Search IcanEra"
+                title="Search (Ctrl K or /)"
+                className={`ican-search-btn hidden lg:inline-flex shrink-0 items-center justify-center gap-2 h-9 md:h-10 rounded-md border px-2.5 3xl:px-3 text-sm font-semibold transition-colors ${isDarkTheme ? 'border-slate-600 text-slate-100 hover:border-amber-300/70 hover:text-amber-200' : 'border-slate-300 text-slate-800 hover:border-emerald-800 hover:text-emerald-900'}`}
+              >
+                <Search className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden 3xl:inline">Search</span>
+                <kbd className={`hidden 3xl:inline rounded border px-1.5 text-[10px] font-sans ${isDarkTheme ? 'border-slate-600 text-slate-400' : 'border-slate-300 text-slate-500'}`}>Ctrl K</kbd>
+              </button>
               <div className="hidden md:block"><ThemeSwitcher /></div>
               <div className="hidden md:block shrink-0"><PWAInstallButton /></div>
               <button
@@ -1125,11 +1216,22 @@ const LandingPage = ({ onGetStarted }) => {
                     <PWAInstallButton />
                   </div>
                 </div>
+                <div className="px-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIsNavMoreOpen(false); setIsSearchOpen(true); }}
+                    className={`ican-search-btn flex w-full items-center gap-2 rounded-md border px-3 py-2.5 text-left text-sm ${isDarkTheme ? 'border-slate-700 text-slate-300' : 'border-stone-300 text-slate-600'}`}
+                  >
+                    <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    Search pages, developers…
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-1 p-2">
                   {[
                     { label: 'Features', section: 'platforms' },
                     { label: 'Platforms', section: 'platforms' },
                     { label: 'Pricing', section: null },
+                    { label: 'Franchise', section: 'franchise' },
                     { label: 'Testimonials', section: 'testimonials' },
                     { label: 'Community', section: 'community-board' },
                     { label: 'Try it live', section: 'live-explore' }
@@ -1190,7 +1292,7 @@ const LandingPage = ({ onGetStarted }) => {
                 <span className={`font-serif text-lg font-bold italic ${isDarkTheme ? 'text-white' : 'text-[#1f1a12]'}`}>The IcanEra Gazette</span>
                 <span className={`text-[10px] sm:text-xs uppercase tracking-[0.2em] ${isDarkTheme ? 'text-slate-400' : 'text-[#6b5f49]'}`}>Your financial picture</span>
               </div>
-              <img src="/images/IcanEra CMMS.png" alt="IcanEra business management system" className="w-full aspect-[1.22] object-cover object-top sepia-[.12]" />
+              <img src="/images/ICANera CMMS.png" alt="IcanEra business management system" className="w-full aspect-[1.22] object-cover object-top sepia-[.12]" />
               <div className={`grid grid-cols-3 divide-x border-t-2 border-double ${isDarkTheme ? 'divide-slate-700 border-slate-600' : 'divide-[#1f1a12]/25 border-[#1f1a12]/70'}`}>
                 {[['I', 'Manage your team'], ['II', 'Find talent'], ['III', 'Reach customers']].map(([number, label]) => <div key={number} className="px-3 py-3"><span className={`block font-serif text-sm italic ${isDarkTheme ? 'text-amber-300' : 'text-emerald-900'}`}>{number}.</span><span className={`mt-0.5 block font-serif text-sm font-semibold ${isDarkTheme ? 'text-slate-100' : 'text-[#1f1a12]'}`}>{label}</span></div>)}
               </div>
@@ -1475,6 +1577,9 @@ const LandingPage = ({ onGetStarted }) => {
           </div>
         </div>
       </section>
+
+      {/* Franchise: become an authorised partner (registered companies only) */}
+      <FranchiseSection onGetStarted={onGetStarted} />
 
       {/* Testimonials Section - Compact Animated Badge */}
       <section id="testimonials" className="relative py-6 md:py-8 lg:py-12 2xl:py-16 px-4 sm:px-6 lg:px-8 2xl:px-16">
@@ -1858,30 +1963,6 @@ const LandingPage = ({ onGetStarted }) => {
               </button>
             </div>
           )}
-
-          {contributors.length > 0 && (
-            <div className="mt-8">
-              <p className="text-xs uppercase tracking-[0.3em] text-cyan-400">Community members</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {contributors.map((c) => (
-                  <button
-                    key={c.authId || 'guests'}
-                    type="button"
-                    onClick={() => handleSelectContributor(c)}
-                    disabled={c.isGuestGroup}
-                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition disabled:cursor-default ${
-                      isDarkTheme ? 'border-slate-600/40 bg-white/5 text-slate-300' : 'border-slate-300 bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    <User className="h-3 w-3" /> {c.name}
-                    <span className={isDarkTheme ? 'text-slate-500' : 'text-slate-400'}>
-                      · {c.count} {c.count === 1 ? 'message' : 'messages'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
@@ -1967,10 +2048,17 @@ const LandingPage = ({ onGetStarted }) => {
       </section>
 
       {/* Footer */}
-      <footer className="relative border-t border-purple-500/10 py-6 md:py-10 lg:py-12 2xl:py-16 px-4 sm:px-6 lg:px-8 2xl:px-16">
+      <footer id="site-footer" className="relative scroll-mt-24 border-t border-purple-500/10 py-6 md:py-10 lg:py-12 2xl:py-16 px-4 sm:px-6 lg:px-8 2xl:px-16">
         <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto">
           {/* Footer Navigation - Simple List */}
           <div className="flex flex-wrap gap-3 md:gap-6 mb-8 md:mb-12 justify-center md:justify-start">
+            {/* Developers: the public API portal (a standalone page, public/developers/index.html) */}
+            <a
+              href="/developers/"
+              className={`flex items-center gap-2 transition-all duration-300 font-bold text-sm md:text-base px-3 py-1.5 ican-cove-tab border-2 ${isDarkTheme ? 'text-sky-100 hover:text-white border-sky-300/55 bg-sky-900/20 hover:bg-sky-700/35 hover:border-sky-200/80' : 'text-sky-900 hover:text-sky-950 border-sky-400/55 bg-sky-100 hover:bg-sky-200/90 hover:border-sky-500/75'}`}
+            >
+              Developers
+            </a>
             {/* About */}
             <div className="group">
               <button
@@ -2180,6 +2268,10 @@ const LandingPage = ({ onGetStarted }) => {
           <a href="/api/v1/debug/keys" tabIndex={-1}>debug keys</a>
         </div>
       </footer>
+
+      {isSearchOpen && (
+        <LandingSearch items={searchItems} isDarkTheme={isDarkTheme} onClose={() => setIsSearchOpen(false)} />
+      )}
 
       {isImageViewerOpen && (
         <div
