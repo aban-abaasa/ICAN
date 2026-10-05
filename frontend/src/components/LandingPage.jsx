@@ -1099,7 +1099,7 @@ const LandingPage = ({ onGetStarted }) => {
               switcher, and auth buttons for the same row. Full pill row
               only returns at xl+, where the whole row actually fits
               without any of it wrapping. */}
-          <div className="hidden md:flex xl:hidden items-center gap-2">
+          <div className="hidden md:flex 2xl:hidden items-center gap-2">
             <button
               onClick={() => scrollToSection('live-explore')}
               className={`px-3 py-2 ican-cove-tab border-2 text-sm font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-emerald-100 border-emerald-300/55 bg-emerald-900/25 hover:bg-emerald-800/35 hover:border-emerald-200/80' : 'text-emerald-900 border-emerald-400/55 bg-emerald-100 hover:bg-emerald-200/90 hover:border-emerald-500/75'}`}
@@ -1116,6 +1116,13 @@ const LandingPage = ({ onGetStarted }) => {
               </button>
               {isNavMoreOpen && (
                 <div className={`absolute left-0 mt-2 w-48 rounded-lg border shadow-2xl backdrop-blur-xl z-50 animate-fadeIn overflow-hidden ${isDarkTheme ? 'bg-slate-900/95 border-slate-600/50' : 'bg-white/95 border-slate-300/70'}`}>
+                  <button
+                    onClick={() => { setIsNavMoreOpen(false); setIsSearchOpen(true); }}
+                    className={`lg:hidden ican-search-btn flex w-full items-center gap-2 border-b px-4 py-2.5 text-left text-sm font-semibold transition-colors ${isDarkTheme ? 'border-slate-600/50 text-slate-200 hover:bg-slate-700/50' : 'border-slate-300/70 text-slate-700 hover:bg-slate-100'}`}
+                  >
+                    <Search className="h-4 w-4" aria-hidden="true" />
+                    Search
+                  </button>
                   {[
                     { label: 'Features', section: 'platforms' },
                     { label: 'Platforms', section: 'platforms' },
@@ -1139,7 +1146,7 @@ const LandingPage = ({ onGetStarted }) => {
               )}
             </div>
           </div>
-          <div className="hidden xl:flex items-center gap-2 2xl:gap-6 3xl:gap-9 font-serif">
+          <div className="hidden 2xl:flex items-center gap-4 3xl:gap-9 font-serif">
             {[
               { label: 'Features', go: () => scrollToSection('platforms') },
               { label: 'Platforms', go: () => scrollToSection('platforms') },
@@ -1152,14 +1159,14 @@ const LandingPage = ({ onGetStarted }) => {
               <button
                 key={item.label}
                 onClick={item.go}
-                className={`ican-nav-link group relative whitespace-nowrap px-1 py-1 text-sm 2xl:text-lg font-semibold tracking-wide transition-colors ${isDarkTheme ? 'text-stone-200 hover:text-amber-300' : 'text-[#1f1a12] hover:text-emerald-900'}`}
+                className={`ican-nav-link group relative whitespace-nowrap px-1 py-1 text-base 3xl:text-lg font-semibold tracking-wide transition-colors ${isDarkTheme ? 'text-stone-200 hover:text-amber-300' : 'text-[#1f1a12] hover:text-emerald-900'}`}
               >
                 {item.label}
                 <span className="absolute inset-x-0 -bottom-0.5 h-[2px] origin-center scale-x-0 bg-current transition-transform duration-300 group-hover:scale-x-100" />
               </button>
             ))}
           </div>
-          <div className="ml-auto min-w-0 pl-2 xl:pl-4 2xl:pl-8">
+          <div className="ml-auto min-w-0 pl-2 xl:pl-4 3xl:pl-8">
             {/* Compact account actions keep the mobile header on one line. */}
             <div className="flex items-center justify-end gap-1 sm:gap-2 md:gap-3">
               <button
@@ -1167,7 +1174,7 @@ const LandingPage = ({ onGetStarted }) => {
                 onClick={() => setIsSearchOpen(true)}
                 aria-label="Search IcanEra"
                 title="Search (Ctrl K or /)"
-                className={`ican-search-btn hidden sm:inline-flex shrink-0 items-center justify-center gap-2 h-9 md:h-10 rounded-md border px-2.5 3xl:px-3 text-sm font-semibold transition-colors ${isDarkTheme ? 'border-slate-600 text-slate-100 hover:border-amber-300/70 hover:text-amber-200' : 'border-slate-300 text-slate-800 hover:border-emerald-800 hover:text-emerald-900'}`}
+                className={`ican-search-btn hidden lg:inline-flex shrink-0 items-center justify-center gap-2 h-9 md:h-10 rounded-md border px-2.5 3xl:px-3 text-sm font-semibold transition-colors ${isDarkTheme ? 'border-slate-600 text-slate-100 hover:border-amber-300/70 hover:text-amber-200' : 'border-slate-300 text-slate-800 hover:border-emerald-800 hover:text-emerald-900'}`}
               >
                 <Search className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden 3xl:inline">Search</span>
