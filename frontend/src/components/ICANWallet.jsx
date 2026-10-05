@@ -363,6 +363,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [realBusinessProfiles, setRealBusinessProfiles] = useState([]);
   const [businessProfilesLoading, setBusinessProfilesLoading] = useState(false);
   const [businessValuations, setBusinessValuations] = useState({}); // { [businessProfileId]: valuation }
+  const [openBusinessCardId, setOpenBusinessCardId] = useState(null); // Cards tab: which business's card is expanded
   // Prefer a caller-supplied businessProfiles prop if one was actually passed;
   // otherwise fall back to what this component fetches for itself from Pitchin.
   const effectiveBusinessProfiles = (businessProfiles && businessProfiles.length > 0) ? businessProfiles : realBusinessProfiles;
@@ -1076,6 +1077,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // Load real business profiles (from Pitchin) when the Business Accounts tab is opened
   useEffect(() => {
     if (activeTab === 'business' && currentUserId) {
+      loadBusinessAccountProfiles();
+    }
+  }, [activeTab, currentUserId]);
+
+  // The Cards tab lists each business's digital card; fetch the profiles once if the Business tab hasn't.
+  useEffect(() => {
+    if (activeTab === 'cards' && currentUserId && realBusinessProfiles.length === 0) {
       loadBusinessAccountProfiles();
     }
   }, [activeTab, currentUserId]);
@@ -5253,6 +5261,37 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           askPin={askPin}
           onPaidOut={() => currentUserId && loadWalletBalances(currentUserId)}
         />
+
+        {effectiveBusinessProfiles.length > 0 && (
+          <div className="mb-6 space-y-3">
+            <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Store className="w-4 h-4 text-cyan-400" />
+              Business Cards
+            </h4>
+            {effectiveBusinessProfiles.map((profile) => (
+              <div key={profile.id} className="rounded-lg border border-cyan-500/30 bg-slate-800/40">
+                <button
+                  type="button"
+                  onClick={() => setOpenBusinessCardId((id) => (id === profile.id ? null : profile.id))}
+                  className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left"
+                  aria-expanded={openBusinessCardId === profile.id}
+                >
+                  <span className="text-sm font-semibold text-white truncate">🏢 {profile.business_name}</span>
+                  <span className="text-xs text-cyan-300 shrink-0">{openBusinessCardId === profile.id ? 'Hide card' : 'Show card'}</span>
+                </button>
+                {openBusinessCardId === profile.id && (
+                  <div className="px-4 pt-1">
+                    <DigitalCardPanel
+                      business={profile}
+                      userId={currentUserId}
+                      askPin={askPin}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         {cardMessage && (
           <div className={`mb-4 p-4 rounded-lg border ${
