@@ -1954,6 +1954,13 @@ const LandingPage = ({ onGetStarted }) => {
         <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto">
           {/* Footer Navigation - Simple List */}
           <div className="flex flex-wrap gap-3 md:gap-6 mb-8 md:mb-12 justify-center md:justify-start">
+            {/* Developers: the public API portal (a standalone page, public/developers/index.html) */}
+            <a
+              href="/developers/"
+              className={`flex items-center gap-2 transition-all duration-300 font-bold text-sm md:text-base px-3 py-1.5 ican-cove-tab border-2 ${isDarkTheme ? 'text-sky-100 hover:text-white border-sky-300/55 bg-sky-900/20 hover:bg-sky-700/35 hover:border-sky-200/80' : 'text-sky-900 hover:text-sky-950 border-sky-400/55 bg-sky-100 hover:bg-sky-200/90 hover:border-sky-500/75'}`}
+            >
+              Developers
+            </a>
             {/* About */}
             <div className="group">
               <button

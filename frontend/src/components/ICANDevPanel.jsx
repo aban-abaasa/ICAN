@@ -12,6 +12,7 @@ import CallDock from './calls/CallDock';
 import CallStage from './calls/CallStage';
 import ICANReferralsDevTab from './ICANReferralsDevTab';
 import ICANFranchiseDevTab from './ICANFranchiseDevTab';
+import ICANEraApiDevTab from './ICANEraApiDevTab';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { Linkify } from '../utils/linkify';
 import {
@@ -123,6 +124,7 @@ const TABS = [
   { id: 'corporate',  label: 'Corporate',    Icon: CreditCard,  color: '#a855f7' },
   { id: 'referrals',  label: 'Referrals',    Icon: Gift,        color: '#84cc16' },
   { id: 'franchise',  label: 'Franchise',    Icon: Network,     color: '#f59e0b' },
+  { id: 'api',        label: 'API',          Icon: Zap,         color: '#38bdf8' },
   { id: 'board',     label: 'Public Board', Icon: MessageCircle, color: '#14b8a6' },
   { id: 'messages',   label: 'Messages',     Icon: Mail,          color: '#0ea5e9' },
   { id: 'support',    label: 'Support Team', Icon: Shield,        color: '#22c55e' },
@@ -478,8 +480,9 @@ const SupportTeamTab = () => {
   const [newPassword, setNewPassword] = useState('');
   const [newEmails,   setNewEmails]   = useState('');
   const [newAllowedTabs, setNewAllowedTabs] = useState(['messages', 'board']);
-  // never let a link grant the tab that manages links/PIN itself, nor the franchise tab (partner approvals and payouts)
-  const shareableTabs = TABS.filter(t => t.id !== 'support' && t.id !== 'franchise');
+  // never let a link grant the tab that manages links/PIN itself, nor the franchise tab (partner approvals and payouts),
+  // nor the API tab (it approves outside developers and can switch the whole API off)
+  const shareableTabs = TABS.filter(t => t.id !== 'support' && t.id !== 'franchise' && t.id !== 'api');
   const [creating,   setCreating]   = useState(false);
   const [createError, setCreateError] = useState('');
   const [justCreated, setJustCreated] = useState(null); // { token, label }
@@ -2548,6 +2551,9 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
 
         {/* ══ FRANCHISE (requests, partners, rate card, payouts; needs a real admin account, not the panel token) ══ */}
         {tab==='franchise' && <ICANFranchiseDevTab/>}
+
+        {/* ══ API (outside developers: requests, keys, endpoint kill switches; needs a real admin account, not the panel token) ══ */}
+        {tab==='api' && <ICANEraApiDevTab/>}
 
         {/* ══ CORPORATE (subscriptions + contract requests) ══ */}
         {tab==='corporate' && (<>
