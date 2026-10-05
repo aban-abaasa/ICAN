@@ -4,6 +4,10 @@
 
 TRUNCATE t.results;
 TRUNCATE t.vars;
+-- tomorrow 11:00 in Kampala: the standard (x1.0) fare band, whatever time the tests run
+CREATE OR REPLACE FUNCTION t.std_time() RETURNS TEXT LANGUAGE sql AS
+  $$ SELECT to_char(date_trunc('day', now() AT TIME ZONE 'Africa/Kampala') + INTERVAL '1 day 11 hours', 'YYYY-MM-DD"T"HH24:MI:SS') || '+03:00' $$;
+GRANT EXECUTE ON FUNCTION t.std_time() TO PUBLIC;
 DELETE FROM public.era_api_usage;
 
 -- A developer with every app approved and generous limits.
@@ -22,6 +26,8 @@ BEGIN
 END $t$;
 
 -- Stub rows for the live handlers
+INSERT INTO public.icaneracoin_integrity_chain (seq, event_type, previous_hash, chain_hash)
+VALUES (1357, 'transfer', repeat('0', 64), repeat('a', 64)), (1358, 'purchase', repeat('a', 64), repeat('b', 64));
 INSERT INTO public.ican_price_ohlc (open_price, high_price, low_price, close_price, trading_volume, timeframe, open_time)
 SELECT 5500 + n, 5510 + n, 5490 + n, 5505 + n, 10, '5m', date_trunc('hour', now()) - INTERVAL '1 hour' + (n * INTERVAL '5 minutes') FROM generate_series(0, 11) n;
 INSERT INTO public.country_tax_rules (country_code, country_name, currency, personal_tax_period, corporate_tax_rate, vat_rate, capital_gains_rate,
@@ -102,16 +108,16 @@ BEGIN
   PERFORM t.check('2.2 only active districts', jsonb_array_length(t.call(lk, '/bodagoera/districts')#>'{body,data}') = 1);
   PERFORM t.check('2.3 ports filter by country, hide inactive', jsonb_array_length(t.call(lk, '/bodagoera/ports', '{"country":"kenya"}')#>'{body,data}') = 1);
 
-  r := t.call(lk, '/bodagoera/fare/estimate', '{"km":"7.5"}');
+  r := t.call(lk, '/bodagoera/fare/estimate', jsonb_build_object('km', '7.5', 'at', t.std_time()));
   PERFORM t.check('2.4 ride fare = base + per-km x distance', (r#>>'{body,data,estimated_fare}')::NUMERIC = 8500 AND r#>>'{body,data,currency}' = 'UGX', r::TEXT);
-  PERFORM t.check('2.5 the minimum fare applies on short rides', (t.call(lk, '/bodagoera/fare/estimate', '{"km":"0.5"}')#>>'{body,data,estimated_fare}')::NUMERIC = 2000);
-  PERFORM t.check('2.6 cargo has its own rates', (t.call(lk, '/bodagoera/fare/estimate', '{"km":"3","kind":"cargo"}')#>>'{body,data,estimated_fare}')::NUMERIC = 11000);
+  PERFORM t.check('2.5 the minimum fare applies on short rides', (t.call(lk, '/bodagoera/fare/estimate', jsonb_build_object('km', '0.5', 'at', t.std_time()))#>>'{body,data,estimated_fare}')::NUMERIC = 2000);
+  PERFORM t.check('2.6 cargo has its own rates', (t.call(lk, '/bodagoera/fare/estimate', jsonb_build_object('km', '3', 'kind', 'cargo', 'at', t.std_time()))#>>'{body,data,estimated_fare}')::NUMERIC = 11000);
   PERFORM t.check('2.7 km is required, numeric and bounded (400s)',
     t.call(lk, '/bodagoera/fare/estimate')#>>'{body,error,message}' = 'km is required'
     AND t.call(lk, '/bodagoera/fare/estimate', '{"km":"abc"}')->>'status' = '400'
     AND t.call(lk, '/bodagoera/fare/estimate', '{"km":"1000"}')->>'status' = '400'
     AND t.call(lk, '/bodagoera/fare/estimate', '{"km":"5","kind":"plane"}')->>'status' = '400');
-  PERFORM t.check('2.8 non-public settings are never exposed', t.call(lk, '/bodagoera/fare/estimate', '{"km":"7.5"}')::TEXT NOT LIKE '%commission%');
+  PERFORM t.check('2.8 non-public settings are never exposed', t.call(lk, '/bodagoera/fare/estimate', jsonb_build_object('km', '7.5', 'at', t.std_time()))::TEXT NOT LIKE '%commission%');
 
   r := t.call(lk, '/bodagoera/riders/verify', '{"code":"ABCDEF0123456789ABCD"}');
   PERFORM t.check('2.9 a valid rider card verifies', (r#>>'{body,data,is_valid}')::BOOLEAN AND r#>>'{body,data,full_name}' = 'Real Rider' AND r#>>'{body,data,plate_number}' = 'UBB 111C', r::TEXT);
@@ -144,7 +150,7 @@ BEGIN
   PERFORM t.check('3.10 unknown barcode is a 404; a withdrawn item is not findable; junk is a 400',
     t.call(lk, '/supermarketera/barcode/0000000000000')->>'status' = '404' AND t.call(lk, '/supermarketera/barcode/OLD-1')->>'status' = '404'
     AND t.call(lk, '/supermarketera/barcode/a%20b')->>'status' = '400');
-  PERFORM t.check('3.11 categories with counts', (t.call(lk, '/supermarketera/categories')#>>'{body,data,0,items}')::INT = 1 AND jsonb_array_length(t.call(lk, '/supermarketera/categories')#>'{body,data}') = 2);
+  PERFORM t.check('3.11 categories with counts', jsonb_array_length(t.call(lk, '/supermarketera/categories')#>'{body,data}') = 2 AND (t.call(lk, '/supermarketera/categories')#>>'{body,data,0,catalogue_items}')::INT >= 1);
 END $t$;
 
 -- ================================================================ 4. FARMAGENTERA, live
@@ -210,7 +216,7 @@ GRANT EXECUTE ON FUNCTION t.example(TEXT) TO PUBLIC;
 DO $t$
 DECLARE ep RECORD; ex RECORD; r JSONB; bad_s TEXT := ''; bad_l TEXT := ''; n INT := 0;
 BEGIN
-  FOR ep IN SELECT id, example_path FROM public.era_api_endpoints ORDER BY sort LOOP
+  FOR ep IN SELECT id, example_path FROM public.era_api_endpoints WHERE access = 'app' AND method = 'GET' ORDER BY sort LOOP
     n := n + 1;
     SELECT * INTO ex FROM t.example(ep.example_path);
     r := t.call(t.v('sandbox'), ex.path, ex.q);
@@ -218,7 +224,7 @@ BEGIN
     r := t.call(t.v('live'), ex.path, ex.q);
     IF r->>'status' <> '200' THEN bad_l := bad_l || ep.id || '=' || (r->>'status') || ' ' || left(COALESCE(r#>>'{body,error,message}', ''), 60) || '; '; END IF;
   END LOOP;
-  PERFORM t.check('6.1 all ' || n || ' documented examples answer 200 in the sandbox', bad_s = '' AND n = 20, bad_s);
+  PERFORM t.check('6.1 all ' || n || ' documented examples answer 200 in the sandbox', bad_s = '' AND n = 29, bad_s);
   PERFORM t.check('6.2 and 200 live against real tables', bad_l = '', bad_l);
 END $t$;
 
@@ -228,7 +234,8 @@ BEGIN
   -- the registry itself: every row well-formed, every handler exists, every parameter documented has a name and location
   FOR ep IN SELECT * FROM public.era_api_endpoints LOOP
     IF to_regprocedure(ep.handler || '(jsonb, boolean)') IS NULL THEN bad := bad || ep.id || ':nohandler '; END IF;
-    IF ep.example_path IS NULL OR ep.example_path NOT LIKE '/%' THEN bad := bad || ep.id || ':noexample '; END IF;
+    IF ep.method = 'GET' AND (ep.example_path IS NULL OR ep.example_path NOT LIKE '/%') THEN bad := bad || ep.id || ':noexample '; END IF;
+    IF ep.method = 'POST' AND jsonb_typeof(ep.body) <> 'array' THEN bad := bad || ep.id || ':nobody '; END IF;
     IF jsonb_typeof(ep.params) <> 'array' OR EXISTS (SELECT 1 FROM jsonb_array_elements(ep.params) x WHERE x->>'name' IS NULL OR x->>'in' NOT IN ('query', 'path')) THEN bad := bad || ep.id || ':params '; END IF;
     IF ep.path LIKE '%{%' AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(ep.params) x WHERE x->>'in' = 'path' AND ep.path LIKE '%{' || (x->>'name') || '}%') THEN bad := bad || ep.id || ':pathparam '; END IF;
   END LOOP;

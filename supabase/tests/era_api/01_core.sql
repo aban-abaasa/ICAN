@@ -46,9 +46,9 @@ BEGIN
   PERFORM t.as_anon();
   i := public.era_api_public_info(); c := public.era_api_catalog();
   PERFORM t.reset();
-  PERFORM t.check('2.1 public info says enabled and counts endpoints', (i->>'enabled')::BOOLEAN AND (i->>'endpoints')::INT = 20, i::TEXT);
+  PERFORM t.check('2.1 public info says enabled and counts endpoints', (i->>'enabled')::BOOLEAN AND (i->>'endpoints')::INT = 44, i::TEXT);
   PERFORM t.check('2.2 catalogue lists every endpoint, never a handler name',
-    jsonb_array_length(c->'endpoints') = 20 AND c::TEXT NOT LIKE '%era_h_%' AND jsonb_array_length(c->'apps') = 5, jsonb_array_length(c->'endpoints')::TEXT);
+    jsonb_array_length(c->'endpoints') = 44 AND c::TEXT NOT LIKE '%era_h_%' AND jsonb_array_length(c->'apps') = 6, jsonb_array_length(c->'endpoints')::TEXT);
 END $t$;
 
 -- ================================================================ 3. Getting a key (no account)
@@ -305,8 +305,10 @@ BEGIN
   PERFORM t.check('10.5 the registry refuses a handler that is not an era_h_ function',
     t.err($$INSERT INTO public.era_api_endpoints (id, app, path, summary, handler) VALUES ('platform.evil', 'platform', '/evil', 'x', 'pg_sleep(100)')$$) LIKE '%violates check%'
     AND t.err($$INSERT INTO public.era_api_endpoints (id, app, path, summary, handler) VALUES ('platform.evil2', 'platform', '/evil2', 'x', 'public.era_h_a; drop table x')$$) LIKE '%violates check%');
-  PERFORM t.check('10.6 the registry refuses non-GET methods',
-    t.err($$INSERT INTO public.era_api_endpoints (id, app, method, path, summary, handler) VALUES ('platform.post', 'platform', 'POST', '/post', 'x', 'public.era_h_a')$$) LIKE '%violates check%');
+  PERFORM t.check('10.6 the registry accepts only GET and POST',
+    t.err($$INSERT INTO public.era_api_endpoints (id, app, method, path, summary, handler) VALUES ('platform.del', 'platform', 'DELETE', '/del', 'x', 'public.era_h_a')$$) LIKE '%violates check%');
+  PERFORM t.check('10.6b a business endpoint must name a scope, and an app endpoint must not',
+    t.err($$INSERT INTO public.era_api_endpoints (id, app, path, summary, handler, access) VALUES ('business.noscope', 'business', '/business/noscope', 'x', 'public.era_h_a', 'business')$$) LIKE '%violates check%');
   DELETE FROM public.era_api_endpoints WHERE id = 'platform.boom';
   DROP FUNCTION public.era_h_test_boom(JSONB, BOOLEAN);
 END $t$;
@@ -341,10 +343,10 @@ BEGIN
   ep := public.era_api_admin_list_endpoints(); calls := public.era_api_admin_recent_calls(NULL, 20);
   s := public.era_api_admin_save_settings('{"sandbox_rate_per_min": 45}');
   PERFORM t.reset();
-  PERFORM t.check('12.1 overview shape', (o#>>'{clients,total}')::INT >= 3 AND jsonb_array_length(o->'hourly') = 24 AND o ? 'top_endpoints' AND o#>>'{endpoints,total}' = '20', o::TEXT);
+  PERFORM t.check('12.1 overview shape', (o#>>'{clients,total}')::INT >= 3 AND jsonb_array_length(o->'hourly') = 24 AND o ? 'top_endpoints' AND o#>>'{endpoints,total}' = '44', o::TEXT);
   PERFORM t.check('12.2 client list never exposes a ticket hash or a key hash', l::TEXT NOT LIKE '%ticket_hash%' AND l::TEXT NOT LIKE '%key_hash%');
   PERFORM t.check('12.3 pending applications sort first', l->0->>'status' = 'pending', l->0->>'status');
-  PERFORM t.check('12.4 endpoint list carries 24h usage', jsonb_array_length(ep) = 20 AND (SELECT SUM((e->>'calls_24h')::INT) FROM jsonb_array_elements(ep) e) > 0);
+  PERFORM t.check('12.4 endpoint list carries 24h usage', jsonb_array_length(ep) = 44 AND (SELECT SUM((e->>'calls_24h')::INT) FROM jsonb_array_elements(ep) e) > 0);
   PERFORM t.check('12.5 recent calls available', jsonb_array_length(calls) > 0);
   PERFORM t.check('12.6 settings patch applies', (s->>'sandbox_rate_per_min')::INT = 45);
   PERFORM t.check('12.7 every admin write left an audit row', (SELECT COUNT(*) FROM public.era_api_audit WHERE action IN ('review_approve','review_suspend','review_reinstate','endpoint_changed','settings_changed','key_issued')) >= 8);

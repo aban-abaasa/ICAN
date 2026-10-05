@@ -14,6 +14,8 @@ ROOT="$(cd "$HERE/../../.." && pwd)"
 DB="${DB_NAME:-ican_era_api_test}"
 CORE="$ROOT/supabase/migrations/20261005100000_era_api.sql"
 ENDPOINTS="$ROOT/supabase/migrations/20261005100100_era_api_endpoints.sql"
+BIZ="$ROOT/supabase/migrations/20261006100000_era_api_business.sql"
+BIZ_ENDPOINTS="$ROOT/supabase/migrations/20261006100100_era_api_business_endpoints.sql"
 ROLLBACK="$ROOT/supabase/rollback/20261005_rollback_era_api.sql"
 WORK="$(mktemp -d)"
 trap '[ "${KEEP_DB:-0}" = "1" ] || psql -X -q -d postgres -c "DROP DATABASE IF EXISTS \"$DB\"" >/dev/null 2>&1; rm -rf "$WORK"' EXIT
@@ -21,13 +23,15 @@ trap '[ "${KEEP_DB:-0}" = "1" ] || psql -X -q -d postgres -c "DROP DATABASE IF E
 psql_db() { psql -X -q -v ON_ERROR_STOP=1 -d "$DB" "$@"; }
 
 psql -X -q -d postgres -c "DROP DATABASE IF EXISTS \"$DB\"" -c "CREATE DATABASE \"$DB\"" >/dev/null
-psql_db -f "$HERE/00_stub.sql" >/dev/null 2>"$WORK/stub.err" || { grep -v NOTICE "$WORK/stub.err" >&2; echo "stub failed" >&2; exit 2; }
+for stub in 00_stub.sql 00b_stub_business.sql; do
+  psql_db -f "$HERE/$stub" >/dev/null 2>"$WORK/stub.err" || { grep -v NOTICE "$WORK/stub.err" >&2; echo "$stub failed" >&2; exit 2; }
+done
 
-for f in "$CORE" "$ENDPOINTS"; do
+for f in "$CORE" "$ENDPOINTS" "$BIZ" "$BIZ_ENDPOINTS"; do
   psql_db -f "$f" >/dev/null 2>"$WORK/mig.err" || { grep -v NOTICE "$WORK/mig.err" >&2; echo "$(basename "$f") failed" >&2; exit 2; }
 done
-echo "migrations applied. re-applying both to prove they are safe to run twice..."
-for f in "$CORE" "$ENDPOINTS"; do
+echo "migrations applied. re-applying all four to prove they are safe to run twice..."
+for f in "$CORE" "$ENDPOINTS" "$BIZ" "$BIZ_ENDPOINTS"; do
   psql_db -f "$f" >/dev/null 2>&1 || { echo "re-applying $(basename "$f") FAILED" >&2; exit 1; }
 done
 
@@ -46,6 +50,7 @@ echo "the developer page's catalogue snapshot matches the registry."
 # an administrator's choices must survive a re-run of the endpoint file
 psql_db -c "UPDATE public.era_api_endpoints SET enabled = FALSE, cache_seconds = 7 WHERE id = 'icanera.coin_price'" >/dev/null
 psql_db -f "$ENDPOINTS" >/dev/null 2>&1
+psql_db -f "$BIZ_ENDPOINTS" >/dev/null 2>&1
 kept=$(psql_db -Atc "SELECT enabled::text || ',' || cache_seconds FROM public.era_api_endpoints WHERE id = 'icanera.coin_price'")
 [ "$kept" = "false,7" ] || { echo "re-applying the endpoints file overwrote an administrator's setting ($kept)" >&2; exit 1; }
 psql_db -c "UPDATE public.era_api_endpoints SET enabled = TRUE, cache_seconds = 30 WHERE id = 'icanera.coin_price'" >/dev/null
