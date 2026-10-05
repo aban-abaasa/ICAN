@@ -32,7 +32,7 @@ CREATE TABLE public.ican_coin_market_prices (id BIGSERIAL PRIMARY KEY, price_usd
 CREATE TABLE public.ican_price_ohlc (id BIGSERIAL PRIMARY KEY, open_price NUMERIC, high_price NUMERIC, low_price NUMERIC,
   close_price NUMERIC, trading_volume NUMERIC, timeframe TEXT, open_time TIMESTAMPTZ);
 CREATE TABLE public.ican_currency_rates (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), currency_code VARCHAR(3), currency_name TEXT,
-  country_name TEXT, country_code VARCHAR(2), region TEXT, rate_to_ugx NUMERIC, local_inflation_pct NUMERIC, updated_at TIMESTAMPTZ DEFAULT now());
+  country_name TEXT, country_code VARCHAR(2), region TEXT, rate_to_ugx NUMERIC, initial_rate_to_ugx NUMERIC, local_inflation_pct NUMERIC, updated_at TIMESTAMPTZ DEFAULT now(), stability_anchor_at TIMESTAMPTZ);
 CREATE TABLE public.ican_country_currency_map (country_code VARCHAR(2), currency_code VARCHAR(3));
 CREATE TABLE public.country_tax_rules (id BIGSERIAL PRIMARY KEY, country_code VARCHAR(2), country_name VARCHAR, currency VARCHAR,
   personal_tax_brackets JSONB, personal_tax_period VARCHAR, corporate_tax_rate NUMERIC, vat_rate NUMERIC, capital_gains_rate NUMERIC,

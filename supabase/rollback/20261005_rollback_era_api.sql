@@ -1,7 +1,9 @@
--- Rolls back the Era API (supabase/migrations/20261005100000_era_api.sql and ..100100_era_api_endpoints.sql).
+-- Rolls back the Era API: v1 (20261005100000_era_api.sql, ..100100_era_api_endpoints.sql) and v2, the business layer
+-- (20261006100000_era_api_business.sql, ..100100_era_api_business_endpoints.sql). Run it once to remove both.
 -- DESTRUCTIVE: deletes every registered developer app, key, usage count and the call log. Nothing else in the
 -- platform depends on these objects. To pause the API without losing anything, use the master switch in the
 -- developer panel's API tab instead.
+-- Your own payment_requests / mbg_rides rows are never touched; only the API's link tables are dropped.
 DO $$
 DECLARE f RECORD;
 BEGIN
@@ -12,6 +14,10 @@ BEGIN
   END LOOP;
 END $$;
 
+DROP TABLE IF EXISTS public.era_api_idempotency CASCADE;
+DROP TABLE IF EXISTS public.era_api_payment_links CASCADE;
+DROP TABLE IF EXISTS public.era_api_booking_intents CASCADE;
+DROP TABLE IF EXISTS public.era_api_chain_config CASCADE;
 DROP TABLE IF EXISTS public.era_api_audit CASCADE;
 DROP TABLE IF EXISTS public.era_api_log CASCADE;
 DROP TABLE IF EXISTS public.era_api_usage CASCADE;
