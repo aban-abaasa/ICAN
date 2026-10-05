@@ -33,7 +33,10 @@ const isVisitorQrPath = window.location.pathname === '/visitor-check-in';
 // `if (!user) return <AuthPage/>`, so these render instead of <App/>, not
 // inside it. They're still wrapped in AuthProvider (unlike the QR pages
 // above) so a viewer can sign in in place to like/comment/invest, and the
-// same component just becomes fully interactive once they do.
+// same component just becomes fully interactive once they do. PublicShareFlow
+// wraps both viewers so the linked item is the first step of a flow -- swipe
+// on to more pitches, tap through other live updates, or open Explore --
+// instead of the only thing the visitor can see.
 const pitchShareMatch = window.location.pathname.match(/^\/pitchin\/([^/]+)/);
 // A private, PIN-locked, time-limited pitch invite for one named investor
 // (backend/PITCHIN_PRIVATE_INVESTOR_INVITES.sql) at /invite/<token> -- unlike
@@ -153,9 +156,8 @@ const lazyWithReloadOnChunkFailure = (importer) => React.lazy(() =>
 const App = lazyWithReloadOnChunkFailure(() => import('./App'));
 const PublicStaffAttendanceCheckIn = lazyWithReloadOnChunkFailure(() => import('./components/PublicStaffAttendanceCheckIn'));
 const PublicVisitorCheckIn = lazyWithReloadOnChunkFailure(() => import('./components/PublicVisitorCheckIn'));
-const PublicPitchViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicPitchViewer'));
+const PublicShareFlow = lazyWithReloadOnChunkFailure(() => import('./components/PublicShareFlow'));
 const PrivatePitchInviteViewer = lazyWithReloadOnChunkFailure(() => import('./components/PrivatePitchInviteViewer'));
-const PublicStatusViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicStatusViewer'));
 const PublicPortfolioPage = lazyWithReloadOnChunkFailure(() => import('./components/profile/PublicPortfolioPage'));
 const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./components/PublicDropshipStorefront'));
 const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
@@ -231,9 +233,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           ) : (
             <ThemeProvider>
               <AuthProvider>
-                {pitchShareMatch ? <PublicPitchViewer pitchId={pitchShareMatch[1]} />
+                {pitchShareMatch ? <PublicShareFlow kind="pitch" id={pitchShareMatch[1]} />
                   : privateInviteMatch ? <PrivatePitchInviteViewer token={privateInviteMatch[1]} />
-                  : statusShareMatch ? <PublicStatusViewer statusId={statusShareMatch[1]} />
+                  : statusShareMatch ? <PublicShareFlow kind="status" id={statusShareMatch[1]} />
                   : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
                   : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />
                   : <><App /><PhoneAlertsPrompt /></>}

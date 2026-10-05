@@ -1,6 +1,6 @@
 import './pitchin-classic.css';
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Share2, Briefcase, X, Send, AlertCircle, Loader, Check, Sun, Moon } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Briefcase, X, Send, AlertCircle, Loader, Check, Sun, Moon, Compass, ChevronUp, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 import { getPitchById, PITCH_PLAN_SECTIONS } from '../services/pitchingService';
@@ -78,6 +78,12 @@ const PLAN_CSS = `
 .pp-invest:hover{transform:translateY(-2px);background-position:100% 0}
 .pp-invest:disabled{opacity:.6;cursor:wait}
 .pp-invest::after{content:'';position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);transform:skewX(-20deg);animation:pp-shine 3.5s ease-in-out infinite}
+.pp-next{display:flex;align-items:center;gap:12px;width:100%;margin-top:14px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);text-align:left;cursor:pointer;box-shadow:var(--shadow);transition:transform .25s,border-color .2s}
+.pp-next:hover{transform:translateY(-2px);border-color:var(--accent)}
+.pp-next small{display:block;font:700 10px system-ui,sans-serif;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.pp-next strong{display:block;margin-top:2px;font-size:17px;color:var(--accent)}
+.pp-explore{display:block;margin:16px auto 0;background:none;border:0;font:600 13px system-ui,sans-serif;color:var(--muted);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.pp-explore:hover{color:var(--accent)}
 .pp-rise{opacity:0;animation:pp-rise .8s cubic-bezier(.2,.7,.2,1) forwards}
 .pp-pop{opacity:0;animation:pp-pop .6s cubic-bezier(.3,1.4,.5,1) forwards}
 @keyframes pp-rise{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
@@ -92,7 +98,14 @@ const PLAN_CSS = `
 @media (prefers-reduced-motion:reduce){.pp-root *,.pp-root *::before,.pp-root *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}.pp-rise,.pp-pop{opacity:1}}
 `;
 
-const PublicPitchViewer = ({ pitchId }) => {
+// A shared pitch is the first step of a flow, not a dead end (see
+// PublicShareFlow): `nextPitch`/`onNext`/`onPrev` page through more pitches
+// (swipe up/down, arrow keys, or the on-screen chevrons), and `onExplore`
+// opens the Explore sheet of live updates and pitches.
+const SWIPE_MIN_PX = 80;
+const SWIPE_BLOCKED_BOTTOM_PX = 110; // keep the native video controls usable
+
+const PublicPitchViewer = ({ pitchId, nextPitch = null, hasPrev = false, onNext, onPrev, onExplore }) => {
   const { user, loading: authLoading, signInWithWallet, signInWithGoogle } = useAuth();
   const [pitch, setPitch] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -127,6 +140,29 @@ const PublicPitchViewer = ({ pitchId }) => {
   const pendingInvest = useRef(false);
   const videoRef = useRef(null);
   const autoInvestTriggered = useRef(false);
+  const touchStart = useRef(null);
+  const [showSwipeHint, setShowSwipeHint] = useState(true);
+
+  const isPlan = Boolean(pitch && !pitch.video_url && pitch.plan_content);
+  const flowBlocked = showComments || showAuthModal || showInvestAuth || Boolean(selectedForInvestment);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSwipeHint(false), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Arrow keys move through pitches on desktop (video pitches only -- a
+  // written plan scrolls, so its arrows must keep scrolling).
+  useEffect(() => {
+    if (!pitch || isPlan || flowBlocked) return undefined;
+    const onKey = (e) => {
+      if (/^(INPUT|TEXTAREA|VIDEO)$/.test(e.target?.tagName || '')) return;
+      if (e.key === 'ArrowDown') onNext?.();
+      else if (e.key === 'ArrowUp' && hasPrev) onPrev?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pitch, isPlan, flowBlocked, hasPrev, onNext, onPrev]);
 
   useEffect(() => {
     let cancelled = false;
@@ -350,6 +386,28 @@ const PublicPitchViewer = ({ pitchId }) => {
     window.location.href = '/';
   };
 
+  // Vertical swipe = next/previous pitch, the same gesture as the feed.
+  // Touches that start on a button or the bottom strip (the video's own
+  // controls) are left alone, as is everything while a panel is open.
+  const handleTouchStart = (e) => {
+    const t = e.touches[0];
+    const ignore = isPlan || flowBlocked || !onNext
+      || t.clientY > window.innerHeight - SWIPE_BLOCKED_BOTTOM_PX
+      || e.target.closest?.('button, a, input, textarea');
+    touchStart.current = ignore ? null : { x: t.clientX, y: t.clientY };
+  };
+  const handleTouchEnd = (e) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dy = t.clientY - start.y;
+    const dx = t.clientX - start.x;
+    if (Math.abs(dy) < SWIPE_MIN_PX || Math.abs(dy) < Math.abs(dx) * 1.5) return;
+    if (dy < 0) onNext();
+    else if (hasPrev) onPrev();
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
@@ -363,12 +421,20 @@ const PublicPitchViewer = ({ pitchId }) => {
       <div className="pitchin-classic fixed inset-0 bg-black flex flex-col items-center justify-center gap-4 p-6 text-center">
         <AlertCircle className="w-14 h-14 text-slate-500" />
         <p className="text-white text-lg font-semibold">This pitch isn't available anymore</p>
-        <button
-          onClick={goToApp}
-          className="icon-btn-transparent px-5 py-2.5 bg-pink-500 hover:bg-pink-600 text-white rounded-lg font-semibold transition"
-        >
-          Open IcanEra
-        </button>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <button
+            onClick={onExplore}
+            className="icon-btn-transparent px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg font-semibold transition inline-flex items-center gap-2"
+          >
+            <Compass className="w-4 h-4" /> Explore more
+          </button>
+          <button
+            onClick={goToApp}
+            className="icon-btn-transparent px-5 py-2.5 bg-pink-500 hover:bg-pink-600 text-white rounded-lg font-semibold transition"
+          >
+            Open IcanEra
+          </button>
+        </div>
       </div>
     );
   }
@@ -378,7 +444,7 @@ const PublicPitchViewer = ({ pitchId }) => {
 
   // A written plan (no video) is shown as a readable web document, not as a
   // video player with nothing to play.
-  const plan = !pitch.video_url && pitch.plan_content ? pitch.plan_content : null;
+  const plan = isPlan ? pitch.plan_content : null;
   const planMoney = (n) => `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
   // Live share value when available; the typed dollar figures are the fallback.
   const planLive = planOffer?.available && Number(planOffer.sharePriceUgx) > 0 ? planOffer : null;
@@ -398,6 +464,8 @@ const PublicPitchViewer = ({ pitchId }) => {
     <div
       className={plan ? 'pp-root fixed inset-0 w-screen h-screen overflow-y-auto' : 'pitchin-classic fixed inset-0 bg-black w-screen h-screen overflow-hidden'}
       data-mode={plan ? planMode : undefined}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       onScroll={plan ? (e) => { const el = e.currentTarget; const max = el.scrollHeight - el.clientHeight; setPlanProgress(max > 0 ? el.scrollTop / max : 0); } : undefined}
     >
       {plan && (
@@ -407,6 +475,11 @@ const PublicPitchViewer = ({ pitchId }) => {
           <header className="pp-header">
             <span className="pp-brand">IcanEra</span>
             <div className="pp-header-actions">
+              {onExplore && (
+                <button onClick={onExplore} className="pp-icon-btn" title="Explore more pitches and updates" aria-label="Explore">
+                  <Compass className="w-5 h-5" />
+                </button>
+              )}
               <button onClick={togglePlanMode} className="pp-icon-btn" title={planMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} aria-label="Toggle light or dark mode">
                 {planMode === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </button>
@@ -482,6 +555,19 @@ const PublicPitchViewer = ({ pitchId }) => {
               {investLoading ? <Loader className="w-5 h-5 animate-spin" /> : <Briefcase className="w-5 h-5" />}
               <span>Invest in {bizName}</span>
             </button>
+
+            {nextPitch && onNext && (
+              <button onClick={onNext} className="pp-next">
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <small>Up next</small>
+                  <strong>{nextPitch.title || 'Another pitch'}</strong>
+                </span>
+                <ChevronDown className="w-5 h-5" style={{ transform: 'rotate(-90deg)', color: 'var(--accent)' }} />
+              </button>
+            )}
+            {onExplore && (
+              <button onClick={onExplore} className="pp-explore">Explore more pitches and updates</button>
+            )}
           </main>
         </>
       )}
@@ -492,6 +578,15 @@ const PublicPitchViewer = ({ pitchId }) => {
       <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
         <span className="text-white font-bold text-sm tracking-wide">IcanEra</span>
         <div className="flex items-center gap-2">
+          {onExplore && (
+            <button
+              onClick={onExplore}
+              className="icon-btn-transparent inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white transition"
+              title="Explore more pitches and updates"
+            >
+              <Compass className="w-4 h-4" /> Explore
+            </button>
+          )}
           {!authLoading && !user && (
             <button
               onClick={() => requireAuth('signup')}
@@ -532,6 +627,36 @@ const PublicPitchViewer = ({ pitchId }) => {
           <p className="text-white/70 text-xs mt-1 line-clamp-2 drop-shadow-lg">{pitch.description}</p>
         )}
       </div>
+
+      {/* Previous / next pitch -- the on-screen twin of swipe and arrow keys.
+          The glass lives on an inner span: the theme paints every <button>. */}
+      {onNext && (
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-3">
+          {hasPrev && (
+            <button onClick={onPrev} className="icon-btn-transparent" title="Previous pitch" aria-label="Previous pitch">
+              <span className="flex rounded-full p-2" style={{ backgroundColor: 'rgba(0,0,0,.5)', color: '#fff' }}>
+                <ChevronUp className="w-5 h-5" />
+              </span>
+            </button>
+          )}
+          <button onClick={onNext} className="icon-btn-transparent" title="Next pitch" aria-label="Next pitch">
+            <span className="flex rounded-full p-2" style={{ backgroundColor: 'rgba(0,0,0,.5)', color: '#fff' }}>
+              <ChevronDown className="w-5 h-5" />
+            </span>
+          </button>
+        </div>
+      )}
+
+      {onNext && showSwipeHint && (
+        <div className="absolute left-0 right-0 bottom-44 z-20 flex justify-center pointer-events-none">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold animate-bounce"
+            style={{ backgroundColor: 'rgba(0,0,0,.7)', color: '#fff' }}
+          >
+            <ChevronUp className="w-4 h-4" /> Swipe up for the next pitch
+          </span>
+        </div>
+      )}
 
       {/* Right action rail */}
       <div className="absolute right-4 bottom-24 flex flex-col gap-5 z-30">
