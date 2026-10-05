@@ -16,6 +16,7 @@ CORE="$ROOT/supabase/migrations/20261005100000_era_api.sql"
 ENDPOINTS="$ROOT/supabase/migrations/20261005100100_era_api_endpoints.sql"
 BIZ="$ROOT/supabase/migrations/20261006100000_era_api_business.sql"
 BIZ_ENDPOINTS="$ROOT/supabase/migrations/20261006100100_era_api_business_endpoints.sql"
+ACCOUNTS="$ROOT/supabase/migrations/20261007100000_era_api_developer_accounts.sql"
 ROLLBACK="$ROOT/supabase/rollback/20261005_rollback_era_api.sql"
 WORK="$(mktemp -d)"
 trap '[ "${KEEP_DB:-0}" = "1" ] || psql -X -q -d postgres -c "DROP DATABASE IF EXISTS \"$DB\"" >/dev/null 2>&1; rm -rf "$WORK"' EXIT
@@ -27,11 +28,11 @@ for stub in 00_stub.sql 00b_stub_business.sql; do
   psql_db -f "$HERE/$stub" >/dev/null 2>"$WORK/stub.err" || { grep -v NOTICE "$WORK/stub.err" >&2; echo "$stub failed" >&2; exit 2; }
 done
 
-for f in "$CORE" "$ENDPOINTS" "$BIZ" "$BIZ_ENDPOINTS"; do
+for f in "$CORE" "$ENDPOINTS" "$BIZ" "$BIZ_ENDPOINTS" "$ACCOUNTS"; do
   psql_db -f "$f" >/dev/null 2>"$WORK/mig.err" || { grep -v NOTICE "$WORK/mig.err" >&2; echo "$(basename "$f") failed" >&2; exit 2; }
 done
-echo "migrations applied. re-applying all four to prove they are safe to run twice..."
-for f in "$CORE" "$ENDPOINTS" "$BIZ" "$BIZ_ENDPOINTS"; do
+echo "migrations applied. re-applying all five to prove they are safe to run twice..."
+for f in "$CORE" "$ENDPOINTS" "$BIZ" "$BIZ_ENDPOINTS" "$ACCOUNTS"; do
   psql_db -f "$f" >/dev/null 2>&1 || { echo "re-applying $(basename "$f") FAILED" >&2; exit 1; }
 done
 

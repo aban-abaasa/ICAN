@@ -13,7 +13,8 @@
  *
  * Not shared on purpose (they differ per app): the dev-panel wiring (EraApiDevTab.*) and vercel.json.
  * The catalogue snapshot public/developers/catalog.json is generated from the database registry by
- * supabase/tests/era_api/run.sh (UPDATE_CATALOG=1) and only copied here.
+ * supabase/tests/era_api/run.sh (UPDATE_CATALOG=1) and only copied here. public/developers/countries.json is generated from
+ * the app's own country lookup by scripts/build-era-countries.mjs and only copied here.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -25,6 +26,7 @@ export const SHARED = [
   'frontend/public/developers/index.html',
   'frontend/public/developers/admin.js',
   'frontend/public/developers/catalog.json',
+  'frontend/public/developers/countries.json',
   'frontend/tests/eraApi.test.js',
 ];
 

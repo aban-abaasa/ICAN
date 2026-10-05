@@ -48,3 +48,8 @@ CREATE TABLE public.mbg_customers (id UUID PRIMARY KEY DEFAULT gen_random_uuid()
 CREATE TABLE public.mbg_rides (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), customer_id UUID, rider_id UUID, status mbg_ride_status DEFAULT 'pending',
   distance_km NUMERIC, fare NUMERIC, requested_at TIMESTAMPTZ DEFAULT now(), accepted_at TIMESTAMPTZ, started_at TIMESTAMPTZ, completed_at TIMESTAMPTZ,
   cancelled_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT now());
+
+-- The platform's existing country lookup (franchise layer) and the table it reads, as the developer accounts reuse them.
+ALTER TABLE public.user_accounts ADD COLUMN IF NOT EXISTS country_code VARCHAR;
+CREATE OR REPLACE FUNCTION public.ican_franchise_country_of(p_user UUID, p_business UUID) RETURNS VARCHAR
+LANGUAGE sql STABLE SECURITY DEFINER AS $$ SELECT upper(country_code)::VARCHAR FROM public.user_accounts WHERE user_id = p_user AND country_code IS NOT NULL LIMIT 1 $$;
