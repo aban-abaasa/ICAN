@@ -8,6 +8,7 @@ import WalletMockTrader from './landing/WalletMockTrader';
 import TrustGroupsPreview from './landing/TrustGroupsPreview';
 import DropshipPreview from './landing/DropshipPreview';
 import CMMSNoticeBoardPreview from './landing/CMMSNoticeBoardPreview';
+import FranchiseSection from './landing/FranchiseSection';
 import ProfessionalsCarousel from './landing/ProfessionalsCarousel';
 import { useTheme, isDarkFamilyTheme } from '../context/ThemeContext';
 import { getSupabaseClient } from '../lib/supabase/client';
@@ -1049,6 +1050,7 @@ const LandingPage = ({ onGetStarted }) => {
                     { label: 'Features', section: 'platforms' },
                     { label: 'Platforms', section: 'platforms' },
                     { label: 'Pricing', section: null },
+                    { label: 'Franchise', section: 'franchise' },
                     { label: 'Testimonials', section: 'testimonials' },
                     { label: 'Community', section: 'community-board' }
                   ].map((item) => (
@@ -1072,6 +1074,7 @@ const LandingPage = ({ onGetStarted }) => {
               { label: 'Features', go: () => scrollToSection('platforms') },
               { label: 'Platforms', go: () => scrollToSection('platforms') },
               { label: 'Pricing', go: goToPricing },
+              { label: 'Franchise', go: () => scrollToSection('franchise') },
               { label: 'Testimonials', go: () => scrollToSection('testimonials') },
               { label: 'Community', go: () => scrollToSection('community-board') },
               { label: 'Try It Live', go: () => scrollToSection('live-explore') }
@@ -1130,6 +1133,7 @@ const LandingPage = ({ onGetStarted }) => {
                     { label: 'Features', section: 'platforms' },
                     { label: 'Platforms', section: 'platforms' },
                     { label: 'Pricing', section: null },
+                    { label: 'Franchise', section: 'franchise' },
                     { label: 'Testimonials', section: 'testimonials' },
                     { label: 'Community', section: 'community-board' },
                     { label: 'Try it live', section: 'live-explore' }
@@ -1475,6 +1479,9 @@ const LandingPage = ({ onGetStarted }) => {
           </div>
         </div>
       </section>
+
+      {/* Franchise: become an authorised partner (registered companies only) */}
+      <FranchiseSection onGetStarted={onGetStarted} />
 
       {/* Testimonials Section - Compact Animated Badge */}
       <section id="testimonials" className="relative py-6 md:py-8 lg:py-12 2xl:py-16 px-4 sm:px-6 lg:px-8 2xl:px-16">

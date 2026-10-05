@@ -49,6 +49,7 @@ import {
   Plus,
   Globe,
   Target,
+  Network,
   Clock,
   Percent,
   Sparkles,
@@ -72,6 +73,7 @@ import CmmsPageShell from './CmmsPageShell';
 import { ProfilePage } from './auth/ProfilePage';
 import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
 import ReadinessPanel from './profile/ReadinessPanel';
+import FranchisePanel from './franchise/FranchisePanel';
 import GrowthPanel from './profile/GrowthPanel';
 import SecurityPanel from './profile/SecurityPanel';
 import SettingsPanel from './profile/SettingsPanel';
@@ -5665,6 +5667,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('resume', 'My Resume'); setShowMenuDropdown(false); }}>
                       <Briefcase /> <span>My resume</span>
                     </button>
+                    <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('franchise', 'Franchise'); setShowMenuDropdown(false); }}>
+                      <Network /> <span>Franchise</span>
+                    </button>
                     <button role="menuitem" className="icn-menu-item" onClick={() => { navigateTo('professionals'); setShowMenuDropdown(false); }}>
                       <Users /> <span>Professionals</span>
                     </button>
@@ -6122,6 +6127,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {/* GROWTH - PROSPERITY ARCHITECT */}
               {selectedDetail.tab === 'growth' && selectedDetail.item === 'Growth' && (
                 <GrowthPanel />
+              )}
+
+              {/* FRANCHISE - PARTNER CONSOLE */}
+              {selectedDetail.tab === 'franchise' && selectedDetail.item === 'Franchise' && (
+                <FranchisePanel />
               )}
 
               {/* MY RESUME / PORTFOLIO */}
