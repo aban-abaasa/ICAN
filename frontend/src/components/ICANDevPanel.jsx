@@ -291,16 +291,34 @@ const fmtChatTime = (d) => {
   return date.toLocaleDateString();
 };
 
+const fmtClock = (d) => d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+const dayLabel = (d) => {
+  const date = new Date(d);
+  const startOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOf(new Date()) - startOf(date)) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  return date.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+};
+
 export const MessagesTab = () => {
   const [conversations, setConversations] = useState([]);
+  const [loadingList,   setLoadingList]   = useState(true);
   const [selectedId,    setSelectedId]    = useState(null);
   const [messages,      setMessages]      = useState([]);
   const [reply,         setReply]         = useState('');
   const [sending,       setSending]       = useState(false);
+  const [query,         setQuery]         = useState('');
+  const [unreadOnly,    setUnreadOnly]    = useState(false);
   const scrollRef = useRef(null);
+  const inputRef  = useRef(null);
 
   const refresh = useCallback(async () => {
-    setConversations(await listConversations());
+    try {
+      setConversations(await listConversations());
+    } finally {
+      setLoadingList(false);
+    }
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -336,7 +354,32 @@ export const MessagesTab = () => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
+  // Grow the composer with its content (up to ~5 lines), like a chat app.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [reply, selectedId]);
+
+  // While the full-screen chat is open on a phone, stop the page behind it scrolling.
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    const mq = window.matchMedia('(min-width: 1024px)');
+    if (mq.matches) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [selectedId]);
+
   const selected = conversations.find(c => c.id === selectedId);
+  const unreadCount = conversations.filter(c => c.unread_by_dev).length;
+
+  const q = query.trim().toLowerCase();
+  const visibleConversations = conversations.filter(c =>
+    (!unreadOnly || c.unread_by_dev) &&
+    (!q || [c.guest_name, c.guest_email, c.portal, c.last_message_preview].some(v => String(v || '').toLowerCase().includes(q)))
+  );
 
   const call = useDirectCall({
     roomId: selectedId ? `support:${selectedId}` : null,
@@ -362,99 +405,180 @@ export const MessagesTab = () => {
     }
   };
 
+  // Enter sends on desktop; on touch keyboards Enter is a newline and the
+  // send button sends (Shift+Enter is always a newline).
+  const onComposerKeyDown = (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent?.isComposing) return;
+    if (window.matchMedia('(pointer: coarse)').matches) return;
+    e.preventDefault();
+    handleReply();
+  };
+
+  // Day separators + consecutive-sender grouping
+  const timeline = [];
+  messages.forEach((m, i) => {
+    const prev = messages[i - 1];
+    if (!prev || dayLabel(prev.created_at) !== dayLabel(m.created_at)) {
+      timeline.push({ type: 'day', key: `day-${m.id}`, label: dayLabel(m.created_at) });
+    }
+    timeline.push({ type: 'msg', key: m.id, m, first: !prev || prev.sender_role !== m.sender_role || timeline[timeline.length - 1].type === 'day' });
+  });
+
   return (
-    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-      <div className={`${selectedId ? 'hidden lg:block' : ''} rounded-2xl border overflow-hidden`} style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
-        <div className="px-4 py-3 border-b text-xs font-bold uppercase tracking-wider" style={{ color:'var(--dp-muted)', borderColor:'var(--dp-sep)' }}>
-          Conversations ({conversations.length})
+    <div className="grid gap-4 lg:grid-cols-[340px_1fr] lg:h-[calc(100dvh-11.5rem)] lg:min-h-[480px]">
+
+      {/* ── Conversation list ── */}
+      <div className={`${selectedId ? 'hidden lg:flex' : 'flex'} flex-col overflow-hidden rounded-2xl border lg:min-h-0`}
+        style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
+        <div className="space-y-2.5 border-b px-3 pb-3 pt-3.5" style={{ borderColor:'var(--dp-sep)' }}>
+          <div className="flex items-center justify-between px-1">
+            <p className="text-sm font-black" style={{ color:'var(--dp-txt)' }}>Conversations</p>
+            <span className="text-[11px] font-semibold" style={{ color:'var(--dp-muted)' }}>{conversations.length}</span>
+          </div>
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color:'var(--dp-muted)' }}/>
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name, email or message…"
+              className="h-10 w-full rounded-xl border pl-9 pr-3 text-base sm:text-sm outline-none transition focus:border-teal-500/60"
+              style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}/>
+          </div>
+          <div className="flex gap-1.5">
+            {[{ id:false, label:'All' }, { id:true, label:`Unread${unreadCount ? ` (${unreadCount})` : ''}` }].map(f => (
+              <button key={String(f.id)} onClick={() => setUnreadOnly(f.id)}
+                className="rounded-full border px-3 py-1 text-[11px] font-bold transition active:scale-95"
+                style={unreadOnly === f.id
+                  ? { background:'rgba(20,184,166,0.15)', borderColor:'rgba(20,184,166,0.45)', color:'#14b8a6' }
+                  : { background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)', color:'var(--dp-sub)' }}>
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="max-h-[65vh] overflow-y-auto">
-          {conversations.map(c => (
-            <button key={c.id} onClick={() => setSelectedId(c.id)}
-              className="w-full border-b last:border-0 px-4 py-3 text-left transition"
-              style={{ borderColor:'var(--dp-sep)', background: selectedId === c.id ? 'rgba(20,184,166,0.10)' : 'transparent' }}>
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold truncate" style={{ color:'var(--dp-txt)' }}>{c.guest_name || c.role || 'Guest'}</p>
-                {c.unread_by_dev && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />}
-              </div>
-              <p className="text-xs truncate" style={{ color:'var(--dp-muted)' }}>{c.guest_email}</p>
-              <div className="mt-1.5 flex items-center gap-2">
-                <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize"
-                  style={{ borderColor:'var(--dp-inner-bd)', background:'var(--dp-inner)', color:'var(--dp-sub)' }}>{c.portal}</span>
-                <span className="text-[10px]" style={{ color:'var(--dp-muted)' }}>{fmtChatTime(c.last_message_at)}</span>
-              </div>
-              {c.last_message_preview && <p className="mt-1 truncate text-xs" style={{ color:'var(--dp-muted)' }}>{c.last_message_preview}</p>}
-            </button>
+
+        <div className="max-h-[calc(100dvh-20rem)] flex-1 overflow-y-auto overscroll-contain lg:max-h-none">
+          {loadingList && [1,2,3,4].map(i => (
+            <div key={i} className="flex items-center gap-3 border-b px-4 py-3.5" style={{ borderColor:'var(--dp-sep)' }}>
+              <Skel h="h-11 w-11" cls="flex-shrink-0 !rounded-xl"/>
+              <div className="flex-1 space-y-2"><Skel h="h-3 w-2/5" cls="!rounded-md"/><Skel h="h-3 w-4/5" cls="!rounded-md"/></div>
+            </div>
           ))}
-          {conversations.length === 0 && (
-            <p className="px-4 py-10 text-center text-sm" style={{ color:'var(--dp-muted)' }}>No conversations yet.</p>
+          {visibleConversations.map(c => {
+            const active = selectedId === c.id;
+            return (
+              <button key={c.id} onClick={() => setSelectedId(c.id)}
+                className="relative flex w-full items-center gap-3 border-b px-4 py-3 text-left transition active:opacity-80"
+                style={{ borderColor:'var(--dp-sep)', background: active ? 'rgba(20,184,166,0.10)' : 'transparent' }}>
+                {active && <span className="absolute inset-y-0 left-0 w-0.5 bg-teal-500"/>}
+                <Avatar name={c.guest_name || c.role || 'Guest'} size={44}/>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className={`truncate text-sm ${c.unread_by_dev ? 'font-black' : 'font-semibold'}`} style={{ color:'var(--dp-txt)' }}>{c.guest_name || c.role || 'Guest'}</p>
+                    <span className="flex-shrink-0 text-[10px]" style={{ color: c.unread_by_dev ? '#14b8a6' : 'var(--dp-muted)' }}>{fmtChatTime(c.last_message_at)}</span>
+                  </div>
+                  <div className="mt-0.5 flex items-center justify-between gap-2">
+                    <p className="truncate text-xs" style={{ color: c.unread_by_dev ? 'var(--dp-sub)' : 'var(--dp-muted)' }}>
+                      {c.last_message_preview || c.guest_email || 'No messages yet'}
+                    </p>
+                    {c.unread_by_dev && <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full bg-teal-500" style={{ boxShadow:'0 0 6px #14b8a6' }}/>}
+                  </div>
+                  <span className="mt-1 inline-block rounded-full border px-2 py-px text-[10px] font-medium capitalize"
+                    style={{ borderColor:'var(--dp-inner-bd)', background:'var(--dp-inner)', color:'var(--dp-sub)' }}>{c.portal}</span>
+                </div>
+              </button>
+            );
+          })}
+          {!loadingList && visibleConversations.length === 0 && (
+            <EmptyState msg={conversations.length === 0 ? 'No conversations yet' : 'No matches'}
+              hint={conversations.length === 0 ? 'New visitor chats will appear here in real time.' : 'Try a different search or switch back to All.'}
+              Icon={MessageCircle}/>
           )}
         </div>
       </div>
 
-      <div className={`${selectedId ? 'flex fixed inset-0 z-40 lg:static lg:z-auto' : 'hidden lg:flex'} relative flex-col overflow-hidden lg:rounded-2xl lg:border`} style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
+      {/* ── Chat pane (full screen on phones, like a messaging app) ── */}
+      <div className={`${selectedId ? 'flex fixed inset-0 z-40 lg:relative lg:inset-auto lg:z-auto' : 'hidden lg:flex lg:relative'} flex-col overflow-hidden lg:min-h-0 lg:rounded-2xl lg:border`}
+        style={{ background: 'var(--dp-bg)', borderColor:'var(--dp-card-bd)', paddingTop: selectedId ? 'env(safe-area-inset-top)' : undefined }}>
         {!selected ? (
-          <div className="flex flex-1 items-center justify-center text-sm" style={{ color:'var(--dp-muted)' }}>
+          <div className="flex flex-1 items-center justify-center text-sm" style={{ color:'var(--dp-muted)', background:'var(--dp-card)' }}>
             <div className="text-center">
-              <MessageCircle className="mx-auto mb-2 h-8 w-8 opacity-40" />
-              Select a conversation to reply
+              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl border" style={{ background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)' }}>
+                <MessageCircle className="h-6 w-6 opacity-50" />
+              </div>
+              <p className="font-semibold" style={{ color:'var(--dp-sub)' }}>Select a conversation</p>
+              <p className="mt-0.5 text-xs">Pick a chat on the left to read and reply.</p>
             </div>
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-between gap-2 border-b px-4 py-3" style={{ borderColor:'var(--dp-sep)' }}>
+            <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5" style={{ borderColor:'var(--dp-sep)', background:'var(--dp-hdr)', backdropFilter:'blur(24px)' }}>
               <div className="flex min-w-0 items-center gap-2">
-                <button onClick={() => setSelectedId(null)} className="flex-shrink-0 rounded-full p-1 transition hover:opacity-70 lg:hidden" style={{ color:'var(--dp-sub)' }}>
+                <button onClick={() => setSelectedId(null)} aria-label="Back to conversations"
+                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition active:scale-90 lg:hidden" style={{ color:'var(--dp-sub)' }}>
                   <ChevronLeft className="h-5 w-5" />
                 </button>
+                <Avatar name={selected.guest_name || 'Guest'} size={38}/>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate" style={{ color:'var(--dp-txt)' }}>{selected.guest_name || 'Guest'}</p>
-                  <p className="text-xs truncate" style={{ color:'var(--dp-muted)' }}>{selected.guest_email} · {selected.portal}</p>
+                  <p className="truncate text-sm font-bold" style={{ color:'var(--dp-txt)' }}>{selected.guest_name || 'Guest'}</p>
+                  <p className="truncate text-[11px]" style={{ color:'var(--dp-muted)' }}>{selected.guest_email} · {selected.portal}</p>
                 </div>
               </div>
               {call.canCall && (
                 <div className="flex flex-shrink-0 items-center gap-1">
-                  <button onClick={() => call.startCall(false, peerNameHintRef.current)} className="rounded-full p-1.5 transition hover:opacity-70" style={{ color:'var(--dp-sub)' }} title="Audio call">
-                    <Phone className="h-4 w-4" />
+                  <button onClick={() => call.startCall(false, peerNameHintRef.current)} className="flex h-9 w-9 items-center justify-center rounded-full transition active:scale-90 hover:opacity-70" style={{ color:'var(--dp-sub)' }} title="Audio call" aria-label="Audio call">
+                    <Phone className="h-[18px] w-[18px]" />
                   </button>
-                  <button onClick={() => call.startCall(true, peerNameHintRef.current)} className="rounded-full p-1.5 transition hover:opacity-70" style={{ color:'var(--dp-sub)' }} title="Video call">
-                    <Video className="h-4 w-4" />
+                  <button onClick={() => call.startCall(true, peerNameHintRef.current)} className="flex h-9 w-9 items-center justify-center rounded-full transition active:scale-90 hover:opacity-70" style={{ color:'var(--dp-sub)' }} title="Video call" aria-label="Video call">
+                    <Video className="h-[18px] w-[18px]" />
                   </button>
                 </div>
               )}
             </div>
             {showCallStage && <CallStage call={call} />}
             {!showCallStage && <CallDock call={call} />}
-            <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto px-4 py-3 lg:max-h-[48vh]">
-              {messages.map(m => {
+
+            <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4">
+              {messages.length === 0 && (
+                <p className="py-10 text-center text-xs" style={{ color:'var(--dp-muted)' }}>No messages yet — say hello 👋</p>
+              )}
+              {timeline.map(row => {
+                if (row.type === 'day') {
+                  return (
+                    <div key={row.key} className="my-3 flex justify-center">
+                      <span className="rounded-full border px-3 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                        style={{ background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)', color:'var(--dp-muted)' }}>{row.label}</span>
+                    </div>
+                  );
+                }
+                const { m, first } = row;
                 const fromDev = m.sender_role === 'dev';
                 return (
-                  <div key={m.id} className={`flex ${fromDev ? 'justify-end' : 'justify-start'}`}>
-                    <div className="max-w-[75%] rounded-2xl px-3 py-2 text-sm"
+                  <div key={row.key} className={`flex ${fromDev ? 'justify-end' : 'justify-start'} ${first ? 'mt-3' : 'mt-0.5'}`}>
+                    <div className={`max-w-[85%] sm:max-w-[70%] px-3 py-2 text-sm shadow-sm ${fromDev ? 'rounded-2xl rounded-br-md' : 'rounded-2xl rounded-bl-md border'}`}
                       style={fromDev
                         ? { background:'linear-gradient(135deg,#14b8a6,#0f766e)', color:'#fff' }
-                        : { background:'var(--dp-inner)', color:'var(--dp-txt)' }}>
-                      {!fromDev && (
-                        <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide" style={{ color:'var(--dp-muted)' }}>
+                        : { background:'var(--dp-card)', borderColor:'var(--dp-card-bd)', color:'var(--dp-txt)' }}>
+                      {!fromDev && first && (
+                        <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ color:'#14b8a6' }}>
                           {m.sender_name || selected.role}
                         </p>
                       )}
                       <p className="whitespace-pre-wrap break-words"><Linkify text={m.body} /></p>
+                      <p className="mt-0.5 text-right text-[10px] leading-none" style={{ color: fromDev ? 'rgba(255,255,255,0.7)' : 'var(--dp-muted)' }}>{fmtClock(m.created_at)}</p>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div className="flex items-center gap-2 border-t px-3 py-3" style={{ borderColor:'var(--dp-sep)' }}>
-              <input value={reply} onChange={e => setReply(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleReply(); }}
+
+            <div className="flex items-end gap-2 border-t px-3 pt-2.5" style={{ borderColor:'var(--dp-sep)', background:'var(--dp-hdr)', paddingBottom:'calc(0.625rem + env(safe-area-inset-bottom))' }}>
+              <textarea ref={inputRef} rows={1} value={reply} onChange={e => setReply(e.target.value)}
+                onKeyDown={onComposerKeyDown}
                 placeholder="Reply as IcanEra Team…"
-                className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none transition"
+                className="max-h-[120px] min-h-[40px] flex-1 resize-none rounded-2xl border px-3.5 py-2 text-base sm:text-sm leading-snug outline-none transition focus:border-teal-500/60"
                 style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }} />
-              <button onClick={handleReply} disabled={sending || !reply.trim()}
-                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-white transition disabled:opacity-40"
-                style={{ background:'linear-gradient(135deg,#14b8a6,#0f766e)' }}>
-                <Send size={14} />
+              <button onClick={handleReply} disabled={sending || !reply.trim()} aria-label="Send reply"
+                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white transition active:scale-90 disabled:opacity-40"
+                style={{ background:'linear-gradient(135deg,#14b8a6,#0f766e)', boxShadow: reply.trim() ? '0 4px 14px #14b8a655' : 'none' }}>
+                <Send size={16} />
               </button>
             </div>
           </>
@@ -871,6 +995,8 @@ export const PublicBoardTab = ({ token = DEV_TOKEN, allowGrants = true } = {}) =
   const [grantAmount,   setGrantAmount]   = useState('');
   const [grantingId,    setGrantingId]    = useState(null);
   const [grantError,    setGrantError]    = useState('');
+  const [filter,        setFilter]        = useState('all'); // all | public | private | needs_reply
+  const [query,         setQuery]         = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -953,19 +1079,54 @@ export const PublicBoardTab = ({ token = DEV_TOKEN, allowGrants = true } = {}) =
     }
   };
 
-  const topLevel = items.filter(m => !m.parent_id);
+  const allTopLevel = items.filter(m => !m.parent_id);
+  const hasDevReply = (m) => items.some(i => i.parent_id === m.id && i.sender_role === 'dev');
+  const needsReplyCount = allTopLevel.filter(m => m.is_public && !hasDevReply(m)).length;
+  const q = query.trim().toLowerCase();
+  const topLevel = allTopLevel.filter(m =>
+    (filter === 'all' ||
+      (filter === 'public' && m.is_public) ||
+      (filter === 'private' && !m.is_public) ||
+      (filter === 'needs_reply' && m.is_public && !hasDevReply(m))) &&
+    (!q || [m.name, m.email, m.message, m.origin_app].some(v => String(v || '').toLowerCase().includes(q)))
+  );
 
   return (
     <>
       <div className="flex items-center justify-between">
-        <p className="text-sm font-black" style={{ color:'var(--dp-txt)' }}>
-          Landing page messages <span style={{ color:'var(--dp-muted)' }}>({topLevel.length})</span>
-        </p>
-        <button onClick={refresh} disabled={loading}
-          className="rounded-lg p-1.5 border transition disabled:opacity-40"
+        <div>
+          <p className="text-base font-black" style={{ color:'var(--dp-txt)' }}>Public Board</p>
+          <p className="text-[11px]" style={{ color:'var(--dp-muted)' }}>Landing page messages · {allTopLevel.length} total</p>
+        </div>
+        <button onClick={refresh} disabled={loading} aria-label="Refresh messages"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border transition active:scale-95 disabled:opacity-40"
           style={{ background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)', color:'var(--dp-sub)' }}>
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''}/>
         </button>
+      </div>
+
+      <div className="relative">
+        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color:'var(--dp-muted)' }}/>
+        <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name, email or message…"
+          className="h-11 w-full rounded-xl border pl-10 pr-4 text-base sm:text-sm outline-none transition focus:border-teal-500/60"
+          style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}/>
+      </div>
+
+      <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 scrollbar-none sm:mx-0 sm:px-0">
+        {[
+          { id:'all',         label:'All' },
+          { id:'needs_reply', label:`Needs reply${needsReplyCount ? ` (${needsReplyCount})` : ''}` },
+          { id:'public',      label:'Public' },
+          { id:'private',     label:'Private' },
+        ].map(f => (
+          <button key={f.id} onClick={() => setFilter(f.id)}
+            className="flex-shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-xs font-bold transition active:scale-95"
+            style={filter === f.id
+              ? { background:'rgba(20,184,166,0.15)', borderColor:'rgba(20,184,166,0.45)', color:'#14b8a6' }
+              : { background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)', color:'var(--dp-sub)' }}>
+            {f.label}
+          </button>
+        ))}
       </div>
 
       {loading && [1,2,3].map(i => <Skel key={i} h="h-20"/>)}
@@ -976,6 +1137,7 @@ export const PublicBoardTab = ({ token = DEV_TOKEN, allowGrants = true } = {}) =
         return (
           <div key={m.id} className="rounded-2xl border p-4 transition-all" style={{ background:'var(--dp-card)', borderColor:'var(--dp-card-bd)' }}>
             <div className="flex items-start justify-between gap-3">
+              <Avatar name={m.name || 'Website visitor'} size={40}/>
               <button onClick={() => { setExpandedId(isExpanded ? null : m.id); setReplyDraft(''); }} className="min-w-0 flex-1 text-left">
                 <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
                   <p className="font-bold" style={{ color:'var(--dp-txt)' }}>{m.name || 'Website visitor'}</p>
@@ -997,8 +1159,8 @@ export const PublicBoardTab = ({ token = DEV_TOKEN, allowGrants = true } = {}) =
                 <p className="mt-1 whitespace-pre-wrap break-words text-sm" style={{ color:'var(--dp-sub)' }}>{m.message}</p>
               </button>
               <button onClick={() => handleDelete(m.id)} disabled={deletingId === m.id}
-                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-rose-500 transition hover:bg-rose-500/10 disabled:opacity-40"
-                title="Delete message">
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-rose-500 transition hover:bg-rose-500/10 active:scale-90 disabled:opacity-40"
+                title="Delete message" aria-label="Delete message">
                 <Trash2 size={14}/>
               </button>
             </div>
@@ -1089,10 +1251,10 @@ export const PublicBoardTab = ({ token = DEV_TOKEN, allowGrants = true } = {}) =
                     <input value={replyDraft} onChange={e => setReplyDraft(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') handleReply(m.id); }}
                       placeholder="Reply as IcanEra Team…"
-                      className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none transition"
+                      className="h-10 flex-1 rounded-xl border px-3 text-base sm:text-sm outline-none transition focus:border-teal-500/60"
                       style={{ background:'var(--dp-input)', borderColor:'var(--dp-input-bd)', color:'var(--dp-txt)' }}/>
-                    <button onClick={() => handleReply(m.id)} disabled={replying || !replyDraft.trim()}
-                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-white transition disabled:opacity-40"
+                    <button onClick={() => handleReply(m.id)} disabled={replying || !replyDraft.trim()} aria-label="Send reply"
+                      className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-white transition active:scale-90 disabled:opacity-40"
                       style={{ background:'linear-gradient(135deg,#06b6d4,#0284c7)' }}>
                       <Send size={14}/>
                     </button>
@@ -1103,7 +1265,12 @@ export const PublicBoardTab = ({ token = DEV_TOKEN, allowGrants = true } = {}) =
           </div>
         );
       })}
-      {!loading && topLevel.length === 0 && <EmptyState msg="No landing page messages yet." Icon={MessageCircle}/>}
+      {!loading && topLevel.length === 0 && (
+        <EmptyState
+          msg={allTopLevel.length === 0 ? 'No landing page messages yet' : 'No messages match'}
+          hint={allTopLevel.length === 0 ? 'Visitor questions from the landing page will show up here.' : 'Try another filter or clear the search.'}
+          Icon={MessageCircle}/>
+      )}
     </>
   );
 };
@@ -1281,6 +1448,9 @@ const RecoveryTab = () => {
 // clear warning" note next to allowed_tabs in the Support Team tab below.
 export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = null }) => {
   const shownTabs = visibleTabs ? TABS.filter(t => visibleTabs.includes(t.id)) : TABS;
+  // Support-link viewers get the app-style shell: compact header + bottom tab
+  // bar on phones, instead of the full dev-console chrome.
+  const supportMode = !!visibleTabs;
   const [tab, setTab]   = useState(shownTabs[0]?.id || 'overview');
   const [loading, setL] = useState(true);
   const [search,  setQ] = useState('');
@@ -1476,24 +1646,25 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
       {/* ══ HEADER ══ */}
       <header className="sticky top-0 z-40 border-b transition-colors"
         style={{ background:'var(--dp-hdr)', borderColor:'var(--dp-hdr-bd)', backdropFilter:'blur(24px)' }}>
-        <div className="flex items-center justify-between px-5 py-3 gap-4">
+        <div className="flex items-center justify-between px-4 sm:px-5 gap-3"
+          style={{ paddingTop: supportMode ? 'calc(env(safe-area-inset-top) + 0.625rem)' : '0.75rem', paddingBottom: supportMode ? '0.625rem' : '0.75rem' }}>
 
           {/* brand */}
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl"
+          <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
+            <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl"
               style={{ background:'linear-gradient(135deg,#06b6d4,#0284c7)', boxShadow:'0 0 20px #06b6d440' }}>
               <Shield size={18} className="text-white" />
               <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2"
                 style={{ background:'#10b981', borderColor: dark ? '#07091a' : '#fff', boxShadow:'0 0 6px #10b981' }} />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-[8px] font-bold uppercase tracking-[0.25em]" style={{ color:'var(--dp-muted)' }}>IcanEra Capital</p>
-              <p className="text-sm font-black leading-tight bg-gradient-to-r from-cyan-500 to-blue-500 bg-clip-text text-transparent">Dev Console</p>
+              <p className="text-sm font-black leading-tight bg-gradient-to-r from-cyan-500 to-blue-500 bg-clip-text text-transparent">{supportMode ? 'Support Console' : 'Dev Console'}</p>
             </div>
           </div>
 
           {/* ticker */}
-          {market && (
+          {market && !supportMode && (
             <div className="hidden sm:flex items-center gap-2 rounded-xl border px-3 py-2 flex-1 max-w-xs"
               style={{ borderColor:'rgba(6,182,212,0.2)', background:'rgba(6,182,212,0.06)' }}>
               <Zap size={11} className="text-cyan-500 flex-shrink-0" />
@@ -1509,15 +1680,17 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
           <div className="flex items-center gap-2 flex-shrink-0">
             {headerExtra}
             {ts && <span className="hidden sm:block text-[10px]" style={{ color:'var(--dp-muted)' }}>{ts.toLocaleTimeString()}</span>}
-            <button onClick={fetchAll} disabled={loading}
-              className="rounded-xl border p-2 transition disabled:opacity-40"
-              style={{ background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)', color:'var(--dp-sub)' }}>
-              <RefreshCw size={14} className={loading?'animate-spin':''} />
-            </button>
+            {!supportMode && (
+              <button onClick={fetchAll} disabled={loading}
+                className="rounded-xl border p-2 transition disabled:opacity-40"
+                style={{ background:'var(--dp-inner)', borderColor:'var(--dp-inner-bd)', color:'var(--dp-sub)' }}>
+                <RefreshCw size={14} className={loading?'animate-spin':''} />
+              </button>
+            )}
 
             {/* ── Theme toggle — always visible ── */}
-            <button onClick={toggleTheme}
-              className="flex items-center gap-1.5 rounded-xl border px-2.5 py-2 text-[11px] font-bold transition-all"
+            <button onClick={toggleTheme} aria-label="Toggle theme"
+              className="flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-bold transition-all active:scale-95"
               style={dark
                 ? { borderColor:'rgba(250,204,21,0.4)', background:'rgba(250,204,21,0.12)', color:'#fbbf24' }
                 : { borderColor:'rgba(99,102,241,0.4)',  background:'rgba(99,102,241,0.12)', color:'#6366f1' }}>
@@ -1525,16 +1698,16 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
               <span className="hidden sm:inline">{dark ? 'Light' : 'Dark'}</span>
             </button>
 
-            <button onClick={onExit}
-              className="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold text-red-500 transition"
+            <button onClick={onExit} aria-label="Exit"
+              className="flex h-9 items-center gap-1.5 rounded-xl border px-2.5 sm:px-3 text-xs font-bold text-red-500 transition active:scale-95"
               style={{ borderColor:'rgba(239,68,68,0.25)', background:'rgba(239,68,68,0.08)' }}>
-              <LogOut size={12}/> Exit
+              <LogOut size={13}/> <span className="hidden sm:inline">Exit</span>
             </button>
           </div>
         </div>
 
         {/* tabs */}
-        <div className="flex overflow-x-auto px-5 scrollbar-none">
+        <div className={`${supportMode ? 'hidden md:flex' : 'flex'} overflow-x-auto px-5 scrollbar-none`}>
           {shownTabs.map(t => (
             <button key={t.id} onClick={()=>{ setTab(t.id); setQ(''); }}
               className="relative flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 text-[11px] font-bold transition-all duration-200 border-b-2"
@@ -1550,7 +1723,7 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
         </div>
       </header>
 
-      <main className="px-5 py-5 space-y-4">
+      <main className={`px-4 sm:px-5 py-4 sm:py-5 space-y-4 ${supportMode ? 'pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-6' : ''}`}>
 
         {/* search */}
         {['users','companies','businesses','groups','agents'].includes(tab) && (
@@ -2669,6 +2842,31 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
         {tab==='recovery' && <RecoveryTab/>}
 
       </main>
+
+      {/* ══ MOBILE BOTTOM NAV (support links) — same pattern as the main app ══ */}
+      {supportMode && shownTabs.length > 1 && (
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t"
+          style={{ background:'var(--dp-hdr)', borderColor:'var(--dp-hdr-bd)', backdropFilter:'blur(24px)', paddingBottom:'env(safe-area-inset-bottom)' }}>
+          <div className="flex overflow-x-auto scrollbar-none">
+            {shownTabs.map(t => {
+              const active = tab === t.id;
+              return (
+                <button key={t.id} onClick={() => { setTab(t.id); setQ(''); window.scrollTo({ top: 0 }); }}
+                  aria-current={active ? 'page' : undefined}
+                  className="relative flex min-w-[72px] flex-1 flex-col items-center justify-center gap-0.5 py-2 transition active:scale-95"
+                  style={{ color: active ? t.color : 'var(--dp-muted)' }}>
+                  {active && <span className="absolute inset-x-5 top-0 h-0.5 rounded-b-full" style={{ background:t.color }}/>}
+                  <span className="flex h-7 w-11 items-center justify-center rounded-full transition"
+                    style={{ background: active ? `${t.color}1f` : 'transparent' }}>
+                    <t.Icon size={18}/>
+                  </span>
+                  <span className="text-[10px] font-bold leading-none">{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
     </div>
   );
 };
