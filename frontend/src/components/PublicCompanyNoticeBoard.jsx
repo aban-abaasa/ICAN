@@ -14,7 +14,8 @@ import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunit
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
 import useGuestCheckout from '../hooks/useGuestCheckout';
 import PayAnyAmountForm from './PayAnyAmountForm';
-import { getPayCodeInfoForBusiness } from '../services/publicTransactionService';
+import ReceiveRequestForm from './ReceiveRequestForm';
+import { getPayCodeInfoForBusiness, getReceiveInfoForBusiness } from '../services/publicTransactionService';
 import { getPitchesByBusinessProfileId, getPitchById, getBusinessProfileIdByName, PITCH_PLAN_SECTIONS } from '../services/pitchingService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useAuth } from '../context/AuthContext';
@@ -635,14 +636,20 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // The business's standing "pay any amount" QR (ADD_PUBLIC_TRANSACTION_QR.sql). When it has one switched on,
   // this site grows a Pay tab, and the printed QR opens straight onto it (?pay=1).
   const [payInfo, setPayInfo] = useState(null);
+  // Whether clients may also REQUEST money from this business (owner switched it on): the Pay tab then
+  // has a "Receive" side (ADD_BUSINESS_RECEIVE_REQUESTS.sql).
+  const [receiveInfo, setReceiveInfo] = useState(null);
   useEffect(() => {
-    if (!company?.business_profile_id) { setPayInfo(null); return undefined; }
+    if (!company?.business_profile_id) { setPayInfo(null); setReceiveInfo(null); return undefined; }
     let cancelled = false;
     getPayCodeInfoForBusiness(company.business_profile_id).then((info) => {
       if (cancelled) return;
       const live = info?.found && info.active ? info : null;
       setPayInfo(live);
       if (live && new URLSearchParams(window.location.search).get('pay')) setSection('pay');
+    });
+    getReceiveInfoForBusiness(company.business_profile_id).then((info) => {
+      if (!cancelled) setReceiveInfo(info?.found ? info : null);
     });
     return () => { cancelled = true; };
   }, [company?.business_profile_id]);
@@ -1092,7 +1099,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             />
           )}
           {section === 'pay' && payInfo && (
-            <PaySection company={company} info={payInfo} />
+            <PaySection company={company} info={payInfo} receiveInfo={receiveInfo} />
           )}
           {section === 'pitchin' && (
             <PitchinSection pitches={pitches} loading={pitchesLoading} liveOffer={liveOffer} onSelect={setSelectedPitch} />
@@ -1145,22 +1152,45 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 // "Pay any amount": the customer types what they are paying for and the price (or lists several items), then
 // chooses cash / IcanEra wallet / Mobile Money / card / bank on the receipt page and keeps the receipt. The
 // printed standing QR opens this tab (?pay=1). The form itself is shared with the standalone /p/<code> page.
-const PaySection = ({ company, info }) => (
-  <div className="max-w-xl mx-auto">
-    <div className="nb-card rounded-2xl p-5 sm:p-7">
-      <div className="text-center mb-5">
-        <div className="w-12 h-12 rounded-full nb-chip-green flex items-center justify-center mx-auto mb-3">
-          <Banknote className="w-6 h-6" />
+//
+// When the owner has also switched on "Let clients request money from us", a Pay | Receive switch appears:
+// Receive files a request that an owner approves with the business-wallet PIN before anything is paid.
+const PaySection = ({ company, info, receiveInfo }) => {
+  const [side, setSide] = useState('pay'); // 'pay' | 'receive'
+  const receiving = side === 'receive' && receiveInfo;
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="nb-card rounded-2xl p-5 sm:p-7">
+        {receiveInfo && (
+          <div role="tablist" aria-label="Pay or receive" className="grid grid-cols-2 gap-2 mb-5">
+            {[['pay', 'Pay'], ['receive', 'Receive']].map(([id, label]) => (
+              <button
+                key={id} type="button" role="tab" aria-selected={side === id} onClick={() => setSide(id)}
+                className={`min-h-[44px] rounded-xl text-sm font-bold border transition ${side === id ? 'nb-btn-primary' : 'nb-surface-alt nb-border nb-text-muted'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 rounded-full nb-chip-green flex items-center justify-center mx-auto mb-3">
+            <Banknote className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold nb-text">{receiving ? `Receive from ${company.company_name}` : `Pay ${company.company_name}`}</h2>
+          <p className="text-sm nb-text-muted mt-1.5 leading-relaxed">
+            {receiving
+              ? 'Owed money, a refund or a payout? Send a request. The owner approves it, then it is paid into your IcanEra wallet.'
+              : 'Type what you are paying for and the price — or list several items. Pay with cash, your IcanEra wallet, Mobile Money, card or bank, and keep your receipt. No account needed.'}
+          </p>
         </div>
-        <h2 className="text-xl sm:text-2xl font-bold nb-text">Pay {company.company_name}</h2>
-        <p className="text-sm nb-text-muted mt-1.5 leading-relaxed">
-          Type what you are paying for and the price — or list several items. Pay with cash, your IcanEra wallet, Mobile Money, card or bank, and keep your receipt. No account needed.
-        </p>
+        {receiving
+          ? <ReceiveRequestForm businessProfileId={company.business_profile_id} businessName={company.company_name} info={receiveInfo} />
+          : <PayAnyAmountForm code={info.code} info={info} skin="nb" />}
       </div>
-      <PayAnyAmountForm code={info.code} info={info} skin="nb" />
     </div>
-  </div>
-);
+  );
+};
 
 // The brand name is "IcanEra" (capital I/E, lowercase elsewhere) everywhere
 // else in the app -- LandingPage.jsx, MainNavigation's logo alt text, etc.

@@ -3,8 +3,12 @@ import { Bell, CheckCircle2, LockKeyhole, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import { enableWalletPhoneAlerts, disableWalletPhoneAlerts, getWalletPhoneAlertsStatus } from '../services/walletPushService';
 import { approveBusinessWalletTransaction } from '../services/icanWalletService';
-import { getPaymentRequest } from '../services/publicTransactionService';
+import { getPaymentRequest, getReceiveRequest } from '../services/publicTransactionService';
 import QrApprovalCard from './QrApprovalCard';
+import ReceiveApprovalCard from './ReceiveApprovalCard';
+
+// Both need an owner's decision from the notification: a customer's QR payment, or a client's request for money.
+const isQrApproval = (type) => type === 'qr_payment_approval' || type === 'qr_receive_approval';
 
 // Shared inbox: records are produced in the database for every connected app.
 export default function ICANWalletInbox() {
@@ -55,7 +59,7 @@ export default function ICANWalletInbox() {
   // Opening the bell with a payment waiting: show its approval card straight away, no extra tap.
   useEffect(() => {
     if (!open || qrApproval) return;
-    const waiting = items.find((item) => item.notification_type === 'qr_payment_approval' && !item.read_at && item.metadata?.qr_request_id);
+    const waiting = items.find((item) => isQrApproval(item.notification_type) && !item.read_at && (item.metadata?.qr_request_id || item.metadata?.receive_request_id));
     if (waiting) selectItem(waiting);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, items]);
@@ -70,6 +74,18 @@ export default function ICANWalletInbox() {
     await supabase.rpc('ican_clear_wallet_inbox', { p_read_only: false });
   };
   const selectItem = async (item) => {
+    if (item.notification_type === 'qr_receive_approval' && item.metadata?.receive_request_id) {
+      setApprovalItem(null);
+      setQrApproval({ item, loading: true, receive: true });
+      try {
+        const request = await getReceiveRequest(item.metadata.receive_request_id);
+        setQrApproval({ item, request, receive: true });
+        if (request.status !== 'pending') await read(item.id);
+      } catch (error) {
+        setQrApproval({ item, receive: true, error: error?.message || 'Could not open this request.' });
+      }
+      return;
+    }
     if (item.notification_type === 'qr_payment_approval' && item.metadata?.qr_request_id) {
       setApprovalItem(null);
       setQrApproval({ item, loading: true });
@@ -114,14 +130,17 @@ export default function ICANWalletInbox() {
       </div>
       <button onClick={togglePhoneAlerts} className={`mb-3 rounded px-3 py-1.5 text-xs font-semibold text-white ${phoneAlertsEnabled ? 'bg-slate-700 hover:bg-slate-600' : 'bg-sky-600 hover:bg-sky-500'}`}>{phoneAlertsEnabled ? 'Disable phone alerts' : 'Enable phone alerts'}</button>
       {pushMessage && <p className="mb-2 text-xs text-sky-200">{pushMessage}</p>}
-      {items.length === 0 ? <p className="text-sm text-gray-400">No wallet notifications yet.</p> : <div className="max-h-96 space-y-2 overflow-auto">{items.slice(0, 30).map((item) => <div key={item.id} onClick={() => selectItem(item)} className={`group relative w-full cursor-pointer rounded-lg p-3 pr-8 text-left ${item.read_at ? 'bg-white/5' : 'bg-sky-500/15 border border-sky-300/30'}`}><button onClick={(event) => remove(item.id, event)} title="Delete" className="absolute right-2 top-2 rounded p-1 text-gray-500 opacity-0 hover:bg-white/10 hover:text-red-300 group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button><div className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 text-sky-300" /><div><p className="text-sm font-semibold text-white">{item.title}</p><p className="text-xs text-gray-300">{item.message}</p>{item.amount_ican != null && <p className="mt-1 text-xs text-emerald-300">{Number(item.amount_ican).toLocaleString()} IcanEra · {item.source_app}</p>}{item.notification_type === 'wallet_approval_required' && <p className="mt-1 text-xs font-semibold text-amber-300">Click to review and approve with PIN</p>}{item.notification_type === 'qr_payment_approval' && qrApproval?.item?.id !== item.id && <button type="button" onClick={(event) => { event.stopPropagation(); selectItem(item); }} className="mt-2 rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-bold text-slate-900 hover:bg-amber-300">Review &amp; approve</button>}</div></div>
-        {item.notification_type === 'qr_payment_approval' && qrApproval?.item?.id === item.id && <div className="mt-3" onClick={(event) => event.stopPropagation()}>
+      {items.length === 0 ? <p className="text-sm text-gray-400">No wallet notifications yet.</p> : <div className="max-h-96 space-y-2 overflow-auto">{items.slice(0, 30).map((item) => <div key={item.id} onClick={() => selectItem(item)} className={`group relative w-full cursor-pointer rounded-lg p-3 pr-8 text-left ${item.read_at ? 'bg-white/5' : 'bg-sky-500/15 border border-sky-300/30'}`}><button onClick={(event) => remove(item.id, event)} title="Delete" className="absolute right-2 top-2 rounded p-1 text-gray-500 opacity-0 hover:bg-white/10 hover:text-red-300 group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button><div className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 text-sky-300" /><div><p className="text-sm font-semibold text-white">{item.title}</p><p className="text-xs text-gray-300">{item.message}</p>{item.amount_ican != null && <p className="mt-1 text-xs text-emerald-300">{Number(item.amount_ican).toLocaleString()} IcanEra · {item.source_app}</p>}{item.notification_type === 'wallet_approval_required' && <p className="mt-1 text-xs font-semibold text-amber-300">Click to review and approve with PIN</p>}{isQrApproval(item.notification_type) && qrApproval?.item?.id !== item.id && <button type="button" onClick={(event) => { event.stopPropagation(); selectItem(item); }} className="mt-2 rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-bold text-slate-900 hover:bg-amber-300">Review &amp; approve</button>}</div></div>
+        {isQrApproval(item.notification_type) && qrApproval?.item?.id === item.id && <div className="mt-3" onClick={(event) => event.stopPropagation()}>
           {qrApproval.loading && <p className="text-xs text-sky-200">Opening payment…</p>}
           {qrApproval.error && <p className="text-xs text-red-300">{qrApproval.error}</p>}
-          {qrApproval.request && qrApproval.request.status !== 'pending_approval' && (
-            <p className="rounded-lg bg-white/10 p-3 text-xs text-sky-100">This payment was already handled — it is now <b>{qrApproval.request.status.replace('_', ' ')}</b>.</p>
+          {qrApproval.request && qrApproval.request.status !== (qrApproval.receive ? 'pending' : 'pending_approval') && (
+            <p className="rounded-lg bg-white/10 p-3 text-xs text-sky-100">This {qrApproval.receive ? 'request' : 'payment'} was already handled — it is now <b>{qrApproval.request.status.replace('_', ' ')}</b>.</p>
           )}
-          {qrApproval.request && qrApproval.request.status === 'pending_approval' && (
+          {qrApproval.request && qrApproval.receive && qrApproval.request.status === 'pending' && (
+            <ReceiveApprovalCard request={qrApproval.request} onDecided={async () => { await read(qrApproval.item.id); setQrApproval(null); }} />
+          )}
+          {qrApproval.request && !qrApproval.receive && qrApproval.request.status === 'pending_approval' && (
             <QrApprovalCard request={qrApproval.request} onDecided={async () => { await read(qrApproval.item.id); setQrApproval(null); }} />
           )}
           <button type="button" onClick={() => setQrApproval(null)} className="mt-2 text-xs text-slate-300 underline">Close</button>
