@@ -31,6 +31,7 @@ import {
   storeConversationId,
   createConversation,
   fetchConversation,
+  fetchLatestSupportConversation,
   fetchMessages,
   sendMessage,
   markConversationRead,
@@ -432,11 +433,22 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     setSupportUnread(false);
     if (!scopeKey) return;
     const storedId = getStoredConversationId(scopeKey);
-    if (!storedId) return;
+    const accountId = identity && !identity.isGuest ? identity.userId : null;
+    if (!storedId && !accountId) return;
 
     let cancelled = false;
     (async () => {
-      const conv = await fetchConversation(storedId);
+      let conv = storedId ? await fetchConversation(storedId) : null;
+      if (accountId) {
+        // A thread the team started for this account (a franchise code, say) or one opened on another
+        // device has no id remembered here: pick it up. Switch to it only when it holds something
+        // new for them, so a quiet older thread never replaces the one they are using.
+        const latest = await fetchLatestSupportConversation(accountId).catch(() => null);
+        if (latest && (!conv || (latest.id !== conv.id && latest.unread_by_user))) {
+          conv = latest;
+          storeConversationId(scopeKey, latest.id);
+        }
+      }
       if (!conv || cancelled) return;
       setSupportConvId(conv.id);
       setSupportUnread(!!conv.unread_by_user);
