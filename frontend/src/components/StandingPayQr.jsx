@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Check, ChevronDown, ChevronUp, Copy, Loader, Printer, QrCode } from 'lucide-react';
-import { buildPayCodeLink, getMyPayCode, updateMyPayCode } from '../services/publicTransactionService';
+import { buildPayCodeLink, getMyPayCode, getReceiveSettings, updateMyPayCode, updateReceiveSettings } from '../services/publicTransactionService';
 
 /**
  * The business's PERMANENT pay QR: print it once and stick it on the counter. Any customer scans it, types
@@ -22,6 +22,9 @@ export default function StandingPayQr({ businessProfileId, businessName, needsBu
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [max, setMax] = useState('');
+  // "Let clients request money from us" (business only): { enabled, max_ugx, can_change }
+  const [recv, setRecv] = useState(null);
+  const [recvMax, setRecvMax] = useState('');
   const loadedFor = useRef(null);
 
   useEffect(() => {
@@ -32,8 +35,17 @@ export default function StandingPayQr({ businessProfileId, businessName, needsBu
     setLoading(true);
     setError('');
     setPaycode(null);
+    setRecv(null);
     getMyPayCode(businessProfileId || null)
-      .then((pc) => { setPaycode(pc); setMax(String(Math.round(Number(pc.max_amount_ugx)))); })
+      .then((pc) => {
+        setPaycode(pc);
+        setMax(String(Math.round(Number(pc.max_amount_ugx))));
+        if (businessProfileId) {
+          getReceiveSettings(businessProfileId)
+            .then((r) => { setRecv(r); setRecvMax(String(Math.round(Number(r.max_ugx)))); })
+            .catch(() => setRecv(null)); // receive SQL not installed yet: no switch
+        }
+      })
       .catch((err) => { setError(err.message || 'Could not load your pay QR.'); loadedFor.current = null; })
       .finally(() => setLoading(false));
   }, [open, businessProfileId, needsBusiness]);
@@ -47,6 +59,20 @@ export default function StandingPayQr({ businessProfileId, businessName, needsBu
       const next = await updateMyPayCode(paycode.id, patch);
       setPaycode(next);
       setMax(String(Math.round(Number(next.max_amount_ugx))));
+    } catch (err) {
+      setError(err.message || 'Could not save.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveReceive = async (patch) => {
+    setError('');
+    setSaving(true);
+    try {
+      const next = await updateReceiveSettings(businessProfileId, patch);
+      setRecv(next);
+      setRecvMax(String(Math.round(Number(next.max_ugx))));
     } catch (err) {
       setError(err.message || 'Could not save.');
     } finally {
@@ -156,6 +182,34 @@ export default function StandingPayQr({ businessProfileId, businessName, needsBu
                 />
               </div>
               <p className="text-[11px] text-gray-500">Currently up to {money(paycode.max_amount_ugx)} per payment.</p>
+
+              {recv && (
+                <div className="space-y-2 rounded-lg bg-white px-3 py-2 text-xs text-gray-700">
+                  <label className="flex min-h-[44px] cursor-pointer items-start gap-2">
+                    <input type="checkbox" checked={recv.enabled} disabled={saving || !recv.can_change}
+                      onChange={(e) => saveReceive({ enabled: e.target.checked })} className="mt-0.5 h-4 w-4 accent-indigo-700" />
+                    <span>
+                      <b className="text-gray-900">Let clients request money from this business</b>
+                      <span className="block text-gray-500">
+                        Adds a “Receive” side to your website&rsquo;s Pay tab. Nothing is paid until an owner or co-owner approves each request with the business-wallet PIN.
+                        {!recv.can_change && ' Only an owner or co-owner can change this.'}
+                      </span>
+                    </span>
+                  </label>
+                  {recv.enabled && (
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1">Biggest request</span>
+                      <input
+                        type="text" inputMode="numeric" value={recvMax ? Number(recvMax).toLocaleString('en-UG') : ''} disabled={!recv.can_change}
+                        onChange={(e) => setRecvMax(e.target.value.replace(/[^0-9]/g, ''))}
+                        onBlur={() => { if (recvMax && Number(recvMax) !== Math.round(Number(recv.max_ugx))) saveReceive({ maxUgx: Number(recvMax) }); }}
+                        className="w-32 rounded-md border border-gray-300 px-2 py-2 text-right text-base text-gray-900 focus:border-indigo-500 focus:outline-none"
+                        aria-label="Biggest request in UGX"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               <button type="button" disabled={saving} onClick={() => save({ active: !paycode.active })}
                 className={`min-h-[44px] w-full rounded-xl text-sm font-bold ${paycode.active ? 'border border-red-300 bg-white text-red-700' : 'bg-green-600 text-white'} disabled:opacity-60`}>

@@ -162,6 +162,59 @@ export async function setTransactionPublicReceive(transactionId, enable) {
   return data;
 }
 
+// ── Receive from a business: a client asks on the business website, an owner approves ──
+// (backend/ADD_BUSINESS_RECEIVE_REQUESTS.sql). Nothing is paid until an owner / co-owner approves with the
+// business-wallet PIN; then the amount goes from the business wallet to the client's IcanEra wallet.
+
+/** Website side: does this business take requests? { found, max_ugx, min_ugx, issuer_name } */
+export async function getReceiveInfoForBusiness(businessProfileId) {
+  if (!businessProfileId) return { found: false };
+  const { data, error } = await supabase.rpc('public_receive_info_by_business', { p_business: businessProfileId });
+  if (error) return { found: false }; // SQL not installed yet -> no Receive side
+  return data || { found: false };
+}
+
+/** Client (signed in): ask the business for money. Resolves the new request. */
+export async function submitReceiveRequest({ businessProfileId, amount, note, name = null, phone = null }) {
+  const { data, error } = await supabase.rpc('public_receive_submit', {
+    p_business: businessProfileId, p_amount: amount, p_note: note, p_name: name, p_phone: phone,
+  });
+  if (error) throw new Error(error.message || 'Could not send your request');
+  if (!data?.success) throw new Error(data?.error || 'Could not send your request');
+  return data.request;
+}
+
+/** The requester (or an owner / co-owner) reads one request: status pending | paid | declined | expired. */
+export async function getReceiveRequest(id) {
+  const { data, error } = await supabase.rpc('public_receive_get', { p_id: id });
+  if (error) throw new Error(error.message || 'Could not load this request');
+  if (!data?.success) throw new Error(data?.error || 'Could not load this request');
+  return data.request;
+}
+
+/** Owner / co-owner: approve (with the business-wallet PIN) or reject. Resolves the updated request. */
+export async function decideReceiveRequest(id, approve, { pin = null, note = null } = {}) {
+  const { data, error } = await supabase.rpc('public_receive_decide', { p_id: id, p_approve: !!approve, p_pin: pin, p_note: note });
+  if (error) throw new Error(error.message || 'Could not record your decision');
+  if (!data?.success) throw new Error(data?.message || 'Could not record your decision');
+  return data.request;
+}
+
+/** Business team: current setting; an owner / co-owner can change it (enabled, biggest request in UGX). */
+export async function getReceiveSettings(businessProfileId) {
+  const { data, error } = await supabase.rpc('public_receive_settings', { p_business: businessProfileId });
+  if (error) throw new Error(error.message || 'Could not load the setting');
+  if (!data?.success) throw new Error(data?.error || 'Could not load the setting');
+  return data;
+}
+
+export async function updateReceiveSettings(businessProfileId, { enabled = null, maxUgx = null } = {}) {
+  const { data, error } = await supabase.rpc('public_receive_settings', { p_business: businessProfileId, p_enabled: enabled, p_max: maxUgx });
+  if (error) throw new Error(error.message || 'Could not save');
+  if (!data?.success) throw new Error(data?.error || 'Could not save');
+  return data;
+}
+
 // ── Owner side (signed in) ──────────────────────────────────────────────────
 
 /** The public code + payment state of one of the owner's ledger entries. */
