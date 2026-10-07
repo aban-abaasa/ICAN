@@ -95,6 +95,25 @@ export async function findDeliveryRiders(storeLat, storeLng, deliveryLat, delive
   return { data: data || [], error };
 }
 
+// Riders for a dropship order, the store's OWN nearby riders first and then
+// any other available rider nearest-first (dropship_find_delivery_riders in
+// ADD_GUEST_CHECKOUT_MOBILE_MONEY.sql — it looks up the pickup store itself
+// from the first cart item). Falls back to the plain nearest-first list if
+// that SQL hasn't been run yet.
+export async function findStoreFirstRiders(resellerBusinessProfileId, productId, storeLat, storeLng, deliveryLat, deliveryLng, { limit = 8, vehicleTypes } = {}) {
+  if (deliveryLat == null || deliveryLng == null) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('dropship_find_delivery_riders', {
+    p_reseller_business_profile_id: resellerBusinessProfileId,
+    p_product_id: productId || null,
+    p_dropoff_lat: deliveryLat,
+    p_dropoff_lng: deliveryLng,
+    p_vehicle_types: vehicleTypes && vehicleTypes.length ? vehicleTypes : null,
+    p_limit: limit,
+  });
+  if (error) return findDeliveryRiders(storeLat, storeLng, deliveryLat, deliveryLng, { limit, vehicleTypes });
+  return { data: data || [], error: null };
+}
+
 // A reseller's own settlement history (their margin on every dropship sale).
 export async function getResellerDropshipSales(resellerBusinessProfileId) {
   const { data, error } = await supabase.rpc('get_reseller_dropship_sales', {
