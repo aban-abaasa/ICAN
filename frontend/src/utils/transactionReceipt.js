@@ -64,6 +64,13 @@ export const getReceiptLines = (tx, { businessName = null, currency = 'UGX' } = 
   if (meta.product_name) lines.push(['Item', meta.product_name]);
   if (meta.quantity) lines.push(['Quantity', String(meta.quantity)]);
   if (meta.unit_price) lines.push(['Unit price', `${Number(meta.unit_price).toLocaleString()} ${currency}`]);
+  // A sale a customer listed themselves on the business's standing pay QR: one line per item.
+  if (Array.isArray(meta.items)) {
+    meta.items.slice(0, 20).forEach((it) => {
+      const qty = Number(it?.qty) || 1;
+      lines.push([`Item${qty > 1 ? ` × ${qty}` : ''}`, `${it?.name || 'Item'} — ${(Number(it?.price || 0) * qty).toLocaleString()} ${currency}`]);
+    });
+  }
   if (meta.payment_method) lines.push(['Method', titleCase(meta.payment_method)]);
   if (meta.payer_name) lines.push(['Paid by', meta.payer_name]);
   if (meta.recipient_name || meta.recipient) lines.push(['Received by', meta.recipient_name || meta.recipient]);

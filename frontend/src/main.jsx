@@ -67,6 +67,14 @@ const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
 // stock Tailwind color class -- a hardcoded background this standalone,
 // bring-your-own-palette page must never inherit.
 const cmmsNoticeBoardMatch = window.location.pathname.match(/^\/notices\/([^/]+)/);
+// The QR printed on any recorded transaction's receipt (/r/<code>, see
+// ADD_PUBLIC_TRANSACTION_QR.sql): the receipt for anyone, no account, plus payment when the
+// owner switched it on. Same reasoning as the notice board -- AuthProvider (a visitor may sign
+// in in place to pay from their wallet) but never the app's ThemeProvider.
+const publicReceiptMatch = window.location.pathname.match(/^\/r\/([a-z0-9]{16,40})\/?$/);
+// A business's STANDING pay QR (/p/<code>): printed once, the customer types any amount / lists items and
+// pays. Standalone like the receipt page, but needs no providers at all (the bill it makes opens /r/<code>).
+const publicPayCodeMatch = window.location.pathname.match(/^\/p\/([a-z0-9]{16,40})\/?$/);
 // A candidate's written-test / live-interview link (see
 // CMMS_WRITTEN_TESTS.sql, CMMS_INTERVIEW_SCHEDULES.sql) -- like the notice
 // board, these need AuthProvider (a candidate must sign in/sign up with a
@@ -161,6 +169,8 @@ const PrivatePitchInviteViewer = lazyWithReloadOnChunkFailure(() => import('./co
 const PublicPortfolioPage = lazyWithReloadOnChunkFailure(() => import('./components/profile/PublicPortfolioPage'));
 const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./components/PublicDropshipStorefront'));
 const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
+const PublicTransactionPage = lazyWithReloadOnChunkFailure(() => import('./components/PublicTransactionPage'));
+const PublicPayCodePage = lazyWithReloadOnChunkFailure(() => import('./components/PublicPayCodePage'));
 const PublicReportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportViewer'));
 const PublicReportExportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportExportViewer'));
 const PublicConsultationFormViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicConsultationFormViewer'));
@@ -214,9 +224,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           : reportShareMatch ? <PublicReportViewer shareToken={reportShareMatch[1]} />
           : reportExportShareMatch ? <PublicReportExportViewer shareToken={reportExportShareMatch[1]} />
           : consultationFormShareMatch ? <PublicConsultationFormViewer shareToken={consultationFormShareMatch[1]} />
+          : publicPayCodeMatch ? <PublicPayCodePage code={publicPayCodeMatch[1]} />
           : cmmsNoticeBoardMatch ? (
             <AuthProvider>
               <PublicCompanyNoticeBoard companyId={cmmsNoticeBoardMatch[1]} />
+            </AuthProvider>
+          ) : publicReceiptMatch ? (
+            <AuthProvider>
+              <PublicTransactionPage code={publicReceiptMatch[1]} />
             </AuthProvider>
           ) : isCandidateTestPath ? (
             <AuthProvider>

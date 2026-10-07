@@ -9975,6 +9975,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           setPreselectedBusinessProfileId(null);
           setVoicePrefill('');
         }}
+        // A QR bill was paid (cash confirmed, wallet, Mobile Money, card or bank): the server has just
+        // written the real income entry, so refresh the list and the report numbers right away.
+        onQrPaid={async () => {
+          try {
+            const qrUserId = authContextUser?.id || user?.id || userProfile?.id;
+            const engine = new VelocityEngine(qrUserId);
+            const loadResult = await engine.loadAllTransactions();
+            if (loadResult.success) {
+              setTransactions(loadResult.data || []);
+              setVelocityMetrics(engine.calculateMetrics());
+            }
+          } catch (error) {
+            console.warn('Could not refresh after a QR payment:', error);
+          }
+        }}
         onSubmit={async (transaction) => {
           const result = await persistTransaction(transaction, { source: 'smart_entry' });
           if (!result.success && result.error) alert(result.error.message || 'Failed to save transaction. Please try again.');
