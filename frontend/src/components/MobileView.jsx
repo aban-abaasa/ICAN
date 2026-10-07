@@ -5988,6 +5988,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     onLogout={() => {
                       setSelectedDetail(null);
                     }}
+                    onOpenResume={() => openDetailView('resume', 'My Resume')}
                     section={['security', 'settings'].includes(selectedDetail.initialTab) ? selectedDetail.initialTab : 'profile'}
                     onSectionChange={(next) => setSelectedDetail((prev) => (prev ? { ...prev, initialTab: next } : prev))}
                     extraSections={{
@@ -6121,7 +6122,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* READINESS - GLOBAL NAVIGATOR */}
               {selectedDetail.tab === 'readiness' && selectedDetail.item === 'Readiness' && (
-                <ReadinessPanel />
+                <ReadinessPanel onOpenResume={() => openDetailView('resume', 'My Resume')} />
               )}
 
               {/* GROWTH - PROSPERITY ARCHITECT */}

@@ -380,6 +380,11 @@ verify_jwt = false
 [functions.flutterwave-banks]
 verify_jwt = false
 
+# Public guest checkout (no wallet, no session): trusts nothing in the request,
+# verifies the payment with Flutterwave itself.
+[functions.guest-checkout-pay]
+verify_jwt = false
+
 # Called by Flutterwave (no Supabase JWT); checks its own verif-hash header.
 [functions.flutterwave-transfer-webhook]
 verify_jwt = false

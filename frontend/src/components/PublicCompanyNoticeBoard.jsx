@@ -11,7 +11,8 @@ import {
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
-import { getDropshipStorefront, dropshipCheckout, findDeliveryRiders } from '../services/dropshipService';
+import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
+import useGuestCheckout from '../hooks/useGuestCheckout';
 import { getPitchesByBusinessProfileId, getPitchById, getBusinessProfileIdByName, PITCH_PLAN_SECTIONS } from '../services/pitchingService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useAuth } from '../context/AuthContext';
@@ -1814,12 +1815,12 @@ const VEHICLE_TYPE_OPTIONS = [
   { value: 'van', label: '🚐 Van' },
 ];
 
-// Browsing is free for anyone; paying is a real IcanEra wallet transfer, so
-// it needs an account. An anonymous visitor who hits "Pay" gets the signup
-// form right here (no navigating away, cart stays intact) -- once they have
-// an account, the exact same button pays instantly, same as anywhere else
-// in IcanEra. This is the whole "click a product -> get an IcanEra wallet,
-// or transact seamlessly if you already have one" flow.
+// Browsing is free for anyone. Paying with an IcanEra wallet is the
+// recommended way (no extra fee): an anonymous visitor who picks it gets the
+// signup form right here (no navigating away, cart stays intact) and the same
+// button then pays instantly. A visitor who doesn't want a wallet can instead
+// pay with Mobile Money, card or bank -- that adds a small payment-processing
+// fee and is handled by useGuestCheckout / guestCheckoutService.
 const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user, authLoading }) => {
   const [showCart, setShowCart] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -1844,8 +1845,13 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
   const [selectedRiderId, setSelectedRiderId] = useState(null); // null = auto-assign nearest
   const [vehicleType, setVehicleType] = useState(null); // null = any bike/car/van
 
-  const storeLat = products[0]?.store_lat;
-  const storeLng = products[0]?.store_lng;
+  // The store this order is picked up from: the first item in the cart (an
+  // order is single-store), or the first listing before anything is added.
+  const pickupListing = products.find((p) => (cart[p.listing_id] || 0) > 0) || products[0];
+  const storeLat = pickupListing?.store_lat;
+  const storeLng = pickupListing?.store_lng;
+  const pickupProductId = pickupListing?.product_id;
+  const storeHasNoLocation = !!pickupListing && (storeLat == null || storeLng == null);
 
   // Once we know both the store's pickup point and where the customer wants
   // it delivered, look up real nearby riders/drivers -- same
@@ -1862,7 +1868,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
     }
     setRidersLoading(true);
     setSelectedRiderId(null);
-    findDeliveryRiders(storeLat, storeLng, deliveryCoords.lat, deliveryCoords.lng, {
+    findStoreFirstRiders(businessProfileId, pickupProductId, storeLat, storeLng, deliveryCoords.lat, deliveryCoords.lng, {
       vehicleTypes: vehicleType ? [vehicleType] : null,
     }).then(({ data }) => {
       if (cancelled) return;
@@ -1870,7 +1876,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
       setRidersLoading(false);
     });
     return () => { cancelled = true; };
-  }, [user, storeLat, storeLng, deliveryCoords, vehicleType]);
+  }, [user, businessProfileId, pickupProductId, storeLat, storeLng, deliveryCoords, vehicleType]);
 
   const shareLocation = () => {
     if (!navigator.geolocation) {
@@ -1915,6 +1921,25 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
   const deliveryFeeAmount = estimatedFare == null ? null : Math.max(estimatedFare - Math.min(subsidyCap, estimatedFare), 0);
   const orderTotal = cartTotal + (deliveryFeeAmount || 0);
 
+  // Pay without a wallet (Mobile Money / card / bank) for signed-out visitors.
+  const guest = useGuestCheckout({
+    enabled: !authLoading,
+    businessProfileId,
+    cartItems,
+    customerName,
+    customerPhone,
+    deliveryAddress,
+    deliveryCoords,
+    maxDeliveryHours,
+    vehicleType,
+    storeName: products[0]?.reseller_name || 'Store',
+    onPaid: (data) => { setReceipt({ ...data, paid_via: 'guest' }); setCart({}); },
+  });
+  // For a signed-out visitor the server's quote is the source of truth (it
+  // prices the rider who will actually be booked); otherwise the preview above.
+  const shownDeliveryFee = !user && guest.quote ? guest.quote.delivery_fee_ugx : deliveryFeeAmount;
+  const walletTotal = !user && guest.quote ? guest.quote.order_total_ugx : orderTotal;
+
   const changeQty = (listingId, delta, maxStock) => {
     setCart((prev) => {
       const next = Math.max(0, Math.min(maxStock ?? Infinity, (prev[listingId] || 0) + delta));
@@ -1935,16 +1960,25 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
     setCheckoutError(null);
     try {
       const cartPayload = cartItems.map((row) => ({ product_id: row.listing.product_id, quantity: row.qty }));
-      const { data, error } = await dropshipCheckout(businessProfileId, cartPayload, {
+      const checkoutOptions = {
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         deliveryAddress: deliveryAddress.trim() || undefined,
         deliveryLat: deliveryCoords.lat,
         deliveryLng: deliveryCoords.lng,
         maxDeliveryHours,
-        riderId: selectedRiderId || undefined,
         vehicleTypes: vehicleType ? [vehicleType] : undefined,
+      };
+      // "Auto-assign" = the top of the list (the store's own nearby rider
+      // first, then the nearest other). If that rider got taken meanwhile,
+      // let the server auto-pick instead of failing the order.
+      const autoRiderId = selectedRiderId ? null : riders[0]?.rider_id;
+      let { data, error } = await dropshipCheckout(businessProfileId, cartPayload, {
+        ...checkoutOptions, riderId: selectedRiderId || autoRiderId || undefined,
       });
+      if (autoRiderId && (error || !data?.success) && /no longer available/i.test(error?.message || data?.error || '')) {
+        ({ data, error } = await dropshipCheckout(businessProfileId, cartPayload, checkoutOptions));
+      }
       if (error || !data?.success) {
         throw new Error(error?.message || data?.error || 'Checkout failed');
       }
@@ -1972,7 +2006,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
           <CheckCircle2 className="w-9 h-9" />
         </div>
         <h3 className="text-lg font-bold nb-text mb-1">Order placed!</h3>
-        <p className="nb-text-muted text-sm mb-4">Paid with your IcanEra wallet.</p>
+        <p className="nb-text-muted text-sm mb-4">{receipt.paid_via === 'guest' ? 'Paid with Mobile Money, card or bank.' : 'Paid with your IcanEra wallet.'}</p>
         <div className="nb-card rounded-2xl p-4 text-left space-y-2">
           <div className="flex justify-between text-sm"><span className="nb-text-faint">Receipt number</span><span className="nb-text font-mono">{receipt.customer_receipt_number}</span></div>
           <div className="flex justify-between text-sm"><span className="nb-text-faint">Items</span><span className="nb-text">{receipt.items_count}</span></div>
@@ -1982,7 +2016,10 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
           {receipt.reseller_transport_subsidy > 0 && (
             <div className="flex justify-between text-sm"><span className="nb-text-faint">Covered by seller</span><span className="nb-price">-{formatUGX(receipt.reseller_transport_subsidy)}</span></div>
           )}
-          <div className="flex justify-between text-base font-semibold border-t nb-border pt-2 mt-2"><span className="nb-text">Total paid</span><span className="nb-text">{formatUGX(receipt.customer_paid_total)}</span></div>
+          {receipt.paid_via === 'guest' && receipt.processing_fee > 0 && (
+            <div className="flex justify-between text-sm"><span className="nb-text-faint">Payment processing fee</span><span className="nb-text">{formatUGX(receipt.processing_fee)}</span></div>
+          )}
+          <div className="flex justify-between text-base font-semibold border-t nb-border pt-2 mt-2"><span className="nb-text">Total paid</span><span className="nb-text">{formatUGX(receipt.paid_via === 'guest' ? receipt.guest_charged_total : receipt.customer_paid_total)}</span></div>
           {receipt.delivery_address && (
             <div className="flex justify-between text-sm"><span className="nb-text-faint">Delivery to</span><span className="nb-text text-right">{receipt.delivery_address}</span></div>
           )}
@@ -1993,7 +2030,9 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
         <p className="text-xs nb-text-faint mt-4">
           A BodaGoera rider has been booked for this order. The business only gets paid once the rider scans it out
           {receipt.verify_url ? <> — track that and confirm delivery at <a href={receipt.verify_url} target="_blank" rel="noreferrer" className="nb-link underline">your receipt link</a></> : null}.
-          {' '}If it misses the window above, you can reclaim your money from the rider's account there.
+          {' '}{receipt.paid_via === 'guest'
+            ? `Keep your receipt number (${receipt.customer_receipt_number}) — if the delivery misses the window above, contact the business with it to be refunded.`
+            : "If it misses the window above, you can reclaim your money from the rider's account there."}
         </p>
         <button onClick={() => setReceipt(null)} className="mt-6 px-5 py-2.5 rounded-xl nb-btn-secondary font-semibold transition">Keep browsing</button>
       </div>
@@ -2003,7 +2042,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm nb-text-muted">Browse for free. Pay with your IcanEra wallet when you're ready to order.</p>
+        <p className="text-sm nb-text-muted">Browse for free. Pay with your IcanEra wallet (no extra fee), or with Mobile Money, card or bank — no account needed.</p>
         <button onClick={() => setShowCart(true)} className="relative p-2.5 rounded-full nb-share-btn flex-shrink-0">
           <ShoppingCart className="w-4 h-4" />
           {cartCount > 0 && (
@@ -2099,7 +2138,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                   <p className="mt-1 text-[11px] nb-text-faint">If the rider misses this window, you can reclaim your money straight from their account.</p>
                 </div>
 
-                {deliveryCoords && user && (
+                {deliveryCoords && (
                   <div>
                     <label className="flex items-center gap-1.5 text-xs nb-text-faint mb-1"><Bike className="w-3.5 h-3.5" />Vehicle</label>
                     <div className="flex gap-1.5 mb-2">
@@ -2114,11 +2153,16 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                         </button>
                       ))}
                     </div>
-                    <label className="flex items-center gap-1.5 text-xs nb-text-faint mb-1"><Bike className="w-3.5 h-3.5" />Rider / driver</label>
-                    {ridersLoading ? (
+                    {!user && (
+                      <p className="text-[11px] nb-text-faint pb-1">The nearest available rider is booked for you automatically.</p>
+                    )}
+                    {user && <label className="flex items-center gap-1.5 text-xs nb-text-faint mb-1"><Bike className="w-3.5 h-3.5" />Rider / driver</label>}
+                    {!user ? null : ridersLoading ? (
                       <div className="flex items-center gap-2 text-xs nb-text-faint py-2"><Loader className="w-3.5 h-3.5 animate-spin" />Finding nearby riders…</div>
+                    ) : storeHasNoLocation ? (
+                      <p className="text-xs nb-text-muted py-1">This business hasn't set its pickup location yet, so a rider can't be routed to it. Please contact them.</p>
                     ) : riders.length === 0 ? (
-                      <p className="text-xs nb-text-muted py-1">No riders nearby right now — we'll auto-assign one as soon as checkout completes.</p>
+                      <p className="text-xs nb-text-muted py-1">No riders are available right now — we'll auto-assign one as soon as checkout completes.</p>
                     ) : (
                       <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                         <button
@@ -2126,7 +2170,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                           onClick={() => setSelectedRiderId(null)}
                           className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-left text-xs transition ${selectedRiderId === null ? 'nb-option-selected' : 'nb-option'}`}
                         >
-                          <span className="nb-text font-medium">Auto-assign nearest available</span>
+                          <span className="nb-text font-medium">Auto-assign — store's rider first</span>
                           <span className="nb-text-faint">Fastest</span>
                         </button>
                         {riders.map((r) => (
@@ -2137,7 +2181,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                             className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-left text-xs transition ${selectedRiderId === r.rider_id ? 'nb-option-selected' : 'nb-option'}`}
                           >
                             <span className="min-w-0">
-                              <span className="block nb-text font-medium truncate">{r.full_name} · {r.vehicle_type}</span>
+                              <span className="block nb-text font-medium truncate">{r.full_name} · {r.vehicle_type}{r.is_store_rider && <span className="ml-1.5 px-1.5 py-0.5 rounded nb-chip-green text-[10px] font-semibold">Store's rider</span>}</span>
                               <span className="flex items-center gap-1 nb-text-faint"><Star className="w-3 h-3 text-amber-400" />{Number(r.rating || 0).toFixed(1)} · {Number(r.distance_to_pickup_km || 0).toFixed(1)}km away</span>
                             </span>
                             <span className="shrink-0 nb-text-faint text-right">~{r.estimated_arrival_min}min<br />{formatUGX(r.fare)}</span>
@@ -2154,8 +2198,8 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                   <div>
                     <label className="flex items-center gap-1.5 text-xs nb-text-faint mb-1"><Truck className="w-3.5 h-3.5" />Delivery fee</label>
                     <p className="text-sm nb-text nb-input rounded-xl px-3 py-2">
-                      {deliveryFeeAmount == null ? 'Calculated once a rider is matched' : formatUGX(deliveryFeeAmount)}
-                      {isFinite(subsidyCap) && subsidyCap > 0 && deliveryFeeAmount != null && (
+                      {shownDeliveryFee == null ? 'Calculated once a rider is matched' : formatUGX(shownDeliveryFee)}
+                      {isFinite(subsidyCap) && subsidyCap > 0 && shownDeliveryFee != null && (
                         <span className="nb-price text-xs ml-1">(seller covers part of the real fare)</span>
                       )}
                     </p>
@@ -2165,20 +2209,46 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
               </div>
               <div className="border-t nb-border pt-3 space-y-1">
                 <div className="flex justify-between text-sm nb-text-faint"><span>Items</span><span>{formatUGX(cartTotal)}</span></div>
-                {deliveryFeeAmount > 0 && (
-                  <div className="flex justify-between text-sm nb-text-faint"><span>Delivery</span><span>{formatUGX(deliveryFeeAmount)}</span></div>
+                {shownDeliveryFee > 0 && (
+                  <div className="flex justify-between text-sm nb-text-faint"><span>Delivery</span><span>{formatUGX(shownDeliveryFee)}</span></div>
                 )}
-                <div className="flex justify-between nb-text font-semibold"><span>Total</span><span>{formatUGX(orderTotal)}</span></div>
+                <div className="flex justify-between nb-text font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>
               </div>
               {checkoutError && <p className="nb-error-text text-xs">{checkoutError}</p>}
-              <button
-                onClick={handleCheckout}
-                disabled={placing || (!!user && !deliveryCoords)}
-                className="w-full py-2.5 rounded-xl nb-btn-primary disabled:opacity-50 text-sm font-semibold transition flex items-center justify-center gap-2"
-              >
-                {placing ? <Loader className="w-4 h-4 animate-spin" /> : null}
-                {!user ? 'Sign up free to pay with IcanEra' : !deliveryCoords ? 'Share your delivery location to continue' : `Pay ${formatUGX(orderTotal)} with IcanEra`}
-              </button>
+              {(
+                <div className="space-y-2">
+                  <button
+                    onClick={user ? handleCheckout : () => setShowAuthModal(true)}
+                    disabled={authLoading || guest.paying || placing || (!!user && !deliveryCoords)}
+                    className="w-full py-2.5 rounded-xl nb-btn-primary disabled:opacity-50 text-sm font-semibold transition"
+                  >
+                    {placing ? <Loader className="w-4 h-4 animate-spin inline mr-2" /> : null}
+                    {user && !deliveryCoords
+                      ? 'Share your delivery location to continue'
+                      : `Pay with IcanEra wallet${deliveryCoords ? ` · ${formatUGX(walletTotal)}` : ''}`}
+                    <span className="block text-[11px] font-medium opacity-80">{user ? 'Recommended · no extra fee' : 'Recommended · no extra fee · sign up free in a minute'}</span>
+                  </button>
+                  <div className="flex items-center gap-2 text-[11px] nb-text-faint"><span className="flex-1 h-px nb-border-strong border-t" />{user ? 'or pay another way' : 'or no wallet needed'}<span className="flex-1 h-px nb-border-strong border-t" /></div>
+                  <button
+                    onClick={guest.payNow}
+                    disabled={guest.paying || guest.quoting || !deliveryCoords || !guest.quote}
+                    className="w-full py-2.5 rounded-xl nb-btn-secondary disabled:opacity-50 text-sm font-semibold transition flex items-center justify-center gap-2"
+                  >
+                    {guest.paying || guest.quoting ? <Loader className="w-4 h-4 animate-spin" /> : null}
+                    {!deliveryCoords
+                      ? 'Share your delivery location to continue'
+                      : guest.quote
+                        ? `Pay ${formatUGX(guest.quote.charge_ugx)} with Mobile Money, card or bank`
+                        : guest.quoting ? 'Pricing your order…' : 'Mobile Money, card or bank'}
+                  </button>
+                  {guest.quote && (
+                    <p className="text-[11px] nb-text-faint">
+                      Includes a {formatUGX(guest.quote.processing_fee_ugx)} payment-processing fee. Pay with your IcanEra wallet to skip it and pay {formatUGX(walletTotal)}.
+                    </p>
+                  )}
+                  {(guest.quoteError || guest.payError) && <p className="nb-error-text text-xs">{guest.payError || guest.quoteError}</p>}
+                </div>
+              )}
             </div>
           )}
         </Modal>

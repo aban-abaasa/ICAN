@@ -6,7 +6,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { User, Mail, Phone, Edit2, Save, X, Upload, Shield, Wallet, Key, LogOut, Plus, Camera, Trash2, Clock, Bell, Settings as SettingsIcon } from 'lucide-react';
+import useResumeAndBusiness from '../../hooks/useResumeAndBusiness';
+import { User, Mail, Phone, Edit2, Save, X, Upload, Shield, Wallet, Key, LogOut, Plus, Camera, Trash2, Clock, Bell, Settings as SettingsIcon, Briefcase, FileText, MapPin } from 'lucide-react';
 import { StatusUploader } from '../status/StatusUploader';
 import ShareholderApprovalsCenter from '../ShareholderApprovalsCenter';
 import '../profile/growth/growth.css';
@@ -21,7 +22,7 @@ const SECTION_TABS = [
  * `extraSections` ({ security: node, settings: node }) and `onSectionChange` turn the page into
  * Profile / Security / Settings tabs. Without them it renders exactly as before.
  */
-export const ProfilePage = ({ onClose = null, onLogout = null, section = 'profile', onSectionChange = null, extraSections = null }) => {
+export const ProfilePage = ({ onClose = null, onLogout = null, section = 'profile', onSectionChange = null, extraSections = null, onOpenResume = null }) => {
   const {
     user,
     profile,
@@ -47,6 +48,9 @@ export const ProfilePage = ({ onClose = null, onLogout = null, section = 'profil
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [showApprovalsModal, setShowApprovalsModal] = useState(false);
   const fileInputRef = useRef(null);
+  const { resume, resumeLoaded, businesses, businessLoaded } = useResumeAndBusiness(user?.id);
+  const [businessId, setBusinessId] = useState(null);
+  const business = businesses.find((b) => b.id === businessId) || businesses[0] || null;
 
   // Form state
   const [formData, setFormData] = useState({
@@ -76,6 +80,7 @@ export const ProfilePage = ({ onClose = null, onLogout = null, section = 'profil
       loadPendingApprovalsCount();
     }
   }, [user?.id]);
+
 
   const loadPendingApprovalsCount = async () => {
     try {
@@ -211,12 +216,6 @@ export const ProfilePage = ({ onClose = null, onLogout = null, section = 'profil
     .filter((value) => String(value || '').trim().length > 0)
     .length;
   const profileCompletionPercent = Math.round((profileCompletionCount / 4) * 100);
-  const normalizedRiskTolerance = String(formData.risk_tolerance || '').toLowerCase();
-  const riskToneClass = normalizedRiskTolerance === 'high'
-    ? 'bg-red-100 text-red-700 border-red-200'
-    : normalizedRiskTolerance === 'medium' || normalizedRiskTolerance === 'moderate'
-      ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
-      : 'bg-emerald-100 text-emerald-700 border-emerald-200';
 
   return (
     <div className="icn-pg">
@@ -274,262 +273,228 @@ export const ProfilePage = ({ onClose = null, onLogout = null, section = 'profil
         {extraSections && section !== 'profile' && extraSections[section]}
 
         {(section === 'profile' || !extraSections) && (<>
-        {/* Main Profile Card - Mobile Optimized */}
-        <div className="icn-pg-card mb-3 sm:mb-4 md:mb-6">
-          {/* Profile Header Background - Responsive Height */}
-          <div className="icn-pg-banner h-20 sm:h-24 md:h-32"></div>
-
-          {/* Profile Content - Better Mobile Padding */}
-          <div className="relative px-3 sm:px-4 md:px-6 pb-4 sm:pb-5 md:pb-6 pt-0">
-            {/* Avatar - Responsive Size */}
-            <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-end sm:justify-between mb-4 sm:mb-5 md:mb-6 -mt-10 sm:-mt-12 md:-mt-16">
-              <div className="flex items-end gap-2 sm:gap-3 md:gap-4">
-                <div className="relative flex-shrink-0">
-                  <div
-                    onClick={handleAvatarClick}
-                    className={`relative ${isEditing ? 'cursor-pointer' : ''}`}
-                  >
-                    {avatarUrl && !imageError ? (
-                      <img
-                        src={avatarUrl}
-                        alt={getDisplayName()}
-                        className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full object-cover icn-pg-avatar transition-all"
-                        onError={(e) => {
-                          console.error('❌ Image failed to load:', avatarUrl, e);
-                          setImageError(true);
-                        }}
-                        onLoad={() => console.log('✅ Image loaded successfully:', avatarUrl)}
-                      />
-                    ) : (
-                      <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full icn-pg-monogram flex items-center justify-center icn-pg-avatar text-2xl sm:text-3xl md:text-4xl font-bold">
-                        {profile?.first_name?.charAt(0) || ''}
-                        {profile?.last_name?.charAt(0) || 'U'}
-                      </div>
-                    )}
-                    {isEditing && (
-                      <div className="absolute bottom-0 right-0 icn-pg-btn-primary rounded-full p-1 sm:p-1.5 md:p-2 transition-colors">
-                        <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-white" />
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Status Upload Button - Responsive Size */}
-                  <button
-                    onClick={() => setShowStatusUploader(true)}
-                    className="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 icn-pg-btn-primary rounded-full p-1.5 sm:p-2 md:p-2.5 transition-all"
-                    title="Add status"
-                  >
-                    <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4" />
-                  </button>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      name="full_name"
-                      placeholder="Full name"
-                      value={formData.full_name}
-                      onChange={handleInputChange}
-                      className="icn-pg-input w-full px-3 py-2 placeholder-gray-400 text-sm sm:text-base"
-                    />
-                  ) : (
-                    <div>
-                      <h2 className="icn-pg-title text-xl sm:text-2xl break-words">{getDisplayName()}</h2>
-                      <p className="icn-pg-sub text-xs sm:text-sm break-all">{user?.email}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div />
-            </div>
-
-            {/* Verification + Completion - Mobile Responsive */}
-            <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-5 md:mb-6">
-              {profile?.blockchain_verified && (
-                <div className="icn-pg-chip icn-pg-chip-ok px-3 py-1.5 w-fit">
-                  <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <span className="text-xs sm:text-sm font-medium">Blockchain Verified</span>
+        {/* Identity: sits directly on the page, no banner card */}
+        <div className="flex items-center gap-4 mb-2">
+          <div className="relative flex-shrink-0">
+            <div onClick={handleAvatarClick} className={`relative ${isEditing ? 'cursor-pointer' : ''}`}>
+              {avatarUrl && !imageError ? (
+                <img
+                  src={avatarUrl}
+                  alt={getDisplayName()}
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover icn-pg-avatar"
+                  onError={() => setImageError(true)}
+                />
+              ) : (
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full icn-pg-monogram flex items-center justify-center icn-pg-avatar text-2xl sm:text-3xl font-bold">
+                  {profile?.first_name?.charAt(0) || ''}
+                  {profile?.last_name?.charAt(0) || 'U'}
                 </div>
               )}
-              <div className="icn-pg-chip px-3 py-1.5">
-                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="text-xs sm:text-sm font-medium">Profile completion: {profileCompletionPercent}%</span>
-              </div>
+              {isEditing && (
+                <div className="absolute bottom-0 right-0 icn-pg-btn-primary rounded-full p-1.5">
+                  <Upload className="w-3.5 h-3.5 text-white" />
+                </div>
+              )}
             </div>
-
-            {/* Profile Details Grid - Mobile Optimized */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {/* Email */}
-              <div className="flex items-center gap-2 sm:gap-3 p-3 icn-pg-row">
-                <Mail className="w-4 h-4 sm:w-5 sm:h-5 icn-pg-icon flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="icn-pg-label">Email</p>
-                  <p className="icn-pg-value text-sm break-all">{user?.email}</p>
-                </div>
-              </div>
-
-              {/* Phone */}
-              <div className="flex items-center gap-2 sm:gap-3 p-3 icn-pg-row">
-                <Phone className="w-4 h-4 sm:w-5 sm:h-5 icn-pg-icon flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="icn-pg-label">Phone</p>
-                  {isEditing ? (
-                    <input
-                      type="tel"
-                      name="phone"
-                      placeholder="Add phone number"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      className="icn-pg-input w-full px-2.5 py-1.5 placeholder-gray-400 text-sm"
-                    />
-                  ) : (
-                    <p className="icn-pg-value text-sm">{formData.phone || 'Not provided'}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Income Level */}
-              <div className="flex items-center gap-2 sm:gap-3 p-3 icn-pg-row">
-                <Wallet className="w-4 h-4 sm:w-5 sm:h-5 icn-pg-icon flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="icn-pg-label">Income Level</p>
-                  {isEditing ? (
-                    <select
-                      name="income_level"
-                      value={formData.income_level}
-                      onChange={handleInputChange}
-                      className="icn-pg-input w-full px-2.5 py-1.5 text-sm"
-                    >
-                      <option value="">Select income level</option>
-                      <option value="low">Low (&lt; 500k UGX/month)</option>
-                      <option value="medium">Medium (500k - 2M UGX/month)</option>
-                      <option value="high">High (2M - 5M UGX/month)</option>
-                      <option value="very_high">Very High (&gt; 5M UGX/month)</option>
-                    </select>
-                  ) : (
-                    <p className="icn-pg-value text-sm">{formData.income_level ? toTitleCase(formData.income_level) : 'Not provided'}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Financial Goal */}
-              <div className="flex items-start gap-2 sm:gap-3 p-3 icn-pg-row">
-                <Key className="w-4 h-4 sm:w-5 sm:h-5 icn-pg-icon mt-0.5 sm:mt-1 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="icn-pg-label">Primary Financial Goal</p>
-                  {isEditing ? (
-                    <select
-                      name="financial_goal"
-                      value={formData.financial_goal}
-                      onChange={handleInputChange}
-                      className="icn-pg-input w-full px-2.5 py-1.5 text-sm"
-                    >
-                      <option value="">Select a goal</option>
-                      <option value="save_emergency_fund">Save Emergency Fund</option>
-                      <option value="pay_off_debt">Pay Off Debt</option>
-                      <option value="grow_business">Grow Business</option>
-                      <option value="invest_wisely">Invest Wisely</option>
-                      <option value="plan_retirement">Plan for Retirement</option>
-                      <option value="give_back">Give Back to Community</option>
-                      <option value="build_wealth">Build Long-term Wealth</option>
-                    </select>
-                  ) : (
-                    <p className="icn-pg-value text-sm">{formData.financial_goal ? toTitleCase(formData.financial_goal) : 'Not provided'}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Risk Tolerance */}
-              <div className="flex items-center gap-2 sm:gap-3 p-3 icn-pg-row sm:col-span-2">
-                <Shield className="w-4 h-4 sm:w-5 sm:h-5 icn-pg-icon flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="icn-pg-label">Risk Tolerance</p>
-                  {isEditing ? (
-                    <select
-                      name="risk_tolerance"
-                      value={formData.risk_tolerance}
-                      onChange={handleInputChange}
-                      className="icn-pg-input w-full px-2.5 py-1.5 text-sm"
-                    >
-                      <option value="low">Conservative (Low Risk)</option>
-                      <option value="medium">Moderate (Medium Risk)</option>
-                      <option value="high">Aggressive (High Risk)</option>
-                    </select>
-                  ) : (
-                    <span className={`inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border text-xs sm:text-sm ${riskToneClass}`}>
-                      {toTitleCase(formData.risk_tolerance || 'Not specified')}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Hidden file input for avatar upload */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarUpload}
-              className="hidden"
-            />
+            <button
+              onClick={() => setShowStatusUploader(true)}
+              className="absolute -bottom-1 -right-1 icn-pg-btn-primary rounded-full p-1.5"
+              title="Add status"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
           </div>
-        </div>
-
-        {/* Account Info + Actions - Mobile Optimized */}
-        <div className="mt-4 sm:mt-5 md:mt-6 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-3 items-stretch">
-          <div className="icn-pg-row p-3 sm:p-4 text-left">
-            <p className="icn-pg-label" style={{ textTransform: "none", letterSpacing: "normal" }}>
-              Account ID: <span className="icn-pg-value font-mono break-all text-[10px] sm:text-xs">{user?.id}</span>
-            </p>
-            <p className="icn-pg-sub text-[11px] mt-1 sm:mt-2">
-              Member since {new Date(user?.created_at).toLocaleDateString()}
-            </p>
-          </div>
-          
-          {/* Edit/Save Buttons - Mobile First */}
-          <div className="flex gap-2">
-            {!isEditing ? (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="icn-pg-btn icn-pg-btn-primary flex-1 sm:flex-none px-5 py-3 text-sm sm:text-base"
-              >
-                <Edit2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span>Edit Profile</span>
-              </button>
+          <div className="min-w-0 flex-1">
+            {isEditing ? (
+              <input
+                type="text"
+                name="full_name"
+                placeholder="Full name"
+                value={formData.full_name}
+                onChange={handleInputChange}
+                className="icn-pg-input w-full px-3 py-2 text-sm sm:text-base"
+              />
             ) : (
               <>
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="icn-pg-btn icn-pg-btn-ghost flex-1 sm:flex-none px-4 py-3 text-sm sm:text-base"
-                >
-                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span>Cancel</span>
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="icn-pg-btn icn-pg-btn-primary flex-1 sm:flex-none px-4 py-3 text-sm sm:text-base"
-                >
-                  <Save className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span>{isSaving ? 'Saving...' : 'Save'}</span>
-                </button>
+                <h2 className="icn-pg-title text-xl sm:text-2xl break-words">{getDisplayName()}</h2>
+                <p className="icn-pg-sub text-xs sm:text-sm break-all">{user?.email}</p>
+                {resume?.headline && <p className="icn-pg-value text-sm mt-0.5">{resume.headline}</p>}
               </>
             )}
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {profile?.blockchain_verified && (
+                <span className="icn-pg-chip icn-pg-chip-ok px-2.5 py-1 text-xs font-medium"><Shield className="w-3.5 h-3.5" />Verified</span>
+              )}
+              <span className="icn-pg-chip px-2.5 py-1 text-xs font-medium">{profileCompletionPercent}% complete</span>
+            </div>
           </div>
-          
-          {/* Logout Button - Full Width on Mobile */}
-          <button
-            onClick={handleLogout}
-            disabled={isLoggingOut}
-            className="icn-pg-btn icn-pg-btn-danger sm:col-span-2 w-full px-5 py-3 text-sm sm:text-base"
-          >
-            <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span>{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
-          </button>
+          {!isEditing && (
+            <button onClick={() => setIsEditing(true)} className="icn-pg-btn icn-pg-btn-ghost px-3 py-2 text-sm self-start" title="Edit profile">
+              <Edit2 className="w-4 h-4" /><span className="hidden sm:inline">Edit</span>
+            </button>
+          )}
         </div>
 
+        {isEditing && (
+          <div className="flex gap-2 justify-end mb-2">
+            <button onClick={() => setIsEditing(false)} className="icn-pg-btn icn-pg-btn-ghost px-4 py-2 text-sm"><X className="w-4 h-4" />Cancel</button>
+            <button onClick={handleSave} disabled={isSaving} className="icn-pg-btn icn-pg-btn-primary px-4 py-2 text-sm"><Save className="w-4 h-4" />{isSaving ? 'Saving...' : 'Save'}</button>
+          </div>
+        )}
+
+        {/* Personal: ICAN profile fields, with a one-tap fill from the resume */}
+        <details className="icn-pg-sec" open>
+          <summary><User className="w-4 h-4 icn-pg-icon" />Personal{resume && <span className="icn-pg-sec-note">linked to your resume</span>}</summary>
+          <div className="icn-pg-sec-body">
+            <div className="icn-pg-line">
+              <Mail className="w-4 h-4 icn-pg-icon mt-1 flex-shrink-0" />
+              <div className="min-w-0 flex-1"><p className="icn-pg-label">Email</p><p className="icn-pg-value text-sm break-all">{user?.email}</p></div>
+            </div>
+            <div className="icn-pg-line">
+              <Phone className="w-4 h-4 icn-pg-icon mt-1 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="icn-pg-label">Phone</p>
+                {isEditing ? (
+                  <div className="flex gap-2 items-center">
+                    <input type="tel" name="phone" placeholder="Add phone number" value={formData.phone} onChange={handleInputChange} className="icn-pg-input w-full px-2.5 py-1.5 text-sm" />
+                    {resume?.phone && resume.phone !== formData.phone && (
+                      <button type="button" className="icn-pg-link whitespace-nowrap" onClick={() => setFormData((p) => ({ ...p, phone: resume.phone }))}>Use resume</button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="icn-pg-value text-sm">{formData.phone || resume?.phone || 'Not provided'}</p>
+                )}
+              </div>
+            </div>
+            {resume?.location && (
+              <div className="icn-pg-line">
+                <MapPin className="w-4 h-4 icn-pg-icon mt-1 flex-shrink-0" />
+                <div className="min-w-0 flex-1"><p className="icn-pg-label">Location</p><p className="icn-pg-value text-sm">{resume.location}</p></div>
+              </div>
+            )}
+            <div className="icn-pg-line">
+              <Wallet className="w-4 h-4 icn-pg-icon mt-1 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="icn-pg-label">Income level</p>
+                {isEditing ? (
+                  <select name="income_level" value={formData.income_level} onChange={handleInputChange} className="icn-pg-input w-full px-2.5 py-1.5 text-sm">
+                    <option value="">Select income level</option>
+                    <option value="low">Low (&lt; 500k UGX/month)</option>
+                    <option value="medium">Medium (500k - 2M UGX/month)</option>
+                    <option value="high">High (2M - 5M UGX/month)</option>
+                    <option value="very_high">Very High (&gt; 5M UGX/month)</option>
+                  </select>
+                ) : (
+                  <p className="icn-pg-value text-sm">{formData.income_level ? toTitleCase(formData.income_level) : 'Not provided'}</p>
+                )}
+              </div>
+            </div>
+            <div className="icn-pg-line">
+              <Key className="w-4 h-4 icn-pg-icon mt-1 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="icn-pg-label">Primary financial goal</p>
+                {isEditing ? (
+                  <select name="financial_goal" value={formData.financial_goal} onChange={handleInputChange} className="icn-pg-input w-full px-2.5 py-1.5 text-sm">
+                    <option value="">Select a goal</option>
+                    <option value="save_emergency_fund">Save Emergency Fund</option>
+                    <option value="pay_off_debt">Pay Off Debt</option>
+                    <option value="grow_business">Grow Business</option>
+                    <option value="invest_wisely">Invest Wisely</option>
+                    <option value="plan_retirement">Plan for Retirement</option>
+                    <option value="give_back">Give Back to Community</option>
+                    <option value="build_wealth">Build Long-term Wealth</option>
+                  </select>
+                ) : (
+                  <p className="icn-pg-value text-sm">{formData.financial_goal ? toTitleCase(formData.financial_goal) : 'Not provided'}</p>
+                )}
+              </div>
+            </div>
+            <div className="icn-pg-line">
+              <Shield className="w-4 h-4 icn-pg-icon mt-1 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="icn-pg-label">Risk tolerance</p>
+                {isEditing ? (
+                  <select name="risk_tolerance" value={formData.risk_tolerance} onChange={handleInputChange} className="icn-pg-input w-full px-2.5 py-1.5 text-sm">
+                    <option value="low">Conservative (Low Risk)</option>
+                    <option value="medium">Moderate (Medium Risk)</option>
+                    <option value="high">Aggressive (High Risk)</option>
+                  </select>
+                ) : (
+                  <p className="icn-pg-value text-sm">{toTitleCase(formData.risk_tolerance || 'Not specified')}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </details>
+
+        {/* Resume summary, read from My Resume */}
+        <details className="icn-pg-sec" open={!!(resume?.summary || resume?.skills?.length)}>
+          <summary><FileText className="w-4 h-4 icn-pg-icon" />My resume{resume && <span className="icn-pg-sec-note">{resume.skills?.length || 0} skills</span>}</summary>
+          <div className="icn-pg-sec-body">
+            {!resumeLoaded ? (
+              <p className="icn-pg-sub text-sm">Loading…</p>
+            ) : resume ? (
+              <>
+                {resume.headline && <p className="icn-pg-value text-sm font-semibold">{resume.headline}</p>}
+                {resume.summary && <p className="icn-pg-sub text-sm mt-1 whitespace-pre-line">{resume.summary}</p>}
+                {resume.skills?.length > 0 && <div className="mt-3">{resume.skills.map((s) => <span key={s} className="icn-pg-skill">{s}</span>)}</div>}
+              </>
+            ) : (
+              <p className="icn-pg-sub text-sm">No resume yet. Add one and your details appear here.</p>
+            )}
+            {onOpenResume && <button type="button" className="icn-pg-link mt-2" onClick={onOpenResume}>{resume ? 'Edit my resume' : 'Create my resume'}</button>}
+          </div>
+        </details>
+
+        {/* Business, read from the Pitchin business profile */}
+        <details className="icn-pg-sec" open={businesses.length > 0}>
+          <summary><Briefcase className="w-4 h-4 icn-pg-icon" />Business{businesses.length > 0 && <span className="icn-pg-sec-note">from Pitchin</span>}</summary>
+          <div className="icn-pg-sec-body">
+            {!businessLoaded ? (
+              <p className="icn-pg-sub text-sm">Loading…</p>
+            ) : business ? (
+              <>
+                {businesses.length > 1 && (
+                  <select value={business.id} onChange={(e) => setBusinessId(e.target.value)} className="icn-pg-input w-full px-2.5 py-1.5 text-sm mb-2">
+                    {businesses.map((b) => <option key={b.id} value={b.id}>{b.business_name}</option>)}
+                  </select>
+                )}
+                {[
+                  ['Business', business.business_name],
+                  ['Type', business.business_type && toTitleCase(business.business_type)],
+                  ['Address', [business.business_address, business.country].filter(Boolean).join(', ')],
+                  ['Website', business.website],
+                  ['Registration no.', business.registration_number],
+                  ['Founded', business.founded_year],
+                  ['Status', business.verification_status && toTitleCase(business.verification_status)],
+                ].filter(([, v]) => v).map(([label, v]) => (
+                  <div key={label} className="icn-pg-line">
+                    <div className="min-w-0 flex-1"><p className="icn-pg-label">{label}</p><p className="icn-pg-value text-sm break-words">{v}</p></div>
+                  </div>
+                ))}
+                {business.description && <p className="icn-pg-sub text-sm mt-1 whitespace-pre-line">{business.description}</p>}
+              </>
+            ) : (
+              <p className="icn-pg-sub text-sm">No business profile yet. Create one in Pitchin and it shows up here.</p>
+            )}
+          </div>
+        </details>
+
+        {/* Account: rarely needed, collapsed */}
+        <details className="icn-pg-sec">
+          <summary><Shield className="w-4 h-4 icn-pg-icon" />Account</summary>
+          <div className="icn-pg-sec-body">
+            <p className="icn-pg-label" style={{ textTransform: 'none', letterSpacing: 'normal' }}>
+              Account ID: <span className="icn-pg-value font-mono break-all text-[11px]">{user?.id}</span>
+            </p>
+            <p className="icn-pg-sub text-xs mt-1">Member since {new Date(user?.created_at).toLocaleDateString()}</p>
+            <button onClick={handleLogout} disabled={isLoggingOut} className="icn-pg-btn icn-pg-btn-danger px-0 py-2 text-sm mt-2">
+              <LogOut className="w-4 h-4" /><span>{isLoggingOut ? 'Signing out...' : 'Sign out'}</span>
+            </button>
+          </div>
+        </details>
+
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
         </>)}
 
         {/* Avatar Change Modal - Mobile Optimized */}
