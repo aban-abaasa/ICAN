@@ -6,13 +6,15 @@ import {
   Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
   Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe,
   Video, Play, Eye, Heart, Bike, Star, Sun, Moon, TrendingUp, MoreVertical, Home,
-  Download
+  Download, Banknote
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
 import useGuestCheckout from '../hooks/useGuestCheckout';
+import PayAnyAmountForm from './PayAnyAmountForm';
+import { getPayCodeInfoForBusiness } from '../services/publicTransactionService';
 import { getPitchesByBusinessProfileId, getPitchById, getBusinessProfileIdByName, PITCH_PLAN_SECTIONS } from '../services/pitchingService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useAuth } from '../context/AuthContext';
@@ -630,6 +632,20 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // name-match fallback (getBusinessProfileIdByName) so a business's pitches
   // still show up on its own public page without that extra manual step.
   const [pitchesBusinessProfileId, setPitchesBusinessProfileId] = useState(null);
+  // The business's standing "pay any amount" QR (ADD_PUBLIC_TRANSACTION_QR.sql). When it has one switched on,
+  // this site grows a Pay tab, and the printed QR opens straight onto it (?pay=1).
+  const [payInfo, setPayInfo] = useState(null);
+  useEffect(() => {
+    if (!company?.business_profile_id) { setPayInfo(null); return undefined; }
+    let cancelled = false;
+    getPayCodeInfoForBusiness(company.business_profile_id).then((info) => {
+      if (cancelled) return;
+      const live = info?.found && info.active ? info : null;
+      setPayInfo(live);
+      if (live && new URLSearchParams(window.location.search).get('pay')) setSection('pay');
+    });
+    return () => { cancelled = true; };
+  }, [company?.business_profile_id]);
 
   // One live share offer per business (not per pitch -- every pitch video
   // this business has posted sells the SAME underlying shares, see
@@ -916,6 +932,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     // PitchinSection's own empty state covers the zero-pitches case.
     ...(pitchesBusinessProfileId ? [{ id: 'pitchin', label: 'Pitches', mobileLabel: 'Pitches', icon: Video }] : []),
     { id: 'careers', label: 'Careers', mobileLabel: 'Careers', icon: Briefcase },
+    ...(payInfo ? [{ id: 'pay', label: 'Pay', mobileLabel: 'Pay', icon: Banknote }] : []),
     ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', mobileLabel: 'Deals', icon: Award }] : []),
     { id: 'track', label: 'Track my application', mobileLabel: 'Track', icon: Search },
     ...(opportunities.length > 0 ? [{ id: 'track-bid', label: 'Track my bid', mobileLabel: 'My bid', icon: Search }] : []),
@@ -1074,6 +1091,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
               authLoading={authLoading}
             />
           )}
+          {section === 'pay' && payInfo && (
+            <PaySection company={company} info={payInfo} />
+          )}
           {section === 'pitchin' && (
             <PitchinSection pitches={pitches} loading={pitchesLoading} liveOffer={liveOffer} onSelect={setSelectedPitch} />
           )}
@@ -1121,6 +1141,26 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     </NoticeBoardThemeCtx.Provider>
   );
 };
+
+// "Pay any amount": the customer types what they are paying for and the price (or lists several items), then
+// chooses cash / IcanEra wallet / Mobile Money / card / bank on the receipt page and keeps the receipt. The
+// printed standing QR opens this tab (?pay=1). The form itself is shared with the standalone /p/<code> page.
+const PaySection = ({ company, info }) => (
+  <div className="max-w-xl mx-auto">
+    <div className="nb-card rounded-2xl p-5 sm:p-7">
+      <div className="text-center mb-5">
+        <div className="w-12 h-12 rounded-full nb-chip-green flex items-center justify-center mx-auto mb-3">
+          <Banknote className="w-6 h-6" />
+        </div>
+        <h2 className="text-xl sm:text-2xl font-bold nb-text">Pay {company.company_name}</h2>
+        <p className="text-sm nb-text-muted mt-1.5 leading-relaxed">
+          Type what you are paying for and the price — or list several items. Pay with cash, your IcanEra wallet, Mobile Money, card or bank, and keep your receipt. No account needed.
+        </p>
+      </div>
+      <PayAnyAmountForm code={info.code} info={info} skin="nb" />
+    </div>
+  </div>
+);
 
 // The brand name is "IcanEra" (capital I/E, lowercase elsewhere) everywhere
 // else in the app -- LandingPage.jsx, MainNavigation's logo alt text, etc.

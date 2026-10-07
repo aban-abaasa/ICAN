@@ -385,6 +385,11 @@ verify_jwt = false
 [functions.guest-checkout-pay]
 verify_jwt = false
 
+# Public QR payment on a recorded transaction's receipt (/r/<code>): no session,
+# verifies the payment with Flutterwave itself.
+[functions.public-tx-pay]
+verify_jwt = false
+
 # Called by Flutterwave (no Supabase JWT); checks its own verif-hash header.
 [functions.flutterwave-transfer-webhook]
 verify_jwt = false
