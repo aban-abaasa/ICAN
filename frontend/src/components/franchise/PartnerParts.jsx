@@ -188,6 +188,11 @@ export function ApplyTab({ onApplied, hasSeats }) {
 
   return (
     <form className="gr-form" onSubmit={submit} noValidate aria-label="Apply to become a partner">
+      <ol className="fr-how gr-card" aria-label="How it works">
+        <li><span className="fr-how__n" aria-hidden="true">1</span><span><b>Apply</b>Tell us about your registered company.</span></li>
+        <li><span className="fr-how__n" aria-hidden="true">2</span><span><b>We verify</b>We check the registration and the owners.</span></li>
+        <li><span className="fr-how__n" aria-hidden="true">3</span><span><b>Go live</b>Serve businesses and earn your share.</span></li>
+      </ol>
       <Alert kind="warn"><b>Franchise partners must be registered companies.</b> We check your registration (and the people behind it) before you can go live. {hasSeats && 'You can hold one seat per type and country.'}</Alert>
       {banner && <Alert kind={banner.kind}>{banner.text}</Alert>}
 
