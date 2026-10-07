@@ -23,6 +23,7 @@ export default function InsurerApplication({ dark = false, onGetStarted }) {
   const [formError, setFormError] = useState('');
   const [sent, setSent] = useState(null);          // { reference, duplicate, email }
   const [notInstalled, setNotInstalled] = useState(false);
+  const [adding, setAdding] = useState(false);     // a second (third...) application while one is already open
   const [check, setCheck] = useState({ reference: '', email: '', busy: false, error: '', result: null });
 
   const loadMine = useCallback(async () => {
@@ -72,7 +73,9 @@ export default function InsurerApplication({ dark = false, onGetStarted }) {
     setState('idle');
     if (!res.success) return setFormError(res.error);
     setSent({ reference: res.reference || null, duplicate: Boolean(res.duplicate), email: form.email.trim().toLowerCase() });
-    setForm({ ...emptyApplication(), email: signedInEmail, contact_name: form.contact_name });
+    // Keep who is applying: a company with several licences sends them one after another.
+    setForm({ ...emptyApplication(), email: form.email, contact_name: form.contact_name, phone: form.phone });
+    setAdding(false);
     if (signedInEmail) loadMine();
   };
 
@@ -152,13 +155,20 @@ export default function InsurerApplication({ dark = false, onGetStarted }) {
               </button>
             </div>
           )}
-          <button type="button" onClick={() => setSent(null)} className={`mt-4 text-xs font-bold underline decoration-dotted ${body}`}>Send another application</button>
+          <p className={`mx-auto mt-4 max-w-md text-xs ${body}`}>One company can hold more than one licence (another country, or a life and a general licence). Each needs its own application.</p>
+          <button type="button" onClick={() => setSent(null)} className={`mt-2 text-xs font-bold underline decoration-dotted ${body}`}>Apply for another licence or country</button>
         </div>
-      ) : open ? (
-        <p className={`text-sm ${body}`}>You have an application in progress, so a new one is not needed.</p>
+      ) : open && !adding ? (
+        <div>
+          <p className={`text-sm ${body}`}>Your application is being handled. A company with more than one licence, or licensed in more than one country, can apply for each.</p>
+          <button type="button" onClick={() => setAdding(true)}
+            className={`mt-3 inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-bold transition ${dark ? 'border-slate-600 text-slate-100 hover:bg-slate-800' : 'border-slate-300 text-slate-800 hover:bg-slate-100'}`}>
+            Apply for another licence or country
+          </button>
+        </div>
       ) : (
         <form onSubmit={submit} noValidate aria-label="Apply to sell insurance on IcanEra">
-          <h3 className={`text-lg font-black ${title}`}>Apply to sell cover</h3>
+          <h3 className={`text-lg font-black ${title}`}>{apps.length > 0 || adding ? 'Apply for another licence or country' : 'Apply to sell cover'}</h3>
           <p className={`mt-1 mb-4 text-sm ${body}`}>
             It takes two minutes. No account needed to apply. Support checks your licence, usually within a few working days.
           </p>
@@ -238,6 +248,7 @@ export default function InsurerApplication({ dark = false, onGetStarted }) {
 
           {formError && <p role="alert" className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-500">{formError}</p>}
 
+          {adding && <button type="button" onClick={() => setAdding(false)} className={`mt-3 block w-full text-center text-xs font-bold underline decoration-dotted ${body}`}>Cancel</button>}
           <button type="submit" disabled={state === 'sending'}
             className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-bold transition disabled:opacity-60 ${primaryBtn}`}>
             {state === 'sending' ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</> : <><ShieldCheck className="h-4 w-4" /> Send my application</>}

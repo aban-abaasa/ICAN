@@ -17,39 +17,44 @@ const COUNTRIES = [
 ];
 
 // ── Becoming an insurer ──────────────────────────────────────────────────────
-function Register({ businesses, insurers, onDone }) {
-  const free = businesses.filter((b) => !insurers.some((i) => i.business_id === b.id));
+// One business can hold several insurer registrations (one per licence and country), so every business is offered.
+function Register({ businesses, onDone }) {
   const [f, setF] = useState({
-    businessId: free[0]?.id || '', displayName: free[0]?.business_name || '', licenceNumber: '', licenceExpiry: '',
+    businessId: businesses[0]?.id || '', displayName: businesses[0]?.business_name || '', licenceNumber: '', licenceExpiry: '',
     countryCode: 'UG', regulator: COUNTRIES[0].regulator, contactEmail: '', contactPhone: '', claimsPhone: '', description: '',
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [approvedList, setApprovedList] = useState([]);
   const [approved, setApproved] = useState(null);
   const set = (patch) => setF((cur) => ({ ...cur, ...patch }));
 
-  // Support already approved this company's application: fill the form from it. Registering with the same
+  // Support already approved this company's application(s): fill the form from one. Registering with the same
   // licence verifies the insurer immediately (the database applies the approval), so nothing is checked twice.
+  // A company with several approved licences picks which one it is registering.
+  const applyApplication = (a) => {
+    setApproved(a);
+    setF((cur) => ({
+      ...cur,
+      displayName: cur.displayName || a.company_name, licenceNumber: a.licence_number, licenceExpiry: a.licence_expiry,
+      countryCode: a.country_code, regulator: a.regulator, contactEmail: a.contact_email || cur.contactEmail,
+      contactPhone: a.contact_phone || cur.contactPhone, description: a.description || cur.description,
+    }));
+  };
   useEffect(() => {
     let cancelled = false;
     insuranceService.myApplications().then((list) => {
-      const a = (list || []).find((x) => x.status === 'approved');
-      if (cancelled || !a) return;
-      setApproved(a);
-      setF((cur) => ({
-        ...cur,
-        displayName: cur.displayName || a.company_name, licenceNumber: a.licence_number, licenceExpiry: a.licence_expiry,
-        countryCode: a.country_code, regulator: a.regulator, contactEmail: a.contact_email || cur.contactEmail,
-        contactPhone: a.contact_phone || cur.contactPhone, description: a.description || cur.description,
-      }));
+      const ok = (list || []).filter((x) => x.status === 'approved');
+      if (cancelled || ok.length === 0) return;
+      setApprovedList(ok);
+      applyApplication(ok[0]);
     }).catch(() => {});
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (free.length === 0) {
-    return <Alert tone="warn">{businesses.length === 0
-      ? 'You need a business profile first. Create one in Business Administration, then register it as an insurer here.'
-      : 'Every business you own is already registered as an insurer.'}</Alert>;
+  if (businesses.length === 0) {
+    return <Alert tone="warn">You need a business profile first. Create one in Business Administration, then register it as an insurer here.</Alert>;
   }
 
   const submit = async () => {
@@ -69,10 +74,16 @@ function Register({ businesses, insurers, onDone }) {
           message policyholders, handle claims and read the data customers choose to share with you.
         </p>
       </div>
-      {approved && <Alert tone="ok">Support approved your application {approved.reference}. Pick your business and submit: you will be verified straight away. Keep the licence number as approved.</Alert>}
+      {approved && <Alert tone="ok">Support approved your application {approved.reference} ({approved.licence_number}, {approved.country_code}). Pick your business and submit: you will be verified straight away. Keep the licence number as approved.</Alert>}
+      {approvedList.length > 1 && (
+        <div className="gr-field"><label className="gr-label" htmlFor="rg-app">Approved licence to register</label>
+          <select id="rg-app" className="gr-select" value={approved?.id || ''} onChange={(e) => applyApplication(approvedList.find((a) => a.id === e.target.value))}>
+            {approvedList.map((a) => <option key={a.id} value={a.id}>{a.company_name} · {a.licence_number} · {a.country_code}</option>)}
+          </select></div>
+      )}
       <div className="gr-field"><label className="gr-label" htmlFor="rg-biz">Business</label>
-        <select id="rg-biz" className="gr-select" value={f.businessId} onChange={(e) => { const b = free.find((x) => x.id === e.target.value); set({ businessId: e.target.value, displayName: b?.business_name || f.displayName }); }}>
-          {free.map((b) => <option key={b.id} value={b.id}>{b.business_name}</option>)}
+        <select id="rg-biz" className="gr-select" value={f.businessId} onChange={(e) => { const b = businesses.find((x) => x.id === e.target.value); set({ businessId: e.target.value, displayName: b?.business_name || f.displayName }); }}>
+          {businesses.map((b) => <option key={b.id} value={b.id}>{b.business_name}</option>)}
         </select></div>
       <div className="gr-field"><label className="gr-label" htmlFor="rg-name">Company name customers see</label>
         <input id="rg-name" className="gr-input" maxLength={80} value={f.displayName} onChange={(e) => set({ displayName: e.target.value })} /></div>
@@ -212,7 +223,7 @@ export default function InsurerDesk({ businesses, insurers, rate, onReload }) {
           </p>
           <InsurerApplication dark={isDarkFamilyTheme(actualTheme)} />
         </section>
-        <Register businesses={businesses} insurers={insurers} onDone={onReload} />
+        <Register businesses={businesses} onDone={onReload} />
       </div>
     );
   }
@@ -257,7 +268,15 @@ export default function InsurerDesk({ businesses, insurers, rate, onReload }) {
       {tab === 'clients' && <BusinessClients key={insurer.insurer_id} insurer={insurer} />}
       {tab === 'claims' && <InsurerClaims key={insurer.insurer_id} insurer={insurer} rate={rate} />}
 
-      {insurer.status === 'rejected' && <Register businesses={businesses} insurers={insurers.filter((i) => i.insurer_id !== insurer.insurer_id)} onDone={onReload} />}
+      {/* One company can hold several licences (another country, or a life and a general licence), also once approved. */}
+      <details className="gr-card ins-fold" open={insurer.status === 'rejected'}>
+        <summary className="gr-sectionhead"><span className="gr-eyebrow">Another licence or country</span><span className="gr-link">Add</span></summary>
+        <div className="gr-form" style={{ marginTop: 12 }}>
+          <p className="gr-sub">Hold more than one licence? Apply for each one, then register it once support approves it. Each registration has its own plans and approval.</p>
+          <InsurerApplication dark={isDarkFamilyTheme(actualTheme)} />
+          <Register businesses={businesses} onDone={onReload} />
+        </div>
+      </details>
     </div>
   );
 }
