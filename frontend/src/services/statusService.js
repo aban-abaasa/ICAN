@@ -205,6 +205,34 @@ export const getActiveStatuses = async (userId = null) => {
 };
 
 /**
+ * The "keep exploring" feed behind a shared pitch/update link
+ * (PublicShareFlow.jsx): live public/followers updates, newest first, so a
+ * visitor who opened one update can keep going through the rest like stories.
+ * Same visibility rule as getStatusById/getActiveStatuses, but quiet (no
+ * per-row console dump) and capped, since it runs for anonymous visitors.
+ */
+export const getStatusFlowFeed = async (limit = 30) => {
+  try {
+    const { data, error } = await supabase
+      .from('ican_statuses')
+      .select('*')
+      .gt('expires_at', new Date().toISOString())
+      .in('visibility', ['public', 'followers'])
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    const withUrls = await refreshStatusMediaUrls(data || []);
+    // Text-only updates have no media to resolve; an image/video whose URL
+    // could not be resolved would just be a blank frame in the flow.
+    const playable = withUrls.filter((s) => s.media_type === 'text' || s.media_url);
+    return await enrichStatusesWithPosterProfiles(playable);
+  } catch (error) {
+    console.error('Get status flow feed error:', error);
+    return [];
+  }
+};
+
+/**
  * Attach each status's poster real profile photo/name (poster_avatar_url,
  * poster_full_name) so the "Updates" UI can show who actually posted it
  * instead of a generic placeholder. ican_statuses only stores user_id, so
@@ -684,6 +712,7 @@ export default {
   uploadStatusMedia,
   createStatus,
   getActiveStatuses,
+  getStatusFlowFeed,
   getUserStatuses,
   incrementStatusView,
   recordStatusView,

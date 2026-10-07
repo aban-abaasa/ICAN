@@ -547,6 +547,41 @@ export const getPitchesByBusinessProfileId = async (businessProfileId, limit = 1
 };
 
 /**
+ * The "keep exploring" feed behind a shared pitch/update link
+ * (PublicShareFlow.jsx): the latest pitches a visitor can swipe on to after
+ * the one they were sent, so a share link opens a flow instead of a dead end.
+ * Same public `pitches` read and media/photo resolution as
+ * getPitchesByBusinessProfileId, just across every business -- and without
+ * getAllPitches' whole-table debug dump, since this runs for anonymous
+ * visitors on every shared-link open. Video pitches and written plans both
+ * count (plans render as a document in the viewer).
+ */
+export const getPitchFlowFeed = async (limit = 20) => {
+  try {
+    const sb = getSupabase();
+    if (!sb) return [];
+
+    const { data, error } = await sb
+      .from('pitches')
+      .select(PITCH_WITH_BUSINESS_SELECT)
+      .or('video_url.not.is.null,plan_content.not.is.null')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    if (!data || data.length === 0) return [];
+
+    const resolved = (await resolveMediaValues(data, ['video_url', 'thumbnail_url']))
+      .filter((pitch) => (pitch.video_url && !pitch.video_url.startsWith('blob:')) || pitch.plan_content);
+    await enrichPitchesWithProfilePhotos(sb, resolved);
+    return resolved;
+  } catch (error) {
+    console.error('Error fetching pitch flow feed:', error);
+    return [];
+  }
+};
+
+/**
  * Fallback for the public notice board (PublicCompanyNoticeBoard.jsx): finds
  * a business_profile_id purely by matching business_profiles.business_name,
  * for when a CMMS company hasn't been through the manual "Board profile"
