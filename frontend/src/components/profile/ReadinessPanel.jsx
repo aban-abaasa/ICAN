@@ -35,7 +35,7 @@ const googleSearchUrl = (item, country) =>
  * they pre-select your country and situation on a first visit and flag steps already recorded there.
  * `onOpenResume` (optional) adds an "Edit my resume" link.
  */
-export default function ReadinessPanel({ onComplianceData, onOpenResume }) {
+export default function ReadinessPanel({ onComplianceData, onOpenResume, initialTab = 'checklist' }) {
   const [country, setCountry] = useState('Uganda');
   const [mode, setMode] = useState('SE');
   const [progress, setProgress] = useState({}); // key -> { status, note }
@@ -48,7 +48,7 @@ export default function ReadinessPanel({ onComplianceData, onOpenResume }) {
   const [preview, setPreview] = useState(null);
   const [linkFormOpen, setLinkFormOpen] = useState(false);
   const [attachTo, setAttachTo] = useState('');
-  const [tab, setTab] = useState('checklist'); // checklist | insurance
+  const [tab, setTab] = useState(initialTab === 'insurance' ? 'insurance' : 'checklist'); // checklist | insurance
   const [covers, setCovers] = useState([]);
   const [coversLoading, setCoversLoading] = useState(true);
   const [openCats, setOpenCats] = useState(null); // null = only the group holding the next required step

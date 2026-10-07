@@ -81,7 +81,8 @@ import {
   Wifi,
   WifiOff,
   Plus,
-  Edit2
+  Edit2,
+  ShieldCheck
 } from 'lucide-react';
 import IcanEraLogo from '../IcanEra.png';
 
@@ -3523,7 +3524,7 @@ const ICANCapitalEngine = () => {
   const [showFinancialAnalytics, setShowFinancialAnalytics] = useState(false);
   const isRestoringHistoryRef = useRef(false);
 
-  const VALID_TABS = ['dashboard', 'security', 'readiness', 'growth', 'settings'];
+  const VALID_TABS = ['dashboard', 'security', 'readiness', 'insurance', 'growth', 'settings'];
 
   const closeFunctionPanels = () => {
     setShowTRUST(false);
@@ -9002,6 +9003,16 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     </div>
   );
 
+  // Insurance: buy cover, or apply and sell it as a licensed insurer. It is the Insurance tab of the readiness
+  // panel, opened directly so it is one click from the main navigation.
+  const renderInsurance = () => (
+    <div className="max-w-6xl mx-auto w-full">
+      <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
+        <ReadinessPanel key="insurance" initialTab="insurance" onComplianceData={setComplianceData} />
+      </div>
+    </div>
+  );
+
   const renderReadinessMandate = () => (
     <div className="max-w-6xl mx-auto w-full">
       <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
@@ -9267,6 +9278,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
               { id: 'dashboard', label: 'Home',     icon: BarChart3  },
               { id: 'security',  label: 'Security', icon: Shield     },
               { id: 'readiness', label: 'Readiness',icon: Globe      },
+              { id: 'insurance', label: 'Insurance',icon: ShieldCheck },
               { id: 'growth',    label: 'Growth',   icon: TrendingUp },
               { id: 'trust',     label: 'SACCO',    icon: Heart      },
               { id: 'share',     label: 'Share',    icon: Send       },
@@ -9357,6 +9369,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         )}
         {activeTab === 'security' && renderSecurityMandate()}
         {activeTab === 'readiness' && renderReadinessMandate()}
+        {activeTab === 'insurance' && renderInsurance()}
         {activeTab === 'growth' && renderGrowthMandate()}
         {activeTab === 'settings' && renderSettings()}
       </main>

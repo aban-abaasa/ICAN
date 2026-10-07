@@ -5662,6 +5662,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('readiness', 'Readiness'); setShowMenuDropdown(false); }}>
                       <Target /> <span>Readiness</span>
                     </button>
+                    <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('readiness', 'Readiness', 'insurance'); setShowMenuDropdown(false); }}>
+                      <Shield /> <span>Insurance</span>
+                    </button>
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('growth', 'Growth'); setShowMenuDropdown(false); }}>
                       <TrendingUp /> <span>Growth</span>
                     </button>
@@ -6141,7 +6144,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* READINESS - GLOBAL NAVIGATOR */}
               {selectedDetail.tab === 'readiness' && selectedDetail.item === 'Readiness' && (
-                <ReadinessPanel onOpenResume={() => openDetailView('resume', 'My Resume')} />
+                <ReadinessPanel key={selectedDetail.initialTab === 'insurance' ? 'insurance' : 'readiness'} initialTab={selectedDetail.initialTab === 'insurance' ? 'insurance' : 'checklist'} onOpenResume={() => openDetailView('resume', 'My Resume')} />
               )}
 
               {/* GROWTH - PROSPERITY ARCHITECT */}

@@ -112,3 +112,13 @@ test('one business may register several insurers: unique per licence and country
 test('a company can send up to ten applications a day', { skip: !existsSync(MULTI) }, () => {
   assert.match(readFileSync(MULTI, 'utf8'), /created_at > now\(\) - interval '24 hours'\) >= 10/);
 });
+
+// Insurance used to be reachable only as a sub-tab of Readiness, so signed-in users never found it.
+test('insurance has its own entry in the desktop and mobile navigation', () => {
+  const desktop = readFileSync(new URL('../src/components/ICAN_Capital_Engine.jsx', import.meta.url), 'utf8');
+  const mobile = readFileSync(new URL('../src/components/MobileView.jsx', import.meta.url), 'utf8');
+  assert.match(desktop, /id: 'insurance', label: 'Insurance'/);
+  assert.match(desktop, /VALID_TABS = \[[^\]]*'insurance'/);
+  assert.match(desktop, /activeTab === 'insurance' && renderInsurance\(\)/);
+  assert.match(mobile, /openDetailView\('readiness', 'Readiness', 'insurance'\)/);
+});

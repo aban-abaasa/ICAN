@@ -10,7 +10,7 @@ import { APPLICATION_STATUS, emptyApplication, regulatorFor, validateApplication
  * "Apply to sell cover": an insurance company applies with its licence and ICAN support approves it
  * (Dev panel > Insurance). Like the franchise form, NO ACCOUNT is needed to send the application; to be
  * set up as an insurer afterwards the company needs an IcanEra account with the same email. The landing
- * page (visitors) and the Compliance > Insurance desk (signed in) both mount it. Backend:
+ * page (visitors) and the Insurance desk (signed in) both mount it. Backend:
  * ins_submit_application / ins_application_status / ins_my_applications
  * (supabase/migrations/20261010200000_insurer_applications_public.sql).
  */

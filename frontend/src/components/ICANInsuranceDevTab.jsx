@@ -318,7 +318,7 @@ export default function ICANInsuranceDevTab({ devToken }) {
 
       {insurers.length === 0 && (
         <div className="rounded-2xl border p-8 text-center text-xs" style={{ ...card, color: 'var(--dp-muted)' }}>
-          {loading ? 'Loading…' : 'No insurance companies yet. They apply from the landing page or under Compliance > Insurance > Sell cover.'}
+          {loading ? 'Loading…' : 'No insurance companies yet. They apply from the landing page or under Insurance > Sell cover.'}
         </div>
       )}
 
