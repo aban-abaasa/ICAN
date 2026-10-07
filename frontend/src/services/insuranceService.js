@@ -113,11 +113,23 @@ export const insuranceService = {
     act('ins_insurer_pay_claim', { p_claim_id: claimId, p_pin: pin, p_offline_reference: offlineReference }, 'Could not pay the claim'),
   policyData: (policyId) => act('ins_insurer_policy_data', { p_policy_id: policyId }, 'Could not open the data room'),
 
+  // ── applying from the landing site (a signed-in company account is required) ──
+  submitApplication: (f) =>
+    act('ins_submit_application', {
+      p_contact_name: f.contact_name, p_company_name: f.company_name, p_licence_number: f.licence_number,
+      p_licence_expiry: f.licence_expiry, p_country_code: f.country_code, p_regulator: f.regulator,
+      p_cover_types: f.cover_types, p_phone: f.phone || null, p_description: f.description || null, p_website: f.website || null,
+    }, 'Could not send the application'),
+  myApplications: () => read('ins_my_applications'),
+
   // ── the ICAN dev panel ─────────────────────────────────────────────────
   devOverview: (devToken) => read('ins_dev_overview', { p_dev_token: devToken }),
   devListInsurers: (status, devToken) => read('ins_dev_list_insurers', { p_status: status || null, p_dev_token: devToken }),
   devReviewInsurer: (insurerId, decision, note, devToken) =>
     act('ins_dev_review_insurer', { p_insurer_id: insurerId, p_decision: decision, p_note: note || null, p_dev_token: devToken }, 'Could not save the decision'),
+  devListApplications: (status, devToken) => read('ins_dev_list_applications', { p_status: status || null, p_dev_token: devToken }),
+  devReviewApplication: (applicationId, decision, note, devToken) =>
+    act('ins_dev_review_application', { p_application_id: applicationId, p_decision: decision, p_note: note || null, p_dev_token: devToken }, 'Could not save the decision'),
   devUpdateSettings: (patch, devToken) =>
     act('ins_dev_update_settings', { p_patch: patch, p_dev_token: devToken }, 'Could not save the settings'),
 };

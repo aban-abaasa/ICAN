@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Building2, FileCheck2, ListChecks, ShieldCheck, Users } from 'lucide-react';
+import { useTheme, isDarkFamilyTheme } from '../../context/ThemeContext';
 import { insuranceService } from '../../services/insuranceService';
 import { INSURER_STATUS, fmtDate, formatIcan } from '../../utils/insuranceCatalog';
 import { Alert, Chip, Money } from './common';
+import InsurerApplication from './InsurerApplication';
 import InsurerClaims from './InsurerClaims';
 import InsurerPlans from './InsurerPlans';
 import { BusinessClients, Policyholders } from './InsurerPolicies';
@@ -23,7 +25,26 @@ function Register({ businesses, insurers, onDone }) {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [approved, setApproved] = useState(null);
   const set = (patch) => setF((cur) => ({ ...cur, ...patch }));
+
+  // Support already approved this company's application: fill the form from it. Registering with the same
+  // licence verifies the insurer immediately (the database applies the approval), so nothing is checked twice.
+  useEffect(() => {
+    let cancelled = false;
+    insuranceService.myApplications().then((list) => {
+      const a = (list || []).find((x) => x.status === 'approved');
+      if (cancelled || !a) return;
+      setApproved(a);
+      setF((cur) => ({
+        ...cur,
+        displayName: cur.displayName || a.company_name, licenceNumber: a.licence_number, licenceExpiry: a.licence_expiry,
+        countryCode: a.country_code, regulator: a.regulator, contactEmail: a.contact_email || cur.contactEmail,
+        contactPhone: a.contact_phone || cur.contactPhone, description: a.description || cur.description,
+      }));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   if (free.length === 0) {
     return <Alert tone="warn">{businesses.length === 0
@@ -48,6 +69,7 @@ function Register({ businesses, insurers, onDone }) {
           message policyholders, handle claims and read the data customers choose to share with you.
         </p>
       </div>
+      {approved && <Alert tone="ok">Support approved your application {approved.reference}. Pick your business and submit: you will be verified straight away. Keep the licence number as approved.</Alert>}
       <div className="gr-field"><label className="gr-label" htmlFor="rg-biz">Business</label>
         <select id="rg-biz" className="gr-select" value={f.businessId} onChange={(e) => { const b = free.find((x) => x.id === e.target.value); set({ businessId: e.target.value, displayName: b?.business_name || f.displayName }); }}>
           {free.map((b) => <option key={b.id} value={b.id}>{b.business_name}</option>)}
@@ -177,8 +199,22 @@ export default function InsurerDesk({ businesses, insurers, rate, onReload }) {
   const [tab, setTab] = useState('overview');
   const insurer = useMemo(() => insurers.find((i) => i.insurer_id === insurerId) || insurers[0], [insurers, insurerId]);
 
+  const { actualTheme } = useTheme();
+
   if (!insurer) {
-    return <Register businesses={businesses} insurers={insurers} onDone={onReload} />;
+    return (
+      <div className="gr-form">
+        <section className="gr-card gr-form">
+          <p className="gr-eyebrow">Step 1</p>
+          <h3 className="gr-title gr-h">Apply to sell cover</h3>
+          <p className="gr-sub" style={{ marginTop: 6 }}>
+            Send your licence to ICAN support for approval. Once approved, register your business below and you are verified straight away.
+          </p>
+          <InsurerApplication dark={isDarkFamilyTheme(actualTheme)} />
+        </section>
+        <Register businesses={businesses} insurers={insurers} onDone={onReload} />
+      </div>
+    );
   }
 
   const status = INSURER_STATUS[insurer.status] || INSURER_STATUS.pending;

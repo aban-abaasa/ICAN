@@ -9,6 +9,7 @@ import TrustGroupsPreview from './landing/TrustGroupsPreview';
 import DropshipPreview from './landing/DropshipPreview';
 import CMMSNoticeBoardPreview from './landing/CMMSNoticeBoardPreview';
 import FranchiseSection from './landing/FranchiseSection';
+import InsurerSection from './landing/InsurerSection';
 import ProfessionalsCarousel from './landing/ProfessionalsCarousel';
 import LandingSearch from './landing/LandingSearch';
 import { useTheme, isDarkFamilyTheme } from '../context/ThemeContext';
@@ -257,6 +258,7 @@ const LandingPage = ({ onGetStarted }) => {
     { id: 'notices', group: 'Jump to', label: 'Company notice board', description: 'Public announcements from companies', keywords: ['cmms', 'notices', 'announcements', 'news'], onSelect: () => scrollToSection('cmms-notices-preview') },
     { id: 'platforms', group: 'Jump to', label: 'Features & platforms', description: 'What IcanEra can do', keywords: ['features', 'apps', 'tools'], onSelect: () => scrollToSection('platforms') },
     { id: 'pricing', group: 'Jump to', label: 'Pricing', description: 'Plans and what they include', keywords: ['price', 'plans', 'cost', 'subscription', 'fees'], onSelect: goToPricing },
+    { id: 'insurance', group: 'Jump to', label: 'Insurance partners', description: 'Licensed insurers: apply to sell cover on IcanEra', keywords: ['insurer', 'insurance company', 'cover', 'policy', 'licence'], onSelect: () => scrollToSection('insurance') },
     { id: 'franchise', group: 'Jump to', label: 'Franchise', description: 'Run IcanEra in your area and request a franchise', keywords: ['agent', 'partner', 'partnership', 'business opportunity'], onSelect: () => scrollToSection('franchise') },
     { id: 'testimonials', group: 'Jump to', label: 'Testimonials', description: 'What users say about IcanEra', keywords: ['reviews', 'stories', 'feedback'], onSelect: () => scrollToSection('testimonials') },
     { id: 'community', group: 'Jump to', label: 'Community board', description: 'Post a message, ask a question or reply', keywords: ['forum', 'chat', 'message', 'help', 'ask', 'discussion'], onSelect: () => scrollToSection('community-board') },
@@ -1128,6 +1130,7 @@ const LandingPage = ({ onGetStarted }) => {
                     { label: 'Platforms', section: 'platforms' },
                     { label: 'Pricing', section: null },
                     { label: 'Franchise', section: 'franchise' },
+                    { label: 'Insurance', section: 'insurance' },
                     { label: 'Testimonials', section: 'testimonials' },
                     { label: 'Community', section: 'community-board' }
                   ].map((item) => (
@@ -1152,6 +1155,7 @@ const LandingPage = ({ onGetStarted }) => {
               { label: 'Platforms', go: () => scrollToSection('platforms') },
               { label: 'Pricing', go: goToPricing },
               { label: 'Franchise', go: () => scrollToSection('franchise') },
+              { label: 'Insurance', go: () => scrollToSection('insurance') },
               { label: 'Testimonials', go: () => scrollToSection('testimonials') },
               { label: 'Community', go: () => scrollToSection('community-board') },
               { label: 'Try It Live', go: () => scrollToSection('live-explore') }
@@ -1232,6 +1236,7 @@ const LandingPage = ({ onGetStarted }) => {
                     { label: 'Platforms', section: 'platforms' },
                     { label: 'Pricing', section: null },
                     { label: 'Franchise', section: 'franchise' },
+                    { label: 'Insurance', section: 'insurance' },
                     { label: 'Testimonials', section: 'testimonials' },
                     { label: 'Community', section: 'community-board' },
                     { label: 'Try it live', section: 'live-explore' }
@@ -1580,6 +1585,9 @@ const LandingPage = ({ onGetStarted }) => {
 
       {/* Franchise: become an authorised partner (registered companies only) */}
       <FranchiseSection onGetStarted={onGetStarted} />
+
+      {/* Insurance: licensed insurers apply to sell cover; ICAN support approves (account required) */}
+      <InsurerSection onGetStarted={onGetStarted} />
 
       {/* Testimonials Section - Compact Animated Badge */}
       <section id="testimonials" className="relative py-6 md:py-8 lg:py-12 2xl:py-16 px-4 sm:px-6 lg:px-8 2xl:px-16">

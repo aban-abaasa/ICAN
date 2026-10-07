@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, CheckCircle, XCircle, Save, PauseCircle, RotateCcw } from 'lucide-react';
 import { insuranceService, isNotInstalled } from '../services/insuranceService';
-import { formatIcan, fmtDate } from '../utils/insuranceCatalog';
+import { formatIcan, fmtDate, coverTypeLabel } from '../utils/insuranceCatalog';
+import { APPLICATION_STATUS } from '../utils/insurerApplication';
 
 /**
  * Insurance tab of the ICAN dev panel: verify the licence of every insurance company, see the
@@ -9,6 +10,8 @@ import { formatIcan, fmtDate } from '../utils/insuranceCatalog';
  * insurance is managed for both IcanEra and BodaGoEra (same database, same settings). The
  * commission is added silently on top of each insurer's premium and credited to the platform
  * business (see ADD_INSURANCE_PLATFORM.sql); the insurer always takes home exactly what it set.
+ * It also holds the queue of applications from the landing site (20261010100000_insurer_applications.sql):
+ * support approves or rejects each one, and an approved company is verified the moment it registers.
  */
 
 const STATUS = {
@@ -69,6 +72,8 @@ const toForm = (s) => ({
 export default function ICANInsuranceDevTab({ devToken }) {
   const [overview, setOverview] = useState(null);
   const [insurers, setInsurers] = useState([]);
+  const [apps, setApps] = useState([]);
+  const [appsMissing, setAppsMissing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [busyId, setBusyId] = useState(null);
@@ -89,6 +94,14 @@ export default function ICANInsuranceDevTab({ devToken }) {
       ]);
       setOverview(o);
       setInsurers(list || []);
+      // The applications queue ships in its own migration: an older database keeps the rest of the tab working.
+      try {
+        setApps(await insuranceService.devListApplications(null, devToken) || []);
+        setAppsMissing(false);
+      } catch (e) {
+        setApps([]);
+        setAppsMissing(isNotInstalled(e));
+      }
       setForm((cur) => cur || toForm(o.settings)); // never clobber unsaved edits on refresh
     } catch (e) {
       setError(isNotInstalled(e)
@@ -149,8 +162,28 @@ export default function ICANInsuranceDevTab({ devToken }) {
     load();
   };
 
+  const reviewApp = async (app, decision) => {
+    let note = null;
+    if (decision === 'reject') {
+      const answer = window.prompt(`Reject ${app.company_name}? Give a reason (the applicant will see it):`, '');
+      if (answer === null) return;
+      note = answer.trim();
+      if (!note) return setError('A reason is required');
+    } else if (!window.confirm(`Confirm you have checked licence ${app.licence_number} (${app.regulator}, ${app.country_code}) for ${app.company_name}?`)) {
+      return;
+    }
+    setBusyId(app.id);
+    setError('');
+    const res = await insuranceService.devReviewApplication(app.id, decision, note, devToken);
+    setBusyId(null);
+    if (!res.success) return setError(res.error);
+    say(decision === 'approve' ? 'Application approved. They are verified when they register.' : 'Application rejected');
+    load();
+  };
+
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const o = overview;
+  const queue = apps.filter((a) => a.status !== 'onboarded');
 
   return (
     <>
@@ -221,6 +254,58 @@ export default function ICANInsuranceDevTab({ devToken }) {
         </div>
       )}
 
+      {appsMissing && (
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-500">
+          Insurer applications are not installed yet. Run supabase/migrations/20261010100000_insurer_applications.sql, then refresh.
+        </div>
+      )}
+
+      {queue.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--dp-muted)' }}>
+            Applications from the landing site · {apps.filter((a) => a.status === 'new').length} waiting
+          </p>
+          {queue.map((a) => (
+            <div key={a.id} className="rounded-2xl border p-4" style={card}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-sm font-black" style={{ color: 'var(--dp-txt)' }}>{a.company_name}</p>
+                  <p className="text-xs" style={{ color: 'var(--dp-sub)' }}>
+                    {a.contact_name} · {a.email}{a.phone ? ` · ${a.phone}` : ''} · {a.country_code}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--dp-sub)' }}>
+                    Licence <b style={{ color: 'var(--dp-txt)' }}>{a.licence_number}</b> ({a.regulator}) · expires{' '}
+                    <b style={{ color: a.licence_expired ? '#ef4444' : 'var(--dp-txt)' }}>{fmtDate(a.licence_expiry)}{a.licence_expired ? ' (expired)' : ''}</b>
+                  </p>
+                  <p className="text-[11px]" style={{ color: 'var(--dp-muted)' }}>Covers: {(a.cover_types || []).map(coverTypeLabel).join(', ')}</p>
+                  {a.description && <p className="text-[11px]" style={{ color: 'var(--dp-muted)' }}>{a.description}</p>}
+                  {a.licence_clash && <p className="text-[11px] font-bold text-red-500">This licence number is already used by another application or insurer. Check it carefully before approving.</p>}
+                  {a.review_note && <p className="text-[11px] italic" style={{ color: 'var(--dp-muted)' }}>Note: {a.review_note}</p>}
+                  <p className="text-[10px]" style={{ color: 'var(--dp-muted)' }}>{a.reference} · sent {fmtDate(a.created_at)}</p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <span className="rounded-full border px-2.5 py-0.5 text-[10px] font-bold" style={{ borderColor: 'var(--dp-inner-bd)', color: 'var(--dp-sub)' }}>{(APPLICATION_STATUS[a.status] || APPLICATION_STATUS.new).label}</span>
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                    {(a.status === 'new' || a.status === 'rejected') && (
+                      <button disabled={busyId === a.id || a.licence_expired} onClick={() => reviewApp(a, 'approve')}
+                        className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-500 disabled:opacity-40">
+                        <CheckCircle size={10} /> Approve
+                      </button>
+                    )}
+                    {(a.status === 'new' || a.status === 'approved') && (
+                      <button disabled={busyId === a.id} onClick={() => reviewApp(a, 'reject')}
+                        className="flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[10px] font-bold text-red-500 disabled:opacity-40">
+                        <XCircle size={10} /> Reject
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-xl border px-3 py-2 text-xs outline-none" style={field}>
           <option value="">All insurers</option>
@@ -230,7 +315,7 @@ export default function ICANInsuranceDevTab({ devToken }) {
 
       {insurers.length === 0 && (
         <div className="rounded-2xl border p-8 text-center text-xs" style={{ ...card, color: 'var(--dp-muted)' }}>
-          {loading ? 'Loading…' : 'No insurance companies yet. They register under Compliance > Insurance > Sell cover.'}
+          {loading ? 'Loading…' : 'No insurance companies yet. They apply from the landing page or under Compliance > Insurance > Sell cover.'}
         </div>
       )}
 
