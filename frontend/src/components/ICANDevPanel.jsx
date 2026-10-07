@@ -33,12 +33,17 @@ import {
 } from '../services/chatService';
 
 export const SESSION_KEY = 'ican_dev_panel_auth';
-const DEV_TOKEN   = 'dev_ICAN_Pr0_KV25';
+// The panel token is no longer baked into the bundle. It is a server-held,
+// rotatable secret that only a signed-in Supabase account on the
+// ican_dev_operators allowlist can fetch (ican_get_dev_token(), see
+// backend/SECURE_ICAN_DEV_ACCESS.sql). ICANDevPanel (below) and SupportConsole
+// set it once before any dev tab renders; every RPC reads it at call time.
+let DEV_TOKEN = '';
+export const setDevToken = (token) => { DEV_TOKEN = token || ''; };
 const ICAN_TO_UGX = 5000;
 
-// The dev-panel login is a hidden token intercept, not a real Supabase auth
-// user (see SignIn.jsx) — there's no auth.uid() to identify a call with, so
-// mint a random one and stick with it for the tab's session.
+// The dev-panel token RPCs don't identify a caller with a Supabase auth.uid(),
+// so mint a random call id and stick with it for the tab's session.
 const DEV_CALL_ID_KEY = 'ican_dev_call_id';
 const getDevCallId = () => {
   let id = sessionStorage.getItem(DEV_CALL_ID_KEY);
@@ -2877,74 +2882,65 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
 };
 
 // =============================================================================
-// LOGIN GATE
+// ROOT — the panel only opens for a real, signed-in Supabase account that is
+// on the server-side ican_dev_operators allowlist. There is no password or
+// token to type here anymore: sign in on the normal IcanEra sign-in page.
 // =============================================================================
-const LoginGate = ({ onAuth }) => {
-  const [token, setToken] = useState('');
-  const [err,   setErr]   = useState('');
-  const [vis,   setVis]   = useState(false);
-  const [shake, setShake] = useState(false);
-  const ref = useRef(null);
-  useEffect(()=>{ ref.current?.focus(); },[]);
+const DevAccessScreen = ({ title, message, action, onAction }) => (
+  <div className="min-h-screen flex items-center justify-center px-4 font-sans"
+    style={{ background:'linear-gradient(160deg,#07091a,#0d1124,#07091a)' }}>
+    <div className="w-full max-w-sm text-center">
+      <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl"
+        style={{ background:'linear-gradient(135deg,#06b6d4,#0284c7)', boxShadow:'0 0 40px #06b6d460' }}>
+        <Shield size={28} className="text-white"/>
+      </div>
+      <h1 className="text-2xl font-black text-white">{title}</h1>
+      <p className="mt-2 text-xs leading-relaxed" style={{ color:'#94a3b8' }}>{message}</p>
+      {action && (
+        <button onClick={onAction}
+          className="mt-6 w-full rounded-2xl py-3.5 text-sm font-black text-white transition"
+          style={{ background:'linear-gradient(135deg,#06b6d4,#0284c7)' }}>
+          {action}
+        </button>
+      )}
+    </div>
+  </div>
+);
 
-  const submit = e => {
-    e.preventDefault();
-    if (token === DEV_TOKEN) { sessionStorage.setItem(SESSION_KEY,'true'); onAuth(); }
-    else { setErr('Invalid security token.'); setShake(true); setTimeout(()=>{ setErr(''); setShake(false); },2000); }
+const ICANDevPanel = ({ onExit }) => {
+  const [state, setState] = useState('checking'); // checking | ready | denied
+  const exit = async () => {
+    sessionStorage.removeItem(SESSION_KEY);
+    setDevToken('');
+    try { await getSupabaseClient()?.auth.signOut(); } catch { /* best effort */ }
+    onExit?.();
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center px-4 font-sans"
-      style={{ background:'linear-gradient(160deg,#07091a,#0d1124,#07091a)' }}>
-      <div className={`w-full max-w-sm transition-transform duration-150 ${shake?'translate-x-1':''}`}>
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-5 relative flex h-16 w-16 items-center justify-center rounded-3xl"
-            style={{ background:'linear-gradient(135deg,#06b6d4,#0284c7)', boxShadow:'0 0 40px #06b6d460' }}>
-            <Shield size={28} className="text-white"/>
-            <span className="absolute -right-1 -top-1 h-4 w-4 rounded-full border-2 bg-emerald-400"
-              style={{ borderColor:'#07091a', boxShadow:'0 0 10px #10b981' }}/>
-          </div>
-          <h1 className="text-2xl font-black text-white">IcanEra Dev Console</h1>
-          <p className="mt-1 text-xs tracking-widest" style={{ color:'#475569' }}>BLOCKCHAIN-SECURED ACCESS</p>
-        </div>
-        <form onSubmit={submit} className="space-y-3">
-          <div className="relative">
-            <Lock size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color:'#475569' }}/>
-            <input ref={ref} type={vis?'text':'password'} value={token} onChange={e=>setToken(e.target.value)}
-              placeholder="Enter security token…"
-              className="w-full rounded-2xl border py-3.5 pl-10 pr-11 text-sm text-white outline-none transition"
-              style={{ background:'rgba(255,255,255,0.06)', borderColor:'rgba(255,255,255,0.1)' }}/>
-            <button type="button" onClick={()=>setVis(v=>!v)} className="absolute right-3.5 top-1/2 -translate-y-1/2 transition" style={{ color:'#475569' }}>
-              {vis?<EyeOff size={13}/>:<Eye size={13}/>}
-            </button>
-          </div>
-          {err&&(
-            <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2">
-              <AlertTriangle size={12} className="text-red-400"/><p className="text-[11px] text-red-400">{err}</p>
-            </div>
-          )}
-          <button type="submit" disabled={!token}
-            className="w-full rounded-2xl py-3.5 text-sm font-black text-white transition disabled:opacity-30"
-            style={{ background:'linear-gradient(135deg,#06b6d4,#0284c7)', boxShadow:token?'0 0 24px #06b6d430':'none' }}>
-            Access Console
-          </button>
-        </form>
-        <div className="mt-6 flex items-start gap-2.5 rounded-2xl border border-amber-500/15 bg-amber-500/[0.05] p-3.5">
-          <AlertTriangle size={13} className="text-amber-400 flex-shrink-0 mt-0.5"/>
-          <p className="text-[10px] leading-relaxed" style={{ color:'rgba(251,191,36,0.7)' }}>Authorized personnel only. All access is logged on the IcanEra blockchain.</p>
-        </div>
-      </div>
-    </div>
-  );
-};
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const supabase = getSupabaseClient();
+      const { data, error } = supabase
+        ? await supabase.rpc('ican_get_dev_token')
+        : { data: null, error: new Error('no client') };
+      if (!live) return;
+      if (error || !data) { setDevToken(''); setState('denied'); return; }
+      setDevToken(data);
+      setState('ready');
+    })();
+    return () => { live = false; };
+  }, []);
 
-// =============================================================================
-// ROOT
-// =============================================================================
-const ICANDevPanel = ({ onExit }) => {
-  const [authed, setAuthed] = useState(sessionStorage.getItem(SESSION_KEY)==='true');
-  const exit = () => { sessionStorage.removeItem(SESSION_KEY); setAuthed(false); onExit?.(); };
-  if (!authed) return <LoginGate onAuth={()=>setAuthed(true)}/>;
+  if (state === 'checking') {
+    return <DevAccessScreen title="Checking access…" message="Verifying your IcanEra account."/>;
+  }
+  if (state === 'denied') {
+    return (
+      <DevAccessScreen title="Not authorized"
+        message="Sign in with an IcanEra account that has Dev Console access. Access is granted by an allowlist in Supabase, not by a password or token."
+        action="Back to sign in" onAction={exit}/>
+    );
+  }
   return <ICANDevDashboard onExit={exit}/>;
 };
 

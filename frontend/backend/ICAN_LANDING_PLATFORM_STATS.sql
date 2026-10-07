@@ -38,7 +38,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   -- Same internal token ican_get_market_snapshot() uses to call the
   -- token-gated engine — the client never sees or needs it.
-  _tok CONSTANT TEXT := 'dev_ICAN_Pr0_KV25';
+  _tok CONSTANT TEXT := public.ican_dev_secret();
   v_user_count BIGINT := 0;
 BEGIN
   BEGIN

@@ -2,7 +2,7 @@
 -- SUPPORT_CONSOLE.sql
 -- ============================================================================
 -- Purpose: a shareable link into ICANDevDashboard (ICANDevPanel.jsx) that
--- doesn't require typing in the master DEV_TOKEN ('dev_ICAN_Pr0_KV25', a
+-- doesn't require typing in the master DEV_TOKEN ('<dev token>', a
 -- plain JS constant already shipped in the ICANDevPanel bundle) by hand.
 -- The admin picks which nav tabs a given link should show (allowed_tabs,
 -- default ['messages','board'] — defaults to just the low-risk Public
@@ -137,7 +137,7 @@ DECLARE
   v_allowed_tabs TEXT[];
   v_id UUID;
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   IF p_visibility NOT IN ('password', 'restricted') THEN
     RETURN jsonb_build_object('success', false, 'error', 'Invalid visibility mode.');
@@ -186,7 +186,7 @@ RETURNS TABLE (
   created_at TIMESTAMPTZ
 ) SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT l.id, l.token, l.label, l.visibility, l.allowed_emails, l.allowed_tabs,
            l.revoked_at, l.view_count, l.failed_attempts, l.locked_until, l.created_at
@@ -200,7 +200,7 @@ GRANT EXECUTE ON FUNCTION public.ican_dev_list_support_links(TEXT) TO anon, auth
 CREATE OR REPLACE FUNCTION public.ican_dev_revoke_support_link(dev_token TEXT, p_link_id UUID)
 RETURNS JSONB SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   UPDATE public.ican_support_links SET revoked_at = now() WHERE id = p_link_id AND revoked_at IS NULL;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'Link not found or already revoked.');
@@ -219,7 +219,7 @@ GRANT EXECUTE ON FUNCTION public.ican_dev_revoke_support_link(TEXT, UUID) TO ano
 CREATE OR REPLACE FUNCTION public.ican_dev_reactivate_support_link(dev_token TEXT, p_link_id UUID)
 RETURNS JSONB SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   UPDATE public.ican_support_links
      SET revoked_at = NULL, failed_attempts = 0, locked_until = NULL
    WHERE id = p_link_id AND revoked_at IS NOT NULL;
@@ -238,7 +238,7 @@ GRANT EXECUTE ON FUNCTION public.ican_dev_reactivate_support_link(TEXT, UUID) TO
 CREATE OR REPLACE FUNCTION public.ican_dev_update_support_link_tabs(dev_token TEXT, p_link_id UUID, p_allowed_tabs TEXT[])
 RETURNS JSONB SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   IF p_allowed_tabs IS NULL OR array_length(p_allowed_tabs, 1) IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Pick at least one tab for this link to open.');
   END IF;
@@ -313,7 +313,7 @@ BEGIN
    WHERE id = v_link.id;
   INSERT INTO public.ican_support_link_access_log (share_id, outcome) VALUES (v_link.id, 'viewed');
 
-  RETURN jsonb_build_object('success', true, 'label', v_link.label, 'board_token', 'dev_ICAN_Pr0_KV25', 'allowed_tabs', to_jsonb(v_link.allowed_tabs));
+  RETURN jsonb_build_object('success', true, 'label', v_link.label, 'board_token', public.ican_dev_secret(), 'allowed_tabs', to_jsonb(v_link.allowed_tabs));
 END;
 $$;
 REVOKE ALL ON FUNCTION public.support_verify_link_password(TEXT, TEXT) FROM PUBLIC;
@@ -369,7 +369,7 @@ BEGIN
   UPDATE public.ican_support_links SET view_count = view_count + 1 WHERE id = v_link.id;
   INSERT INTO public.ican_support_link_access_log (share_id, viewer_email, outcome) VALUES (v_link.id, v_email, 'viewed');
 
-  RETURN jsonb_build_object('success', true, 'label', v_link.label, 'board_token', 'dev_ICAN_Pr0_KV25', 'allowed_tabs', to_jsonb(v_link.allowed_tabs));
+  RETURN jsonb_build_object('success', true, 'label', v_link.label, 'board_token', public.ican_dev_secret(), 'allowed_tabs', to_jsonb(v_link.allowed_tabs));
 END;
 $$;
 REVOKE ALL ON FUNCTION public.support_verify_link_otp(TEXT, TEXT, TEXT) FROM PUBLIC;
@@ -395,7 +395,7 @@ DECLARE
   v_iwos_id UUID;
   v_user_id UUID;
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   IF p_base_pay_amount IS NULL OR p_base_pay_amount <= 0 THEN
     RETURN jsonb_build_object('success', false, 'error', 'Enter a pay amount greater than zero.');
@@ -456,7 +456,7 @@ DECLARE
   v_members JSONB;
   v_compensation JSONB;
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   v_iwos_id := public.fn_get_platform_fee_business_id();
 
@@ -488,7 +488,7 @@ SELECT 'Support Console installed' AS status;
 -- ============================================================================
 -- VERIFY
 -- ============================================================================
--- SELECT ican_dev_create_support_link('dev_ICAN_Pr0_KV25', 'Test', 'password', 'test1234');
+-- SELECT ican_dev_create_support_link('<dev token>', 'Test', 'password', 'test1234');
 -- SELECT support_get_link_access('<token from above>');
 -- SELECT support_verify_link_password('<token>', 'test1234');
 -- SELECT * FROM ican_support_links;

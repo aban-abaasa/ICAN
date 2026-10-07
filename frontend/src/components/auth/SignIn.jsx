@@ -7,6 +7,7 @@ import OfflineLoginHelper from '../OfflineLoginHelper';
 import CanweFields from '../security/CanweFields';
 import ReferralCodeField from './ReferralCodeField';
 import { checkCanweFields } from '../../utils/canweGuard';
+import { getSupabaseClient } from '../../lib/supabase/client';
 
 import { DiamondSpinner } from '../IcanDiamond';
 const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
@@ -91,18 +92,25 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
       return;
     }
 
-    // Silent developer intercept
-    if (normalizedEmail === 'icaneraera@gmail.com' && password === '@1997God') {
-      sessionStorage.setItem('ican_dev_panel_auth', 'true');
-      window.location.reload();
-      return;
-    }
-
     setLoading(true);
     setError('');
 
     try {
       await signIn(normalizedEmail, password);
+
+      // Dev Console access is a real Supabase account on the server-side
+      // ican_dev_operators allowlist (backend/SECURE_ICAN_DEV_ACCESS.sql) —
+      // never credentials or a token shipped in this bundle. Anyone else
+      // gets the normal app.
+      try {
+        const { data: isDevOperator } = await getSupabaseClient().rpc('ican_is_dev_operator');
+        if (isDevOperator === true) {
+          sessionStorage.setItem('ican_dev_panel_auth', 'true');
+          window.location.reload();
+          return;
+        }
+      } catch { /* not a dev operator, or the check isn't deployed yet */ }
+
       if (onSuccess) {
         onSuccess();
       }

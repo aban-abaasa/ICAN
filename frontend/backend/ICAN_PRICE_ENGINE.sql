@@ -88,7 +88,7 @@ DECLARE
   v_app_pct      NUMERIC;
   v_usd_gain     NUMERIC;
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   -- 1. Get USD/UGX rates from currency table
   BEGIN
@@ -225,7 +225,7 @@ SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 DECLARE
   v_ugx NUMERIC; v_usd NUMERIC; v_app NUMERIC; v_vol NUMERIC;
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   SELECT pe.fair_price_ugx, pe.fair_price_usd, pe.appreciation_pct
   INTO   v_ugx, v_usd, v_app

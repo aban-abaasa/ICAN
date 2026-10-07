@@ -1,9 +1,10 @@
 -- ============================================================================
 -- ICAN DEV PANEL ACCESS — Run ONCE in Supabase SQL Editor
 -- ============================================================================
--- Token:        dev_ICAN_Pr0_KV25   (must match DEV_TOKEN in ICANDevPanel.jsx)
--- Dev email:    icaneraera@gmail.com
--- Dev password: @1997God
+-- SUPERSEDED by supabase/migrations/20261009100000_secure_dev_access.sql, which
+-- replaces the fixed token below with public.ican_dev_secret() and opens the
+-- panel for an allowlisted Supabase account instead of a hardcoded login.
+-- Run that migration after this file.
 -- ============================================================================
 
 
@@ -22,7 +23,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT ua.user_id, ua.account_holder_name, ua.account_number,
            ua.email, ua.phone_number, ua.country_code, ua.created_at
@@ -41,7 +42,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT w.user_id, w.ican_balance, w.total_earned, w.total_spent, w.total_tithe_paid
     FROM public.ican_user_wallets w ORDER BY w.ican_balance DESC;
@@ -56,7 +57,7 @@ CREATE OR REPLACE FUNCTION public.ican_dev_get_tx_totals(dev_token TEXT)
 RETURNS TABLE (recipient_user_id UUID, total_received NUMERIC, tx_count BIGINT)
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT t.recipient_user_id, SUM(t.ican_amount), COUNT(*)
     FROM public.ican_coin_transactions t
@@ -76,7 +77,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT t.user_id,
            COALESCE(SUM(t.tithe_amount), 0),
@@ -105,7 +106,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT a.id, a.user_id, a.agent_name, a.agent_code,
            COALESCE(af.float_balance, 0), COALESCE(SUM(aset.amount), 0),
@@ -131,7 +132,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT bp.id, bp.user_id, bp.name, bp.type, bp.country,
            COALESCE(bp.is_verified, false), bp.created_at
@@ -155,7 +156,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT p.id, p.user_id, p.title, p.category,
            COALESCE(p.target_amount,0),
@@ -182,7 +183,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT tg.id, tg.name,
            COUNT(DISTINCT tgm.user_id),
@@ -209,7 +210,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT COALESCE(ua.country_code, 'unknown'),
            COUNT(DISTINCT ua.user_id),
@@ -234,7 +235,7 @@ RETURNS VOID
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 DECLARE tithe NUMERIC; net NUMERIC;
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   tithe := ROUND(bonus_amount * 0.1, 6);
   net   := bonus_amount - tithe;
   INSERT INTO public.ican_user_wallets (user_id, ican_balance, total_earned, total_tithe_paid)
@@ -259,7 +260,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT c.id, c.name, c.created_by,
            COUNT(DISTINCT bpm.user_id) AS member_count,
@@ -285,7 +286,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT bt.id, bt.tx_hash, bt.tx_type,
            COALESCE(bt.ican_amount, 0),
@@ -309,7 +310,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT mp.price_ugx, COALESCE(mp.percentage_change_24h, 0),
            COALESCE(mp.market_cap, 0), COALESCE(mp.volume, 0),
@@ -332,7 +333,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT n.id, n.user_id, n.notification_type,
            n.notification_title, n.notification_message,
