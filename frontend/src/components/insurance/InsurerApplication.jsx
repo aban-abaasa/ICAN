@@ -1,43 +1,50 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { CheckCircle, Loader2, ShieldCheck, WifiOff } from 'lucide-react';
+import { CheckCircle, Loader2, Search, ShieldCheck, WifiOff } from 'lucide-react';
 import { getSupabaseClient } from '../../lib/supabase/client';
 import { insuranceService, isNotInstalled } from '../../services/insuranceService';
 import { COVER_TYPES, COVER_TYPE_IDS, fmtDate } from '../../utils/insuranceCatalog';
-import { COUNTRIES } from '../../utils/franchise';
+import { COUNTRIES, isValidEmail } from '../../utils/franchise';
 import { APPLICATION_STATUS, emptyApplication, regulatorFor, validateApplication } from '../../utils/insurerApplication';
 
 /**
  * "Apply to sell cover": an insurance company applies with its licence and ICAN support approves it
- * (Dev panel > Insurance). The company needs an IcanEra account, so this only renders for a signed-in
- * user; the landing page and the Compliance > Insurance desk both mount it. Everything goes through
- * ins_submit_application / ins_my_applications (supabase/migrations/20261010100000_insurer_applications.sql).
+ * (Dev panel > Insurance). Like the franchise form, NO ACCOUNT is needed to send the application; to be
+ * set up as an insurer afterwards the company needs an IcanEra account with the same email. The landing
+ * page (visitors) and the Compliance > Insurance desk (signed in) both mount it. Backend:
+ * ins_submit_application / ins_application_status / ins_my_applications
+ * (supabase/migrations/20261010200000_insurer_applications_public.sql).
  */
-export default function InsurerApplication({ dark = false }) {
-  const [apps, setApps] = useState(undefined); // undefined = loading, null = backend not installed
+export default function InsurerApplication({ dark = false, onGetStarted }) {
+  const [signedInEmail, setSignedInEmail] = useState('');
+  const [apps, setApps] = useState([]);            // a signed-in company's own applications
   const [form, setForm] = useState(emptyApplication);
   const [errors, setErrors] = useState({});
-  const [state, setState] = useState('idle'); // idle | sending
+  const [state, setState] = useState('idle');      // idle | sending
   const [formError, setFormError] = useState('');
-  const [sent, setSent] = useState(null);     // { reference, duplicate }
-  const [accountEmail, setAccountEmail] = useState('');
+  const [sent, setSent] = useState(null);          // { reference, duplicate, email }
+  const [notInstalled, setNotInstalled] = useState(false);
+  const [check, setCheck] = useState({ reference: '', email: '', busy: false, error: '', result: null });
 
-  const load = useCallback(async () => {
+  const loadMine = useCallback(async () => {
     try {
       setApps(await insuranceService.myApplications());
     } catch (e) {
-      setApps(isNotInstalled(e) ? null : []);
+      if (isNotInstalled(e)) setNotInstalled(true);
     }
   }, []);
 
   useEffect(() => {
-    load();
     getSupabaseClient()?.auth.getUser().then(({ data }) => {
       const u = data?.user;
       if (!u) return;
-      setAccountEmail(u.email || '');
-      setForm((f) => ({ ...f, contact_name: f.contact_name || u.user_metadata?.full_name || u.user_metadata?.name || '' }));
+      setSignedInEmail(u.email || '');
+      setForm((f) => ({
+        ...f, email: f.email || u.email || '',
+        contact_name: f.contact_name || u.user_metadata?.full_name || u.user_metadata?.name || '',
+      }));
+      loadMine();
     }).catch(() => {});
-  }, [load]);
+  }, [loadMine]);
 
   const set = (k) => (e) => {
     const v = e?.target ? e.target.value : e;
@@ -64,9 +71,22 @@ export default function InsurerApplication({ dark = false }) {
     const res = await insuranceService.submitApplication(form);
     setState('idle');
     if (!res.success) return setFormError(res.error);
-    setSent({ reference: res.reference || null, duplicate: Boolean(res.duplicate) });
-    setForm(emptyApplication());
-    load();
+    setSent({ reference: res.reference || null, duplicate: Boolean(res.duplicate), email: form.email.trim().toLowerCase() });
+    setForm({ ...emptyApplication(), email: signedInEmail, contact_name: form.contact_name });
+    if (signedInEmail) loadMine();
+  };
+
+  const runCheck = async (e) => {
+    e.preventDefault();
+    if (!check.reference.trim() || !isValidEmail(check.email)) return setCheck((c) => ({ ...c, error: 'Enter your reference and the email you applied with.', result: null }));
+    setCheck((c) => ({ ...c, busy: true, error: '', result: null }));
+    try {
+      const r = await insuranceService.applicationStatus(check.reference.trim(), check.email.trim());
+      setCheck((c) => ({ ...c, busy: false, result: r?.found ? r : null, error: r?.found ? '' : 'We could not find an application with that reference and email.' }));
+    } catch (err) {
+      if (isNotInstalled(err)) setNotInstalled(true);
+      setCheck((c) => ({ ...c, busy: false, error: err.message }));
+    }
   };
 
   // ---- styling (matches the landing sections; also fine inside the app) ----
@@ -76,14 +96,14 @@ export default function InsurerApplication({ dark = false }) {
     ? 'border-slate-600 bg-slate-950 text-white placeholder-slate-500 focus:ring-teal-300/50'
     : 'border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:ring-teal-600/40'}`;
   const label = `mb-1 block text-xs font-bold uppercase tracking-wider ${dark ? 'text-slate-300' : 'text-slate-600'}`;
+  const primaryBtn = dark ? 'bg-teal-300 text-slate-950 hover:bg-teal-200' : 'bg-teal-800 text-white hover:bg-teal-700';
   const tone = { warn: dark ? 'border-amber-400/40 bg-amber-900/20 text-amber-100' : 'border-amber-300 bg-amber-50 text-amber-900',
     ok: dark ? 'border-emerald-400/40 bg-emerald-900/20 text-emerald-100' : 'border-emerald-300 bg-emerald-50 text-emerald-900',
     bad: dark ? 'border-red-400/40 bg-red-900/20 text-red-100' : 'border-red-300 bg-red-50 text-red-900' };
   const err = (k) => (errors[k] ? <p id={`ia-${k}-err`} role="alert" className="mt-1 text-xs font-semibold text-red-500">{errors[k]}</p> : null);
   const a11y = (k) => ({ 'aria-invalid': Boolean(errors[k]), 'aria-describedby': errors[k] ? `ia-${k}-err` : undefined });
 
-  if (apps === undefined) return <div className={`h-24 rounded-xl animate-pulse ${dark ? 'bg-slate-800' : 'bg-slate-100'}`} />;
-  if (apps === null) {
+  if (notInstalled) {
     return (
       <div className="py-8 text-center">
         <WifiOff className={`mx-auto h-8 w-8 ${body}`} />
@@ -93,46 +113,54 @@ export default function InsurerApplication({ dark = false }) {
     );
   }
 
+  const statusCard = (a) => {
+    const st = APPLICATION_STATUS[a.status] || APPLICATION_STATUS.new;
+    return (
+      <li key={a.id || a.reference} className={`rounded-xl border p-4 ${tone[st.tone]}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-black">{a.company_name}</p>
+          <span className="rounded-full border border-current px-2.5 py-0.5 text-[11px] font-bold">{st.label}</span>
+        </div>
+        <p className="mt-1 text-xs opacity-90">Reference {a.reference}{a.licence_number ? ` · licence ${a.licence_number}` : ''} · sent {fmtDate(a.created_at || a.submitted_at)}</p>
+        <p className="mt-2 text-sm">{st.help}</p>
+        {a.status === 'rejected' && a.review_note && <p className="mt-1 text-sm font-semibold">Support said: {a.review_note}</p>}
+      </li>
+    );
+  };
+
   const open = apps.some((a) => a.status === 'new' || a.status === 'approved');
 
   return (
     <div>
       {apps.length > 0 && (
-        <ul className="mb-5 space-y-3" aria-label="Your applications">
-          {apps.map((a) => {
-            const st = APPLICATION_STATUS[a.status] || APPLICATION_STATUS.new;
-            return (
-              <li key={a.id} className={`rounded-xl border p-4 ${tone[st.tone]}`}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-black">{a.company_name}</p>
-                  <span className="rounded-full border border-current px-2.5 py-0.5 text-[11px] font-bold">{st.label}</span>
-                </div>
-                <p className="mt-1 text-xs opacity-90">Reference {a.reference} · licence {a.licence_number} · sent {fmtDate(a.created_at)}</p>
-                <p className="mt-2 text-sm">{st.help}</p>
-                {a.status === 'rejected' && a.review_note && <p className="mt-1 text-sm font-semibold">Support said: {a.review_note}</p>}
-              </li>
-            );
-          })}
-        </ul>
+        <ul className="mb-5 space-y-3" aria-label="Your applications">{apps.map(statusCard)}</ul>
       )}
 
-      {sent && (
-        <div className="mb-5 py-3 text-center" role="status">
-          <CheckCircle className="mx-auto h-10 w-10 text-emerald-500" />
-          <h3 className={`mt-2 text-lg font-black ${title}`}>{sent.duplicate ? 'We already have this application' : 'Application received'}</h3>
-          <p className={`mx-auto mt-1 max-w-md text-sm ${body}`}>
-            Support will check your licence with the regulator. The decision shows here and on your account{sent.reference ? <>. Your reference is <strong>{sent.reference}</strong></> : ''}.
+      {sent ? (
+        <div className="py-3 text-center" role="status">
+          <CheckCircle className="mx-auto h-12 w-12 text-emerald-500" />
+          <h3 className={`mt-3 text-xl font-black ${title}`}>{sent.duplicate ? 'We already have this application' : 'Application received'}</h3>
+          <p className={`mx-auto mt-2 max-w-md text-sm leading-relaxed ${body}`}>
+            Support will check your licence with the regulator and the decision will be shown under your reference
+            {sent.reference ? <>: <strong>{sent.reference}</strong></> : ''}. Keep it with the email <strong>{sent.email}</strong>.
           </p>
+          {!signedInEmail && (
+            <div className={`mx-auto mt-4 max-w-md rounded-lg border p-3 text-sm ${tone.warn}`}>
+              To be set up as an insurer once approved, you will need an IcanEra account with this same email.
+              <button type="button" onClick={() => onGetStarted?.('signup')} className={`mt-2 block w-full rounded-md px-4 py-2 text-sm font-bold ${primaryBtn}`}>
+                Create my account
+              </button>
+            </div>
+          )}
+          <button type="button" onClick={() => setSent(null)} className={`mt-4 text-xs font-bold underline decoration-dotted ${body}`}>Send another application</button>
         </div>
-      )}
-
-      {open ? (
+      ) : open ? (
         <p className={`text-sm ${body}`}>You have an application in progress, so a new one is not needed.</p>
       ) : (
         <form onSubmit={submit} noValidate aria-label="Apply to sell insurance on IcanEra">
           <h3 className={`text-lg font-black ${title}`}>Apply to sell cover</h3>
           <p className={`mt-1 mb-4 text-sm ${body}`}>
-            Applying as <strong>{accountEmail || 'your account'}</strong>. Support checks your licence, usually within a few working days.
+            It takes two minutes. No account needed to apply. Support checks your licence, usually within a few working days.
           </p>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -142,12 +170,18 @@ export default function InsurerApplication({ dark = false }) {
               {err('contact_name')}
             </div>
             <div>
+              <label htmlFor="ia-email" className={label}>Email *</label>
+              <input id="ia-email" type="email" className={input} value={form.email} onChange={set('email')} autoComplete="email" maxLength={254}
+                readOnly={Boolean(signedInEmail)} {...a11y('email')} />
+              {err('email')}
+            </div>
+            <div>
               <label htmlFor="ia-phone" className={label}>Phone / WhatsApp</label>
               <input id="ia-phone" type="tel" className={input} value={form.phone} onChange={set('phone')} autoComplete="tel" maxLength={40} {...a11y('phone')} />
               {err('phone')}
             </div>
-            <div className="sm:col-span-2">
-              <label htmlFor="ia-company_name" className={label}>Registered insurance company name *</label>
+            <div>
+              <label htmlFor="ia-company_name" className={label}>Registered insurance company *</label>
               <input id="ia-company_name" className={input} value={form.company_name} onChange={set('company_name')} autoComplete="organization" maxLength={160} {...a11y('company_name')} />
               {err('company_name')}
             </div>
@@ -205,11 +239,37 @@ export default function InsurerApplication({ dark = false }) {
           {formError && <p role="alert" className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-500">{formError}</p>}
 
           <button type="submit" disabled={state === 'sending'}
-            className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-bold transition disabled:opacity-60 ${dark ? 'bg-teal-300 text-slate-950 hover:bg-teal-200' : 'bg-teal-800 text-white hover:bg-teal-700'}`}>
+            className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-bold transition disabled:opacity-60 ${primaryBtn}`}>
             {state === 'sending' ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</> : <><ShieldCheck className="h-4 w-4" /> Send my application</>}
           </button>
-          <p className={`mt-2 text-center text-xs ${body}`}>Only an approved insurer with an unexpired licence can sell cover. Customers always see your licence and regulator.</p>
+          <p className={`mt-2 text-center text-xs ${body}`}>Only an approved insurer with an unexpired licence can sell cover. We only use your details to reply to this application.</p>
         </form>
+      )}
+
+      {!signedInEmail && (
+        <details className={`mt-6 rounded-xl border p-4 ${dark ? 'border-slate-700/60' : 'border-slate-200'}`}>
+          <summary className={`cursor-pointer text-sm font-bold ${title}`}>Already applied? Check your application</summary>
+          <form onSubmit={runCheck} noValidate className="mt-3 grid gap-3 sm:grid-cols-3">
+            <div>
+              <label htmlFor="ia-chk-ref" className={label}>Reference</label>
+              <input id="ia-chk-ref" className={input} value={check.reference} placeholder="INS-4F9A2C" maxLength={20}
+                onChange={(e) => setCheck((c) => ({ ...c, reference: e.target.value }))} />
+            </div>
+            <div>
+              <label htmlFor="ia-chk-email" className={label}>Email you applied with</label>
+              <input id="ia-chk-email" type="email" className={input} value={check.email} maxLength={254}
+                onChange={(e) => setCheck((c) => ({ ...c, email: e.target.value }))} />
+            </div>
+            <div className="flex items-end">
+              <button type="submit" disabled={check.busy}
+                className={`inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold disabled:opacity-60 ${primaryBtn}`}>
+                {check.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Check
+              </button>
+            </div>
+          </form>
+          {check.error && <p role="alert" className="mt-3 text-sm font-semibold text-red-500">{check.error}</p>}
+          {check.result && <ul className="mt-3">{statusCard(check.result)}</ul>}
+        </details>
       )}
     </div>
   );

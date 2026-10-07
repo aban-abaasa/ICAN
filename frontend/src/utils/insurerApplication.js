@@ -1,14 +1,14 @@
 // Insurance company applications from the landing site: pure helpers, no React and no network, so the
 // form can say "no" before a round trip. They mirror ins_submit_application() in
-// supabase/migrations/20261010100000_insurer_applications.sql, which stays the source of truth.
+// supabase/migrations/20261010200000_insurer_applications_public.sql, which stays the source of truth.
 // Unit tested in tests/insurerApplication.test.js.
 
 import { COVER_TYPE_IDS } from './insuranceCatalog.js';
-import { isCountryCode } from './franchise.js';
+import { isCountryCode, isValidEmail } from './franchise.js';
 
 export const APPLICATION_STATUS = {
-  new:       { label: 'Under review',  tone: 'warn',  help: 'Support is checking your licence. You will see the decision here.' },
-  approved:  { label: 'Approved',      tone: 'ok',    help: 'Approved. Create your business profile, then register it under Compliance > Insurance > Sell cover. You will be verified straight away.' },
+  new:       { label: 'Under review',  tone: 'warn',  help: 'Support is checking your licence. Check back here with your reference to see the decision.' },
+  approved:  { label: 'Approved',      tone: 'ok',    help: 'Approved. Sign in (or create an IcanEra account with the same email you applied with), create your business profile, then register it under Compliance > Insurance > Sell cover. You will be verified straight away.' },
   rejected:  { label: 'Not approved',  tone: 'bad',   help: 'Support could not approve this application.' },
   onboarded: { label: 'Registered',    tone: 'ok',    help: 'Your company is registered as an insurer on IcanEra.' },
 };
@@ -38,7 +38,7 @@ export function isFutureLicenceDate(value, today = new Date()) {
 export const normalizeLicence = (raw) => String(raw ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
 
 export const emptyApplication = () => ({
-  contact_name: '', company_name: '', licence_number: '', licence_expiry: '', country_code: '',
+  contact_name: '', email: '', company_name: '', licence_number: '', licence_expiry: '', country_code: '',
   regulator: '', cover_types: [], phone: '', description: '', website: '',
 });
 
@@ -46,6 +46,7 @@ export const emptyApplication = () => ({
 export function validateApplication(form = {}, today = new Date()) {
   const errors = {};
   if (len(form.contact_name) < 2 || len(form.contact_name) > 120) errors.contact_name = 'Please enter your name.';
+  if (!isValidEmail(form.email)) errors.email = 'Please enter a valid email address.';
   if (len(form.company_name) < 2 || len(form.company_name) > 160) errors.company_name = 'Enter your insurance company\'s registered name.';
   if (len(form.licence_number) < 3 || len(form.licence_number) > 60 || !normalizeLicence(form.licence_number)) {
     errors.licence_number = 'Enter your insurance licence number.';

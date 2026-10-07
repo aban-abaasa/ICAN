@@ -113,13 +113,14 @@ export const insuranceService = {
     act('ins_insurer_pay_claim', { p_claim_id: claimId, p_pin: pin, p_offline_reference: offlineReference }, 'Could not pay the claim'),
   policyData: (policyId) => act('ins_insurer_policy_data', { p_policy_id: policyId }, 'Could not open the data room'),
 
-  // ── applying from the landing site (a signed-in company account is required) ──
+  // ── applying from the landing site (no account needed to apply; one with the same email is needed to be set up) ──
   submitApplication: (f) =>
     act('ins_submit_application', {
-      p_contact_name: f.contact_name, p_company_name: f.company_name, p_licence_number: f.licence_number,
+      p_contact_name: f.contact_name, p_email: f.email, p_company_name: f.company_name, p_licence_number: f.licence_number,
       p_licence_expiry: f.licence_expiry, p_country_code: f.country_code, p_regulator: f.regulator,
       p_cover_types: f.cover_types, p_phone: f.phone || null, p_description: f.description || null, p_website: f.website || null,
     }, 'Could not send the application'),
+  applicationStatus: (reference, email) => read('ins_application_status', { p_reference: reference, p_email: email }),
   myApplications: () => read('ins_my_applications'),
 
   // ── the ICAN dev panel ─────────────────────────────────────────────────
