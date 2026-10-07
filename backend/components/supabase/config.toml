@@ -390,6 +390,11 @@ verify_jwt = false
 [functions.public-tx-pay]
 verify_jwt = false
 
+# Public QR payment on a digital card (/card-pay/<token>, personal or business): no
+# session, verifies the payment with Flutterwave itself.
+[functions.card-qr-pay]
+verify_jwt = false
+
 # Called by Flutterwave (no Supabase JWT); checks its own verif-hash header.
 [functions.flutterwave-transfer-webhook]
 verify_jwt = false

@@ -6,6 +6,9 @@
  * bank with no account (Flutterwave + the public-tx-pay Edge Function), or the IcanEra wallet.
  * The amount, the recipient and the fee always come from the server; the browser only ever sends
  * the code and the payer's own name and phone.
+ *
+ * The same QR works the other way for a money-out entry: the client can scan it to RECEIVE the money
+ * from the business wallet (see the receive functions below).
  */
 
 import { supabase } from '../lib/supabase/client';
@@ -121,6 +124,41 @@ export async function payPublicReceiptWithWallet(code) {
   const { data, error } = await supabase.rpc('public_tx_pay_wallet', { p_code: code });
   if (error) throw new Error(error.message || 'Could not complete this payment');
   if (!data?.success) throw new Error(data?.error || 'Could not complete this payment');
+  return data;
+}
+
+// ── Receive money from the business (backend/ADD_PUBLIC_TRANSACTION_QR_RECEIVE.sql) ──
+// A money-out entry's QR can also PAY the client: the owner (or finance) switches it on, the client
+// signs in and the amount moves from the business wallet to their IcanEra wallet, once.
+
+/** What a scan says about receiving: { found, receivable, received, amount_ugx, expires_at }. */
+export async function getPublicReceiveInfo(code) {
+  const { data, error } = await supabase.rpc('public_tx_receive_info', { p_code: code });
+  if (error) return { found: false };
+  return data || { found: false };
+}
+
+/** Signed-in client: take the money from the business wallet into their IcanEra wallet. */
+export async function receivePublicReceiptWithWallet(code) {
+  const { data, error } = await supabase.rpc('public_tx_receive_wallet', { p_code: code });
+  if (error) throw new Error(error.message || 'Could not complete this payout');
+  if (!data?.success) throw new Error(data?.error || 'Could not complete this payout');
+  return data;
+}
+
+/** Owner side: whether this entry's QR can pay the client, and what has happened. */
+export async function getTransactionReceiveState(transactionId) {
+  const { data, error } = await supabase.rpc('public_tx_receive_state', { p_tx_id: transactionId });
+  if (error) throw new Error(error.message || 'Could not load the payout setting');
+  if (!data?.success) throw new Error(data?.error || 'Could not load the payout setting');
+  return data;
+}
+
+/** Owner side: switch "let the client receive this by scanning" on (valid 7 days) or off. */
+export async function setTransactionPublicReceive(transactionId, enable) {
+  const { data, error } = await supabase.rpc('public_tx_set_receive', { p_tx_id: transactionId, p_enable: !!enable });
+  if (error) throw new Error(error.message || 'Could not update the payout setting');
+  if (!data?.success) throw new Error(data?.error || 'Could not update the payout setting');
   return data;
 }
 

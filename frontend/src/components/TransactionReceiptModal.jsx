@@ -5,7 +5,9 @@ import QRCode from 'qrcode';
 import { QRCodeCanvas } from 'qrcode.react';
 import { X, Receipt, Paperclip, Download, Share2, Loader2, ShieldCheck, FileCheck2, ExternalLink, Printer, Copy, Check, QrCode } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
-import { buildPublicReceiptLink, getTransactionPublicLink, setTransactionPublicPay } from '../services/publicTransactionService';
+import {
+  buildPublicReceiptLink, getTransactionPublicLink, getTransactionReceiveState, setTransactionPublicPay, setTransactionPublicReceive,
+} from '../services/publicTransactionService';
 import { uploadToR2, resolveMediaValues, isR2Key } from '../services/r2StorageService';
 import {
   RECEIPT_FOLDER,
@@ -54,6 +56,9 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
   const [pub, setPub] = useState(null);
   const [pubBusy, setPubBusy] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  // Receive-by-QR (money-out entries of a business): { receive_status, can_enable, can_manage, blocker, expires_at, received }
+  const [recv, setRecv] = useState(null);
+  const [recvBusy, setRecvBusy] = useState(false);
 
   useEffect(() => { setTx(transaction); setRefInput(getReceiptRef(transaction) || ''); }, [transaction]);
 
@@ -67,6 +72,18 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
       .catch(() => { /* not one of the viewer's own ledger entries: no QR section */ });
     return () => { cancelled = true; };
   }, [transaction?.id]);
+
+  // Money-out entries of a business can also pay the client who scans the QR.
+  useEffect(() => {
+    let cancelled = false;
+    setRecv(null);
+    if (!pub?.code || !transaction?.id || !isUuid(transaction.id)) return undefined;
+    if (transaction.transaction_type !== 'expense' || !transaction.business_profile_id) return undefined;
+    getTransactionReceiveState(transaction.id)
+      .then((state) => { if (!cancelled) setRecv(state); })
+      .catch(() => { /* no receive section */ });
+    return () => { cancelled = true; };
+  }, [pub?.code, transaction?.id, transaction?.transaction_type, transaction?.business_profile_id]);
 
   // Resolve which ledger row proof is saved on: the row itself when it's the
   // user's own, or -- for tithe receipts -- the ledger row the tithe page wrote
@@ -145,6 +162,21 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
       setError(err.message || 'Could not change the payment setting.');
     } finally {
       setPubBusy(false);
+    }
+  };
+
+  const recvOpen = recv?.receive_status === 'open';
+  const recvDone = recv?.receive_status === 'received';
+
+  const toggleReceive = async () => {
+    setError('');
+    setRecvBusy(true);
+    try {
+      setRecv(await setTransactionPublicReceive(tx.id, !recvOpen));
+    } catch (err) {
+      setError(err.message || 'Could not change the payout setting.');
+    } finally {
+      setRecvBusy(false);
     }
   };
 
@@ -396,6 +428,39 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
             )}
             {!payPaid && !payOpen && !pub.can_enable && pub.blocker && (
               <p className="mt-3 text-[11px] text-slate-500">Payment by QR is not available here: {pub.blocker}.</p>
+            )}
+
+            {recvDone && recv.received && (
+              <p className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                Received by {recv.received.recipient_name || 'the client'}
+                {recv.received.received_at ? ` · ${new Date(recv.received.received_at).toLocaleString()}` : ''}. UGX {Number(recv.received.amount_ugx || 0).toLocaleString()} was paid from your business wallet.
+              </p>
+            )}
+            {recv && !recvDone && (recv.can_enable || recvOpen) && (
+              <button
+                onClick={toggleReceive}
+                disabled={recvBusy}
+                className={`mt-3 flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left text-sm disabled:opacity-60 ${recvOpen ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-slate-700 bg-slate-900'}`}
+              >
+                <span>
+                  <span className="block font-semibold text-slate-100">Let the client receive this by scanning</span>
+                  <span className="block text-[11px] text-slate-400">
+                    {recvOpen
+                      ? `On — the client signs in with IcanEra and collects this amount from your business wallet, once${recv.expires_at ? ` (until ${new Date(recv.expires_at).toLocaleDateString()})` : ''}.`
+                      : 'Off — nobody can collect money through this QR. Turning it on is valid for 7 days.'}
+                  </span>
+                </span>
+                <span className={`relative h-6 w-11 flex-shrink-0 rounded-full transition ${recvOpen ? 'bg-emerald-500' : 'bg-slate-600'}`}>
+                  {recvBusy
+                    ? <Loader2 className="absolute left-3 top-1 h-4 w-4 animate-spin text-white" />
+                    : <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${recvOpen ? 'left-[22px]' : 'left-0.5'}`} />}
+                </span>
+              </button>
+            )}
+            {recv && !recvDone && !recvOpen && !recv.can_enable && (recv.blocker || recv.can_manage === false) && (
+              <p className="mt-3 text-[11px] text-slate-500">
+                Receiving by QR is not available here: {recv.blocker || 'only the business owner, a co-owner or finance team can switch it on'}.
+              </p>
             )}
 
             <div className="mt-3 grid grid-cols-2 gap-2">

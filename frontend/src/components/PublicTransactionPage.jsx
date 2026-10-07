@@ -9,8 +9,10 @@ import {
   buildPublicReceiptLink,
   claimCashPayment,
   getPublicReceipt,
+  getPublicReceiveInfo,
   payPublicReceipt,
   payPublicReceiptWithWallet,
+  receivePublicReceiptWithWallet,
   resumePendingPublicPayment,
 } from '../services/publicTransactionService';
 
@@ -22,6 +24,10 @@ import {
  * ways to pay — IcanEra wallet (no extra fee), Mobile Money / card / bank, or cash — and once paid the
  * same page is the receipt, listing the customer's items. The seller approves each payment from a
  * notification; this page waits and turns into the paid receipt by itself.
+ *
+ * A money-OUT receipt works the other way: when the business switched "let the client receive this by
+ * scanning" on, the client signs in here and takes the money from the business wallet into their own
+ * IcanEra wallet (once).
  */
 
 const formatMoney = (amount, currency = 'UGX') =>
@@ -46,6 +52,8 @@ const METHODS = [
 const PublicTransactionPage = ({ code }) => {
   const { user, loading: authLoading } = useAuth();
   const [receipt, setReceipt] = useState(null);
+  const [receive, setReceive] = useState(null); // { receivable, received, amount_ugx, expires_at }
+  const [justReceived, setJustReceived] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   // Name / phone typed on the standing pay QR come along in the URL — keep them off the address bar after reading.
@@ -64,8 +72,9 @@ const PublicTransactionPage = ({ code }) => {
 
   const load = useCallback(async () => {
     try {
-      const data = await getPublicReceipt(code);
+      const [data, recv] = await Promise.all([getPublicReceipt(code), getPublicReceiveInfo(code)]);
       setReceipt(data?.found ? data : null);
+      setReceive(recv?.found ? recv : null);
       setLoadError('');
     } catch (err) {
       setLoadError(err.message || 'Could not load this receipt');
@@ -140,6 +149,22 @@ const PublicTransactionPage = ({ code }) => {
       await load();
     } catch (err) {
       setPayError(err.message || 'Payment failed. Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Money-out receipt the business switched on: take it from the business wallet into the client's wallet.
+  const handleReceive = async () => {
+    if (!user) { setShowAuth(true); return; }
+    setPayError('');
+    setBusy('receive');
+    try {
+      const result = await receivePublicReceiptWithWallet(code);
+      setJustReceived(result);
+      await load();
+    } catch (err) {
+      setPayError(err.message || 'Could not receive this money. Please try again.');
     } finally {
       setBusy(null);
     }
@@ -291,6 +316,42 @@ const PublicTransactionPage = ({ code }) => {
           </p>
           <p className="ptx-note" style={{ marginTop: 6 }}>Keep this page — print it or save it as your receipt.</p>
         </div>
+      )}
+
+      {justReceived && (
+        <div className="ptx-section ptx-callout ptx-callout-ok" style={{ textAlign: 'center' }}>
+          <CheckCircle2 style={{ width: 34, height: 34, margin: '0 auto 8px', color: 'var(--green)' }} />
+          <h2 className="ptx-h2">Money received — it's in your IcanEra wallet</h2>
+          <p className="ptx-muted" style={{ fontSize: 14, marginTop: 6 }}>
+            {formatMoney(justReceived.amount_ugx)} from {receipt.issuer_name} ({Number(justReceived.ican_received).toLocaleString('en-UG', { maximumFractionDigits: 4 })} ICAN at today's price).
+          </p>
+          <p className="ptx-note" style={{ marginTop: 6 }}>Keep this page — print it or save it as your receipt.</p>
+        </div>
+      )}
+
+      {receive?.receivable && !receive.received && (
+        <div className="ptx-section ptx-noprint">
+          <h2 className="ptx-h2">Receive this money</h2>
+          <p className="ptx-muted" style={{ fontSize: 14, marginTop: 4, lineHeight: 1.5 }}>
+            {receipt.issuer_name} has paid {formatMoney(receive.amount_ugx)} to you through this receipt. Collect it into your IcanEra wallet — it can only be collected once.
+            {!user && ' Sign in or create a free account first.'}
+          </p>
+          <div className="ptx-stack-tight" style={{ marginTop: 12 }}>
+            <button className="ptx-btn ptx-primary" onClick={handleReceive} disabled={!!busy || authLoading}>
+              {busy === 'receive' ? <Loader2 className="animate-spin" width={18} height={18} /> : <Wallet width={18} height={18} />}
+              {user ? `Receive ${formatMoney(receive.amount_ugx)}` : 'Sign in to receive'}
+            </button>
+            {receive.expires_at && <p className="ptx-note">Available until {formatDate(receive.expires_at)}.</p>}
+          </div>
+          {payError && <p className="ptx-err" style={{ marginTop: 12 }}>{payError}</p>}
+        </div>
+      )}
+
+      {receive?.received && !justReceived && (
+        <p className="ptx-note" style={{ textAlign: 'center', marginTop: 12 }}>
+          <CheckCircle2 width={14} height={14} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 4 }} />
+          This money was received{receive.received_at ? ` on ${formatDate(receive.received_at)}` : ''}.
+        </p>
       )}
 
       {receipt.payable && receipt.last_reject_note && (
