@@ -13,6 +13,7 @@ import CallStage from './calls/CallStage';
 import ICANReferralsDevTab from './ICANReferralsDevTab';
 import ICANFranchiseDevTab from './ICANFranchiseDevTab';
 import ICANEraApiDevTab from './ICANEraApiDevTab';
+import ICANInsuranceDevTab from './ICANInsuranceDevTab';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { Linkify } from '../utils/linkify';
 import {
@@ -125,6 +126,7 @@ const TABS = [
   { id: 'referrals',  label: 'Referrals',    Icon: Gift,        color: '#84cc16' },
   { id: 'franchise',  label: 'Franchise',    Icon: Network,     color: '#f59e0b' },
   { id: 'api',        label: 'API',          Icon: Zap,         color: '#38bdf8' },
+  { id: 'insurance',  label: 'Insurance',    Icon: ShieldCheck, color: '#14b8a6' },
   { id: 'board',     label: 'Public Board', Icon: MessageCircle, color: '#14b8a6' },
   { id: 'messages',   label: 'Messages',     Icon: Mail,          color: '#0ea5e9' },
   { id: 'support',    label: 'Support Team', Icon: Shield,        color: '#22c55e' },
@@ -2727,6 +2729,9 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
 
         {/* ══ API (outside developers: requests, keys, endpoint kill switches; needs a real admin account, not the panel token) ══ */}
         {tab==='api' && <ICANEraApiDevTab/>}
+
+        {/* ══ INSURANCE (verify insurers, commission, points rate; IcanEra + BodaGoEra share it) ══ */}
+        {tab==='insurance' && <ICANInsuranceDevTab devToken={DEV_TOKEN}/>}
 
         {/* ══ CORPORATE (subscriptions + contract requests) ══ */}
         {tab==='corporate' && (<>

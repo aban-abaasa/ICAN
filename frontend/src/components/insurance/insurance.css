@@ -1,0 +1,92 @@
+/* IcanEra Cover — extras on top of the classic Readiness kit (growth.css).
+   Everything is scoped under .gr and reads the same --gr-* tokens, so it follows the ebony/gold
+   and ivory/bronze themes. Controls reuse the kit's classes, which the theme guard already protects. */
+
+.gr button.gr-chip[aria-pressed="true"] { background-color: var(--gr-gold-hi) !important; color: var(--gr-btn-ink) !important; border-color: var(--gr-gold-hi) !important; }
+.gr .gr-chip--bad { color: var(--gr-err); border-color: color-mix(in srgb, var(--gr-err) 45%, transparent); }
+
+/* Money: "12.5 ICAN" with the person's own currency underneath */
+.gr .ins-money { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.gr .ins-money b { color: var(--gr-ink); font-variant-numeric: tabular-nums; }
+.gr .ins-money small { font-size: .72rem; color: var(--gr-faint); }
+
+/* A labelled switch with a line of help */
+.gr .ins-scope { align-items: flex-start; }
+.gr .ins-scope span { display: grid; gap: 2px; }
+.gr .ins-scope b { font-size: .86rem; color: var(--gr-ink); }
+.gr .ins-scope small { font-size: .74rem; font-weight: 400; color: var(--gr-faint); line-height: 1.4; }
+
+/* Sub navigation with a count badge */
+.gr .ins-nav { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.gr .ins-nav::-webkit-scrollbar { display: none; }
+.gr .ins-nav button { flex: none; display: inline-flex; align-items: center; gap: .4rem; min-height: 40px; padding: 0 .9rem; border-radius: 999px; border: 1px solid var(--gr-line); background: transparent; color: var(--gr-muted); font-weight: 600; font-size: .8rem; white-space: nowrap; }
+.gr .ins-nav button svg { width: .95rem; height: .95rem; }
+.gr .ins-nav button[aria-pressed="true"] { background: var(--gr-gold-hi); border-color: var(--gr-gold-hi); color: var(--gr-btn-ink); }
+/* ThemeContext repaints every <button>; same properties, higher specificity */
+.gr .ins-nav button { background-color: transparent !important; color: var(--gr-muted) !important; border-color: var(--gr-line) !important; }
+.gr .ins-nav button[aria-pressed="true"] { background-color: var(--gr-gold-hi) !important; color: var(--gr-btn-ink) !important; border-color: var(--gr-gold-hi) !important; }
+
+/* Plan card */
+.gr .ins-plans { display: grid; gap: 12px; }
+.gr .ins-plan { display: grid; gap: 10px; }
+.gr .ins-plan__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.gr .ins-plan__name { font-family: var(--gr-serif); font-weight: 700; font-size: 1.08rem; color: var(--gr-ink); line-height: 1.25; }
+.gr .ins-plan__by { font-size: .78rem; color: var(--gr-muted); }
+.gr .ins-plan__lic { font-size: .68rem; color: var(--gr-faint); }
+.gr .ins-price { text-align: right; flex: none; }
+.gr .ins-price b { display: block; font-family: var(--gr-serif); font-size: 1.35rem; line-height: 1; color: var(--gr-ink); font-variant-numeric: tabular-nums; }
+.gr .ins-price span { display: block; margin-top: 3px; font-size: .64rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gr-faint); }
+.gr .ins-price small { display: block; margin-top: 2px; font-size: .7rem; color: var(--gr-faint); }
+.gr .ins-perks { display: flex; flex-wrap: wrap; gap: 6px; }
+.gr .ins-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: .8rem; color: var(--gr-ink-2); }
+.gr .ins-list li { display: flex; gap: .45rem; line-height: 1.4; }
+.gr .ins-list li::before { content: '✓'; color: var(--gr-ok); flex: none; }
+.gr .ins-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; border-top: 1px solid var(--gr-line-soft); }
+
+/* A fact grid */
+.gr .ins-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 8px; }
+.gr .ins-fact { padding: 8px 10px; border: 1px solid var(--gr-line-soft); border-radius: 12px; background: var(--gr-tint); }
+.gr .ins-fact dt { font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; color: var(--gr-faint); }
+.gr .ins-fact dd { margin: 2px 0 0; font-size: .86rem; font-weight: 600; color: var(--gr-ink); overflow-wrap: anywhere; }
+
+/* Stat tiles */
+.gr .ins-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: 8px; }
+.gr .ins-stat { padding: 10px 12px; border: 1px solid var(--gr-line-soft); border-radius: 12px; background: var(--gr-tint); }
+.gr .ins-stat b { display: block; font-family: var(--gr-serif); font-size: 1.35rem; color: var(--gr-ink); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.gr .ins-stat span { display: block; margin-top: 2px; font-size: .64rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gr-faint); }
+.gr .ins-stat.is-warn b { color: var(--gr-warn); }
+.gr .ins-stat.is-bad b { color: var(--gr-err); }
+
+/* Messages */
+.gr .ins-thread { display: grid; gap: 8px; max-height: 20rem; overflow-y: auto; padding: 10px; border: 1px solid var(--gr-line-soft); border-radius: 12px; background: var(--gr-tint); }
+.gr .ins-msg { max-width: 86%; padding: 8px 11px; border-radius: 14px; border: 1px solid var(--gr-line-soft); background: var(--gr-card); font-size: .86rem; line-height: 1.45; color: var(--gr-ink); }
+.gr .ins-msg.is-mine { margin-left: auto; background: var(--gr-tint-2); border-color: var(--gr-line); }
+.gr .ins-msg small { display: block; margin-top: 3px; font-size: .66rem; color: var(--gr-faint); }
+.gr .ins-msg__who { display: block; margin-bottom: 2px; font-size: .62rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--gr-faint); }
+.gr .ins-msg--system { max-width: 100%; text-align: center; background: transparent; border: 0; font-style: italic; font-size: .76rem; color: var(--gr-faint); }
+.gr .ins-compose { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+
+/* Data room */
+.gr .ins-data { display: grid; gap: 10px; }
+.gr .ins-data table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.gr .ins-data th, .gr .ins-data td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--gr-line-soft); font-variant-numeric: tabular-nums; }
+.gr .ins-data th:first-child, .gr .ins-data td:first-child { text-align: left; }
+.gr .ins-data th { font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gr-faint); }
+
+/* Policyholder / claim rows */
+.gr .ins-rows { display: grid; gap: 8px; }
+.gr .ins-row { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--gr-line-soft); border-radius: 12px; background: var(--gr-card); }
+.gr .ins-row__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.gr .ins-row__t { font-weight: 700; font-size: .88rem; color: var(--gr-ink); overflow-wrap: anywhere; }
+.gr .ins-row__m { font-size: .76rem; color: var(--gr-muted); line-height: 1.45; overflow-wrap: anywhere; }
+.gr .ins-row__acts { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.gr .ins-fold > summary { list-style: none; cursor: pointer; }
+.gr .ins-fold > summary::-webkit-details-marker { display: none; }
+
+@media (max-width: 480px) {
+  .gr .ins-plan__top { flex-direction: column; }
+  .gr .ins-price { text-align: left; }
+  .gr .ins-foot { flex-direction: column; align-items: stretch; }
+}
+@media (prefers-reduced-motion: reduce) { .gr * { scroll-behavior: auto; } }

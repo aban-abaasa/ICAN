@@ -18,13 +18,16 @@ export const CATEGORY_LABELS = {
   social: 'Social security',
   legal: 'Legal & registration',
   health: 'Health cover',
+  insurance: 'Insurance',
   finance: 'Financial safety',
   other: 'Other',
 };
-export const CATEGORY_ORDER = ['identity', 'legal', 'tax', 'social', 'health', 'finance', 'other'];
+export const CATEGORY_ORDER = ['identity', 'legal', 'tax', 'social', 'health', 'insurance', 'finance', 'other'];
 
-const item = (key, category, title, authority, link, why, required = true) =>
-  ({ key, category, title, authority, link, why, required, source: 'builtin' });
+// `covers` names the kinds of insurance that satisfy an item (see utils/insuranceCatalog.js). An item with it
+// is ticked from the live policies the person or their businesses hold, never by hand.
+const item = (key, category, title, authority, link, why, required = true, covers = null) =>
+  ({ key, category, title, authority, link, why, required, source: 'builtin', ...(covers ? { covers } : {}) });
 
 const EMERGENCY = (p) => item(`${p}-se-emergency`, 'finance', 'Build an emergency fund of 3 to 6 months of expenses', 'You', '',
   'Keeps one bad month from becoming a debt. Start small and automate it on payday.', false);
@@ -41,7 +44,7 @@ const UG = {
     item('ug-se-tin', 'tax', 'Register for a Taxpayer Identification Number (TIN)', 'URA', 'https://www.ura.go.ug', 'Your employer deducts PAYE against your TIN. You need it to file returns and prove your income.'),
     item('ug-se-nssf', 'social', 'Confirm your NSSF membership and contributions', 'NSSF Uganda', 'https://www.nssfug.org', 'Check that your employer is remitting your contributions and that your statement matches your payslips.'),
     PAYSLIPS('ug', 'URA / your employer'),
-    item('ug-se-health', 'health', 'Have health insurance or a medical cover plan', 'Insurance Regulatory Authority', 'https://www.ira.go.ug', 'One hospital stay can erase a year of savings.', false),
+    item('ug-se-health', 'health', 'Have health insurance or a medical cover plan', 'Insurance Regulatory Authority', 'https://www.ira.go.ug', 'One hospital stay can erase a year of savings.', false, ['medical']),
     EMERGENCY('ug'),
   ],
   BO: [
@@ -81,7 +84,7 @@ const TZ = {
     item('tz-se-nida', 'identity', 'Hold a valid National ID (NIDA)', 'NIDA', 'https://www.nida.go.tz', 'The base document for TRA, banks and social security.'),
     item('tz-se-tin', 'tax', 'Register for a TIN', 'TRA', 'https://www.tra.go.tz', 'Needed to file returns and prove income.'),
     item('tz-se-nssf', 'social', 'Confirm your NSSF or PSSSF membership and contributions', 'NSSF / PSSSF', 'https://www.nssf.go.tz', 'Check your employer is remitting and your statement matches your payslips.'),
-    item('tz-se-health', 'health', 'Have health insurance cover', 'NHIF', 'https://www.nhif.or.tz', 'Protects your savings from medical bills.', false),
+    item('tz-se-health', 'health', 'Have health insurance cover', 'NHIF', 'https://www.nhif.or.tz', 'Protects your savings from medical bills.', false, ['medical']),
     PAYSLIPS('tz', 'TRA / your employer'),
     EMERGENCY('tz'),
   ],
@@ -101,7 +104,7 @@ const RW = {
     item('rw-se-id', 'identity', 'Hold a valid National ID', 'NIDA Rwanda', 'https://www.nida.gov.rw', 'The base document for RRA, banks and social security.'),
     item('rw-se-tin', 'tax', 'Register for a TIN', 'RRA', 'https://www.rra.gov.rw', 'Needed to file returns and prove income.'),
     item('rw-se-rssb', 'social', 'Confirm your RSSB pension and contributions', 'RSSB', 'https://www.rssb.rw', 'Check your employer is remitting and your statement matches your payslips.'),
-    item('rw-se-health', 'health', 'Have health insurance cover (CBHI or RAMA)', 'RSSB', 'https://www.rssb.rw', 'Protects your savings from medical bills.', false),
+    item('rw-se-health', 'health', 'Have health insurance cover (CBHI or RAMA)', 'RSSB', 'https://www.rssb.rw', 'Protects your savings from medical bills.', false, ['medical']),
     PAYSLIPS('rw', 'RRA / your employer'),
     EMERGENCY('rw'),
   ],
@@ -132,6 +135,32 @@ const GENERIC = {
     BOOKS('xx', 'Your registry and revenue authority'),
   ],
 };
+
+// Insurance, for everyone: what to have in place, and which kind of cover satisfies it. These tick themselves
+// from the policies bought in the Insurance tab.
+function addInsurance(catalog, p, authority, link, { medical = true, motorLaw = '' } = {}) {
+  if (medical) {
+    catalog.SE.push(item(`${p}-se-ins-medical`, 'insurance', 'Have medical insurance cover', authority, link,
+      'One hospital stay can erase a year of savings. Cover you pay for yourself works alongside any state scheme.', false, ['medical']));
+  }
+  catalog.SE.push(item(`${p}-se-ins-accident`, 'insurance', 'Have personal accident or life cover', authority, link,
+    'Pays out if you cannot work, or to your family if you die. Cheap compared with what it protects.', false, ['accident', 'life']));
+  catalog.BO.push(
+    item(`${p}-bo-ins-liability`, 'insurance', 'Insure the business against claims, including injury to staff', authority, link,
+      'One accident or lawsuit can close a business that has no cover. Many countries expect employers to insure their staff.', false, ['liability']),
+    item(`${p}-bo-ins-property`, 'insurance', 'Insure your stock, premises and equipment', authority, link,
+      'Fire, theft and flood are not covered by your profit and loss. Cover keeps you trading after a bad day.', false, ['property']),
+    item(`${p}-bo-ins-motor`, 'insurance', 'Insure every business vehicle, third-party at least', authority, link,
+      `${motorLaw} Without cover, one crash can end the business and the driver's livelihood.`.trim(), false, ['third_party', 'comprehensive', 'fleet']),
+    item(`${p}-bo-ins-transit`, 'insurance', 'Insure the goods you move or deliver', authority, link,
+      'Customers expect you to be good for what is lost or damaged on the road.', false, ['goods_in_transit']),
+  );
+}
+addInsurance(UG, 'ug', 'Insurance Regulatory Authority', 'https://www.ira.go.ug', { medical: false, motorLaw: 'Third-party motor insurance is required by law for every motor vehicle in Uganda.' });
+addInsurance(KE, 'ke', 'Insurance Regulatory Authority (Kenya)', 'https://www.ira.go.ke', { motorLaw: 'Third-party motor insurance is required by law for every motor vehicle in Kenya.' });
+addInsurance(TZ, 'tz', 'Tanzania Insurance Regulatory Authority', 'https://www.tira.go.tz', { medical: false, motorLaw: 'Motor insurance is required by law for every motor vehicle in Tanzania.' });
+addInsurance(RW, 'rw', 'National Bank of Rwanda', 'https://www.bnr.rw', { medical: false, motorLaw: 'Third-party motor insurance is required by law for every motor vehicle in Rwanda.' });
+addInsurance(GENERIC, 'xx', 'Your insurance regulator', '', { motorLaw: 'Most countries require third-party motor insurance for every vehicle.' });
 
 const CATALOG = { Uganda: UG, Kenya: KE, Tanzania: TZ, Rwanda: RW, Other: GENERIC };
 
