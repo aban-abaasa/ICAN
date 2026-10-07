@@ -138,7 +138,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   RETURN QUERY
   -- bp.business_name is VARCHAR(255) in business_profiles — cast to TEXT so
@@ -167,7 +167,7 @@ CREATE OR REPLACE FUNCTION public.ican_dev_run_corporate_billing_cycle(dev_token
 RETURNS TABLE (business_profile_id UUID, outcome TEXT)
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY SELECT * FROM public.fn_run_corporate_billing_cycle();
 END;
 $$;
@@ -182,7 +182,7 @@ CREATE OR REPLACE FUNCTION public.ican_dev_list_contract_requests(dev_token TEXT
 RETURNS SETOF public.ican_corporate_contract_requests
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY SELECT * FROM public.ican_corporate_contract_requests ORDER BY
     CASE status WHEN 'pending' THEN 0 ELSE 1 END, created_at DESC;
 END;
@@ -197,7 +197,7 @@ CREATE OR REPLACE FUNCTION public.ican_dev_resolve_contract_request(
 RETURNS TABLE (success BOOLEAN, message TEXT)
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   IF p_status NOT IN ('contacted', 'closed', 'declined') THEN
     RETURN QUERY SELECT FALSE, 'Invalid status'::TEXT;
@@ -242,7 +242,7 @@ DECLARE
   v_existing public.ican_corporate_subscriptions;
   v_new public.ican_corporate_subscriptions;
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   IF p_monthly_price_ic IS NULL OR p_monthly_price_ic <= 0 THEN
     RETURN QUERY SELECT FALSE, NULL::UUID, 'Negotiated price must be greater than 0'::TEXT;
@@ -287,8 +287,8 @@ GRANT EXECUTE ON FUNCTION public.ican_dev_provision_contract_subscription(TEXT, 
 -- ============================================================================
 -- VERIFY
 -- ============================================================================
--- SELECT * FROM public.ican_dev_get_corporate_subscriptions('dev_ICAN_Pr0_KV25');
--- SELECT * FROM public.ican_dev_list_contract_requests('dev_ICAN_Pr0_KV25');
+-- SELECT * FROM public.ican_dev_get_corporate_subscriptions('<dev token>');
+-- SELECT * FROM public.ican_dev_list_contract_requests('<dev token>');
 -- SELECT * FROM public.fn_request_corporate_contract('Acme Ltd', 'Jane Doe', 'jane@acme.com', NULL, 250, 'Need 250 seats');
 -- ============================================================================
 -- END

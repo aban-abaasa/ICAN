@@ -30,7 +30,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT ua.user_id, ua.account_holder_name::TEXT, ua.account_number::TEXT,
            ua.email::TEXT, ua.phone_number::TEXT, ua.country_code::TEXT, ua.created_at
@@ -53,7 +53,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT
       ua.user_id,
@@ -85,7 +85,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT
       a.id                                              AS agent_id,
@@ -125,7 +125,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public, auth LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   -- Try ican_saccos first (SACCO/Trust system)
   BEGIN
     RETURN QUERY
@@ -187,7 +187,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT
       gen_random_uuid()                    AS id,
@@ -218,7 +218,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT
       COALESCE(mp.price_ugx,              5000)::NUMERIC,
@@ -248,7 +248,7 @@ CREATE OR REPLACE FUNCTION public.ican_dev_grant_bonus(
 RETURNS VOID
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   UPDATE public.user_accounts
   SET
     ican_coin_balance         = COALESCE(ican_coin_balance, 0)         + bonus_amount,
@@ -286,7 +286,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public, auth LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT
       cp.id,
@@ -332,7 +332,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public, auth LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   -- Try with investor_investments for raised amount
   BEGIN
     RETURN QUERY

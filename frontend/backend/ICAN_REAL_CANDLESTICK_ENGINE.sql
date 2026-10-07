@@ -47,7 +47,7 @@ CREATE OR REPLACE FUNCTION public.ican_record_price_tick(p_volume_contribution N
 RETURNS VOID
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 DECLARE
-  _tok         CONSTANT TEXT := 'dev_ICAN_Pr0_KV25';
+  _tok         CONSTANT TEXT := public.ican_dev_secret();
   v_price_ugx  NUMERIC;
   -- 5-minute buckets, not hourly: squashing a whole hour into one candle
   -- means real activity only ever produces one flat dash on the chart at a
@@ -161,7 +161,7 @@ BEGIN
       -- fallback instead of quietly mislabeling an unknown currency as USD.
       SELECT (NEW.amount * COALESCE(r.rate_to_ugx, 1)) / NULLIF(fx.fx_adjusted_floor, 0)
       INTO v_vol
-      FROM public.ican_compute_fair_price('dev_ICAN_Pr0_KV25') fx
+      FROM public.ican_compute_fair_price(public.ican_dev_secret()) fx
       LEFT JOIN public.ican_currency_rates r ON r.currency_code = UPPER(NEW.currency)
       LIMIT 1;
     END IF;

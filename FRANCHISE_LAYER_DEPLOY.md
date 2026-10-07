@@ -83,9 +83,8 @@ Countries & rates, Franchise admins.
    an edge rate limit if that happens.
 5. **Not automated yet:** charging the upfront fee, enforcing the minimum annual royalty (it is tracked and shown),
    and wallet payouts.
-6. **Existing security finding, not changed here:** the developer panel PIN (`dev_ICAN_Pr0_KV25`) is committed in
-   the repo and in the public app, and several older dev functions accept it from anyone. Worth rotating and
-   moving those functions to a real signed-in check, as the franchise functions do.
+6. **Dev panel token:** the old fixed developer-panel token is replaced by a server-side secret, and the panel
+   is opened by an allowlisted Supabase account. See `supabase/migrations/20261009100000_secure_dev_access.sql`.
 
 ## Tests
 

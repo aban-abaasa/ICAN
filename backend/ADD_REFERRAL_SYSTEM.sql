@@ -157,7 +157,7 @@ REVOKE ALL ON public.ican_referral_settings, public.ican_referral_codes, public.
 CREATE OR REPLACE FUNCTION public.ican_referral_is_manager(p_dev_token TEXT DEFAULT NULL)
 RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
-  IF p_dev_token IS NOT NULL AND p_dev_token = 'dev_ICAN_Pr0_KV25' THEN
+  IF p_dev_token IS NOT NULL AND p_dev_token = public.ican_dev_secret() THEN
     RETURN TRUE;
   END IF;
   IF auth.uid() IS NOT NULL AND to_regclass('public.mbg_users') IS NOT NULL THEN
