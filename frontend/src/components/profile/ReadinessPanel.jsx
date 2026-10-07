@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle, Check, ClipboardList, ExternalLink, Globe, Paperclip, Search, Timer,
+  AlertTriangle, Check, ClipboardList, ExternalLink, Globe, Paperclip, Search, Shield, ShieldCheck, Timer,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { loadAllCovers } from '../../services/insuranceService';
+import { coveredBy } from '../../utils/insuranceCatalog';
+import InsuranceHub from '../insurance/InsuranceHub';
 import {
   COUNTRIES, MODES, computeCompliance, getBuiltInItems, groupByCategory, mergeItems, toComplianceData,
 } from '../../utils/readinessCatalog';
@@ -38,6 +42,10 @@ export default function ReadinessPanel({ onComplianceData }) {
   const [preview, setPreview] = useState(null);
   const [linkFormOpen, setLinkFormOpen] = useState(false);
   const [attachTo, setAttachTo] = useState('');
+  const [tab, setTab] = useState('checklist'); // checklist | insurance
+  const [covers, setCovers] = useState([]);
+  const [coversLoading, setCoversLoading] = useState(true);
+  const { user } = useAuth();
   const linksRef = useRef(null);
   const loadedSelection = useRef(null);
 
@@ -52,7 +60,23 @@ export default function ReadinessPanel({ onComplianceData }) {
     [sheet.rows, country, mode],
   );
   const items = useMemo(() => mergeItems(getBuiltInItems(country, mode), sheetResult.items), [country, mode, sheetResult.items]);
-  const statusMap = useMemo(() => Object.fromEntries(Object.entries(progress).map(([k, v]) => [k, v.status])), [progress]);
+  const savedStatus = useMemo(() => Object.fromEntries(Object.entries(progress).map(([k, v]) => [k, v.status])), [progress]);
+
+  // Insurance items are ticked from the cover the person (or their businesses) actually holds, never by hand.
+  const refreshCovers = useCallback(async () => {
+    if (!user?.id) { setCoversLoading(false); return; }
+    try { setCovers(await loadAllCovers(user.id)); } catch { setCovers([]); }
+    setCoversLoading(false);
+  }, [user?.id]);
+  useEffect(() => { refreshCovers(); }, [refreshCovers]);
+
+  const statusMap = useMemo(() => {
+    const merged = { ...savedStatus };
+    items.forEach((i) => { if (coveredBy(i, covers)) merged[i.key] = 'done'; });
+    return merged;
+  }, [savedStatus, items, covers]);
+  const insuranceItems = useMemo(() => items.filter((i) => i.covers), [items]);
+  const insuranceOpen = insuranceItems.filter((i) => !coveredBy(i, covers)).length;
   const compliance = useMemo(() => computeCompliance(items, statusMap), [items, statusMap]);
   const groups = useMemo(() => groupByCategory(items), [items]);
   const nextRequired = items.find((i) => i.required && statusMap[i.key] !== 'done');
@@ -198,6 +222,16 @@ export default function ReadinessPanel({ onComplianceData }) {
         </div>
       </header>
 
+      <div className="gr-tabs" role="tablist" aria-label="Readiness sections" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+        <button type="button" role="tab" className="gr-tab" aria-selected={tab === 'checklist'} onClick={() => setTab('checklist')}>
+          <ClipboardList aria-hidden="true" />Checklist
+        </button>
+        <button type="button" role="tab" className="gr-tab" aria-selected={tab === 'insurance'} onClick={() => setTab('insurance')}>
+          <Shield aria-hidden="true" />Insurance
+          {insuranceOpen > 0 && <span className="gr-badge" aria-label={`${insuranceOpen} not covered`}>{insuranceOpen}</span>}
+        </button>
+      </div>
+
       {!backendReady && (
         <div className="gr-alert gr-alert--warn" role="status">
           <AlertTriangle aria-hidden="true" />
@@ -206,6 +240,11 @@ export default function ReadinessPanel({ onComplianceData }) {
       )}
       {banner && <div className="gr-alert gr-alert--err" role="alert"><AlertTriangle aria-hidden="true" /><span>{banner}</span></div>}
 
+      {tab === 'insurance' && (
+        <InsuranceHub items={insuranceItems} covers={covers} coversLoading={coversLoading} onCoversChanged={refreshCovers} />
+      )}
+
+      {tab === 'checklist' && (<>
       {loading ? (
         <><div className="gr-skel" /><div className="gr-skel" /></>
       ) : (
@@ -216,11 +255,13 @@ export default function ReadinessPanel({ onComplianceData }) {
               {g.items.map((item) => {
                 const status = statusMap[item.key] || 'todo';
                 const done = status === 'done';
+                const auto = coveredBy(item, covers);
                 const evidence = evidenceFor(item.key);
                 return (
                   <article key={item.key} className={`gr-item ${done ? 'is-done' : ''}`}>
-                    <button type="button" className="gr-tick" aria-pressed={done} onClick={() => setStatus(item, done ? 'todo' : 'done')}
-                      aria-label={`${done ? 'Mark not done' : 'Mark done'}: ${item.title}`}>
+                    <button type="button" className="gr-tick" aria-pressed={done} disabled={!!auto} onClick={() => setStatus(item, done ? 'todo' : 'done')}
+                      title={auto ? 'Ticked from your active insurance' : undefined}
+                      aria-label={auto ? `Covered: ${item.title}` : `${done ? 'Mark not done' : 'Mark done'}: ${item.title}`}>
                       <Check aria-hidden="true" />
                     </button>
                     <div style={{ minWidth: 0 }} className="gr-form">
@@ -230,6 +271,7 @@ export default function ReadinessPanel({ onComplianceData }) {
                           <span className="gr-chip">{item.required ? 'Required' : 'Recommended'}</span>
                           {item.authority && <span>{item.authority}</span>}
                           {item.source === 'sheet' && <span className="gr-chip gr-chip--ok">From your sheet</span>}
+                          {auto && <span className="gr-chip gr-chip--ok"><ShieldCheck aria-hidden="true" />Covered by {auto.insurer}</span>}
                           {status === 'in_progress' && <span className="gr-chip gr-chip--warn"><Timer aria-hidden="true" />Working on it</span>}
                         </div>
                       </div>
@@ -244,6 +286,11 @@ export default function ReadinessPanel({ onComplianceData }) {
                         </div>
                       )}
                       <div className="gr-block__actions" style={{ gap: 8 }}>
+                        {item.covers && !auto && (
+                          <button type="button" className="gr-btn gr-btn--primary gr-btn--sm" onClick={() => setTab('insurance')}>
+                            <Shield aria-hidden="true" />Find cover
+                          </button>
+                        )}
                         {!done && (
                           <button type="button" className="gr-btn gr-btn--ghost gr-btn--sm" onClick={() => setStatus(item, status === 'in_progress' ? 'todo' : 'in_progress')} aria-pressed={status === 'in_progress'}>
                             <Timer aria-hidden="true" />{status === 'in_progress' ? 'Not started' : 'Working on it'}
@@ -281,6 +328,7 @@ export default function ReadinessPanel({ onComplianceData }) {
         <Globe aria-hidden="true" style={{ width: 14, height: 14, display: 'inline', marginRight: 6 }} />
         Guidance only, not legal advice. Requirements and thresholds change, so confirm with the authority named on each item.
       </p>
+      </>)}
 
       {preview && <FramePreview link={preview} onClose={() => setPreview(null)} />}
     </section>
