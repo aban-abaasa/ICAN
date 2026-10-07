@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { getCardQrInfo, submitCardQrRequest, payWithCardPin, getCardQrAccountName, listUgandaBanks } from '../services/digitalCardService';
+import {
+  getCardQrInfo, submitCardQrRequest, payWithCardPin, getCardQrAccountName, listUgandaBanks,
+  getCardPayInfo, quoteCardPayment, payCardWithFlutterwave, resumePendingCardPayment,
+} from '../services/digitalCardService';
 import { detectUgandaMobileNetwork } from '../services/icanWalletService';
 
 /**
@@ -10,6 +13,10 @@ import { detectUgandaMobileNetwork } from '../services/icanWalletService';
  * If the owner turned PIN approval off, or they don't have the PIN, this falls
  * back to sending them a request they confirm later in their wallet.
  * Route: /card-pay/:token
+ *
+ * The same QR also lets the scanner PAY the card holder (personal or business card) with Mobile Money, card or
+ * bank through Flutterwave — no account, no PIN. The server fixes the amount and fee, confirms the payment
+ * with Flutterwave and credits the holder's wallet. That is the first option when it is available.
  */
 const CardPayPage = ({ token }) => {
   const [info, setInfo] = useState(undefined); // undefined = loading, null = invalid
@@ -17,17 +24,46 @@ const CardPayPage = ({ token }) => {
   const [dest, setDest] = useState('momo'); // 'momo' | 'icanera' | 'bank' (PIN mode only)
   const [banks, setBanks] = useState([]);
   const [acctName, setAcctName] = useState(null); // masked IcanEra holder name, null = unknown
-  const [mode, setMode] = useState('pin'); // 'pin' | 'request'
+  const [mode, setMode] = useState('pin'); // 'pay' (Flutterwave) | 'pin' | 'request'
+  const [payInfo, setPayInfo] = useState(null); // { found, kind, holder_name, fee_pct, min_ugx, max_ugx }
+  const [pay, setPay] = useState({ name: '', phone: '', amount: '', note: '' });
+  const [quote, setQuote] = useState(null); // { amount_ugx, processing_fee_ugx, charge_ugx }
+  const [quoteError, setQuoteError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(null); // { kind: 'paid' | 'requested', amount }
 
   useEffect(() => {
-    getCardQrInfo(token).then((i) => {
+    let cancelled = false;
+    Promise.all([getCardQrInfo(token), getCardPayInfo(token)]).then(([i, p]) => {
+      if (cancelled) return;
       setInfo(i);
-      if (i && !i.pin_pay_enabled) setMode('request');
-    }).catch(() => setInfo(null));
+      const canPay = Boolean(i && p?.found);
+      setPayInfo(canPay ? p : null);
+      setMode(canPay ? 'pay' : i && !i.pin_pay_enabled ? 'request' : 'pin');
+    }).catch(() => { if (!cancelled) setInfo(null); });
+    // Paid on an earlier scan but the tab closed before it was confirmed? Finish that first.
+    resumePendingCardPayment(token).then((r) => { if (r && !cancelled) setDone({ kind: 'flw', amount: r.amount_ugx, charged: r.charged_ugx, fee: r.processing_fee_ugx, code: r.code }); });
+    return () => { cancelled = true; };
   }, [token]);
+
+  // Show the total (amount + gateway fee) as the payer types the amount.
+  useEffect(() => {
+    setQuote(null);
+    setQuoteError(null);
+    const amount = Number(pay.amount);
+    if (mode !== 'pay' || !payInfo || !amount) return undefined;
+    if (amount < payInfo.min_ugx || amount > payInfo.max_ugx) {
+      setQuoteError(`Amount must be between UGX ${payInfo.min_ugx.toLocaleString()} and UGX ${payInfo.max_ugx.toLocaleString()}`);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      quoteCardPayment(token, amount).then((q) => { if (!cancelled) setQuote(q); })
+        .catch((err) => { if (!cancelled) setQuoteError(err.message); });
+    }, 400);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [mode, payInfo, pay.amount, token]);
 
   useEffect(() => {
     if (dest !== 'bank' || banks.length) return;
@@ -70,6 +106,29 @@ const CardPayPage = ({ token }) => {
     }
   };
 
+  const setP = (k) => (e) => setPay((f) => ({ ...f, [k]: e.target.value }));
+
+  const submitPay = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setError(null);
+    if (pay.name.trim().length < 2) { setError('Enter your name'); return; }
+    if (pay.phone.replace(/[^0-9]/g, '').length < 9) { setError('Enter the phone number you will pay with'); return; }
+    if (!quote) { setError(quoteError || 'Enter the amount you want to pay'); return; }
+    setBusy(true);
+    try {
+      const r = await payCardWithFlutterwave({
+        token, amount: Number(pay.amount), name: pay.name.trim(), phone: pay.phone.trim(), note: pay.note.trim(),
+        holderName: payInfo.holder_name, expectedCharge: quote.charge_ugx,
+      });
+      setDone({ kind: 'flw', amount: r.amount_ugx, charged: r.charged_ugx, fee: r.processing_fee_ugx, code: r.code });
+    } catch (err) {
+      setError(err.message || 'Payment failed. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const input = 'w-full px-3 py-3 rounded-lg bg-slate-800 border border-slate-600 text-white placeholder-gray-500 focus:outline-none focus:border-blue-400';
 
   return (
@@ -90,6 +149,17 @@ const CardPayPage = ({ token }) => {
             <p className="text-sm text-gray-400 mt-1">{done.amount.toLocaleString()} UGX {done.dest === 'icanera' ? `is already in IcanEra account ${form.phone}.` : `is on its way to ${form.phone}. It is refunded to the card owner automatically if it is rejected.`}</p>
           </div>
         )}
+        {info && done?.kind === 'flw' && (
+          <div className="text-center py-6">
+            <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
+            <p className="font-semibold">Payment received — thank you!</p>
+            <p className="text-sm text-gray-400 mt-1">
+              UGX {Number(done.amount).toLocaleString()} has been paid to {payInfo?.holder_name || info.holder_first_name}.
+              {done.fee > 0 ? ` Total charged UGX ${Number(done.charged).toLocaleString()} (includes a UGX ${Number(done.fee).toLocaleString()} processing fee).` : ''}
+            </p>
+            {done.code && <a href={`/r/${done.code}`} className="inline-block mt-3 text-sm text-blue-300 underline">View your receipt</a>}
+          </div>
+        )}
         {info && done?.kind === 'requested' && (
           <div className="text-center py-6">
             <CheckCircle2 className="w-10 h-10 text-green-400 mx-auto mb-3" />
@@ -97,7 +167,42 @@ const CardPayPage = ({ token }) => {
             <p className="text-sm text-gray-400 mt-1">They must confirm it in their wallet before any money is sent to {form.phone}.</p>
           </div>
         )}
-        {info && !done && (
+        {info && !done && payInfo && (
+          <div className="grid grid-cols-2 gap-1 mb-4">
+            {[['pay', `Pay ${payInfo.holder_name}`], ['other', 'Ask for money']].map(([k, label]) => {
+              const on = k === 'pay' ? mode === 'pay' : mode !== 'pay';
+              return (
+                <button type="button" key={k} onClick={() => { setError(null); setMode(k === 'pay' ? 'pay' : (info.pin_pay_enabled ? 'pin' : 'request')); }}
+                  className={`py-2 rounded-lg text-xs font-semibold border ${on ? 'border-blue-400 bg-blue-500/20' : 'border-slate-600'}`}>{label}</button>
+              );
+            })}
+          </div>
+        )}
+        {info && !done && mode === 'pay' && payInfo && (
+          <form onSubmit={submitPay} className="space-y-3">
+            <div>
+              <h1 className="text-lg font-bold">Pay {payInfo.holder_name}</h1>
+              <p className="text-xs text-gray-400">
+                IcanEra {payInfo.kind === 'business' ? 'business ' : ''}card ending {info.last4}. Pay with Mobile Money, card or bank — no account needed.
+              </p>
+            </div>
+            <input className={input} placeholder="Your name" value={pay.name} onChange={setP('name')} autoComplete="name" required />
+            <input className={input} placeholder="Phone you will pay with (07…)" inputMode="tel" value={pay.phone} onChange={setP('phone')} autoComplete="tel" required />
+            <input className={input} placeholder="Amount (UGX)" inputMode="numeric" type="number" min={payInfo.min_ugx} max={payInfo.max_ugx} value={pay.amount} onChange={setP('amount')} required />
+            <input className={input} placeholder="What is it for? (optional)" maxLength={140} value={pay.note} onChange={setP('note')} />
+            {quote && (
+              <p className="text-xs text-gray-300">
+                Includes a UGX {Number(quote.processing_fee_ugx).toLocaleString()} payment-processing fee. {payInfo.holder_name} receives the full UGX {Number(quote.amount_ugx).toLocaleString()}.
+              </p>
+            )}
+            {quoteError && !error && <p className="text-xs text-amber-300">{quoteError}</p>}
+            {error && <p className="text-sm text-red-400">{error}</p>}
+            <button disabled={busy || !quote} className="w-full py-3 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 font-semibold disabled:opacity-50">
+              {busy ? 'Please wait…' : quote ? `Pay UGX ${Number(quote.charge_ugx).toLocaleString()}` : 'Enter an amount'}
+            </button>
+          </form>
+        )}
+        {info && !done && mode !== 'pay' && (
           <form onSubmit={submit} className="space-y-3">
             <div>
               <h1 className="text-lg font-bold">{pinMode ? `Pay with ${info.holder_first_name}'s card` : `Request money from ${info.holder_first_name}`}</h1>
