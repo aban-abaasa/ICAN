@@ -63,6 +63,7 @@ import {
   Loader2
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
+import PendingQrApprovals from './PendingQrApprovals';
 import TransactionReceiptModal from './TransactionReceiptModal';
 import ReceiptTally, { TruthBadge } from './ReceiptTally';
 import { getProofStatus, getProofLabel, getReceiptNumber } from '../utils/transactionReceipt';
@@ -5731,6 +5732,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           openFeaturePanel('cmms');
           if (innerTab) {
             setCmmsOpenRequest({ tab: innerTab, requestId: `dashboard-widget:${Date.now()}` });
+          }
+        }}
+      />
+
+      {/* A customer paid a QR bill and an approver has to confirm it: Approve / Reject right here, no hunting for the notification */}
+      <PendingQrApprovals
+        onDecided={async () => {
+          try {
+            const decidedUserId = authContextUser?.id || user?.id || userProfile?.id;
+            const engine = new VelocityEngine(decidedUserId);
+            const loadResult = await engine.loadAllTransactions();
+            if (loadResult.success) {
+              setTransactions(loadResult.data || []);
+              setVelocityMetrics(engine.calculateMetrics());
+            }
+          } catch (error) {
+            console.warn('Could not refresh after an approval:', error);
           }
         }}
       />
