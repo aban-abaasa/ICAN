@@ -27,6 +27,36 @@ const openedFromRecoveryLink = (() => {
 
 export const useAuth = () => useContext(AuthContext);
 
+// How long startup may wait on the network before the app stops showing the loading
+// screen. getSession() waits for a token refresh when the stored access token has
+// expired, and on a slow mobile connection that call can retry for a long time.
+const SESSION_CHECK_TIMEOUT_MS = 4000;
+const MFA_CHECK_TIMEOUT_MS = 5000;
+
+const withTimeout = (promise, ms, label) => new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  Promise.resolve(promise).then(
+    (value) => { clearTimeout(timer); resolve(value); },
+    (error) => { clearTimeout(timer); reject(error); },
+  );
+});
+
+// The session supabase-js persisted on this device, read without any network or lock.
+// Only used to get past the loading screen when getSession() is slow: the real session
+// (or a sign-out) still arrives through onAuthStateChange and replaces it.
+const readStoredSessionUser = () => {
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key && /^sb-.+-auth-token$/.test(key)) {
+        const stored = JSON.parse(localStorage.getItem(key));
+        if (stored?.user?.id) return stored.user;
+      }
+    }
+  } catch (_) { /* storage unavailable or unreadable */ }
+  return null;
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -243,11 +273,23 @@ export const AuthProvider = ({ children }) => {
     const client = getSupabaseClient();
     try {
       if (!client) throw new Error('Supabase not initialized');
-      const { data, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+      const { data, error } = await withTimeout(
+        client.auth.mfa.getAuthenticatorAssuranceLevel(), MFA_CHECK_TIMEOUT_MS, 'Two-step level check');
       if (error) throw error;
       if (data?.currentLevel === 'aal1' && data?.nextLevel === 'aal2') {
-        const { data: factors } = await client.auth.mfa.listFactors();
-        const verified = (factors?.totp || [])[0]; // `totp` lists verified factors only
+        // The session already says a second step is owed. If looking up the factor is
+        // slow, still require the code (verifyMfa finds the factor itself) rather than
+        // leaving the app on the loading screen or letting the account through.
+        let verified = null;
+        try {
+          const { data: factors } = await withTimeout(
+            client.auth.mfa.listFactors(), MFA_CHECK_TIMEOUT_MS, 'Two-step factor lookup');
+          verified = (factors?.totp || [])[0]; // `totp` lists verified factors only
+        } catch (lookupErr) {
+          console.warn('[AuthContext] Two-step factor lookup slow, requiring code anyway:', lookupErr?.message || lookupErr);
+          setMfa({ userId: forUserId, status: 'required', factorId: null });
+          return;
+        }
         if (verified) {
           setMfa({ userId: forUserId, status: 'required', factorId: verified.id });
           return;
@@ -255,6 +297,14 @@ export const AuthProvider = ({ children }) => {
       }
       setMfa({ userId: forUserId, status: 'clear', factorId: null });
     } catch (err) {
+      // A check that merely timed out on a slow network is not "no second step": if the
+      // session stored on this device lists a verified factor, still ask for the code.
+      const storedFactors = readStoredSessionUser()?.factors;
+      if (/timed out/.test(err?.message || '') && storedFactors?.some((f) => f.status === 'verified')) {
+        console.warn('[AuthContext] Two-step check slow, requiring code:', err.message);
+        setMfa({ userId: forUserId, status: 'required', factorId: null });
+        return;
+      }
       // Fail open: a device-cached (offline) user has no Supabase session to check, and a
       // broken check must not lock every account out of the app.
       console.warn('[AuthContext] Two-step check skipped:', err?.message || err);
@@ -270,9 +320,14 @@ export const AuthProvider = ({ children }) => {
 
   const verifyMfa = async (code) => {
     const client = getSupabase();
-    if (!client || !mfa.factorId) throw new Error('No verification method is set up for this account.');
+    let factorId = mfa.factorId;
+    if (client && !factorId) {
+      const { data: factors } = await client.auth.mfa.listFactors();
+      factorId = (factors?.totp || [])[0]?.id || null;
+    }
+    if (!client || !factorId) throw new Error('No verification method is set up for this account.');
     const { error } = await client.auth.mfa.challengeAndVerify({
-      factorId: mfa.factorId,
+      factorId,
       code: String(code || '').replace(/\D/g, ''),
     });
     if (error) throw error;
@@ -288,8 +343,16 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    // Get initial session - Supabase will automatically process OAuth tokens from URL
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Get initial session - Supabase will automatically process OAuth tokens from URL.
+    // Bounded: if it is still waiting on a token refresh after a few seconds, carry on
+    // with the session stored on this device instead of holding the loading screen.
+    // onAuthStateChange below delivers the real result (or a sign-out) when it lands.
+    // Not while an OAuth / magic-link sign-in is being completed from the URL: no stored
+    // session exists yet, so cutting the wait short would flash the landing page.
+    const completingSignInFromUrl = /[#&?](access_token|code|error_description)=/.test(
+      `${window.location.hash}${window.location.search}`);
+    const sessionCheck = supabase.auth.getSession();
+    (completingSignInFromUrl ? sessionCheck : withTimeout(sessionCheck, SESSION_CHECK_TIMEOUT_MS, 'Session check')).then(({ data: { session } }) => {
       // Never downgrade: PASSWORD_RECOVERY may already have fired.
       if (openedFromRecoveryLink) setIsRecoveryMode(true);
       setUser(session?.user ?? null);
@@ -303,7 +366,14 @@ export const AuthProvider = ({ children }) => {
         window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
       }
     }).catch((err) => {
-      console.error('Error getting session:', err);
+      console.warn('Session check slow or failed:', err?.message || err);
+      const storedUser = readStoredSessionUser();
+      if (storedUser) {
+        if (openedFromRecoveryLink) setIsRecoveryMode(true);
+        // Keep a user the listener has already set; otherwise use the stored one.
+        setUser((current) => current ?? storedUser);
+        loadProfile(storedUser.id);
+      }
       setLoading(false);
     });
 

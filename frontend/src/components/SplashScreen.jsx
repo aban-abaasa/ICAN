@@ -161,11 +161,46 @@ const SplashArt = () => {
   );
 };
 
-/** Full-screen, in-flow loading state (no timer). */
+// If the full-screen loader is still up after this long, something is stalled
+// (usually a slow connection); offer a way out instead of an endless wait.
+const STALLED_AFTER_MS = 12000;
+
+/** Full-screen, in-flow loading state. Offers a reload if it stays up too long. */
 export function ClassicLoadingScreen() {
+  const [stalled, setStalled] = useState(false);
+  const isDark = useIsDark();
+
+  useEffect(() => {
+    const timer = setTimeout(() => setStalled(true), STALLED_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const c = isDark ? PALETTES.dark : PALETTES.light;
+
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div style={{ minHeight: '100vh', position: 'relative' }}>
       <SplashArt />
+      {stalled && (
+        <div
+          role="status"
+          style={{
+            position: 'absolute', left: 0, right: 0, bottom: '2.5rem', zIndex: 2, textAlign: 'center',
+            fontFamily: "Georgia, 'Times New Roman', serif", color: c.muted, fontSize: '0.85rem',
+          }}
+        >
+          Still loading… slow connection?{' '}
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            style={{
+              background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: c.accent,
+              fontFamily: 'inherit', fontSize: 'inherit', fontWeight: 700, textDecoration: 'underline',
+            }}
+          >
+            Reload
+          </button>
+        </div>
+      )}
     </div>
   );
 }
