@@ -256,7 +256,7 @@ export default function ICANInsuranceDevTab({ devToken }) {
 
       {appsMissing && (
         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-500">
-          Insurer applications are not installed yet. Run supabase/migrations/20261010100000_insurer_applications.sql, then refresh.
+          Insurer applications are not installed yet. Run supabase/migrations/20261010100000_insurer_applications.sql and then 20261010200000_insurer_applications_public.sql, then refresh.
         </div>
       )}
 
@@ -276,6 +276,9 @@ export default function ICANInsuranceDevTab({ devToken }) {
                   <p className="text-xs" style={{ color: 'var(--dp-sub)' }}>
                     Licence <b style={{ color: 'var(--dp-txt)' }}>{a.licence_number}</b> ({a.regulator}) · expires{' '}
                     <b style={{ color: a.licence_expired ? '#ef4444' : 'var(--dp-txt)' }}>{fmtDate(a.licence_expiry)}{a.licence_expired ? ' (expired)' : ''}</b>
+                  </p>
+                  <p className="text-[11px]" style={{ color: a.has_account ? '#10b981' : '#f59e0b' }}>
+                    {a.has_account ? 'Has an IcanEra account with this email.' : 'No IcanEra account with this email yet. They need one to be set up after approval.'}
                   </p>
                   <p className="text-[11px]" style={{ color: 'var(--dp-muted)' }}>Covers: {(a.cover_types || []).map(coverTypeLabel).join(', ')}</p>
                   {a.description && <p className="text-[11px]" style={{ color: 'var(--dp-muted)' }}>{a.description}</p>}

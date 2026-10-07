@@ -1,40 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import { BadgeCheck, FileCheck2, ShieldCheck, Wallet, UserPlus, LogIn } from 'lucide-react';
+import React from 'react';
+import { BadgeCheck, FileCheck2, ShieldCheck, Wallet } from 'lucide-react';
 import { useTheme, isDarkFamilyTheme } from '../../context/ThemeContext';
-import { getSupabaseClient } from '../../lib/supabase/client';
 import InsurerApplication from '../insurance/InsurerApplication';
 
 /**
  * Landing page "Insurance" section: licensed insurance companies apply to sell cover on IcanEra and
- * ICAN support approves them (Dev panel > Insurance). The company needs an IcanEra account, so a
- * visitor is sent to create one (or sign in) first; the application itself is the signed-in form,
- * shown here if the visitor already has a session and in Compliance > Insurance > Sell cover otherwise.
+ * ICAN support approves them (Dev panel > Insurance). Like the franchise form, no account is needed to
+ * apply; once approved, the company needs an IcanEra account with the same email to be set up.
  */
 const InsurerSection = ({ onGetStarted }) => {
   const { actualTheme } = useTheme();
   const dark = isDarkFamilyTheme(actualTheme);
-  const [signedIn, setSignedIn] = useState(false);
-
-  useEffect(() => {
-    const sb = getSupabaseClient();
-    if (!sb) return undefined;
-    let live = true;
-    sb.auth.getUser().then(({ data }) => { if (live) setSignedIn(Boolean(data?.user)); }).catch(() => {});
-    const { data: sub } = sb.auth.onAuthStateChange((_e, session) => { if (live) setSignedIn(Boolean(session?.user)); });
-    return () => { live = false; sub?.subscription?.unsubscribe?.(); };
-  }, []);
-
   const title = dark ? 'text-white' : 'text-slate-900';
   const body = dark ? 'text-slate-400' : 'text-slate-600';
   const card = dark ? 'border-slate-700/40 bg-slate-900/60' : 'border-slate-200 bg-white';
-  const accent = dark ? 'text-teal-300' : 'text-teal-800';
-  const primaryBtn = dark ? 'bg-teal-300 text-slate-950 hover:bg-teal-200' : 'bg-teal-800 text-white hover:bg-teal-700';
 
   const steps = [
-    ['Create your company account', 'Sign up to IcanEra with an email your company controls. The application is tied to this account.'],
-    ['Apply with your licence', 'Give your licence number, expiry, regulator and the cover you offer.'],
-    ['Support approves you', 'We check your licence with the regulator. You see the decision on your account.'],
-    ['Register and sell', 'Add your business profile and publish plans. Premiums are paid in ICAN straight into your business wallet.'],
+    ['Send your application', 'Give your licence number, expiry, regulator and the cover you offer. No account needed.'],
+    ['Support approves you', 'We check your licence with the regulator. Check the decision any time with your reference.'],
+    ['Create your IcanEra account', 'Sign up with the same email you applied with, then add your business profile.'],
+    ['Register and sell', 'Register the business as an insurer and you are verified straight away. Premiums are paid in ICAN into your business wallet.'],
   ];
   const perks = [
     [BadgeCheck, 'Verified badge', 'Customers see your licence and regulator on every plan.'],
@@ -55,7 +40,7 @@ const InsurerSection = ({ onGetStarted }) => {
           </p>
           <div className={`mt-4 inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-xs md:text-sm font-semibold ${dark ? 'border-sky-400/30 bg-sky-900/20 text-sky-200' : 'border-sky-300 bg-sky-50 text-sky-900'}`}>
             <FileCheck2 className="w-4 h-4 shrink-0" />
-            For licensed insurers only. Your company needs an IcanEra account to apply.
+            For licensed insurers only. We verify your licence before you go live.
           </div>
         </div>
 
@@ -83,27 +68,7 @@ const InsurerSection = ({ onGetStarted }) => {
           </div>
 
           <div id="insurance-apply" className={`lg:col-span-3 scroll-mt-24 rounded-2xl border p-5 md:p-7 ${card}`}>
-            {signedIn ? (
-              <InsurerApplication dark={dark} />
-            ) : (
-              <div className="py-6 text-center">
-                <ShieldCheck className={`mx-auto h-10 w-10 ${accent}`} />
-                <h3 className={`mt-3 text-xl font-black ${title}`}>Start with your company account</h3>
-                <p className={`mx-auto mt-2 max-w-md text-sm leading-relaxed ${body}`}>
-                  Create an IcanEra account for your insurance company, or sign in if you already have one. Then open <strong>Compliance &gt; Insurance &gt; Sell cover</strong> to send your licence for approval.
-                </p>
-                <div className="mx-auto mt-5 flex max-w-sm flex-col gap-2 sm:flex-row">
-                  <button type="button" onClick={() => onGetStarted?.('signup')}
-                    className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-bold transition ${primaryBtn}`}>
-                    <UserPlus className="h-4 w-4" /> Create company account
-                  </button>
-                  <button type="button" onClick={() => onGetStarted?.('signin')}
-                    className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg border px-5 py-3 text-sm font-bold transition ${dark ? 'border-slate-600 text-slate-100 hover:bg-slate-800' : 'border-slate-300 text-slate-800 hover:bg-slate-100'}`}>
-                    <LogIn className="h-4 w-4" /> Sign in
-                  </button>
-                </div>
-              </div>
-            )}
+            <InsurerApplication dark={dark} onGetStarted={onGetStarted} />
           </div>
         </div>
       </div>
