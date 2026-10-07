@@ -8,7 +8,7 @@ import { isCountryCode, isValidEmail } from './franchise.js';
 
 export const APPLICATION_STATUS = {
   new:       { label: 'Under review',  tone: 'warn',  help: 'Support is checking your licence. Check back here with your reference to see the decision.' },
-  approved:  { label: 'Approved',      tone: 'ok',    help: 'Approved. Sign in (or create an IcanEra account with the same email you applied with), create your business profile, then register it under Compliance > Insurance > Sell cover. You will be verified straight away.' },
+  approved:  { label: 'Approved',      tone: 'ok',    help: 'Approved. Sign in (or create an IcanEra account with the same email you applied with), create your business profile, then register it under Insurance > Sell cover. You will be verified straight away.' },
   rejected:  { label: 'Not approved',  tone: 'bad',   help: 'Support could not approve this application.' },
   onboarded: { label: 'Registered',    tone: 'ok',    help: 'Your company is registered as an insurer on IcanEra.' },
 };

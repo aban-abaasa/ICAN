@@ -98,3 +98,27 @@ test('like franchise, applying needs no account: submit and status are granted t
 test('the old account-only submit function is dropped so the two cannot be confused', { skip: !present }, () => {
   assert.match(readFileSync(PUBLIC, 'utf8'), /DROP FUNCTION IF EXISTS public\.ins_submit_application\(TEXT, TEXT, TEXT, DATE/);
 });
+
+// One company, more than one licence.
+const MULTI = new URL('../../supabase/migrations/20261010300000_insurer_multiple_licences.sql', import.meta.url);
+test('one business may register several insurers: unique per licence and country, not per business', { skip: !existsSync(MULTI) }, () => {
+  const sql = readFileSync(MULTI, 'utf8');
+  assert.match(sql, /DROP CONSTRAINT/);
+  assert.match(sql, /CREATE UNIQUE INDEX IF NOT EXISTS ins_insurers_business_licence_uq\s+ON public\.ins_insurers \(business_profile_id, public\.ins_norm_licence\(licence_number\), country_code\)/);
+  assert.match(sql, /This licence is already registered for this business/);
+  assert.doesNotMatch(sql, /This business is already registered as an insurer/);
+});
+
+test('a company can send up to ten applications a day', { skip: !existsSync(MULTI) }, () => {
+  assert.match(readFileSync(MULTI, 'utf8'), /created_at > now\(\) - interval '24 hours'\) >= 10/);
+});
+
+// Insurance used to be reachable only as a sub-tab of Readiness, so signed-in users never found it.
+test('insurance has its own entry in the desktop and mobile navigation', () => {
+  const desktop = readFileSync(new URL('../src/components/ICAN_Capital_Engine.jsx', import.meta.url), 'utf8');
+  const mobile = readFileSync(new URL('../src/components/MobileView.jsx', import.meta.url), 'utf8');
+  assert.match(desktop, /id: 'insurance', label: 'Insurance'/);
+  assert.match(desktop, /VALID_TABS = \[[^\]]*'insurance'/);
+  assert.match(desktop, /activeTab === 'insurance' && renderInsurance\(\)/);
+  assert.match(mobile, /openDetailView\('readiness', 'Readiness', 'insurance'\)/);
+});
