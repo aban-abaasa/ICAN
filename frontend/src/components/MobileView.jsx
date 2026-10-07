@@ -5960,8 +5960,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         const isOwnProfilePage = selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile';
         const detailEyebrow = {
           profile: 'Account', security: 'Account', readiness: 'Career & growth',
-          growth: 'Career & growth', resume: 'Career & growth', settings: 'Settings',
+          growth: 'Career & growth', resume: 'Career & growth', settings: 'Settings', franchise: 'IcanEra partners',
         }[selectedDetail.tab] || 'IcanEra';
+        const isFranchisePage = selectedDetail.tab === 'franchise';
         return (
         <div
           className={`fixed inset-0 bg-black/70 backdrop-blur-[2px] z-40 flex ${isWebDashboard ? 'items-center justify-center p-4' : 'items-end'}`}
@@ -5971,7 +5972,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             role="dialog"
             aria-modal="true"
             aria-label={selectedDetail.item}
-            className={`icn-sheet icn-classic ${isWebDashboard
+            className={`icn-sheet icn-classic ${isFranchisePage ? 'icn-sheet--bloom' : ''} ${isWebDashboard
               ? 'rounded-2xl w-full max-w-3xl max-h-[85vh]'
               : isOwnProfilePage
                 ? 'w-full h-[100dvh] max-h-[100dvh] rounded-none'

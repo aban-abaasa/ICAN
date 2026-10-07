@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BadgeCheck, Copy, Info, Network, Share2 } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, Building2, Check, Clock, Copy, Info, Network, PiggyBank, PlusCircle, Share2, Sparkles, TrendingUp, Users, Wallet, X } from 'lucide-react';
 import { getMySummary, isFranchiseBackendMissing } from '../../services/franchiseService';
 import { PARTNER_TYPES, PRODUCTS, STATUS_LABEL, buildAgencyLink, fmtIcan, friendlyError } from '../../utils/franchise';
 import { Segmented } from '../profile/growth/parts';
 import { ApplyTab, CustomersTab, EarningsTab, MyAgencyTab, StatementsTab } from './PartnerParts';
 import '../profile/growth/growth.css';
+import './franchise.css';
 
 const typeLabel = (v) => PARTNER_TYPES.find((t) => t.value === v)?.label || v;
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '-');
@@ -30,6 +31,43 @@ function pendingNotice(p) {
   return { kind: 'warn', text: `Not live yet: ${todo.join('; ')}. You start earning once you are live.` };
 }
 
+const CHECK_SUB = { done: 'Verified', wait: 'Checking', bad: 'Not accepted' };
+const checkState = (v) => (v === 'verified' ? 'done' : v === 'rejected' ? 'bad' : 'wait');
+const STEP_ICON = { done: Check, wait: Clock, bad: X, idle: Sparkles };
+const STATUS_TONE = { applied: 'warn', approved: 'warn', active: 'ok', suspended: 'bad', terminated: 'bad' };
+
+/** The four things between an application and going live, as a tracker anyone can read at a glance. */
+function goLiveSteps(p) {
+  const company = checkState(p.company_status);
+  const owners = checkState(p.kyc_status);
+  const review = p.status === 'applied' ? 'wait' : 'done';
+  return [
+    { key: 'application', label: 'Application', sub: review === 'done' ? 'Approved' : 'In review', state: review },
+    { key: 'company', label: 'Company', sub: CHECK_SUB[company], state: company },
+    { key: 'owners', label: 'Owners', sub: CHECK_SUB[owners], state: owners },
+    { key: 'live', label: 'Go live', sub: 'Then you earn', state: 'idle' },
+  ];
+}
+
+function GoLive({ seat }) {
+  const steps = goLiveSteps(seat);
+  const current = steps.findIndex((x) => x.state !== 'done');
+  return (
+    <ol className="fr-steps" aria-label="Steps to go live">
+      {steps.map((x, i) => {
+        const Icon = STEP_ICON[x.state];
+        return (
+          <li key={x.key} className={`fr-step is-${x.state}`} aria-current={i === current ? 'step' : undefined}>
+            <span className="fr-step__dot"><Icon aria-hidden="true" /></span>
+            <span className="fr-step__t">{x.label}</span>
+            <span className="fr-step__s">{x.sub}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function Meter({ pct, label }) {
   const v = Math.max(0, Math.min(100, Math.round(pct)));
   return <div className="gr-progress" role="progressbar" aria-valuenow={v} aria-valuemin={0} aria-valuemax={100} aria-label={label}><i style={{ width: `${v}%` }} /></div>;
@@ -53,11 +91,11 @@ function Overview({ p }) {
     <div className="gr-form">
       {notice && <Alert kind={notice.kind}>{notice.text}</Alert>}
 
-      <div className="gr-grid2">
-        <article className="gr-card"><p className="gr-label">Owed to you</p><p className="gr-title">{fmtIcan(owed)} <small>ICAN</small></p><p className="gr-small">{fmtIcan(p.statemented_ican)} already on a statement</p></article>
-        <article className="gr-card"><p className="gr-label">Paid to you</p><p className="gr-title">{fmtIcan(p.paid_ican)} <small>ICAN</small></p><p className="gr-small">all time</p></article>
-        <article className="gr-card"><p className="gr-label">Earned, 12 months</p><p className="gr-title">{fmtIcan(p.earned_12m_ican)} <small>ICAN</small></p></article>
-        <article className="gr-card"><p className="gr-label">Customers</p><p className="gr-title">{p.assigned_accounts}</p><p className="gr-small">{p.partner_type === 'agency' ? `${p.active_accounts} paying lately` : 'with you'}</p></article>
+      <div className="gr-grid2 fr-stats">
+        <article className="gr-card fr-stat fr-stat--pink"><p className="gr-label"><Wallet aria-hidden="true" />Owed to you</p><p className="gr-title">{fmtIcan(owed)} <small>ICAN</small></p><p className="gr-small">{fmtIcan(p.statemented_ican)} already on a statement</p></article>
+        <article className="gr-card fr-stat fr-stat--yellow"><p className="gr-label"><PiggyBank aria-hidden="true" />Paid to you</p><p className="gr-title">{fmtIcan(p.paid_ican)} <small>ICAN</small></p><p className="gr-small">all time</p></article>
+        <article className="gr-card fr-stat fr-stat--blue"><p className="gr-label"><TrendingUp aria-hidden="true" />Earned</p><p className="gr-title">{fmtIcan(p.earned_12m_ican)} <small>ICAN</small></p><p className="gr-small">last 12 months</p></article>
+        <article className="gr-card fr-stat fr-stat--sky"><p className="gr-label"><Users aria-hidden="true" />Customers</p><p className="gr-title">{p.assigned_accounts}</p><p className="gr-small">{p.partner_type === 'agency' ? `${p.active_accounts} paying lately` : 'with you'}</p></article>
       </div>
 
       {p.partner_type === 'agency' && p.status === 'active' && (
@@ -149,31 +187,43 @@ export default function FranchisePanel() {
 
   const seat = summary?.find((s) => s.id === selectedId) || null;
   const sections = [
-    ...(summary?.length ? [{ value: 'partner', label: 'My partnership' }] : []),
-    { value: 'apply', label: summary?.length ? 'Add a seat' : 'Apply' },
-    { value: 'agency', label: 'My agency' },
+    ...(summary?.length ? [{ value: 'partner', label: 'Partnership', Icon: Network }] : []),
+    { value: 'apply', label: summary?.length ? 'Add a seat' : 'Apply', Icon: PlusCircle },
+    { value: 'agency', label: 'My agency', Icon: Building2 },
   ];
 
+  // The sheet header above already says "IcanEra partners / Franchise", so the banner only explains the offer.
   return (
-    <section className="gr" aria-label="Franchise">
-      <header className="gr-card gr-hero">
-        <div className="gr-hero__top">
-          <div className="gr-hero__copy">
-            <p className="gr-eyebrow">IcanEra partners</p>
-            <h2 className="gr-title"><Network aria-hidden="true" style={{ width: 20, height: 20, display: 'inline', marginRight: 8 }} />Franchise</h2>
-            <p className="gr-sub">Run IcanEra for businesses in your country or city, and earn a share of what they pay. For registered companies.</p>
-          </div>
+    <section className="gr fr" aria-label="Franchise">
+      <header className="fr-hero">
+        <div className="fr-hero__intro">
+          <span className="fr-hero__icon"><Network aria-hidden="true" /></span>
+          <p><b>Run IcanEra</b> for businesses in your country or city, and earn a share of what they pay. For registered companies.</p>
         </div>
-        {summary && <Segmented label="Franchise sections" value={section} onChange={setSection} options={sections} />}
+        {summary && (
+          <nav className="fr-nav" aria-label="Franchise sections">
+            {sections.map(({ value, label, Icon }) => (
+              <button key={value} type="button" aria-current={section === value ? 'page' : undefined} onClick={() => setSection(value)}>
+                <Icon aria-hidden="true" />{label}
+              </button>
+            ))}
+          </nav>
+        )}
       </header>
 
       {!backendReady && <Alert kind="warn">Franchises are not switched on for this server yet. An administrator needs to apply the franchise migration.</Alert>}
       {banner && <Alert kind="err">{banner}</Alert>}
-      {summary === null && backendReady && <p className="gr-small" role="status">Loading...</p>}
+      {summary === null && backendReady && (
+        <>
+          <div className="gr-skel" aria-hidden="true" />
+          <div className="gr-skel" aria-hidden="true" />
+          <p className="gr-sr" role="status">Loading your franchise...</p>
+        </>
+      )}
 
       {backendReady && summary && section === 'partner' && seat && (
         <div className="gr-form">
-          <article className="gr-card gr-form">
+          <article className="gr-card gr-form fr-seat">
             {summary.length > 1 && (
               <select className="gr-select" value={selectedId || ''} onChange={(e) => setSelectedId(e.target.value)} aria-label="Choose a partner seat">
                 {summary.map((s) => <option key={s.id} value={s.id}>{s.display_name} ({typeLabel(s.partner_type)}, {s.country_code})</option>)}
@@ -181,14 +231,15 @@ export default function FranchisePanel() {
             )}
             <div>
               <p className="gr-eyebrow">{typeLabel(seat.partner_type)} · {seat.country_code}{seat.region ? ` · ${seat.region}` : ''}</p>
-              <h3 className="gr-h">{seat.display_name}</h3>
-              <div className="gr-block__meta" style={{ marginTop: 6, gap: 6 }}>
-                <span className={`gr-chip ${seat.status === 'active' ? 'gr-chip--ok' : 'gr-chip--warn'}`}>{STATUS_LABEL[seat.status]}</span>
-                <span className={`gr-chip ${seat.company_status === 'verified' ? 'gr-chip--ok' : 'gr-chip--warn'}`}>{seat.company_status === 'verified' ? <><BadgeCheck aria-hidden="true" />Company verified</> : `Company ${seat.company_status}`}</span>
-                <span className={`gr-chip ${seat.kyc_status === 'verified' ? 'gr-chip--ok' : 'gr-chip--warn'}`}>{seat.kyc_status === 'verified' ? 'Owners verified' : `Owners ${seat.kyc_status}`}</span>
+              <h3 className="gr-title fr-seat__name">{seat.display_name}</h3>
+              <div className="fr-chips">
+                <span className={`gr-chip gr-chip--${STATUS_TONE[seat.status] || 'warn'}`}>{STATUS_LABEL[seat.status] || seat.status}</span>
+                {seat.company_status === 'verified' && <span className="gr-chip gr-chip--ok"><BadgeCheck aria-hidden="true" />Company verified</span>}
+                {seat.kyc_status === 'verified' && <span className="gr-chip gr-chip--ok"><BadgeCheck aria-hidden="true" />Owners verified</span>}
                 <span className="gr-chip">{(seat.products || []).length} product(s)</span>
               </div>
             </div>
+            {['applied', 'approved'].includes(seat.status) && <GoLive seat={seat} />}
             <Segmented label="Partnership views" value={view} onChange={setView}
               options={[{ value: 'overview', label: 'Overview' }, { value: 'earnings', label: 'Earnings' }, { value: 'customers', label: 'Customers' }, { value: 'statements', label: 'Statements' }]} />
           </article>
