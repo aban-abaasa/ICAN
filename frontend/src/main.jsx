@@ -56,6 +56,10 @@ const portfolioShareMatch = window.location.pathname.match(/^\/portfolio\/([^/]+
 // Pitchin/status share links above. Only checkout (a real IcanEra payment)
 // prompts sign-in, in place, without losing the cart.
 const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
+// An instalment plan (/plan/<code>) and the customer's list of them (/plans): the plan's code is a
+// handle, not a secret -- the page itself needs the customer (or the seller's team) to be signed in.
+const installmentPlanMatch = window.location.pathname.match(/^\/plan\/([A-Za-z0-9]{6,12})\/?$/);
+const isMyInstallmentsPath = /^\/plans\/?$/.test(window.location.pathname);
 // A CMMS company's public notice board (announcements + job postings) at
 // /notices/<companyId> -- same no-login share-link reasoning as the links
 // above. Job applicants submit their application right on this page with
@@ -127,6 +131,8 @@ const PublicShareFlow = lazyWithReloadOnChunkFailure(() => import('./components/
 const PrivatePitchInviteViewer = lazyWithReloadOnChunkFailure(() => import('./components/PrivatePitchInviteViewer'));
 const PublicPortfolioPage = lazyWithReloadOnChunkFailure(() => import('./components/profile/PublicPortfolioPage'));
 const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./components/PublicDropshipStorefront'));
+const PublicInstallmentPlan = lazyWithReloadOnChunkFailure(() => import('./components/PublicInstallmentPlan'));
+const PublicMyInstallments = lazyWithReloadOnChunkFailure(() => import('./components/PublicMyInstallments'));
 const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
 const PublicTransactionPage = lazyWithReloadOnChunkFailure(() => import('./components/PublicTransactionPage'));
 const PublicPayCodePage = lazyWithReloadOnChunkFailure(() => import('./components/PublicPayCodePage'));
@@ -211,6 +217,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                   : privateInviteMatch ? <PrivatePitchInviteViewer token={privateInviteMatch[1]} />
                   : statusShareMatch ? <PublicShareFlow kind="status" id={statusShareMatch[1]} />
                   : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
+                  : installmentPlanMatch ? <PublicInstallmentPlan code={installmentPlanMatch[1].toUpperCase()} />
+                  : isMyInstallmentsPath ? <PublicMyInstallments />
                   : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />
                   : <><App /><PhoneAlertsPrompt /></>}
               </AuthProvider>

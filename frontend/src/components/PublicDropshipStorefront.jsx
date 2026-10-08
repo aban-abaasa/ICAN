@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
 import useGuestCheckout from '../hooks/useGuestCheckout';
+import InstallmentOffer from './InstallmentOffer';
 
 // Presets for the customer-chosen delivery deadline — mirrors the backend's
 // delivery.min_deadline_hours/delivery.max_deadline_hours bounds (1-48h by
@@ -489,6 +490,17 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                     <div className="flex justify-between text-white font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>
                   </div>
                   {checkoutError && <p className="text-xs text-red-400">{checkoutError}</p>}
+                  <InstallmentOffer
+                    businessProfileId={businessProfileId}
+                    cartItems={cartItems}
+                    user={user}
+                    authLoading={authLoading}
+                    onNeedAuth={() => setShowAuthModal(true)}
+                    customerName={customerName}
+                    customerPhone={customerPhone}
+                    storeName={resellerName}
+                    skin="slate"
+                  />
                   {(
                     <div className="space-y-2">
                       <button

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Megaphone, Briefcase, MapPin, Calendar, Users, FileText, X, Loader,
   AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
@@ -6,13 +6,15 @@ import {
   Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
   Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe,
   Video, Play, Eye, Heart, Bike, Star, Sun, Moon, TrendingUp, MoreVertical, Home,
-  Download, Banknote
+  Download, Banknote, User
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
 import useGuestCheckout from '../hooks/useGuestCheckout';
+import InstallmentOffer from './InstallmentOffer';
+import { getBusinessSiteInfo, joinBusinessSite, getMyInstallmentPlans, getMyBusinessAccounts, STATUS_LABELS as PLAN_STATUS_LABELS } from '../services/installmentService';
 import PayAnyAmountForm from './PayAnyAmountForm';
 import ReceiveRequestForm from './ReceiveRequestForm';
 import { getPayCodeInfoForBusiness, getReceiveInfoForBusiness } from '../services/publicTransactionService';
@@ -720,6 +722,15 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     return () => { cancelled = true; };
   }, [company?.business_profile_id]);
 
+  // Does this business invite customers to create an account on its site (and so offer instalments)?
+  const [accountsEnabled, setAccountsEnabled] = useState(true);
+  useEffect(() => {
+    if (!company?.business_profile_id) return undefined;
+    let cancelled = false;
+    getBusinessSiteInfo(company.business_profile_id).then((info) => { if (!cancelled) setAccountsEnabled(info.accounts_enabled !== false); });
+    return () => { cancelled = true; };
+  }, [company?.business_profile_id]);
+
   useEffect(() => {
     let cancelled = false;
     const resolve = async () => {
@@ -941,6 +952,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     { id: 'careers', label: 'Careers', mobileLabel: 'Careers', icon: Briefcase },
     ...(payInfo ? [{ id: 'pay', label: 'Pay', mobileLabel: 'Pay', icon: Banknote }] : []),
     ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', mobileLabel: 'Deals', icon: Award }] : []),
+    ...(accountsEnabled && company?.business_profile_id ? [{ id: 'account', label: 'My account', mobileLabel: 'Account', icon: User }] : []),
     { id: 'track', label: 'Track my application', mobileLabel: 'Track', icon: Search },
     ...(opportunities.length > 0 ? [{ id: 'track-bid', label: 'Track my bid', mobileLabel: 'My bid', icon: Search }] : []),
   ];
@@ -1110,6 +1122,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           {section === 'opportunities' && (
             <OpportunityList opportunities={opportunities} onSelect={openOpportunityDetail} />
           )}
+          {section === 'account' && accountsEnabled && (
+            <AccountSection company={company} user={user} authLoading={authLoading} />
+          )}
           {section === 'track' && <TrackApplication companyId={companyId} viewerUser={user} onWantAccount={requestAccountCreation} />}
           {section === 'track-bid' && <TrackOpportunityBid viewerUser={user} onWantAccount={requestAccountCreation} />}
         </div>
@@ -1146,6 +1161,122 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       )}
     </div>
     </NoticeBoardThemeCtx.Provider>
+  );
+};
+
+// Customer accounts on a business website: anyone can create a free IcanEra account right here and become this
+// business's customer, so they can track every plan and payment they have with it (and the business can see who
+// its customers are). Joining is always the visitor's own choice -- merely browsing registers nobody.
+const JOIN_SITE_KEY = 'icanera_join_site';
+const AccountSection = ({ company, user, authLoading }) => {
+  const businessId = company.business_profile_id;
+  const [joined, setJoined] = useState(null); // null = not known yet
+  const [plans, setPlans] = useState([]);
+  const [showAuth, setShowAuth] = useState(null); // null | 'signup' | 'signin'
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const [accounts, allPlans] = await Promise.all([getMyBusinessAccounts(), getMyInstallmentPlans().catch(() => [])]);
+    setJoined(accounts.some((a) => a.business_profile_id === businessId));
+    setPlans(allPlans.filter((p) => p.seller_id === businessId));
+  }, [businessId]);
+
+  useEffect(() => {
+    if (!user) { setJoined(null); setPlans([]); return undefined; }
+    let cancelled = false;
+    (async () => {
+      // They chose to sign up or sign in from this page: that is their consent to become a customer here.
+      let wantsJoin = false;
+      try { wantsJoin = sessionStorage.getItem(JOIN_SITE_KEY) === businessId; } catch { /* ignore */ }
+      if (wantsJoin) {
+        await joinBusinessSite(businessId, 'website');
+        try { sessionStorage.removeItem(JOIN_SITE_KEY); } catch { /* ignore */ }
+      }
+      if (!cancelled) await load();
+    })();
+    return () => { cancelled = true; };
+  }, [user, businessId, load]);
+
+  const openAuth = (view) => {
+    try { sessionStorage.setItem(JOIN_SITE_KEY, businessId); } catch { /* ignore */ }
+    setShowAuth(view);
+  };
+  const join = async () => {
+    setBusy(true);
+    await joinBusinessSite(businessId, 'website');
+    await load();
+    setBusy(false);
+  };
+
+  const paid = plans.filter((p) => !['cancelled', 'lapsed'].includes(p.status)).reduce((sum, p) => sum + Number(p.paid_ugx || 0), 0);
+  const owing = plans.filter((p) => ['awaiting_deposit', 'active', 'ready'].includes(p.status)).reduce((sum, p) => sum + Number(p.balance_ugx || 0), 0);
+
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="nb-card rounded-2xl p-5 sm:p-7">
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 rounded-full nb-chip-green flex items-center justify-center mx-auto mb-3"><User className="w-6 h-6" /></div>
+          <h2 className="text-xl sm:text-2xl font-bold nb-text">{user ? `Your account with ${company.company_name}` : `Create your account with ${company.company_name}`}</h2>
+          <p className="text-sm nb-text-muted mt-1.5 leading-relaxed">
+            Track every payment and receipt in one place, pay for products in instalments, and collect them or have them delivered once they are paid in full.
+          </p>
+        </div>
+
+        {authLoading || (user && joined === null) ? (
+          <div className="flex justify-center py-6"><Loader className="w-6 h-6 animate-spin nb-text-faint" /></div>
+        ) : !user ? (
+          <div className="space-y-2">
+            <button onClick={() => openAuth('signup')} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-primary font-semibold transition">Create a free account</button>
+            <button onClick={() => openAuth('signin')} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-secondary font-semibold transition">I already have an account</button>
+            <p className="text-xs nb-text-faint text-center leading-relaxed">The same IcanEra account works on every business website. {company.company_name} will see your name, phone and your payments with them — nothing else.</p>
+          </div>
+        ) : !joined ? (
+          <div className="space-y-2">
+            <button onClick={join} disabled={busy} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-primary font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2">
+              {busy ? <Loader className="w-4 h-4 animate-spin" /> : null}Become a customer of {company.company_name}
+            </button>
+            <p className="text-xs nb-text-faint text-center leading-relaxed">{company.company_name} will see your name, phone and your payments with them.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {[['Plans', plans.length], ['Paid', formatUGX(paid)], ['Owing', formatUGX(owing)]].map(([label, value]) => (
+                <div key={label} className="nb-surface-alt border nb-border rounded-xl p-2.5">
+                  <p className="text-[11px] nb-text-faint">{label}</p>
+                  <p className="text-sm font-bold nb-text break-words">{value}</p>
+                </div>
+              ))}
+            </div>
+            {plans.length === 0 ? (
+              <p className="text-sm nb-text-muted text-center py-4">No payments yet. Choose “Pay in instalments” in the Shop tab to start one.</p>
+            ) : (
+              <div className="space-y-2">
+                {plans.map((p) => (
+                  <a key={p.code} href={`/plan/${p.code}`} className="block nb-surface-alt border nb-border rounded-xl p-3 hover:opacity-90 transition">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm nb-text font-medium truncate flex-1">{p.items.map((i) => i.name).slice(0, 2).join(', ')}{p.items.length > 2 ? '…' : ''}</p>
+                      <ChevronRight className="w-4 h-4 nb-text-faint shrink-0" />
+                    </div>
+                    <div className="flex justify-between text-xs mt-1">
+                      <span className="nb-text-muted">{PLAN_STATUS_LABELS[p.status] || p.status}</span>
+                      <span className="nb-text">{formatUGX(p.paid_ugx)} of {formatUGX(p.total_ugx)}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+            <a href="/plans" className="block text-center text-sm nb-link font-semibold">See all my payments across businesses</a>
+          </div>
+        )}
+      </div>
+
+      {showAuth && (
+        <div className="icanera-nb fixed inset-0 z-[60] overflow-y-auto nb-surface">
+          <button onClick={() => setShowAuth(null)} className="fixed top-4 right-4 nb-share-btn p-2 rounded-full z-10"><X className="w-5 h-5" /></button>
+          <AuthPage initialView={showAuth} onAuthSuccess={() => setShowAuth(null)} />
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -2285,6 +2416,17 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                 <div className="flex justify-between nb-text font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>
               </div>
               {checkoutError && <p className="nb-error-text text-xs">{checkoutError}</p>}
+              <InstallmentOffer
+                businessProfileId={businessProfileId}
+                cartItems={cartItems}
+                user={user}
+                authLoading={authLoading}
+                onNeedAuth={() => setShowAuthModal(true)}
+                customerName={customerName}
+                customerPhone={customerPhone}
+                storeName={products[0]?.reseller_name || 'Store'}
+                skin="nb"
+              />
               {(
                 <div className="space-y-2">
                   <button

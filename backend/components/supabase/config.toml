@@ -385,6 +385,12 @@ verify_jwt = false
 [functions.guest-checkout-pay]
 verify_jwt = false
 
+# Public Mobile Money / card / bank payment on an installment plan: the customer
+# was signed in when it started, but the confirmation trusts nothing in the
+# request and verifies the payment with Flutterwave itself.
+[functions.installment-pay]
+verify_jwt = false
+
 # Public QR payment on a recorded transaction's receipt (/r/<code>): no session,
 # verifies the payment with Flutterwave itself.
 [functions.public-tx-pay]
