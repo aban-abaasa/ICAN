@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useOptionalTheme } from '../../context/ThemeContext';
 import { getClassicAuthPalette, classicAuthClass } from './classicAuthTheme';
 import './classicAuth.css';
 import OfflineLoginHelper from '../OfflineLoginHelper';
@@ -12,7 +12,7 @@ import { getSupabaseClient } from '../../lib/supabase/client';
 import { DiamondSpinner } from '../IcanDiamond';
 const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
   const { signIn, offlineSignIn, signInWithGoogle, signInWithWallet } = useAuth();
-  const { actualTheme } = useTheme();
+  const { actualTheme } = useOptionalTheme();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
