@@ -224,6 +224,11 @@ const CMMSAnnouncementsPanel = ({
   const [savedBusinessProfileId, setSavedBusinessProfileId] = useState('');
   const [myBusinessProfiles, setMyBusinessProfiles] = useState([]);
   const [savingStorefront, setSavingStorefront] = useState(false);
+  // Where the website's Shop tab gets its products: the linked business's
+  // resellers' Dropship listings, its own store's products, or both.
+  const [productsSource, setProductsSource] = useState('resellers');
+  const [savedProductsSource, setSavedProductsSource] = useState('resellers');
+  const [savingProductsSource, setSavingProductsSource] = useState(false);
 
   // The "real website" fields (tagline, cover photo, WhatsApp, hours,
   // socials) that turn the public board's header into an actual business
@@ -252,6 +257,18 @@ const CMMSAnnouncementsPanel = ({
   // something worth re-reading (and pushing the actual post list further
   // down) on every single visit -- collapsed by default, one tap away.
   const [boardInfoExpanded, setBoardInfoExpanded] = useState(false);
+
+  // Its own query (not part of the big select below) so a database that hasn't
+  // had 20261012100000_site_products_source.sql run yet can't break the page.
+  useEffect(() => {
+    if (!companyId) return;
+    supabase.from('cmms_company_profiles').select('site_products_source').eq('id', companyId).maybeSingle()
+      .then(({ data }) => {
+        const source = ['resellers', 'store', 'both'].includes(data?.site_products_source) ? data.site_products_source : 'resellers';
+        setProductsSource(source);
+        setSavedProductsSource(source);
+      });
+  }, [companyId]);
 
   useEffect(() => {
     if (!companyId) return;
@@ -308,6 +325,14 @@ const CMMSAnnouncementsPanel = ({
     setSavingStorefront(false);
     if (!result.success) { alert(`❌ ${result.error}`); return; }
     setSavedBusinessProfileId(businessProfileId);
+  };
+
+  const saveProductsSource = async () => {
+    setSavingProductsSource(true);
+    const result = await cmmsAnnouncementsService.setCompanySiteProductsSource(companyId, productsSource);
+    setSavingProductsSource(false);
+    if (!result.success) { alert(`❌ ${result.error}`); return; }
+    setSavedProductsSource(productsSource);
   };
 
   const websiteProfileDirty = JSON.stringify(websiteDraft) !== JSON.stringify(savedWebsiteProfile) || !!coverImageFile || !!logoFile;
@@ -977,6 +1002,32 @@ const CMMSAnnouncementsPanel = ({
                   </button>
                 </div>
               </>
+            )}
+            {savedBusinessProfileId && (
+              <div className="mt-4">
+                <label className="block text-xs font-semibold cmms-classic-muted mb-1">Products on the website come from</label>
+                <select
+                  value={productsSource}
+                  onChange={(e) => setProductsSource(e.target.value)}
+                  className="w-full px-3 py-2 rounded bg-slate-900 text-white border border-white/20"
+                >
+                  <option value="resellers">Resellers — products resellers list from this business (Dropship)</option>
+                  <option value="store">Store — this business's own store products</option>
+                  <option value="both">Both — store products and reseller listings</option>
+                </select>
+                <p className="text-xs cmms-classic-muted mt-1">
+                  Store products are shown with their price and whether they are in stock. Customers order them from you directly; only reseller listings can be added to a cart on the website.
+                </p>
+                <div className="flex items-center justify-end gap-2 mt-2">
+                  <button
+                    disabled={savingProductsSource || productsSource === savedProductsSource}
+                    onClick={saveProductsSource}
+                    className="cmms-classic-btn-primary px-4 py-2 text-sm"
+                  >
+                    {savingProductsSource ? 'Saving…' : 'Save products source'}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
