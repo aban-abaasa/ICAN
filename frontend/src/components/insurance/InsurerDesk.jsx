@@ -18,7 +18,7 @@ const COUNTRIES = [
 
 // ── Becoming an insurer ──────────────────────────────────────────────────────
 // One business can hold several insurer registrations (one per licence and country), so every business is offered.
-function Register({ businesses, onDone }) {
+export function Register({ businesses, onDone }) {
   const [f, setF] = useState({
     businessId: businesses[0]?.id || '', displayName: businesses[0]?.business_name || '', licenceNumber: '', licenceExpiry: '',
     countryCode: 'UG', regulator: COUNTRIES[0].regulator, contactEmail: '', contactPhone: '', claimsPhone: '', description: '',

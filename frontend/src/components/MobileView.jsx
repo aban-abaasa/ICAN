@@ -82,6 +82,7 @@ const ProfilePage = lazyPanel(() => import('./auth/ProfilePage'));
 const ShareholderApprovalsCenter = lazyPanel(() => import('./ShareholderApprovalsCenter'));
 const ReadinessPanel = lazyPanel(() => import('./profile/ReadinessPanel'));
 const FranchisePanel = lazyPanel(() => import('./franchise/FranchisePanel'));
+const InsurerPartnerPanel = lazyPanel(() => import('./insurance/partner/InsurerPartnerPanel'));
 const GrowthPanel = lazyPanel(() => import('./profile/GrowthPanel'));
 const SecurityPanel = lazyPanel(() => import('./profile/SecurityPanel'));
 const SettingsPanel = lazyPanel(() => import('./profile/SettingsPanel'));
@@ -5776,6 +5777,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('franchise', 'Franchise'); setShowMenuDropdown(false); }}>
                       <Network /> <span>Franchise</span>
                     </button>
+                    <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('insurer', 'Insurance partner'); setShowMenuDropdown(false); }}>
+                      <ShieldCheck /> <span>Insurance partner</span>
+                    </button>
                     <button role="menuitem" className="icn-menu-item" onClick={() => { navigateTo('professionals'); setShowMenuDropdown(false); }}>
                       <Users /> <span>Professionals</span>
                     </button>
@@ -6043,7 +6047,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         const isOwnProfilePage = selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile';
         const detailEyebrow = {
           profile: 'Account', security: 'Account', readiness: 'Career & growth',
-          growth: 'Career & growth', resume: 'Career & growth', settings: 'Settings', franchise: 'IcanEra partners',
+          growth: 'Career & growth', resume: 'Career & growth', settings: 'Settings', franchise: 'IcanEra partners', insurer: 'IcanEra partners',
         }[selectedDetail.tab] || 'IcanEra';
         const isFranchisePage = selectedDetail.tab === 'franchise';
         return (
@@ -6235,6 +6239,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {/* FRANCHISE - PARTNER CONSOLE */}
               {selectedDetail.tab === 'franchise' && selectedDetail.item === 'Franchise' && (
                 <FranchisePanel />
+              )}
+
+              {/* INSURANCE PARTNER - LIST AND SELL COVER */}
+              {selectedDetail.tab === 'insurer' && selectedDetail.item === 'Insurance partner' && (
+                <InsurerPartnerPanel />
               )}
 
               {/* MY RESUME / PORTFOLIO */}

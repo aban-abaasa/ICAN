@@ -100,6 +100,16 @@ export const insuranceService = {
     }, 'Could not register the insurance company'),
   updateInsurer: (insurerId, payload) =>
     act('ins_update_insurer', { p_insurer_id: insurerId, p_payload: payload }, 'Could not save'),
+  updateListing: (insurerId, payload) =>
+    act('ins_update_listing', { p_insurer_id: insurerId, p_payload: payload }, 'Could not save your listing'),
+  // The anonymous price guide for the plan builder. Null when it cannot be reached; it is only ever advice.
+  marketBenchmark: async ({ coverType, audience = null, periodDays = 30, excludeInsurer = null }) => {
+    try {
+      return await read('ins_market_benchmark', { p_cover_type: coverType, p_audience: audience, p_period_days: periodDays, p_exclude_insurer: excludeInsurer });
+    } catch {
+      return null;
+    }
+  },
   insurerPlans: (insurerId) => read('ins_insurer_plans', { p_insurer_id: insurerId }),
   savePlan: (insurerId, planId, payload) =>
     act('ins_save_plan', { p_insurer_id: insurerId, p_plan_id: planId, p_payload: payload }, 'Could not save the plan'),
@@ -120,6 +130,9 @@ export const insuranceService = {
       p_licence_expiry: f.licence_expiry, p_country_code: f.country_code, p_regulator: f.regulator,
       p_cover_types: f.cover_types, p_phone: f.phone || null, p_description: f.description || null, p_website: f.website || null,
     }, 'Could not send the application'),
+  // The public directory (no account needed): verified insurers with a plan on sale.
+  publicDirectory: ({ country = null, coverType = null, search = null } = {}) =>
+    read('ins_public_directory', { p_country: country, p_cover_type: coverType, p_search: search }),
   applicationStatus: (reference, email) => read('ins_application_status', { p_reference: reference, p_email: email }),
   myApplications: () => read('ins_my_applications'),
 
@@ -131,6 +144,8 @@ export const insuranceService = {
   devListApplications: (status, devToken) => read('ins_dev_list_applications', { p_status: status || null, p_dev_token: devToken }),
   devReviewApplication: (applicationId, decision, note, devToken) =>
     act('ins_dev_review_application', { p_application_id: applicationId, p_decision: decision, p_note: note || null, p_dev_token: devToken }, 'Could not save the decision'),
+  devSetListing: (insurerId, hidden, note, devToken) =>
+    act('ins_dev_set_listing', { p_insurer_id: insurerId, p_hidden: hidden, p_note: note || null, p_dev_token: devToken }, 'Could not change the listing'),
   devUpdateSettings: (patch, devToken) =>
     act('ins_dev_update_settings', { p_patch: patch, p_dev_token: devToken }, 'Could not save the settings'),
 };

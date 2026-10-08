@@ -162,6 +162,26 @@ export default function ICANInsuranceDevTab({ devToken }) {
     load();
   };
 
+  const toggleListing = async (insurer) => {
+    const hiding = !insurer.hidden_by_support;
+    let note = null;
+    if (hiding) {
+      const answer = window.prompt(`Hide ${insurer.display_name} from the public directory? Give a reason (the insurer will see it):`, '');
+      if (answer === null) return;
+      note = answer.trim();
+      if (!note) return setError('A reason is required');
+    } else if (!window.confirm(`Show ${insurer.display_name} in the public directory again?`)) {
+      return;
+    }
+    setBusyId(insurer.insurer_id);
+    setError('');
+    const res = await insuranceService.devSetListing(insurer.insurer_id, hiding, note, devToken);
+    setBusyId(null);
+    if (!res.success) return setError(res.error);
+    say(hiding ? 'Hidden from the directory' : 'Shown in the directory again');
+    load();
+  };
+
   const reviewApp = async (app, decision) => {
     let note = null;
     if (decision === 'reject') {
@@ -337,6 +357,9 @@ export default function ICANInsuranceDevTab({ devToken }) {
               {(i.contact_email || i.contact_phone) && <p className="text-[11px]" style={{ color: 'var(--dp-muted)' }}>{[i.contact_email, i.contact_phone].filter(Boolean).join(' · ')}</p>}
               {i.description && <p className="text-[11px]" style={{ color: 'var(--dp-muted)' }}>{i.description}</p>}
               {i.review_note && <p className="text-[11px] italic" style={{ color: 'var(--dp-muted)' }}>Note: {i.review_note}</p>}
+              {(i.tagline || i.website) && <p className="text-[11px]" style={{ color: 'var(--dp-muted)' }}>{[i.tagline, i.website].filter(Boolean).join(' · ')}</p>}
+              {i.hidden_by_support && <p className="text-[11px] font-bold text-red-500">Hidden from the directory{i.hidden_note ? `: ${i.hidden_note}` : ''}</p>}
+              {!i.hidden_by_support && i.listed === false && <p className="text-[11px]" style={{ color: 'var(--dp-muted)' }}>The insurer has switched its public listing off.</p>}
               <p className="text-[10px]" style={{ color: 'var(--dp-muted)' }}>
                 {i.plans} plan{i.plans === 1 ? '' : 's'} on sale · {i.policies} active {i.policies === 1 ? 'policy' : 'policies'} · {i.claims_open} open claim{i.claims_open === 1 ? '' : 's'} · registered {fmtDate(i.created_at)}
               </p>
@@ -362,6 +385,10 @@ export default function ICANInsuranceDevTab({ devToken }) {
                     <PauseCircle size={10} /> Suspend
                   </button>
                 )}
+                <button disabled={busyId === i.insurer_id} onClick={() => toggleListing(i)}
+                  className="flex items-center gap-1 rounded-lg border border-slate-500/20 bg-slate-500/10 px-2.5 py-1 text-[10px] font-bold disabled:opacity-40" style={{ color: 'var(--dp-sub)' }}>
+                  {i.hidden_by_support ? 'Show in directory' : 'Hide from directory'}
+                </button>
                 {i.status === 'pending' && (
                   <button disabled={busyId === i.insurer_id} onClick={() => review(i, 'reject')}
                     className="flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[10px] font-bold text-red-500 disabled:opacity-40">
