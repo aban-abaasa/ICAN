@@ -10,7 +10,7 @@
     { "source": "/notices/:id", "destination": "/api/share-preview?type=notices&id=:id" },
     { "source": "/developers", "destination": "/developers/index.html" },
     { "source": "/developers/", "destination": "/developers/index.html" },
-    { "source": "/((?!api/|developers/).*)", "destination": "/" }
+    { "source": "/((?!api/|developers/|js/|assets/|images/|icons/).*)", "destination": "/" }
   ],
   "headers": [
     {
@@ -27,6 +27,12 @@
     },
     {
       "source": "/static/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/js/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]

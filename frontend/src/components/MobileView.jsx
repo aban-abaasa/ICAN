@@ -64,58 +64,66 @@ import {
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import PendingQrApprovals from './PendingQrApprovals';
-import TransactionReceiptModal from './TransactionReceiptModal';
 import ReceiptTally, { TruthBadge } from './ReceiptTally';
 import { getProofStatus, getProofLabel, getReceiptNumber } from '../utils/transactionReceipt';
 import {
   analyzeReceiptTruth, buildReceiptTruth, formatFlags, getEvidenceLabel, getTruthStatement, shortSeal,
 } from '../utils/receiptTruth';
 import CmmsPageShell from './CmmsPageShell';
-import { ProfilePage } from './auth/ProfilePage';
-import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
-import ReadinessPanel from './profile/ReadinessPanel';
-import FranchisePanel from './franchise/FranchisePanel';
-import GrowthPanel from './profile/GrowthPanel';
-import SecurityPanel from './profile/SecurityPanel';
-import SettingsPanel from './profile/SettingsPanel';
-import PortfolioTab from './profile/PortfolioTab';
-import ProfessionalsDirectory from './profile/ProfessionalsDirectory';
-import Pitchin from './Pitchin';
-import ICANWallet from './ICANWallet';
-import TrustSystem from './TrustSystem';
-import CMMSModule from './CMSSModule';
-import { StatusPage } from './StatusPage';
-import { StatusUploader } from './status/StatusUploader';
-import SearchModal from './SearchModal';
+import { ICANWallet, CMMSModule, PanelSuspense, prefetchHeavyPanels, lazyPanel } from './lazyPanels';
 import ThemeSwitcher from './ThemeSwitcher';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useCountry } from '../hooks/useCountry';
 import { useCmmsAccess } from '../hooks/useCmmsAccess';
-import { BusinessLoanCalculator } from './BusinessLoanCalculator';
-import { jsPDF } from 'jspdf';
-import * as XLSX from 'xlsx';
+// Screens opened from a tab or menu rather than shown on the home view. Each is
+// its own download (fetched when first opened) so the dashboard paints sooner.
+const ProfilePage = lazyPanel(() => import('./auth/ProfilePage'));
+const ShareholderApprovalsCenter = lazyPanel(() => import('./ShareholderApprovalsCenter'));
+const ReadinessPanel = lazyPanel(() => import('./profile/ReadinessPanel'));
+const FranchisePanel = lazyPanel(() => import('./franchise/FranchisePanel'));
+const GrowthPanel = lazyPanel(() => import('./profile/GrowthPanel'));
+const SecurityPanel = lazyPanel(() => import('./profile/SecurityPanel'));
+const SettingsPanel = lazyPanel(() => import('./profile/SettingsPanel'));
+const PortfolioTab = lazyPanel(() => import('./profile/PortfolioTab'));
+const ProfessionalsDirectory = lazyPanel(() => import('./profile/ProfessionalsDirectory'));
+const Pitchin = lazyPanel(() => import('./Pitchin'));
+const TrustSystem = lazyPanel(() => import('./TrustSystem'));
+const StatusPage = lazyPanel(() => import('./StatusPage'));
+const StatusUploader = lazyPanel(() => import('./status/StatusUploader'), { fallback: null });
+const SearchModal = lazyPanel(() => import('./SearchModal'), { fallback: null });
+const BusinessLoanCalculator = lazyPanel(() => import('./BusinessLoanCalculator'), { fallback: null });
+// The charts pull in the recharts library (~350 KB); the rest of the home view
+// renders first and a quiet placeholder holds each chart's spot.
+const ChartSpot = ({ height = 160 }) => <div aria-hidden="true" style={{ minHeight: height }} />;
+const DailyTrackingChart = lazyPanel(() => import('./DailyTrackingChart'), { fallback: <ChartSpot height={220} /> });
+const BusinessTrendChart = lazyPanel(() => import('./BusinessTrendChart'), { fallback: <ChartSpot height={220} /> });
+const CmmsActivityWidget = lazyPanel(() => import('./CmmsActivityWidget'), { fallback: <ChartSpot /> });
+const IcanPriceChartWidget = lazyPanel(() => import('./IcanPriceChartWidget'), { fallback: <ChartSpot height={260} /> });
+const DropshipDashboardWidget = lazyPanel(() => import('./DropshipDashboardWidget'), { fallback: <ChartSpot height={120} /> });
+// Receipt modal builds PDFs (jsPDF ~400 KB); it only needs to exist once a receipt is opened.
+const TransactionReceiptModal = lazyPanel(() => import('./TransactionReceiptModal'), { fallback: null });
+const ReportPreviewCard = lazyPanel(() => import('./reports/ReportPreviewCard'));
+const DataCleanupModal = lazyPanel(() => import('./DataCleanupModal'), { fallback: null });
+
+// PDF and Excel libraries are ~800 KB together and only needed when someone
+// taps Download/Share/Import, so they load on demand instead of with the dashboard.
+const loadXLSX = () => import('xlsx');
+const loadJsPDF = async () => (await import('jspdf')).jsPDF;
 import {
   generateTaxReturn,
   generateBalanceSheet,
   generateIncomeStatement,
   generateCountryComplianceReport,
 } from '../services/advancedReportService';
-import ReportPreviewCard from './reports/ReportPreviewCard';
 import { COUNTRIES } from '../constants/countries';
 import { VelocityEngine } from '../utils/velocityEngine';
 import { journeyStages, determineCurrentStage, calculateStageProgress, getNextMilestone } from '../utils/journeyStages';
 import { getSharePriceHistory, getLatestSnapshot } from '../services/pitchinShareBlockchainService';
-import DailyTrackingChart from './DailyTrackingChart';
-import IcanPriceChartWidget from './IcanPriceChartWidget';
-import DropshipDashboardWidget from './DropshipDashboardWidget';
 import DashboardUpdatesCard from './DashboardUpdatesCard';
-import BusinessTrendChart from './BusinessTrendChart';
-import CmmsActivityWidget from './CmmsActivityWidget';
 import { supabase } from '../lib/supabase/client';
 import { deleteTransaction, TWO_ACCOUNT_DELETE_MESSAGE } from '../services/supabaseTransactions';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
-import DataCleanupModal from './DataCleanupModal';
 import { walletAccountService } from '../services/walletAccountService';
 import { walletService } from '../services/walletService';
 import {
@@ -696,7 +704,10 @@ const HeaderAvatar = ({ url, name }) => {
 // under the avatar; whatever doesn't fit goes into "More".
 const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack, inline = false }) => {
   const [moreOpen, setMoreOpen] = useState(false);
+  const [fitCount, setFitCount] = useState(MAX_VISIBLE_HEADER_TABS);
   const moreRef = useRef(null);
+  const slotRef = useRef(null);
+  const measureRef = useRef(null);
 
   const renderTabButton = (tab) => {
     const isActive = activeTab === tab.id;
@@ -704,10 +715,7 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack,
     return (
       <button
         key={tab.id}
-  const [fitCount, setFitCount] = useState(MAX_VISIBLE_HEADER_TABS);
         onClick={() => onTabClick(tab.id)}
-  const slotRef = useRef(null);
-  const measureRef = useRef(null);
         className={`icn-navtab ${inline ? 'icn-navtab--inline' : ''} ${isActive ? 'is-active' : ''}`}
         aria-current={isActive ? 'page' : undefined}
       >
@@ -717,14 +725,6 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack,
     );
   };
 
-  // Close "More" dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (moreRef.current && !moreRef.current.contains(e.target)) {
-        setMoreOpen(false);
-      }
-    };
-    if (moreOpen) {
   // Inline mode: measure the real tab widths (hidden copy below) against the
   // space the slot has been given, and keep as many tabs as fit.
   useEffect(() => {
@@ -755,6 +755,14 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack,
     return () => ro.disconnect();
   }, [inline, tabs, showBack]);
 
+  // Close "More" dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (moreRef.current && !moreRef.current.contains(e.target)) {
+        setMoreOpen(false);
+      }
+    };
+    if (moreOpen) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
@@ -863,6 +871,9 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const { country: userSignupCountry } = useCountry();
   const { hasCmmsAccess, cmmsMemberships } = useCmmsAccess();
   const [authUser, setAuthUser] = useState(null);
+
+  // Fetch the Wallet and CMMS screens quietly once the dashboard is up.
+  useEffect(() => prefetchHeavyPanels(), []);
   
   // Get the actual Supabase auth user
   useEffect(() => {
@@ -3927,6 +3938,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   const handleDownloadExcel = async (allFiltered, period, ownerArg) => {
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
+    const XLSX = await loadXLSX();
     const filtered = owner.records;
     const truth = analyzeReceiptTruth(filtered);
     const rows = filtered.map((t, idx) => ({
@@ -3993,6 +4005,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     setImportingExcel(true);
     try {
       const buffer = await file.arrayBuffer();
+      const XLSX = await loadXLSX();
       const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
@@ -4091,6 +4104,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   const handleDownloadPDF = async (allFiltered, period, ownerArg) => {
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
+    const jsPDF = await loadJsPDF();
     const filtered = owner.records;
     const truth = analyzeReceiptTruth(filtered);
     const truthSummary = truth.summary;
@@ -4351,6 +4365,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       if (format === 'pdf') {
         // Generate PDF
         await handleDownloadPDF(filtered, period, owner);
+        const jsPDF = await loadJsPDF();
         const pdfBlob = await new Promise(resolve => {
           const doc = new jsPDF({ unit: 'mm', format: 'a4' });
           // PDF generation code is in handleDownloadPDF, we'll get the blob
@@ -4407,6 +4422,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           ]);
         });
         
+        const XLSX = await loadXLSX();
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(ws_data);
         XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
@@ -5595,6 +5611,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     recognitionRef.current?.stop();
   };
 
+  const handleHeaderBack = () => {
+    if (navHistory.length === 0) return;
+    const prev = navHistory[navHistory.length - 1];
+    setNavHistory(h => h.slice(0, -1));
+
+    if (prev && typeof prev === 'object' && prev.panel && prev.tab) {
+      // Sub-page back: tell the open panel to switch its internal tab
+      const refMap = { wallet: walletNavRef, trust: trustNavRef, pitchin: pitchinNavRef, cmms: cmssNavRef };
+      refMap[prev.panel]?.current?.(prev.tab);
+    } else {
+      // Panel-level back: restore previous panel
+      restorePanel(prev || 'dashboard');
+    }
+  };
+
   return (
     <div
       className={`min-h-screen text-white overflow-x-hidden ${
@@ -5611,21 +5642,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         className={`${isWebDashboard ? 'icn-masthead fixed top-0 left-0 right-0 z-[70]' : 'sticky top-0 z-40'} border-b ${
         isWebDashboard
           ? 'bg-gradient-to-r from-slate-950/92 via-slate-900/88 to-slate-950/92 backdrop-blur-xl border-slate-700/60 shadow-[0_10px_30px_rgba(2,6,23,0.45)]'
-  const handleHeaderBack = () => {
-    if (navHistory.length === 0) return;
-    const prev = navHistory[navHistory.length - 1];
-    setNavHistory(h => h.slice(0, -1));
-
-    if (prev && typeof prev === 'object' && prev.panel && prev.tab) {
-      // Sub-page back: tell the open panel to switch its internal tab
-      const refMap = { wallet: walletNavRef, trust: trustNavRef, pitchin: pitchinNavRef, cmms: cmssNavRef };
-      refMap[prev.panel]?.current?.(prev.tab);
-    } else {
-      // Panel-level back: restore previous panel
-      restorePanel(prev || 'dashboard');
-    }
-  };
-
           : 'bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-purple-500/20'
       }`}>
         <div className={`px-3 py-2.5 sm:px-4 sm:py-3 relative ${isWebDashboard ? 'w-full px-4 sm:px-6 lg:px-8 2xl:px-12' : ''}`}>
@@ -7748,7 +7764,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <ICANWallet navRef={walletNavRef} onTabChange={(prev) => handlePanelTabChange('wallet', prev)} />
+            <PanelSuspense>
+              <ICANWallet navRef={walletNavRef} onTabChange={(prev) => handlePanelTabChange('wallet', prev)} />
+            </PanelSuspense>
           </div>
         </div>
       )}
@@ -8715,13 +8733,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               contained, padded shell at the md breakpoint, so wrapping it in
               padding here would just box in every CMMS page on phones. */}
           <div className="min-h-full pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <CMMSModule
-              user={userProfile}
-              navRef={cmssNavRef}
-              onTabChange={(prev) => handlePanelTabChange('cmms', prev)}
-              openRequest={cmmsOpenRequest}
-              onOpenRequestConsumed={() => setCmmsOpenRequest(null)}
-            />
+            <PanelSuspense>
+              <CMMSModule
+                user={userProfile}
+                navRef={cmssNavRef}
+                onTabChange={(prev) => handlePanelTabChange('cmms', prev)}
+                openRequest={cmmsOpenRequest}
+                onOpenRequestConsumed={() => setCmmsOpenRequest(null)}
+              />
+            </PanelSuspense>
           </div>
         </div>
       )}
@@ -9819,7 +9839,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                           {/* Excel */}
                           <button
-                            onClick={() => {
+                            onClick={async () => {
+                              const XLSX = await loadXLSX();
                               const rows = [];
                               const flatten = (obj, prefix='') => {
                                 Object.entries(obj).forEach(([k,v]) => {
@@ -9857,7 +9878,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                           {/* PDF */}
                           <button
-                            onClick={() => {
+                            onClick={async () => {
+                              const jsPDF = await loadJsPDF();
                               const doc = new jsPDF({ unit: 'mm', format: 'a4' });
                               const rpt = generatedReportData;
                               const countryName = countries?.find(c => c.code === selectedCountry)?.name || selectedCountry || 'Uganda';

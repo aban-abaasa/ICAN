@@ -1,23 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSupabaseClient } from '../lib/supabase/client';
-import { ProfileIcon, ProfilePage } from './auth';
+import ProfileIcon from './auth/ProfileIcon';
 import { Header } from './Header';
-import { StatusPage } from './StatusPage';
-import { StatusUploader } from './status/StatusUploader';
 import { StatusCarousel } from './status/StatusCarousel';
 import { StatusViewerUI } from './status/StatusViewerUI';
 import MainNavigation from './MainNavigation';
-import SACCOHub from './SACCOHub';
-import SHAREHub from './SHAREHub';
-import CMMSModule from './CMSSModule';
-import ICANWallet from './ICANWallet';
-import MobileView from './MobileView';
-import GrowthPanel from './profile/GrowthPanel';
-import ReadinessPanel from './profile/ReadinessPanel';
-import SecurityPanel from './profile/SecurityPanel';
-import SettingsPanel from './profile/SettingsPanel';
-import { EnhancedReportConfiguration } from './EnhancedReportConfiguration';
+import { ICANWallet, CMMSModule, PanelSuspense, lazyPanel } from './lazyPanels';
+import { lazyWithRetry } from '../lib/lazyWithRetry';
 import { 
   Shield, 
   Globe, 
@@ -85,6 +75,21 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import IcanEraLogo from '../IcanEra.png';
+
+// ~520 KB of source: downloaded when the dashboard first renders it, not with the Engine.
+const MobileView = lazyWithRetry(() => import('./MobileView'));
+
+// Panels opened on demand — each downloads the first time it is shown.
+const ProfilePage = lazyPanel(() => import('./auth/ProfilePage'));
+const StatusPage = lazyPanel(() => import('./StatusPage'));
+const StatusUploader = lazyPanel(() => import('./status/StatusUploader'), { fallback: null });
+const SACCOHub = lazyPanel(() => import('./SACCOHub'));
+const SHAREHub = lazyPanel(() => import('./SHAREHub'));
+const GrowthPanel = lazyPanel(() => import('./profile/GrowthPanel'));
+const ReadinessPanel = lazyPanel(() => import('./profile/ReadinessPanel'));
+const SecurityPanel = lazyPanel(() => import('./profile/SecurityPanel'));
+const SettingsPanel = lazyPanel(() => import('./profile/SettingsPanel'));
+const EnhancedReportConfiguration = lazyPanel(() => import('./EnhancedReportConfiguration'), { fallback: null });
 
 // AI Spending Advice Modal
 const AIAdviceModal = ({ isOpen, advice, transaction, onConfirm, onCancel }) => {
@@ -8849,11 +8854,13 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         />
 
         {/* CMMS (Computerized Maintenance Management System) */}
-        <CMMSModule
-          onDataUpdate={(data) => setCmmsData(prev => ({ ...prev, ...data }))}
-          netWorth={netWorth}
-          currentJourneyStage={currentJourneyStage}
-        />
+        <PanelSuspense>
+          <CMMSModule
+            onDataUpdate={(data) => setCmmsData(prev => ({ ...prev, ...data }))}
+            netWorth={netWorth}
+            currentJourneyStage={currentJourneyStage}
+          />
+        </PanelSuspense>
 
         {/* AI Financial Intelligence Dashboard */}
         <AIFinancialIntelligenceDashboard
@@ -9195,7 +9202,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           >
             Close Wallet
           </button>
-          <ICANWallet />
+          <PanelSuspense><ICANWallet /></PanelSuspense>
         </div>
       )}
 
@@ -9364,7 +9371,9 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       <main className={activeTab === 'dashboard' ? 'p-4' : 'p-4 lg:p-8'}>
         {activeTab === 'dashboard' && (
           <section className="w-full min-h-screen overflow-y-auto -mx-4 -mt-4">
-            <MobileView userProfile={dashboardUserProfile} isWebDashboard />
+            <PanelSuspense>
+              <MobileView userProfile={dashboardUserProfile} isWebDashboard />
+            </PanelSuspense>
           </section>
         )}
         {activeTab === 'security' && renderSecurityMandate()}

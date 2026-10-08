@@ -10,6 +10,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 // Dependency-free on purpose (no Supabase import) — see referralCapture.js.
 import { captureReferralFromUrl } from './services/referralCapture';
+import { lazyWithRetry } from './lib/lazyWithRetry';
 
 // A shared referral link (/?ref=CODE) can land on any page, signed in or not:
 // remember the code now, App redeems it once the visitor has an account.
@@ -115,51 +116,9 @@ const reportExportShareMatch = window.location.pathname.match(/^\/report-exports
 // submits with no ICAN account (CMMS_CLINICAL_CONSULTATION_FORMS.sql gates
 // it by share_token + share_enabled instead of business membership).
 const consultationFormShareMatch = window.location.pathname.match(/^\/consultation-forms\/([^/]+)/);
-// A stale service-worker/browser cache can leave a phone holding an
-// index.html that points at a JS chunk hash the last deploy removed from the
-// server — the chunk 404s, the dynamic import() rejects, and with no retry
-// the Suspense fallback (a bare dark div) is the last thing that ever
-// renders: a silent blank screen with no error visible to the user or to us.
-// Reload once (bypassing every cache we control) before giving up, so the
-// fresh index.html/chunks a normal browser visit would get are fetched
-// instead of leaving the app permanently stuck.
-const lazyWithReloadOnChunkFailure = (importer) => React.lazy(() =>
-  importer().catch(async (error) => {
-    const reloadedKey = 'ican-chunk-reload-attempted';
-    // Offline, this chunk failure means the file simply was never cached
-    // (e.g. a deploy shipped a new hashed chunk name between the service
-    // worker activating and this device's next *online* visit) — a network
-    // fetch can't succeed either way. Unregistering the service worker and
-    // wiping every cache, as the online path below does, would destroy the
-    // one thing still letting the app open offline at all: turning "one
-    // chunk missing" into "nothing works offline, ever, until back online."
-    // Reloading into that state is exactly what produces Chrome's own
-    // "No internet" page instead of the app shell. Let it surface as a
-    // normal render error instead and leave the cache/service worker alone.
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      throw error;
-    }
-    if (sessionStorage.getItem(reloadedKey)) {
-      throw error; // Already retried once this session — a real error, not a stale cache.
-    }
-    sessionStorage.setItem(reloadedKey, '1');
-    console.warn('[App] Chunk load failed, clearing caches and reloading once:', error);
-    try {
-      if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(registrations.map((registration) => registration.unregister()));
-      }
-      if ('caches' in window) {
-        const names = await caches.keys();
-        await Promise.all(names.map((name) => caches.delete(name)));
-      }
-    } catch (cleanupError) {
-      console.warn('[App] Cache cleanup before reload failed:', cleanupError);
-    }
-    window.location.reload();
-    return new Promise(() => {}); // Hang here; the reload is already in flight.
-  })
-);
+// Chunk-load retry + stale-cache recovery lives in lib/lazyWithRetry.js so every
+// lazily loaded screen in the app shares it.
+const lazyWithReloadOnChunkFailure = lazyWithRetry;
 
 const App = lazyWithReloadOnChunkFailure(() => import('./App'));
 const PublicStaffAttendanceCheckIn = lazyWithReloadOnChunkFailure(() => import('./components/PublicStaffAttendanceCheckIn'));
