@@ -13,6 +13,7 @@ import {
   RECEIPT_FOLDER,
   RECEIPT_MAX_BYTES,
   compressReceiptImage,
+  getProofRequirement,
   getProofStatus,
   getReceiptImageRef,
   getReceiptLines,
@@ -145,6 +146,7 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
   const lines = getReceiptLines(tx, { businessName });
   const receiptNumber = getReceiptNumber(tx);
   const proofStatus = getProofStatus(tx);
+  const proofNeed = getProofRequirement(tx);
   const evidence = EVIDENCE_GRADES[getEvidenceGrade(tx)];
   const hasImage = proofStatus === 'attached';
   const canAttach = Boolean(target);
@@ -359,6 +361,21 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
             {evidence.medal} {evidence.label}
           </span>
         </div>
+
+        {proofNeed.required && (
+          <div className={`mb-4 rounded-lg border px-3 py-2 text-xs ${proofNeed.complete ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}`}>
+            <p className="font-bold">
+              {proofNeed.complete ? '100% proof — manual transaction fully evidenced' : 'Manual transaction between two parties — 100% proof required'}
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              <li>{proofNeed.hasPhoto ? '✅' : '⬜'} Receipt photo</li>
+              <li>{proofNeed.hasNumber ? '✅' : '⬜'} Receipt number</li>
+            </ul>
+            {!proofNeed.complete && !canAttach && (
+              <p className="mt-1 text-[11px] opacity-80">Only the person who recorded this entry can attach the proof.</p>
+            )}
+          </div>
+        )}
 
         {hasImage && (
           <div className="mb-4 overflow-hidden rounded-xl border border-slate-700 bg-slate-900">

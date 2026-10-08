@@ -69,7 +69,7 @@ import ReceiveMoneyModal from './ReceiveMoneyModal';
 import PayMoneyModal from './PayMoneyModal';
 import IcanPaymentReceiptModal from './IcanPaymentReceiptModal';
 import TransactionReceiptModal from './TransactionReceiptModal';
-import { walletTxToReceiptTx } from '../utils/transactionReceipt';
+import { getProofRequirement, getTransactionChannel, walletTxToReceiptTx } from '../utils/transactionReceipt';
 import PINRecoveryModal from './PINRecoveryModal';
 import WalletAccessModal from './WalletAccessModal';
 import BusinessWalletAccessModal from './BusinessWalletAccessModal';
@@ -856,19 +856,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
   // Business valuation figures (calculateLiveShareValue) are always in UGX.
   const formatUgx = (value) => `UGX ${Math.round(Number(value) || 0).toLocaleString()}`;
-
-  // Gateway keywords that mean a transaction went through an automated/digital
-  // channel; anything else (cash, agent entry, admin adjustment, no method
-  // recorded at all) is treated as manually handled.
-  const DIGITAL_PAYMENT_KEYWORDS = ['momo', 'mobile money', 'mtn', 'airtel', 'vodafone', 'card', 'visa', 'mastercard', 'verve', 'flutterwave', 'ussd'];
-  const getTransactionChannel = (tx) => {
-    const method = (tx.metadata?.paymentMethod || tx.metadata?.method || '').toString().toLowerCase();
-    const sourceApp = (tx.source_app || tx.metadata?.source_app || '').toString().toLowerCase();
-    const isSharedLedger = String(tx.id || '').startsWith('shared-') || Boolean(tx.ican_amount);
-    const isDigital = isSharedLedger || ['digital-city-era', 'farm-agent', 'mybodaguy', 'ican']
-      .some((app) => sourceApp === app) || DIGITAL_PAYMENT_KEYWORDS.some((keyword) => method.includes(keyword));
-    return isDigital ? 'digital' : 'manual';
-  };
 
   // 📜 Load Recent Wallet Transactions (Send/Receive/Top-Up/etc, from Supabase)
   const loadWalletTransactions = async () => {
@@ -5171,6 +5158,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         const isIncoming = parseFloat(tx.amount) >= 0;
         const channel = getTransactionChannel(tx);
         const isDigital = channel === 'digital';
+        const proofNeed = getProofRequirement(walletTxToReceiptTx(tx));
         return (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedWalletTx(null)}>
             <div className="glass-card p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
@@ -5236,12 +5224,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 )}
               </div>
 
+              {proofNeed.required && (
+                <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${proofNeed.complete ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}`}>
+                  {proofNeed.complete
+                    ? '✅ 100% manual proof — receipt photo and receipt number on file'
+                    : `⚠️ Manual transaction between two parties — proof incomplete. Still needed: ${proofNeed.missing.join(' and ').toLowerCase()}.`}
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={() => { setWalletReceiptTx(walletTxToReceiptTx(tx)); setSelectedWalletTx(null); }}
                 className="mt-4 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white"
               >
-                🧾 View receipt
+                {proofNeed.required && !proofNeed.complete ? '📎 Add required proof' : '🧾 View receipt'}
               </button>
             </div>
           </div>
