@@ -605,3 +605,20 @@ export const useTheme = () => {
   }
   return context;
 };
+
+// For screens that are also shown on public pages that have no ThemeProvider
+// (e.g. the sign-in / create-account overlay on a business website). Falls
+// back to the saved or system theme instead of throwing, so opening it can't
+// take the whole page down.
+export const useOptionalTheme = () => {
+  const context = useContext(ThemeContext);
+  if (context) return context;
+  let actualTheme = 'dark';
+  try {
+    const saved = localStorage.getItem('icanera-theme') || 'system';
+    actualTheme = saved === 'system'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : saved;
+  } catch { /* ignore */ }
+  return { theme: actualTheme, actualTheme };
+};

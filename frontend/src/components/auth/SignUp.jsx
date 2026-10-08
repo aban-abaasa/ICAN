@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useOptionalTheme } from '../../context/ThemeContext';
 import { getClassicAuthPalette, classicAuthClass } from './classicAuthTheme';
 import './classicAuth.css';
 import { CountryService } from '../../services/countryService';
@@ -12,7 +12,7 @@ import { checkCanweFields } from '../../utils/canweGuard';
 import { DiamondSpinner } from '../IcanDiamond';
 const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
   const { signUp, signInWithGoogle } = useAuth();
-  const { actualTheme } = useTheme();
+  const { actualTheme } = useOptionalTheme();
   const [googleLoading, setGoogleLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: prefill?.email || '',
