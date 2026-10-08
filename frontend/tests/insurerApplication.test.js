@@ -122,3 +122,19 @@ test('insurance has its own entry in the desktop and mobile navigation', () => {
   assert.match(desktop, /activeTab === 'insurance' && renderInsurance\(\)/);
   assert.match(mobile, /openDetailView\('readiness', 'Readiness', 'insurance'\)/);
 });
+
+// The insurance partner console sits beside Franchise: avatar menu on mobile, a top tab on desktop.
+test('the insurance partner console has its own entry in the desktop and mobile navigation', () => {
+  const desktop = readFileSync(new URL('../src/components/ICAN_Capital_Engine.jsx', import.meta.url), 'utf8');
+  const mobile = readFileSync(new URL('../src/components/MobileView.jsx', import.meta.url), 'utf8');
+  assert.match(desktop, /id: 'insurer',\s+label: 'Insurers'/);
+  assert.match(desktop, /VALID_TABS = \[[^\]]*'insurer'/);
+  assert.match(desktop, /activeTab === 'insurer' && renderInsurer\(\)/);
+  assert.match(mobile, /openDetailView\('insurer', 'Insurance partner'\)/);
+  assert.match(mobile, /selectedDetail\.tab === 'insurer' && selectedDetail\.item === 'Insurance partner'/);
+});
+
+test('the landing page carries the public insurer directory', () => {
+  const section = readFileSync(new URL('../src/components/landing/InsurerSection.jsx', import.meta.url), 'utf8');
+  assert.match(section, /<InsurerDirectory /);
+});

@@ -72,7 +72,8 @@ import {
   WifiOff,
   Plus,
   Edit2,
-  ShieldCheck
+  ShieldCheck,
+  Building2
 } from 'lucide-react';
 import IcanEraLogo from '../IcanEra.png';
 
@@ -87,6 +88,7 @@ const SACCOHub = lazyPanel(() => import('./SACCOHub'));
 const SHAREHub = lazyPanel(() => import('./SHAREHub'));
 const GrowthPanel = lazyPanel(() => import('./profile/GrowthPanel'));
 const ReadinessPanel = lazyPanel(() => import('./profile/ReadinessPanel'));
+const InsurerPartnerPanel = lazyPanel(() => import('./insurance/partner/InsurerPartnerPanel'));
 const SecurityPanel = lazyPanel(() => import('./profile/SecurityPanel'));
 const SettingsPanel = lazyPanel(() => import('./profile/SettingsPanel'));
 const EnhancedReportConfiguration = lazyPanel(() => import('./EnhancedReportConfiguration'), { fallback: null });
@@ -3529,7 +3531,7 @@ const ICANCapitalEngine = () => {
   const [showFinancialAnalytics, setShowFinancialAnalytics] = useState(false);
   const isRestoringHistoryRef = useRef(false);
 
-  const VALID_TABS = ['dashboard', 'security', 'readiness', 'insurance', 'growth', 'settings'];
+  const VALID_TABS = ['dashboard', 'security', 'readiness', 'insurance', 'insurer', 'growth', 'settings'];
 
   const closeFunctionPanels = () => {
     setShowTRUST(false);
@@ -9020,6 +9022,16 @@ Data Freshness: ${reportData.metadata.dataFreshness}
     </div>
   );
 
+  // Insurance partners: a licensed insurer applies, builds a public listing and sells cover. The counterpart
+  // of the franchise console, one click from the main navigation.
+  const renderInsurer = () => (
+    <div className="max-w-6xl mx-auto w-full">
+      <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
+        <InsurerPartnerPanel key="insurer" />
+      </div>
+    </div>
+  );
+
   const renderReadinessMandate = () => (
     <div className="max-w-6xl mx-auto w-full">
       <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
@@ -9286,6 +9298,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
               { id: 'security',  label: 'Security', icon: Shield     },
               { id: 'readiness', label: 'Readiness',icon: Globe      },
               { id: 'insurance', label: 'Insurance',icon: ShieldCheck },
+              { id: 'insurer',   label: 'Insurers', icon: Building2   },
               { id: 'growth',    label: 'Growth',   icon: TrendingUp },
               { id: 'trust',     label: 'SACCO',    icon: Heart      },
               { id: 'share',     label: 'Share',    icon: Send       },
@@ -9379,6 +9392,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         {activeTab === 'security' && renderSecurityMandate()}
         {activeTab === 'readiness' && renderReadinessMandate()}
         {activeTab === 'insurance' && renderInsurance()}
+        {activeTab === 'insurer' && renderInsurer()}
         {activeTab === 'growth' && renderGrowthMandate()}
         {activeTab === 'settings' && renderSettings()}
       </main>

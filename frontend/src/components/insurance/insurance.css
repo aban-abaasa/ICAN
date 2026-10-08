@@ -90,3 +90,53 @@
   .gr .ins-foot { flex-direction: column; align-items: stretch; }
 }
 @media (prefers-reduced-motion: reduce) { .gr * { scroll-behavior: auto; } }
+
+/* ── Insurer partner console ─────────────────────────────────────────────────── */
+
+/* Journey tracker: apply -> listed */
+.gr .ip-steps { list-style: none; margin: 0; padding: 4px 0 2px; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(64px, 1fr); overflow-x: auto; scrollbar-width: none; }
+.gr .ip-steps::-webkit-scrollbar { display: none; }
+.gr .ip-step { position: relative; display: grid; justify-items: center; gap: 5px; text-align: center; padding: 0 2px; }
+.gr .ip-step::before { content: ''; position: absolute; top: 17px; right: 50%; width: 100%; height: 3px; background: var(--gr-line-soft); }
+.gr .ip-step:first-child::before { display: none; }
+.gr .ip-step.is-done::before { background: var(--gr-ok); }
+.gr .ip-step__dot { position: relative; z-index: 1; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--gr-card); border: 2px solid var(--gr-line); color: var(--gr-faint); font-size: .8rem; font-weight: 800; }
+.gr .ip-step__dot svg { width: 1.05rem; height: 1.05rem; }
+.gr .ip-step.is-done .ip-step__dot { background: var(--gr-ok); border-color: var(--gr-ok); color: #fff; }
+.gr .ip-step.is-current .ip-step__dot { border-color: var(--gr-gold-hi); color: var(--gr-gold-hi); box-shadow: 0 0 0 4px color-mix(in srgb, var(--gr-gold-hi) 22%, transparent); }
+.gr .ip-step.is-wait .ip-step__dot { border-color: var(--gr-warn); color: var(--gr-warn); }
+.gr .ip-step.is-bad .ip-step__dot { border-color: var(--gr-err); color: var(--gr-err); }
+.gr .ip-step__t { font-size: .74rem; font-weight: 700; color: var(--gr-ink); line-height: 1.2; }
+.gr .ip-step__s { font-size: .66rem; color: var(--gr-faint); line-height: 1.2; }
+@media (max-width: 520px) { .gr .ip-step__s { display: none; } }
+
+/* Listing health */
+.gr .ip-health { display: flex; align-items: center; gap: 14px; }
+.gr .ip-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.gr .ip-check { display: flex; align-items: flex-start; gap: 10px; padding: 8px 4px; border-top: 1px solid var(--gr-line-soft); }
+.gr .ip-check:first-child { border-top: 0; }
+.gr .ip-check svg { width: 1.05rem; height: 1.05rem; flex: none; margin-top: 2px; }
+.gr .ip-check.is-done svg { color: var(--gr-ok); }
+.gr .ip-check.is-open svg { color: var(--gr-faint); }
+.gr .ip-check b { display: block; font-size: .86rem; color: var(--gr-ink); }
+.gr .ip-check small { display: block; font-size: .76rem; color: var(--gr-muted); line-height: 1.4; }
+.gr .ip-check__go { margin-left: auto; flex: none; }
+.gr .ip-next { display: grid; gap: 8px; border-left: 3px solid var(--gr-gold-hi); padding-left: 12px; }
+
+/* Listing editor: form beside a live preview */
+.gr .ip-split { display: grid; gap: 16px; }
+@media (min-width: 900px) { .gr .ip-split { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; } .gr .ip-sticky { position: sticky; top: 12px; } }
+.gr .ip-count { font-size: .7rem; color: var(--gr-faint); text-align: right; }
+.gr .ip-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Plan coach */
+.gr .ip-coach { display: grid; gap: 8px; border: 1px solid var(--gr-line); border-radius: 14px; padding: 12px; background: var(--gr-tint); }
+.gr .ip-coach__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gr .ip-coach ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.gr .ip-coach li { display: flex; gap: 8px; font-size: .8rem; line-height: 1.4; color: var(--gr-ink-2, var(--gr-ink)); }
+.gr .ip-coach li svg { width: 1rem; height: 1rem; flex: none; margin-top: 2px; }
+.gr .ip-coach li.is-warn svg { color: var(--gr-err); }
+.gr .ip-coach li.is-tip svg { color: var(--gr-warn); }
+.gr .ip-coach li.is-ok svg { color: var(--gr-ok); }
+.gr .ip-templates { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.gr .ip-templates::-webkit-scrollbar { display: none; }

@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pencil, Plus } from 'lucide-react';
+import { AlertTriangle, Check, Lightbulb, Pencil, Plus, Wand2 } from 'lucide-react';
 import { insuranceService } from '../../services/insuranceService';
 import {
   AUDIENCES, COVER_TYPES, PERIODS, SHARE_SCOPES, VEHICLE_TYPES, coverTypeLabel, formatIcan, periodLabel, scopeShort,
 } from '../../utils/insuranceCatalog';
 import { Switch } from '../profile/growth/parts';
+import {
+  PLAN_TEMPLATES, applyTemplate, customerPrice, feeFromPlans, planCoach, suggestCoverTypes,
+} from '../../utils/insurerListing';
 import { Alert, Chip, Modal, Money } from './common';
 
 const EMPTY = {
@@ -21,12 +24,51 @@ const fromPlan = (p) => ({
   group_discount_pct: Number(p.group_discount_pct), terms_url: p.terms_url || '', active: p.active,
 });
 
-function PlanForm({ insurer, plan, maxDataDiscount, onClose, onSaved }) {
+function CoachPanel({ coach }) {
+  const Icon = { warn: AlertTriangle, tip: Lightbulb, ok: Check };
+  return (
+    <div className="ip-coach" aria-label="Plan coach">
+      <div className="ip-coach__head">
+        <span className="gr-eyebrow">Plan coach</span>
+        <Chip tone={coach.score >= 90 ? 'ok' : coach.score >= 70 ? 'warn' : 'bad'}>{coach.label} · {coach.score}</Chip>
+      </div>
+      {coach.items.length === 0 ? <p className="gr-sub">Nothing to improve. This plan is ready to sell.</p> : (
+        <ul>
+          {coach.items.map((it) => {
+            const I = Icon[it.level] || Lightbulb;
+            return <li key={it.id} className={`is-${it.level}`}><I aria-hidden="true" /><span>{it.text}</span></li>;
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export function PlanForm({ insurer, plan, plans, maxDataDiscount, onClose, onSaved }) {
   const [f, setF] = useState(plan ? fromPlan(plan) : EMPTY);
+  const [benchmark, setBenchmark] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const set = (patch) => setF((cur) => ({ ...cur, ...patch }));
   const toggle = (key, value, on) => set({ [key]: on ? Array.from(new Set([...f[key], value])) : f[key].filter((x) => x !== value) });
+
+  // The anonymous price guide: what other insurers take home for the same kind of cover and period.
+  const audienceKey = f.audience.join(',');
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(() => {
+      insuranceService.marketBenchmark({
+        coverType: f.cover_type, audience: f.audience.length === 1 ? f.audience[0] : null,
+        periodDays: Number(f.period_days), excludeInsurer: insurer.insurer_id,
+      }).then((b) => { if (!cancelled) setBenchmark(b); });
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.cover_type, f.period_days, audienceKey, insurer.insurer_id]);
+
+  const feePct = feeFromPlans(plans);
+  const coach = planCoach(f, { benchmark, maxDataDiscount, existing: plans, editingId: plan?.plan_id || null });
+  const youPay = customerPrice(f.premium_ican, feePct);
 
   const save = async () => {
     setBusy(true); setError('');
@@ -43,6 +85,18 @@ function PlanForm({ insurer, plan, maxDataDiscount, onClose, onSaved }) {
 
   return (
     <Modal title={plan ? 'Edit plan' : 'New plan'} eyebrow={insurer.display_name} onClose={onClose}>
+      {!plan && (
+        <div className="gr-field">
+          <span className="gr-label"><Wand2 aria-hidden="true" style={{ width: 13, height: 13, display: 'inline', marginRight: 4 }} />Start from a template</span>
+          <div className="ip-templates">
+            {suggestCoverTypes(plans).map((id) => (
+              <button key={id} type="button" className="gr-chip" aria-pressed={f.cover_type === id && f.name === PLAN_TEMPLATES[id].name}
+                onClick={() => set(applyTemplate(id))}>{COVER_TYPES[id].label}</button>
+            ))}
+          </div>
+          <p className="gr-hint">{PLAN_TEMPLATES[f.cover_type]?.tip || 'A template fills in a sensible name, summary and benefits. Everything stays editable, and you set the price.'}</p>
+        </div>
+      )}
       <div className="gr-field"><label className="gr-label" htmlFor="pl-name">Plan name</label>
         <input id="pl-name" className="gr-input" maxLength={80} value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Boda Accident Shield" /></div>
       <div className="gr-field"><label className="gr-label" htmlFor="pl-sum">One-line summary</label>
@@ -82,7 +136,7 @@ function PlanForm({ insurer, plan, maxDataDiscount, onClose, onSaved }) {
       <div className="gr-grid2">
         <div className="gr-field"><label className="gr-label" htmlFor="pl-prem">You take home per person, per period (ICAN)</label>
           <input id="pl-prem" className="gr-input" type="number" inputMode="decimal" min="0" step="any" value={f.premium_ican} onChange={(e) => set({ premium_ican: e.target.value })} placeholder="e.g. 0.5" />
-          <p className="gr-hint">This is exactly what is credited to your business wallet. Nothing is taken off it later.</p></div>
+          <p className="gr-hint">This is exactly what is credited to your business wallet. Nothing is taken off it later.{youPay != null && <> Customers will pay about <b>{formatIcan(youPay)} ICAN</b>.</>}</p></div>
         <div className="gr-field"><label className="gr-label" htmlFor="pl-lim">Cover limit (ICAN)</label>
           <input id="pl-lim" className="gr-input" type="number" inputMode="decimal" min="0" step="any" value={f.cover_limit_ican} onChange={(e) => set({ cover_limit_ican: e.target.value })} placeholder="e.g. 50" />
           <p className="gr-hint">Priced in ICAN so it keeps its value. Customers see it in their own currency.</p></div>
@@ -109,13 +163,14 @@ function PlanForm({ insurer, plan, maxDataDiscount, onClose, onSaved }) {
         <input id="pl-url" className="gr-input" type="url" maxLength={300} value={f.terms_url} onChange={(e) => set({ terms_url: e.target.value })} placeholder="https://…" /></div>
       <Switch checked={f.active} onChange={(on) => set({ active: on })}>On sale. Switch off to stop new sales and renewals.</Switch>
 
+      <CoachPanel coach={coach} />
       {error && <Alert tone="bad">{error}</Alert>}
       <button type="button" className="gr-btn gr-btn--primary gr-btn--block" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save plan'}</button>
     </Modal>
   );
 }
 
-export default function InsurerPlans({ insurer, rate }) {
+export default function InsurerPlans({ insurer, rate, onChanged }) {
   const [plans, setPlans] = useState(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(null); // null | 'new' | plan
@@ -131,7 +186,7 @@ export default function InsurerPlans({ insurer, rate }) {
 
   const toggleActive = async (p) => {
     const res = await insuranceService.savePlan(insurer.insurer_id, p.plan_id, { ...p, active: !p.active, benefits: p.benefits, terms_url: p.terms_url || '' });
-    if (res.success) load(); else setError(res.error);
+    if (res.success) { load(); onChanged?.(); } else setError(res.error);
   };
 
   return (
@@ -164,6 +219,7 @@ export default function InsurerPlans({ insurer, rate }) {
               <div className="ins-perks">
                 <Chip tone={p.active ? 'ok' : 'muted'}>{p.active ? 'On sale' : 'Off sale'}</Chip>
                 <Chip>{p.active_policies} active {p.active_policies === 1 ? 'policy' : 'policies'}</Chip>
+                {(() => { const q = planCoach(fromPlan(p), { maxDataDiscount: maxDisc, existing: plans, editingId: p.plan_id }); return <Chip tone={q.score >= 90 ? 'ok' : q.score >= 70 ? 'warn' : 'bad'} title="How complete and competitive this plan is">Quality {q.score}</Chip>; })()}
                 {p.points_enabled && <Chip tone="warn">Takes points</Chip>}
                 {p.data_discount_pct > 0 && <Chip tone="ok">{p.data_discount_pct}% for sharing {p.data_discount_scopes.map((s) => scopeShort(s)).join(' + ')}</Chip>}
                 {p.group_discount_pct > 0 && <Chip>{p.group_discount_pct}% group</Chip>}
@@ -184,9 +240,9 @@ export default function InsurerPlans({ insurer, rate }) {
 
       {editing && (
         <PlanForm
-          insurer={insurer} plan={editing === 'new' ? null : editing} maxDataDiscount={maxDisc}
+          insurer={insurer} plan={editing === 'new' ? null : editing} plans={plans || []} maxDataDiscount={maxDisc}
           onClose={() => setEditing(null)}
-          onSaved={(msg) => { setEditing(null); setFlash(msg); load(); }}
+          onSaved={(msg) => { setEditing(null); setFlash(msg); load(); onChanged?.(); }}
         />
       )}
     </div>

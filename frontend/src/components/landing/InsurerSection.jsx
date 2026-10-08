@@ -2,6 +2,7 @@ import React from 'react';
 import { BadgeCheck, FileCheck2, ShieldCheck, Wallet } from 'lucide-react';
 import { useTheme, isDarkFamilyTheme } from '../../context/ThemeContext';
 import InsurerApplication from '../insurance/InsurerApplication';
+import InsurerDirectory from './InsurerDirectory';
 
 /**
  * Landing page "Insurance" section: licensed insurance companies apply to sell cover on IcanEra and
@@ -54,7 +55,19 @@ const InsurerSection = ({ onGetStarted }) => {
           ))}
         </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-5">
+        {/* For customers: the public directory of verified insurers */}
+        <div className="mt-12">
+          <InsurerDirectory dark={dark} onGetStarted={onGetStarted}
+            onApply={() => document.getElementById('insurance-apply')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} />
+        </div>
+
+        {/* For insurers: apply to be listed */}
+        <div className="mb-6 mt-14 text-center">
+          <h3 className={`text-xl font-black md:text-2xl ${title}`}>Are you a licensed insurer?</h3>
+          <p className={`mx-auto mt-1 max-w-2xl text-sm ${body}`}>Apply in two minutes. Once support verifies your licence you get a public listing, a plan builder that coaches your pricing, and customers who pay in ICAN.</p>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-5">
           <div className={`lg:col-span-2 rounded-2xl border p-5 ${card}`}>
             <h3 className={`text-sm font-black uppercase tracking-wider ${title}`}>How it works</h3>
             <ol className="mt-3 space-y-3">
