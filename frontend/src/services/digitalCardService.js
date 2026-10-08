@@ -154,7 +154,7 @@ async function completeCardPayment(txRef, transactionId) {
  * Pay the holder: store the pending payment, take it with Flutterwave, have the server confirm it.
  * Resolves { code (public receipt), amount_ugx, processing_fee_ugx, charged_ugx }.
  */
-export async function payCardWithFlutterwave({ token, amount, name, phone, note, holderName = 'IcanEra card', expectedCharge = null }) {
+export async function payCardWithFlutterwave({ token, amount, name, phone, note, holderName = 'IcanEra card', expectedCharge = null, paymentOptions = null }) {
   const { data: start, error } = await supabase.rpc('card_qr_pay_start', {
     p_token: token, p_amount: amount, p_payer_name: name, p_payer_phone: phone, p_note: note || null, p_dry_run: false,
   });
@@ -172,6 +172,7 @@ export async function payCardWithFlutterwave({ token, amount, name, phone, note,
     payment = await payWithFlutterwave({
       amount: Number(start.charge_ugx), txRef: start.tx_ref, customerName: name, customerPhone: phone,
       title: holderName, description: `Payment to ${holderName}`,
+      ...(paymentOptions ? { paymentOptions } : {}),
     });
   } catch (err) {
     writePending(null);
@@ -189,6 +190,33 @@ export async function payCardWithFlutterwave({ token, amount, name, phone, note,
     if (!err.retryable) writePending(null);
     throw err;
   }
+}
+
+// ─── Pay the card holder from an IcanEra wallet (backend/ADD_CARD_QR_WALLET_PAY.sql) ──────────────
+// Signed-in payer, no processing fee, any country. The amount is in the PAYER'S OWN currency (the one their
+// wallet shows); source 'local' = their wallet in that currency, 'ican' = ICAN coins. Both are priced at the live
+// coin value on the server. The browser never sends a recipient or a price.
+
+/**
+ * The payer's currency, live coin price in it and balances: { currency, price_local, local_balance, ican_balance }.
+ * With an amount (in their currency) it also prices it: { amount_local, ican_amount, amount_ugx } and refuses
+ * amounts outside the allowed size. Pass amount = null for just the currency and balances.
+ */
+export async function quoteCardWalletPayment(token, amount = null) {
+  const { data, error } = await supabase.rpc('card_qr_wallet_quote', { p_token: token, p_amount: amount });
+  if (error) throw new Error(error.message || 'Could not price this payment');
+  if (!data?.success) throw new Error(data?.error || 'Could not price this payment');
+  return data;
+}
+
+/** Resolves { code (public receipt), currency, amount_local, amount_ugx, ican_amount, source }. */
+export async function payCardWithWallet({ token, amount, source, note }) {
+  const { data, error } = await supabase.rpc('card_qr_pay_wallet', {
+    p_token: token, p_amount: amount, p_source: source, p_note: note || null,
+  });
+  if (error) throw new Error(error.message || 'Could not complete this payment');
+  if (!data?.success) throw new Error(data?.error || 'Could not complete this payment');
+  return data;
 }
 
 /** Paid but closed the tab before it was confirmed? Finish it on the next scan of the same card. */
