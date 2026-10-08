@@ -620,6 +620,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // profile). Loaded separately from notices/jobs since it depends on
   // company.business_profile_id, only known once the header result lands.
   const [products, setProducts] = useState([]);
+  // The business's own store products, when its CMMS website profile says the
+  // Shop tab should show them (instead of / as well as resellers' listings).
+  const [storeProducts, setStoreProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [cart, setCart] = usePersistedCart(`icanera_cart_nb_${companyId}`); // { [listing_id]: quantity } -- survives the round-trip to Google
 
@@ -714,15 +717,19 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 
   useEffect(() => {
     let cancelled = false;
-    if (!company?.business_profile_id) { setProducts([]); return; }
+    if (!company?.business_profile_id) { setProducts([]); setStoreProducts([]); return; }
     setProductsLoading(true);
-    getDropshipStorefront(company.business_profile_id).then(({ data }) => {
+    Promise.all([
+      cmmsAnnouncementsService.getPublicSiteProducts(companyId),
+      getDropshipStorefront(company.business_profile_id),
+    ]).then(([site, { data }]) => {
       if (cancelled) return;
-      setProducts(data || []);
+      setStoreProducts(site.storeProducts);
+      setProducts(site.source === 'store' ? [] : (data || []));
       setProductsLoading(false);
     });
     return () => { cancelled = true; };
-  }, [company?.business_profile_id]);
+  }, [companyId, company?.business_profile_id]);
 
   // Does this business invite customers to create an account on its site (and so offer instalments)?
   const [accountsEnabled, setAccountsEnabled] = useState(true);
@@ -943,7 +950,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // narrower per-tab width.
   const tabs = [
     { id: 'notices', label: 'Notices', mobileLabel: 'Notices', icon: Megaphone },
-    ...(products.length > 0 ? [{ id: 'shop', label: 'Products & Services', mobileLabel: 'Shop', icon: ShoppingBag }] : []),
+    ...(products.length > 0 || storeProducts.length > 0 ? [{ id: 'shop', label: 'Products & Services', mobileLabel: 'Shop', icon: ShoppingBag }] : []),
     // Shown whenever this business has PitchIn enabled at all (a linked or
     // name-matched business_profile_id, see pitchesBusinessProfileId above)
     // not just once it already has a published pitch -- otherwise the
@@ -1104,6 +1111,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           {section === 'shop' && (
             <ShopSection
               products={products}
+              storeProducts={storeProducts}
+              contact={{ phone: company.phone, whatsapp: company.whatsapp }}
               loading={productsLoading}
               cart={cart}
               setCart={setCart}
@@ -2036,7 +2045,7 @@ const VEHICLE_TYPE_OPTIONS = [
 // button then pays instantly. A visitor who doesn't want a wallet can instead
 // pay with Mobile Money, card or bank -- that adds a small payment-processing
 // fee and is handled by useGuestCheckout / guestCheckoutService.
-const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user, authLoading }) => {
+const ShopSection = ({ products, storeProducts = [], contact = {}, loading, cart, setCart, businessProfileId, user, authLoading }) => {
   const cartOpenKey = `icanera_cart_nbshop_${businessProfileId}`;
   const [showCart, setShowCart] = useState(() => consumeCartOpen(cartOpenKey));
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -2280,9 +2289,9 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
         </button>
       </div>
 
-      {products.length === 0 ? (
+      {products.length === 0 && storeProducts.length === 0 ? (
         <EmptyState icon={ShoppingBag} text="Nothing listed right now. Check back later." />
-      ) : (
+      ) : products.length === 0 ? null : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           {products.map((listing) => {
             const qty = cart[listing.listing_id] || 0;
@@ -2319,6 +2328,51 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
               </div>
             );
           })}
+        </div>
+      )}
+
+      {storeProducts.length > 0 && (
+        <div className={products.length > 0 ? 'mt-8' : ''}>
+          <h3 className="text-sm font-semibold nb-text mb-1">{products.length > 0 ? 'From our store' : 'Our products'}</h3>
+          <p className="text-xs nb-text-muted mb-3">Contact us to order these.</p>
+          {(buildWhatsAppLink(contact.whatsapp) || buildTelLink(contact.phone)) && (
+            <div className="flex gap-2 mb-3">
+              {buildWhatsAppLink(contact.whatsapp) && (
+                <a href={buildWhatsAppLink(contact.whatsapp)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg nb-btn-primary text-xs font-semibold">
+                  <MessageCircle className="w-3.5 h-3.5" />WhatsApp
+                </a>
+              )}
+              {buildTelLink(contact.phone) && (
+                <a href={buildTelLink(contact.phone)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg nb-btn-secondary text-xs font-semibold">
+                  <Phone className="w-3.5 h-3.5" />Call
+                </a>
+              )}
+            </div>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+            {storeProducts.map((item) => (
+              <div key={item.product_id} className="nb-card rounded-2xl overflow-hidden flex flex-col">
+                <div className="aspect-square nb-surface-alt flex items-center justify-center overflow-hidden">
+                  {item.images?.[0] ? (
+                    <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Store className="w-8 h-8 nb-icon-muted" />
+                  )}
+                </div>
+                <div className="p-2.5 flex-1 flex flex-col">
+                  <p className="text-sm nb-text font-medium line-clamp-2 min-h-[2.5rem]">{item.name}</p>
+                  <p className="nb-price font-bold mt-1">{formatMoney(item.price, item.currency)}</p>
+                  {item.is_service ? (
+                    <p className="mt-1 text-[11px] nb-text-muted">Service</p>
+                  ) : !item.in_stock ? (
+                    <p className="mt-1 text-xs nb-out-of-stock font-semibold">Out of stock</p>
+                  ) : (
+                    <p className="mt-1 text-[11px] nb-text-muted">In stock</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
