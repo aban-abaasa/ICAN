@@ -33,11 +33,29 @@ const formatMoney = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG
 const digits = (value) => String(value || '').replace(/[^0-9]/g, '');
 const blankRow = () => ({ name: '', price: '', qty: '1' });
 
+// Another app (e.g. the MyBodaGuy self-checkout) can hand over a ready cart through the link:
+//   ?i=<item name>~<price>~<qty> (repeat i= per item), &n=<customer name>, &p=<customer phone>
+// Everything is still typed-in data the customer can see and edit before paying; the server prices the bill.
+const prefillFromUrl = () => {
+  if (typeof window === 'undefined') return { rows: [blankRow()], name: '', phone: '' };
+  const params = new URLSearchParams(window.location.search);
+  const rows = params.getAll('i').slice(0, 20).map((entry) => {
+    const [itemName = '', price = '', qty = '1'] = entry.split('~');
+    return { name: itemName.slice(0, 80), price: digits(price).slice(0, 12), qty: digits(qty).slice(0, 5) || '1' };
+  }).filter((r) => r.price);
+  return {
+    rows: rows.length ? rows : [blankRow()],
+    name: (params.get('n') || '').slice(0, 80),
+    phone: (params.get('p') || '').slice(0, 30),
+  };
+};
+
 export default function PayAnyAmountForm({ code, info, skin = 'ptx' }) {
   const k = SKINS[skin] || SKINS.ptx;
-  const [rows, setRows] = useState([blankRow()]);
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [initial] = useState(prefillFromUrl);
+  const [rows, setRows] = useState(initial.rows);
+  const [name, setName] = useState(initial.name);
+  const [phone, setPhone] = useState(initial.phone);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const lastNameRef = useRef(null);
