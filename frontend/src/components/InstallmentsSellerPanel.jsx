@@ -1,12 +1,21 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Loader, Users, ListChecks, ToggleLeft, ToggleRight, XCircle, Package } from 'lucide-react';
+import { Loader, Users, ListChecks, ToggleLeft, ToggleRight, XCircle, Package, Plane } from 'lucide-react';
 import {
   getSellerInstallmentPlans, sellerCancelInstallmentPlan, getBusinessSiteCustomers, getBusinessSiteInfo, setBusinessSiteAccounts,
-  formatUGX, STATUS_LABELS,
+  sellerShipInstallment, formatMoney, STATUS_LABELS,
 } from '../services/installmentService';
 
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-UG', { day: 'numeric', month: 'short' }) : '');
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '');
 const OPEN = ['awaiting_deposit', 'active', 'ready'];
+const CANCELLABLE = [...OPEN, 'shipping_pending'];
+
+// Amounts in different currencies are never added together: one line per currency.
+const sumByCurrency = (rows, pick) => {
+  const totals = {};
+  rows.forEach((r) => { const v = Number(pick(r) || 0); if (v > 0) totals[r.currency || 'UGX'] = (totals[r.currency || 'UGX'] || 0) + v; });
+  const parts = Object.entries(totals).map(([cur, v]) => formatMoney(v, cur));
+  return parts.length ? parts.join(' · ') : formatMoney(0, 'UGX');
+};
 
 /**
  * The seller's view of instalments: who is paying what, who is waiting to
@@ -44,7 +53,7 @@ const InstallmentsSellerPanel = ({ businessProfileId }) => {
   };
 
   const cancel = async (plan) => {
-    const reason = window.prompt(`Cancel ${plan.customer_name || 'this customer'}'s plan ${plan.code}? ${formatUGX(plan.paid_ugx)} is returned to them in full. Reason (optional):`, '');
+    const reason = window.prompt(`Cancel ${plan.customer_name || 'this customer'}'s plan ${plan.code}? ${formatMoney(plan.paid_amount, plan.currency)} is returned to them in full. Reason (optional):`, '');
     if (reason === null) return;
     setBusy(plan.code);
     try { await sellerCancelInstallmentPlan(plan.code, reason); await load(); } catch (err) { setError(err.message); }
@@ -55,7 +64,8 @@ const InstallmentsSellerPanel = ({ businessProfileId }) => {
 
   const open = (plans || []).filter((p) => OPEN.includes(p.status));
   const waiting = (plans || []).filter((p) => p.status === 'pickup_ready');
-  const owed = open.reduce((sum, p) => sum + Number(p.balance_ugx || 0), 0);
+  const toShip = (plans || []).filter((p) => p.status === 'shipping_pending');
+  const owed = sumByCurrency(open, (p) => p.balance_amount);
 
   return (
     <div className="space-y-3">
@@ -74,7 +84,7 @@ const InstallmentsSellerPanel = ({ businessProfileId }) => {
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-center">
-        {[['Open plans', open.length], ['Customers owe', formatUGX(owed)], ['To collect', waiting.length]].map(([label, value]) => (
+        {[['Open plans', open.length], ['Customers owe', owed], [toShip.length ? 'To ship' : 'To collect', toShip.length ? toShip.length : waiting.length]].map(([label, value]) => (
           <div key={label} className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bgSecondary)' }}>
             <p className="text-[11px]" style={{ color: 'var(--color-textSecondary)' }}>{label}</p>
             <p className="text-sm font-bold break-words" style={{ color: 'var(--color-text)' }}>{value}</p>
@@ -106,12 +116,19 @@ const InstallmentsSellerPanel = ({ businessProfileId }) => {
                 </div>
                 <div className="flex justify-between text-xs mt-1.5" style={{ color: 'var(--color-textSecondary)' }}>
                   <span>{p.code} · {fmtDate(p.created_at)}{OPEN.includes(p.status) ? ` · due by ${fmtDate(p.final_due_at)}` : ''}</span>
-                  <span style={{ color: 'var(--color-text)' }}>{formatUGX(p.paid_ugx)} of {formatUGX(p.total_ugx)}</span>
+                  <span style={{ color: 'var(--color-text)' }}>{formatMoney(p.paid_amount, p.currency)} of {formatMoney(p.total_amount, p.currency)}</span>
                 </div>
                 {p.status === 'pickup_ready' && (
                   <p className="text-xs text-emerald-400 mt-1.5 flex items-center gap-1.5"><Package className="w-3.5 h-3.5" />Waiting to collect at {p.store_name} — the store scans their QR to hand over and release payment.</p>
                 )}
-                {OPEN.includes(p.status) && (
+                {p.status === 'shipping_pending' && <ShipForm plan={p} onShipped={load} setError={setError} />}
+                {p.status === 'shipped' && (
+                  <p className="text-xs text-sky-300 mt-1.5 flex items-center gap-1.5"><Plane className="w-3.5 h-3.5" />Shipped with {p.shipment?.carrier} · {p.shipment?.tracking_no} — you are paid when they confirm it arrived{p.auto_release_at ? ` (or automatically on ${fmtDate(p.auto_release_at)})` : ''}.</p>
+                )}
+                {p.status === 'disputed' && (
+                  <p className="text-xs text-red-300 mt-1.5">The customer reported a problem: “{p.problem?.note}”. Payment is held while support reviews it.</p>
+                )}
+                {CANCELLABLE.includes(p.status) && (
                   <button onClick={() => cancel(p)} disabled={busy === p.code} className="mt-2 text-xs text-slate-500 hover:text-red-400 flex items-center gap-1">
                     {busy === p.code ? <Loader className="w-3 h-3 animate-spin" /> : <XCircle className="w-3 h-3" />}Cancel &amp; refund (e.g. out of stock)
                   </button>
@@ -134,8 +151,12 @@ const InstallmentsSellerPanel = ({ businessProfileId }) => {
                   <p className="text-xs truncate" style={{ color: 'var(--color-textSecondary)' }}>{c.phone || 'No phone'} · joined {fmtDate(c.joined_at)}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-xs text-emerald-400 font-semibold">Paid {formatUGX(c.paid_ugx)}</p>
-                  {c.balance_ugx > 0 && <p className="text-[11px] text-slate-400">Owes {formatUGX(c.balance_ugx)}</p>}
+                  {(c.totals || []).filter((t) => t.paid_amount > 0 || t.balance_amount > 0).map((t) => (
+                    <div key={t.currency}>
+                      <p className="text-xs text-emerald-400 font-semibold">Paid {formatMoney(t.paid_amount, t.currency)}</p>
+                      {t.balance_amount > 0 && <p className="text-[11px] text-slate-400">Owes {formatMoney(t.balance_amount, t.currency)}</p>}
+                    </div>
+                  ))}
                   <p className="text-[11px] text-slate-500">{c.plans} plan{c.plans === 1 ? '' : 's'}</p>
                 </div>
               </div>
@@ -143,6 +164,41 @@ const InstallmentsSellerPanel = ({ businessProfileId }) => {
           </div>
         )
       )}
+    </div>
+  );
+};
+
+// A customer abroad has paid in full: the seller sends the parcel and records who is carrying it.
+const ShipForm = ({ plan, onShipped, setError }) => {
+  const [carrier, setCarrier] = useState('');
+  const [trackingNo, setTrackingNo] = useState('');
+  const [trackingUrl, setTrackingUrl] = useState('');
+  const [eta, setEta] = useState('');
+  const [busy, setBusy] = useState(false);
+  const to = plan.shipping || {};
+  const submit = async () => {
+    setError(''); setBusy(true);
+    try {
+      await sellerShipInstallment(plan.code, { carrier, trackingNo, trackingUrl, etaDays: eta ? Number(eta) : null });
+      await onShipped();
+    } catch (err) { setError(err.message || 'Could not save the shipment'); }
+    setBusy(false);
+  };
+  const input = 'w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500';
+  return (
+    <div className="mt-2 rounded-lg border border-slate-800 p-2.5 space-y-2">
+      <p className="text-xs text-amber-300 flex items-center gap-1.5"><Plane className="w-3.5 h-3.5" />Paid in full — ship this to the customer</p>
+      <p className="text-[11px] text-slate-400 whitespace-pre-line">{[to.name, to.phone, [to.line1, to.line2].filter(Boolean).join(', '), [to.city, to.region, to.postal_code].filter(Boolean).join(' '), to.country, to.note ? `Note: ${to.note}` : ''].filter(Boolean).join('\n')}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <input className={input} value={carrier} onChange={(e) => setCarrier(e.target.value)} placeholder="Carrier (DHL, SF Express…)" aria-label="Carrier" />
+        <input className={input} value={trackingNo} onChange={(e) => setTrackingNo(e.target.value)} placeholder="Tracking number" aria-label="Tracking number" />
+        <input className={input} value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="Tracking link (optional)" aria-label="Tracking link" />
+        <input className={input} value={eta} onChange={(e) => setEta(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Usual days to arrive" inputMode="numeric" aria-label="Days to arrive" />
+      </div>
+      <button onClick={submit} disabled={busy || !carrier.trim() || !trackingNo.trim()} className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center justify-center gap-2">
+        {busy ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Plane className="w-3.5 h-3.5" />}Mark as shipped
+      </button>
+      <p className="text-[11px] text-slate-500">You are paid when the customer confirms it arrived, or automatically after the protection period.</p>
     </div>
   );
 };

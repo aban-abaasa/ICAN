@@ -5,6 +5,9 @@ import { AuthPage } from './auth';
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
 import useGuestCheckout from '../hooks/useGuestCheckout';
 import InstallmentOffer from './InstallmentOffer';
+import ContinueWithGoogle from './ContinueWithGoogle';
+import { getInstallmentShelf, formatMoney } from '../services/installmentService';
+import usePersistedCart, { markCartOpen, consumeCartOpen } from '../hooks/usePersistedCart';
 
 // Presets for the customer-chosen delivery deadline — mirrors the backend's
 // delivery.min_deadline_hours/delivery.max_deadline_hours bounds (1-48h by
@@ -44,8 +47,10 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [cart, setCart] = useState({}); // { [listing_id]: quantity }
-  const [showCart, setShowCart] = useState(false);
+  // The cart survives the round-trip to Google when a new customer signs up in one tap.
+  const cartKey = `icanera_cart_store_${businessProfileId}`;
+  const [cart, setCart] = usePersistedCart(cartKey); // { [listing_id]: quantity }
+  const [showCart, setShowCart] = useState(() => consumeCartOpen(cartKey));
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -64,6 +69,19 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   const [ridersLoading, setRidersLoading] = useState(false);
   const [selectedRiderId, setSelectedRiderId] = useState(null); // null = auto-assign nearest
   const [vehicleType, setVehicleType] = useState(null); // null = any bike/car/van
+
+  // The shop's currency (a shop abroad is priced in its own currency, and is bought through "Pay in instalments" / pay-in-full,
+  // not the Ugandan rider checkout below).
+  const [shelf, setShelf] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    getInstallmentShelf(businessProfileId)
+      .then((rows) => { if (!cancelled) setShelf(Object.fromEntries(rows.map((r) => [r.listing_id, r]))); })
+      .catch(() => { /* keep UGX pricing if the shelf can't be read */ });
+    return () => { cancelled = true; };
+  }, [businessProfileId]);
+  const currencyOf = (listing) => shelf[listing?.listing_id]?.currency || 'UGX';
+  const priceOf = (amount, listing) => (currencyOf(listing) === 'UGX' ? formatUGX(amount) : formatMoney(amount, currencyOf(listing)));
 
   useEffect(() => {
     let cancelled = false;
@@ -143,6 +161,9 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
       .filter((row) => row.listing && row.qty > 0),
     [cart, listings]
   );
+  // An order from a shop priced in another currency can't use the Ugandan rider checkout; it is paid through the instalment flow.
+  const foreignCurrency = currencyOf(cartItems[0]?.listing);
+  const foreign = cartItems.length > 0 && foreignCurrency !== 'UGX';
   const cartTotal = cartItems.reduce((sum, row) => sum + row.listing.listed_price * row.qty, 0);
   const cartCount = cartItems.reduce((sum, row) => sum + row.qty, 0);
   const allFreeDelivery = cartItems.length > 0 && cartItems.every((row) => row.listing.free_delivery);
@@ -327,8 +348,9 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
               </div>
               <div className="p-2.5 flex-1 flex flex-col">
                 <p className="text-sm text-white font-medium line-clamp-2 min-h-[2.5rem]">{listing.name}</p>
-                <p className="text-indigo-300 font-bold mt-1">{formatUGX(listing.listed_price)}</p>
-                {listing.free_delivery ? (
+                <p className="text-indigo-300 font-bold mt-1">{priceOf(listing.listed_price, listing)}</p>
+                {shelf[listing.listing_id]?.cross_border && <p className="mt-0.5 text-[11px] text-sky-300">Ships from {shelf[listing.listing_id].store_country || 'abroad'}</p>}
+                {currencyOf(listing) !== 'UGX' ? null : listing.free_delivery ? (
                   <p className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-400"><Truck className="w-3 h-3" />Free delivery</p>
                 ) : listing.max_delivery_subsidy > 0 ? (
                   <p className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-400"><Truck className="w-3 h-3" />Up to {formatUGX(listing.max_delivery_subsidy)} off delivery</p>
@@ -367,7 +389,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                   <div key={row.listing.listing_id} className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm text-white truncate">{row.listing.name}</p>
-                      <p className="text-xs text-slate-400">{formatUGX(row.listing.listed_price)} × {row.qty}</p>
+                      <p className="text-xs text-slate-400">{priceOf(row.listing.listed_price, row.listing)} × {row.qty}</p>
                     </div>
                     <button onClick={() => setCart((prev) => ({ ...prev, [row.listing.listing_id]: 0 }))} className="p-1.5 text-slate-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
                   </div>
@@ -378,6 +400,8 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                   <div className="space-y-2 pt-2">
                     <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your name" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
                     <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone number" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
+                    {foreign && <p className="text-[11px] text-sky-300">This shop is priced in {foreignCurrency} and ships from {shelf[pickupListing?.listing_id]?.store_country || 'abroad'}. Pay in full or in instalments below — you give your shipping address once it is paid.</p>}
+                    {!foreign && (<>
                     <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Delivery address (e.g. street, landmark)" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
 
                     <button
@@ -481,27 +505,32 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                         <p className="mt-1 text-[11px] text-slate-500">Real BodaGoera fare for the rider you pick — never a fee you set yourself.</p>
                       </div>
                     )}
+                    </>)}
                   </div>
                   <div className="border-t border-slate-800 pt-3 space-y-1">
-                    <div className="flex justify-between text-sm text-slate-400"><span>Items</span><span>{formatUGX(cartTotal)}</span></div>
-                    {shownDeliveryFee > 0 && (
+                    <div className="flex justify-between text-sm text-slate-400"><span>Items</span><span>{foreign ? formatMoney(cartTotal, foreignCurrency) : formatUGX(cartTotal)}</span></div>
+                    {!foreign && shownDeliveryFee > 0 && (
                       <div className="flex justify-between text-sm text-slate-400"><span>Delivery</span><span>{formatUGX(shownDeliveryFee)}</span></div>
                     )}
-                    <div className="flex justify-between text-white font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>
+                    {!foreign && <div className="flex justify-between text-white font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>}
                   </div>
                   {checkoutError && <p className="text-xs text-red-400">{checkoutError}</p>}
+                  {!authLoading && !user && (
+                    <ContinueWithGoogle skin="slate" onUseEmail={() => setShowAuthModal(true)} onBeforeRedirect={() => markCartOpen(cartKey)} />
+                  )}
                   <InstallmentOffer
                     businessProfileId={businessProfileId}
                     cartItems={cartItems}
                     user={user}
                     authLoading={authLoading}
                     onNeedAuth={() => setShowAuthModal(true)}
+                    onBeforeAuthRedirect={() => markCartOpen(cartKey)}
                     customerName={customerName}
                     customerPhone={customerPhone}
                     storeName={resellerName}
                     skin="slate"
                   />
-                  {(
+                  {!foreign && (
                     <div className="space-y-2">
                       <button
                         onClick={user ? handleCheckout : () => setShowAuthModal(true)}

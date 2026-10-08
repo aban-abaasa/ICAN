@@ -44,11 +44,11 @@ CREATE FUNCTION public.unified_business_member(p_business_profile_id UUID) RETUR
 CREATE TABLE public.supermarkets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_user_id UUID, name TEXT, location TEXT, address TEXT, latitude NUMERIC, longitude NUMERIC,
-  pichin_business_profile_id UUID
+  pichin_business_profile_id UUID, country TEXT, price_currency VARCHAR
 );
 CREATE TABLE public.products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  supermarket_id UUID NOT NULL, name TEXT NOT NULL, sku TEXT, barcode TEXT,
+  supermarket_id UUID NOT NULL, name TEXT NOT NULL, sku TEXT, barcode TEXT, images JSONB, brand TEXT,
   selling_price NUMERIC NOT NULL, tax_rate NUMERIC, is_active BOOLEAN DEFAULT TRUE, is_dropship_excluded BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE TABLE public.inventory (
@@ -147,6 +147,20 @@ REVOKE ALL ON FUNCTION public.ican_settle_business_wallet_income(UUID, NUMERIC, 
 
 CREATE TABLE public.guest_checkout_config (key TEXT PRIMARY KEY, value TEXT NOT NULL, note TEXT);
 INSERT INTO public.guest_checkout_config VALUES ('gateway_fee_pct', '3.5', NULL);
+
+-- Coin prices by currency (the live ones come from ican_live_price_in_currency on the real platform) and each user's currency.
+CREATE TABLE public.t_prices (currency TEXT PRIMARY KEY, price NUMERIC);
+INSERT INTO public.t_prices VALUES ('USD', 1.35), ('KES', 175), ('CNY', 9.8);   -- (UGX is fixed at 5,000 by the engine itself)
+CREATE FUNCTION public.ican_live_price_in_currency(p_currency VARCHAR) RETURNS NUMERIC LANGUAGE plpgsql STABLE AS $$
+DECLARE v NUMERIC;
+BEGIN
+  SELECT price INTO v FROM public.t_prices WHERE currency = upper(p_currency);
+  IF v IS NULL THEN RAISE EXCEPTION 'The live icaneracoin price in % is not available right now — please try again in a moment', upper(p_currency); END IF;
+  RETURN v;
+END $$;
+CREATE TABLE public.t_user_cur (user_id UUID PRIMARY KEY, currency TEXT NOT NULL);
+CREATE FUNCTION public.ican_user_currency(p_user_id UUID) RETURNS VARCHAR LANGUAGE sql STABLE AS $$
+  SELECT COALESCE((SELECT currency FROM public.t_user_cur WHERE user_id = p_user_id), 'UGX')::VARCHAR $$;
 
 CREATE FUNCTION public.mbg_get_setting_numeric(p_key TEXT, p_default NUMERIC) RETURNS NUMERIC LANGUAGE sql STABLE AS $$ SELECT p_default $$;
 

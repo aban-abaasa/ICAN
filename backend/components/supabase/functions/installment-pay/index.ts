@@ -9,7 +9,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 // guest-checkout-pay: nothing in the request is trusted. The plan, the amount
 // and the customer were fixed server-side by installment_pay_start() when the
 // customer was signed in; this function only proceeds after Flutterwave itself
-// confirms a successful UGX payment of at least that charge under that
+// confirms a successful payment in the plan's currency of at least that charge under that
 // payment's tx_ref. The tx_ref is an unguessable random token, and all it can
 // ever reveal is the outcome of the one payment it belongs to.
 //
@@ -63,6 +63,10 @@ serve(async (req) => {
       });
     }
 
+    // The payment was priced in the store's currency (UGX, USD, CNY, KES, …); Flutterwave must report that same one.
+    const currency = String(payment.currency ?? "UGX").toUpperCase();
+    const tolerance = currency === "UGX" ? 1 : 0.005;
+
     // ── 1. Ask Flutterwave whether this payment was really made. ───────────
     const verifyUrl = transaction_id
       ? `${FLW}/transactions/${encodeURIComponent(String(transaction_id))}/verify`
@@ -74,8 +78,8 @@ serve(async (req) => {
     const paid = verifyRes.ok && flw &&
       flw.status === "successful" &&
       flw.tx_ref === tx_ref &&
-      (flw.currency ?? "UGX") === "UGX" &&
-      Number(flw.amount ?? 0) >= Number(payment.charge_ugx) - 1;
+      String(flw.currency ?? "").toUpperCase() === currency &&
+      Number(flw.amount ?? 0) >= Number(payment.charge_amount) - tolerance;
     if (!paid) {
       return jsonResponse({
         success: false,
@@ -83,13 +87,13 @@ serve(async (req) => {
       });
     }
     const flwId = String(flw.id);
-    const paidUgx = Number(flw.amount);
+    const paidAmount = Number(flw.amount);
 
     // ── 2. Apply it to the plan (atomic; on failure nothing is kept). ──────
     const { data: result, error: fulfilError } = await admin.rpc("installment_fulfil_payment", {
       p_tx_ref: tx_ref,
       p_flw_transaction_id: flwId,
-      p_paid_ugx: paidUgx,
+      p_paid_amount: paidAmount,
     });
     if (fulfilError) {
       console.error("installment_fulfil_payment error:", fulfilError);
@@ -106,18 +110,18 @@ serve(async (req) => {
 
     // ── 3. It could not be applied after being paid: refund it in full. ────
     const refundRes = await fetch(`${FLW}/transactions/${flwId}/refund`, {
-      method: "POST", headers: flwHeaders, body: JSON.stringify({ amount: paidUgx }),
+      method: "POST", headers: flwHeaders, body: JSON.stringify({ amount: paidAmount }),
     }).catch(() => null);
     const refundBody = await refundRes?.json().catch(() => null);
     if (refundRes?.ok && refundBody?.status === "success") {
       await admin.rpc("installment_mark_refunded", {
         p_tx_ref: tx_ref,
-        p_note: `Flutterwave refund of UGX ${paidUgx} requested`,
+        p_note: `Flutterwave refund of ${currency} ${paidAmount} requested`,
       });
       return jsonResponse({
         success: false,
         refunded: true,
-        error: `${result.error ?? "The payment could not be applied"}. Your payment of UGX ${paidUgx.toLocaleString()} is being refunded.`,
+        error: `${result.error ?? "The payment could not be applied"}. Your payment of ${currency} ${paidAmount.toLocaleString()} is being refunded.`,
       });
     }
     console.error("refund failed", tx_ref, flwId, refundBody);

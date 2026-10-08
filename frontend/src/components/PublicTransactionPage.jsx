@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
+import ContinueWithGoogle from './ContinueWithGoogle';
 import { CLASSIC_PAY_CSS } from './publicPayTheme';
 import {
   buildPublicReceiptLink,
@@ -367,6 +368,11 @@ const PublicTransactionPage = ({ code }) => {
         <div className="ptx-section ptx-noprint">
           <h2 className="ptx-h2">How would you like to pay?</h2>
           <p className="ptx-muted" style={{ fontSize: 14, marginTop: 4 }}>No account needed. Pick one:</p>
+          {!user && !authLoading && (
+            <div style={{ marginTop: 12 }}>
+              <ContinueWithGoogle skin="ptx" title="Pay with a free IcanEra wallet" onUseEmail={() => setShowAuth(true)} />
+            </div>
+          )}
 
           {available.length > 1 && (
             <div role="tablist" aria-label="Payment method" style={{ display: 'grid', gridTemplateColumns: `repeat(${available.length}, 1fr)`, gap: 8, margin: '14px 0' }}>

@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Loader, ShieldCheck, ChevronRight, Store, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
-import { getMyInstallmentPlans, getMyBusinessAccounts, formatUGX, STATUS_LABELS } from '../services/installmentService';
+import ContinueWithGoogle from './ContinueWithGoogle';
+import { getMyInstallmentPlans, getMyBusinessAccounts, formatMoney, STATUS_LABELS } from '../services/installmentService';
 
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-UG', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
 /**
  * /plans — everything the signed-in customer is paying for: the businesses
@@ -35,13 +36,15 @@ const PublicMyInstallments = () => {
           <ShieldCheck className="w-10 h-10 text-indigo-400 mx-auto mb-3" />
           <h1 className="text-xl font-bold text-white mb-1">Track your payments</h1>
           <p className="text-sm text-slate-400 mb-4">Sign in to see every plan you are paying off, with each business you have an account with.</p>
+          <ContinueWithGoogle skin="slate" title="New? Get your free IcanEra wallet" />
+          <p className="text-xs text-slate-500 mt-4">or sign in with email</p>
         </div>
         <AuthPage initialView="signin" onAuthSuccess={() => {}} />
       </div>
     );
   }
 
-  const order = { awaiting_deposit: 0, active: 1, ready: 2, pickup_ready: 3, dispatched: 4, completed: 5, cancelled: 6, lapsed: 6 };
+  const order = { awaiting_deposit: 0, active: 1, ready: 2, pickup_ready: 3, dispatched: 4, shipping_pending: 4, shipped: 4, disputed: 3, completed: 5, cancelled: 6, lapsed: 6 };
   const sorted = (plans || []).slice().sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
 
   return (
@@ -66,8 +69,14 @@ const PublicMyInstallments = () => {
                     <p className="text-[11px] text-slate-500">Customer since {fmtDate(a.joined_at)} · {a.open_plans} open plan{a.open_plans === 1 ? '' : 's'}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-xs text-slate-500">Paid</p><p className="text-sm text-emerald-300 font-semibold">{formatUGX(a.paid_ugx)}</p>
-                    {a.balance_ugx > 0 && <p className="text-[11px] text-slate-400">Owing {formatUGX(a.balance_ugx)}</p>}
+                    <p className="text-xs text-slate-500">Paid</p>
+                    {(a.totals || []).filter((t) => t.paid_amount > 0 || t.balance_amount > 0).map((t) => (
+                      <div key={t.currency}>
+                        <p className="text-sm text-emerald-300 font-semibold">{formatMoney(t.paid_amount, t.currency)}</p>
+                        {t.balance_amount > 0 && <p className="text-[11px] text-slate-400">Owing {formatMoney(t.balance_amount, t.currency)}</p>}
+                      </div>
+                    ))}
+                    {!(a.totals || []).length && <p className="text-sm text-slate-500">—</p>}
                   </div>
                 </div>
               ))}
@@ -90,10 +99,10 @@ const PublicMyInstallments = () => {
                     </div>
                     <div className="flex justify-between text-xs mt-1">
                       <span className="text-slate-400">{STATUS_LABELS[p.status] || p.status} · {p.code}</span>
-                      <span className="text-slate-300">{formatUGX(p.paid_ugx)} of {formatUGX(p.total_ugx)}</span>
+                      <span className="text-slate-300">{formatMoney(p.paid_amount, p.currency)} of {formatMoney(p.total_amount, p.currency)}</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden mt-2">
-                      <div className="h-full bg-indigo-500" style={{ width: `${Math.min(100, Math.round((p.paid_ugx / Math.max(p.total_ugx, 1)) * 100))}%` }} />
+                      <div className="h-full bg-indigo-500" style={{ width: `${Math.min(100, Math.round((p.paid_amount / Math.max(p.total_amount, 1)) * 100))}%` }} />
                     </div>
                   </a>
                 ))}

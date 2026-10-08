@@ -50,7 +50,7 @@ BEGIN
   r := public.installment_terms();
   PERFORM t.check('1.1 anyone can read the terms', (r ->> 'max_installments')::INT = 6 AND (r ->> 'min_deposit_pct')::INT = 20, r::TEXT);
   r := public.installment_quote(t.b(10), jsonb_build_array(jsonb_build_object('product_id', t.p(1), 'quantity', 2)));
-  PERFORM t.check('1.2 quote prices tax in and gives the minimum deposit', (r ->> 'items_ugx')::NUMERIC = 118000 AND (r ->> 'min_deposit_ugx')::NUMERIC = 23600 AND (r ->> 'eligible')::BOOLEAN, r::TEXT);
+  PERFORM t.check('1.2 quote prices tax in and gives the minimum deposit', (r ->> 'items_amount')::NUMERIC = 118000 AND (r ->> 'min_deposit_amount')::NUMERIC = 23600 AND (r ->> 'eligible')::BOOLEAN, r::TEXT);
   r := public.installment_quote(t.b(10), jsonb_build_array(jsonb_build_object('product_id', t.p(2), 'quantity', 1)));
   PERFORM t.check('1.3 a small order is not eligible', NOT (r ->> 'eligible')::BOOLEAN, r::TEXT);
   r := public.installment_quote(t.b(10), jsonb_build_array(jsonb_build_object('product_id', t.u(77), 'quantity', 1)));
@@ -93,7 +93,7 @@ BEGIN
   PERFORM t.as_user(t.u(2));
   e := t.err(format($$SELECT public.installment_create(%L, %L::jsonb, 3, 7, 30000)$$, t.b(10), v_cart));
   PERFORM t.reset();
-  PERFORM t.check('2.10 a customer without a wallet cannot pay the deposit', e LIKE '%wallet was not found%', e);
+  PERFORM t.check('2.10 a customer with an empty / new wallet cannot pay the deposit and is told what to do', e LIKE '%Not enough in your IcanEra wallet%Mobile Money%', e);
   PERFORM t.check('2.11 ...and nothing was reserved or recorded', (SELECT COUNT(*) FROM public.installment_plans) = 0 AND t.reserved(1) = 0);
 
   PERFORM t.as_user(t.u(1));
@@ -102,18 +102,18 @@ BEGIN
   v_code := r ->> 'code';
   INSERT INTO t.kv VALUES ('planA', v_code);
   p := t.plan(v_code);
-  PERFORM t.check('2.12 a plan is created and the deposit taken', (r ->> 'success')::BOOLEAN AND p.status = 'active' AND p.paid_ugx = 30000, r::TEXT);
+  PERFORM t.check('2.12 a plan is created and the deposit taken', (r ->> 'success')::BOOLEAN AND p.status = 'active' AND p.paid_amount = 30000, r::TEXT);
   PERFORM t.check('2.13 the deposit left the wallet and sits in the plan', t.bal(1) = 100 - 6 AND p.held_ican = 6 AND public.installment_escrow_ican() = 6, 'bal=' || t.bal(1));
   PERFORM t.check('2.14 the stock is reserved, not sold', t.reserved(1) = 2 AND t.stock(1) = 10);
   PERFORM t.check('2.15 the customer became one of the business''s customers', EXISTS (SELECT 1 FROM public.business_site_customers WHERE business_profile_id = t.b(10) AND user_id = t.u(1)));
-  PERFORM t.check('2.16 the plan snapshot is priced', p.items_ugx = 118000 AND p.store_ugx = 98000 AND p.margin_ugx = 20000, p.items_ugx::TEXT || '/' || p.store_ugx || '/' || p.margin_ugx);
+  PERFORM t.check('2.16 the plan snapshot is priced', p.items_amount = 118000 AND p.store_amount = 98000 AND p.margin_amount = 20000, p.items_amount::TEXT || '/' || p.store_amount || '/' || p.margin_amount);
   PERFORM t.check('2.17 the ledger shows a held-payment row', EXISTS (SELECT 1 FROM public.ican_coin_transactions WHERE sender_user_id = t.u(1) AND merchant_name = 'Installment plan ' || v_code AND ican_amount = 6));
 
   PERFORM t.as_user(t.u(1));
   s := (public.installment_get(v_code) -> 'plan' -> 'schedule');
   PERFORM t.reset();
-  PERFORM t.check('2.18 the schedule is a deposit plus three payments that add up', jsonb_array_length(s) = 4 AND (SELECT SUM((x ->> 'amount_ugx')::NUMERIC) FROM jsonb_array_elements(s) x) = 118000, s::TEXT);
-  PERFORM t.check('2.19 only the deposit is marked paid', s -> 0 ->> 'status' = 'paid' AND s -> 1 ->> 'status' = 'upcoming' AND (s -> 3 ->> 'amount_ugx')::NUMERIC = 29200, s::TEXT);
+  PERFORM t.check('2.18 the schedule is a deposit plus three payments that add up', jsonb_array_length(s) = 4 AND (SELECT SUM((x ->> 'amount')::NUMERIC) FROM jsonb_array_elements(s) x) = 118000, s::TEXT);
+  PERFORM t.check('2.19 only the deposit is marked paid', s -> 0 ->> 'status' = 'paid' AND s -> 1 ->> 'status' = 'upcoming' AND (s -> 3 ->> 'amount')::NUMERIC = 29200, s::TEXT);
 
   PERFORM t.as_user(t.u(1));
   e := t.err(format($$SELECT public.installment_create(%L, %L::jsonb, 3, 7, 30000)$$, t.b(10), jsonb_build_array(jsonb_build_object('product_id', t.p(1), 'quantity', 9))));
@@ -156,14 +156,14 @@ BEGIN
   r := public.installment_pay_wallet(v, 29400);
   PERFORM t.reset();
   p := t.plan(v);
-  PERFORM t.check('4.4 a normal instalment is accepted', (r ->> 'success')::BOOLEAN AND p.paid_ugx = 59400 AND p.status = 'active', r::TEXT);
+  PERFORM t.check('4.4 a normal instalment is accepted', (r ->> 'success')::BOOLEAN AND p.paid_amount = 59400 AND p.status = 'active', r::TEXT);
   PERFORM t.check('4.5 held coins follow the payments', p.held_ican = ROUND(30000 / 5000.0, 8) + ROUND(29400 / 5000.0, 8), p.held_ican::TEXT);
 
   PERFORM t.as_user(t.u(1));
   r := public.installment_pay_wallet(v, 58600);
   PERFORM t.reset();
   p := t.plan(v);
-  PERFORM t.check('4.6 paying the balance in one go makes the plan ready', p.paid_ugx = 118000 AND p.status = 'ready', p.status);
+  PERFORM t.check('4.6 paying the balance in one go makes the plan ready', p.paid_amount = 118000 AND p.status = 'ready', p.status);
   PERFORM t.as_user(t.u(1));
   e := t.err(format($$SELECT public.installment_pay_wallet(%L, 1000)$$, v));
   PERFORM t.reset();
@@ -233,13 +233,13 @@ BEGIN
   PERFORM t.reset();
   v_code := r ->> 'code'; INSERT INTO t.kv VALUES ('planB', v_code);
   p := t.plan(v_code);
-  PERFORM t.check('6.1 a Mobile Money plan waits for its deposit and still holds the stock', (r ->> 'deposit_pending')::BOOLEAN AND p.status = 'awaiting_deposit' AND p.paid_ugx = 0 AND t.reserved(1) = 1, r::TEXT);
+  PERFORM t.check('6.1 a Mobile Money plan waits for its deposit and still holds the stock', (r ->> 'deposit_pending')::BOOLEAN AND p.status = 'awaiting_deposit' AND p.paid_amount = 0 AND t.reserved(1) = 1, r::TEXT);
 
   PERFORM t.as_user(t.u(1));
   e := t.err(format($$SELECT public.installment_pay_start(%L, 5000)$$, v_code));
   PERFORM t.check('6.2 the first payment must be the deposit', e LIKE '%deposit is UGX 12,000%', e);
   r := public.installment_pay_start(v_code, 12000, TRUE);
-  PERFORM t.check('6.3 a dry run prices the fee and stores nothing', (r ->> 'charge_ugx')::NUMERIC = 12500 AND (r ->> 'processing_fee_ugx')::NUMERIC = 500 AND r ->> 'tx_ref' IS NULL, r::TEXT);
+  PERFORM t.check('6.3 a dry run prices the fee and stores nothing', (r ->> 'charge_amount')::NUMERIC = 12500 AND (r ->> 'processing_fee_amount')::NUMERIC = 500 AND r ->> 'tx_ref' IS NULL, r::TEXT);
   r := public.installment_pay_start(v_code, 12000);
   PERFORM t.reset();
   ref := r ->> 'tx_ref';
@@ -257,13 +257,13 @@ BEGIN
   r := public.installment_fulfil_payment(ref, 'FLW1', 12500);
   PERFORM t.reset();
   p := t.plan(v_code);
-  PERFORM t.check('6.7 a verified payment activates the plan', (r ->> 'success')::BOOLEAN AND p.status = 'active' AND p.paid_ugx = 12000, r::TEXT);
+  PERFORM t.check('6.7 a verified payment activates the plan', (r ->> 'success')::BOOLEAN AND p.status = 'active' AND p.paid_amount = 12000, r::TEXT);
   PERFORM t.check('6.8 the customer''s wallet is unchanged (coins in, coins held)', t.bal(1) = v_bal AND p.held_ican = 2.4, t.bal(1)::TEXT);
   PERFORM t.check('6.9 the coins were minted against the payment', (SELECT SUM(ican) FROM public.minted WHERE payment_ref = 'INS-' || ref) = 2.4);
   PERFORM t.as_service();
   r := public.installment_fulfil_payment(ref, 'FLW1', 12500);
   PERFORM t.reset();
-  PERFORM t.check('6.10 confirming twice does not credit twice', (r ->> 'already_processed')::BOOLEAN AND (t.plan(v_code)).paid_ugx = 12000, r::TEXT);
+  PERFORM t.check('6.10 confirming twice does not credit twice', (r ->> 'already_processed')::BOOLEAN AND (t.plan(v_code)).paid_amount = 12000, r::TEXT);
 
   -- a second Mobile Money payment that arrives after the plan was cancelled is refused and must be refunded
   PERFORM t.as_user(t.u(1));
@@ -271,7 +271,7 @@ BEGIN
   ref2 := r ->> 'tx_ref';
   r := public.installment_cancel(v_code);
   PERFORM t.reset();
-  PERFORM t.check('6.11 cancelling inside the cooling-off window refunds in full', (r ->> 'cancel_fee_ugx')::NUMERIC = 0 AND (r ->> 'refunded_ugx')::NUMERIC = 12000 AND t.bal(1) = v_bal + 2.4, r::TEXT);
+  PERFORM t.check('6.11 cancelling inside the cooling-off window refunds in full', (r ->> 'cancel_fee_amount')::NUMERIC = 0 AND (r ->> 'refunded_amount')::NUMERIC = 12000 AND t.bal(1) = v_bal + 2.4, r::TEXT);
   PERFORM t.as_service();
   r := public.installment_fulfil_payment(ref2, 'FLW2', 20800);
   PERFORM t.check('6.12 a late payment on a cancelled plan is refused and flagged for refund', NOT (r ->> 'success')::BOOLEAN AND (r ->> 'refund_required')::BOOLEAN, r::TEXT);
@@ -295,16 +295,16 @@ BEGIN
   e := t.err(format($$SELECT public.installment_choose_delivery(%L, 'Ntinda', 0.35, 32.6, 500)$$, v_code));
   PERFORM t.check('7.3 a silly delivery window is refused', e LIKE '%between 1 and 48%', e);
   r := public.installment_delivery_quote(v_code, 0.35, 32.6);
-  PERFORM t.check('7.4 the quote is the real fare from the nearest ranked rider', (r ->> 'delivery_fee_ugx')::NUMERIC = 3000 AND r ->> 'rider_name' = 'Rider One', r::TEXT);
+  PERFORM t.check('7.4 the quote is the real fare from the nearest ranked rider', (r ->> 'delivery_fee_amount')::NUMERIC = 3000 AND r ->> 'rider_name' = 'Rider One', r::TEXT);
   r := public.installment_choose_delivery(v_code, 'Ntinda, near the market', 0.35, 32.6, 4);
   p := t.plan(v_code);
-  PERFORM t.check('7.5 choosing delivery waits for the fare', p.status = 'active' AND p.delivery_fee_ugx = 3000 AND p.fulfilment = 'delivery' AND p.paid_ugx = 59000, r::TEXT);
+  PERFORM t.check('7.5 choosing delivery waits for the fare', p.status = 'active' AND p.delivery_fee_amount = 3000 AND p.fulfilment = 'delivery' AND p.paid_amount = 59000, r::TEXT);
   e := t.err(format($$SELECT public.installment_pay_wallet(%L, 1000)$$, v_code));
   PERFORM t.check('7.6 the fare must be paid in one go', e LIKE '%delivery fee of UGX 3,000 in one go%', e);
 
   -- change of mind: back to ready, then pick again
   r := public.installment_clear_delivery(v_code);
-  PERFORM t.check('7.7 delivery can be undone before the fare is paid', (t.plan(v_code)).status = 'ready' AND (t.plan(v_code)).delivery_fee_ugx = 0);
+  PERFORM t.check('7.7 delivery can be undone before the fare is paid', (t.plan(v_code)).status = 'ready' AND (t.plan(v_code)).delivery_fee_amount = 0);
   r := public.installment_choose_delivery(v_code, 'Ntinda, near the market', 0.35, 32.6, 4);
 
   -- the fare changes (the quoted rider's price rose) before it is paid
@@ -312,7 +312,7 @@ BEGIN
   v_bal := t.bal(1);
   e := t.err(format($$SELECT public.installment_pay_wallet(%L, 3000)$$, v_code));
   PERFORM t.check('7.8 if the real fare rose above what was paid the order does not go out', e LIKE '%delivery price changed%', e);
-  PERFORM t.check('7.9 ...and nothing was taken', t.bal(1) = v_bal AND (t.plan(v_code)).paid_ugx = 59000 AND (t.plan(v_code)).status = 'active');
+  PERFORM t.check('7.9 ...and nothing was taken', t.bal(1) = v_bal AND (t.plan(v_code)).paid_amount = 59000 AND (t.plan(v_code)).status = 'active');
   UPDATE public.t_riders SET fare = CASE rider_id WHEN t.u(90) THEN 3000 ELSE 4000 END;
 
   -- the quoted rider goes away: the nearest other is picked
@@ -367,7 +367,7 @@ BEGIN
   PERFORM t.reset();
   UPDATE public.t_riders SET available = TRUE;
   p := t.plan(v_code);
-  PERFORM t.check('8.4 no rider: the payment is flagged for refund and the plan is untouched', NOT (r ->> 'success')::BOOLEAN AND (r ->> 'refund_required')::BOOLEAN AND p.paid_ugx = 59000 AND p.status = 'active', r::TEXT);
+  PERFORM t.check('8.4 no rider: the payment is flagged for refund and the plan is untouched', NOT (r ->> 'success')::BOOLEAN AND (r ->> 'refund_required')::BOOLEAN AND p.paid_amount = 59000 AND p.status = 'active', r::TEXT);
   PERFORM t.check('8.5 no coins were minted for the failed payment', (SELECT COUNT(*) FROM public.minted WHERE payment_ref = 'INS-' || ref) = 0);
 
   -- free delivery goes out at once
@@ -379,7 +379,7 @@ BEGIN
   r := public.installment_pay_wallet(v_code, 47000);
   r := public.installment_choose_delivery(v_code, 'Bukoto', 0.34, 32.6, 2);
   PERFORM t.reset();
-  PERFORM t.check('8.6 a free delivery goes out the moment it is chosen', (r ->> 'status') = 'dispatched' AND (t.plan(v_code)).status = 'dispatched' AND (r ->> 'delivery_fee_ugx')::NUMERIC = 0, r::TEXT);
+  PERFORM t.check('8.6 a free delivery goes out the moment it is chosen', (r ->> 'status') = 'dispatched' AND (t.plan(v_code)).status = 'dispatched' AND (r ->> 'delivery_fee_amount')::NUMERIC = 0, r::TEXT);
   UPDATE public.dropship_listings SET free_delivery = FALSE;
 END $t$;
 
@@ -397,7 +397,7 @@ BEGIN
   PERFORM t.as_user(t.u(1));
   r := public.installment_cancel(v_code);
   PERFORM t.reset();
-  PERFORM t.check('9.1 cancelling after the cooling-off window costs 5 %', (r ->> 'cancel_fee_ugx')::NUMERIC = 2000 AND (r ->> 'refunded_ugx')::NUMERIC = 38000, r::TEXT);
+  PERFORM t.check('9.1 cancelling after the cooling-off window costs 5 %', (r ->> 'cancel_fee_amount')::NUMERIC = 2000 AND (r ->> 'refunded_amount')::NUMERIC = 38000, r::TEXT);
   PERFORM t.check('9.2 the fee goes to the seller and the rest to the wallet', t.bizbal(10) = v_biz + 0.4 AND t.bal(1) = v_bal + 7.6, t.bizbal(10) || '/' || t.bal(1));
   PERFORM t.check('9.3 the stock is released', t.reserved(1) = v_res0);
   PERFORM t.check('9.4 coins are conserved through a cancellation', (t.supply() - t.minted()) = (SELECT val::NUMERIC FROM t.kv WHERE k = 'base'));
@@ -416,7 +416,7 @@ BEGIN
   PERFORM t.as_user(t.u(11));
   r := public.installment_seller_cancel(v_code, 'Out of stock');
   PERFORM t.reset();
-  PERFORM t.check('9.6 a staff member of the seller can cancel, fee-free', (r ->> 'cancel_fee_ugx')::NUMERIC = 0 AND t.bal(1) = v_bal + 8, r::TEXT);
+  PERFORM t.check('9.6 a staff member of the seller can cancel, fee-free', (r ->> 'cancel_fee_amount')::NUMERIC = 0 AND t.bal(1) = v_bal + 8, r::TEXT);
 
   -- sweep: unpaid deposit freed, overdue plan lapsed, a ready plan left alone
   PERFORM t.as_user(t.u(1));
@@ -520,9 +520,9 @@ BEGIN
     e := t.err('SELECT public.' || fn);
     PERFORM t.check('11 a signed-in customer cannot call ' || fn, e LIKE 'permission denied%', e);
   END LOOP;
-  e := t.err($$INSERT INTO public.installment_plans (code, customer_user_id, reseller_business_profile_id, supermarket_id, cart, items, items_ugx, store_ugx, margin_ugx, deposit_ugx, n_installments, frequency_days, final_due_at) VALUES ('HACK', gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), '[]', '[]', 1, 1, 0, 1, 1, 1, now())$$);
+  e := t.err($$INSERT INTO public.installment_plans (code, customer_user_id, reseller_business_profile_id, supermarket_id, cart, items, items_amount, store_amount, margin_amount, deposit_amount, n_installments, frequency_days, final_due_at) VALUES ('HACK', gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), '[]', '[]', 1, 1, 0, 1, 1, 1, now())$$);
   PERFORM t.check('11 a customer cannot write plans directly', e LIKE 'permission denied%', e);
-  e := t.err($$UPDATE public.installment_plans SET paid_ugx = 999999999$$);
+  e := t.err($$UPDATE public.installment_plans SET paid_amount = 999999999$$);
   PERFORM t.check('11 a customer cannot edit plans directly', e LIKE 'permission denied%', e);
   e := t.err($$SELECT * FROM public.installment_config$$);
   PERFORM t.check('11 the settings are not readable by customers', e LIKE 'permission denied%', e);
@@ -537,7 +537,7 @@ BEGIN
   PERFORM t.check('12.2 no plan holds coins it should not', NOT EXISTS (SELECT 1 FROM public.installment_plans WHERE status IN ('cancelled','lapsed','dispatched','completed','pickup_ready') AND held_ican <> 0));
   PERFORM t.check('12.3 held coins always match payments on open plans', NOT EXISTS (
     SELECT 1 FROM public.installment_plans p WHERE p.status IN ('awaiting_deposit','active','ready')
-      AND abs(p.held_ican - COALESCE((SELECT SUM(ROUND(amount_ugx / 5000, 8)) FROM public.installment_payments WHERE plan_id = p.id AND status = 'paid'), 0)) > 0.00000001));
+      AND abs(p.held_ican - COALESCE((SELECT SUM(ROUND(amount / 5000, 8)) FROM public.installment_payments WHERE plan_id = p.id AND status = 'paid'), 0)) > 0.00000001));
   PERFORM t.check('12.4 reserved stock matches open plans', t.reserved(1) = COALESCE((SELECT SUM((c ->> 'quantity')::NUMERIC) FROM public.installment_plans p, jsonb_array_elements(p.cart) c
       WHERE p.status IN ('awaiting_deposit','active','ready') AND (c ->> 'product_id')::UUID = t.p(1)), 0), t.reserved(1)::TEXT);
 END $t$;

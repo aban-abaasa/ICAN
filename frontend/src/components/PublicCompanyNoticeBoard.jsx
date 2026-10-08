@@ -14,7 +14,9 @@ import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunit
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
 import useGuestCheckout from '../hooks/useGuestCheckout';
 import InstallmentOffer from './InstallmentOffer';
-import { getBusinessSiteInfo, joinBusinessSite, getMyInstallmentPlans, getMyBusinessAccounts, STATUS_LABELS as PLAN_STATUS_LABELS } from '../services/installmentService';
+import ContinueWithGoogle from './ContinueWithGoogle';
+import usePersistedCart, { markCartOpen, consumeCartOpen } from '../hooks/usePersistedCart';
+import { getBusinessSiteInfo, joinBusinessSite, getMyInstallmentPlans, getMyBusinessAccounts, getInstallmentShelf, formatMoney, STATUS_LABELS as PLAN_STATUS_LABELS } from '../services/installmentService';
 import PayAnyAmountForm from './PayAnyAmountForm';
 import ReceiveRequestForm from './ReceiveRequestForm';
 import { getPayCodeInfoForBusiness, getReceiveInfoForBusiness } from '../services/publicTransactionService';
@@ -619,7 +621,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // company.business_profile_id, only known once the header result lands.
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
-  const [cart, setCart] = useState({}); // { [listing_id]: quantity }
+  const [cart, setCart] = usePersistedCart(`icanera_cart_nb_${companyId}`); // { [listing_id]: quantity } -- survives the round-trip to Google
 
   // Same "linked business_profile" as Products & Services above, just
   // surfacing that business's Pitchin videos instead of its storefront --
@@ -1208,8 +1210,15 @@ const AccountSection = ({ company, user, authLoading }) => {
     setBusy(false);
   };
 
-  const paid = plans.filter((p) => !['cancelled', 'lapsed'].includes(p.status)).reduce((sum, p) => sum + Number(p.paid_ugx || 0), 0);
-  const owing = plans.filter((p) => ['awaiting_deposit', 'active', 'ready'].includes(p.status)).reduce((sum, p) => sum + Number(p.balance_ugx || 0), 0);
+  // A customer may hold plans in different currencies (a shop abroad): they are listed side by side, never added together.
+  const sumMoney = (rows, pick) => {
+    const totals = {};
+    rows.forEach((p) => { const v = Number(pick(p) || 0); if (v > 0) totals[p.currency || 'UGX'] = (totals[p.currency || 'UGX'] || 0) + v; });
+    const parts = Object.entries(totals).map(([cur, v]) => formatMoney(v, cur));
+    return parts.length ? parts.join(' · ') : formatMoney(0, plans[0]?.currency || 'UGX');
+  };
+  const paid = sumMoney(plans.filter((p) => !['cancelled', 'lapsed'].includes(p.status)), (p) => p.paid_amount);
+  const owing = sumMoney(plans.filter((p) => ['awaiting_deposit', 'active', 'ready'].includes(p.status)), (p) => p.balance_amount);
 
   return (
     <div className="max-w-xl mx-auto">
@@ -1226,7 +1235,12 @@ const AccountSection = ({ company, user, authLoading }) => {
           <div className="flex justify-center py-6"><Loader className="w-6 h-6 animate-spin nb-text-faint" /></div>
         ) : !user ? (
           <div className="space-y-2">
-            <button onClick={() => openAuth('signup')} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-primary font-semibold transition">Create a free account</button>
+            <ContinueWithGoogle
+              skin="nb" compact pendingSection="account"
+              onBeforeRedirect={() => { try { sessionStorage.setItem(JOIN_SITE_KEY, businessId); } catch { /* ignore */ } }}
+            />
+            <p className="text-xs nb-text-faint text-center">New here? Google creates your free IcanEra wallet in one tap.</p>
+            <button onClick={() => openAuth('signup')} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-primary font-semibold transition">Create an account with email</button>
             <button onClick={() => openAuth('signin')} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-secondary font-semibold transition">I already have an account</button>
             <p className="text-xs nb-text-faint text-center leading-relaxed">The same IcanEra account works on every business website. {company.company_name} will see your name, phone and your payments with them — nothing else.</p>
           </div>
@@ -1240,7 +1254,7 @@ const AccountSection = ({ company, user, authLoading }) => {
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-2 text-center">
-              {[['Plans', plans.length], ['Paid', formatUGX(paid)], ['Owing', formatUGX(owing)]].map(([label, value]) => (
+              {[['Plans', plans.length], ['Paid', paid], ['Owing', owing]].map(([label, value]) => (
                 <div key={label} className="nb-surface-alt border nb-border rounded-xl p-2.5">
                   <p className="text-[11px] nb-text-faint">{label}</p>
                   <p className="text-sm font-bold nb-text break-words">{value}</p>
@@ -1259,7 +1273,7 @@ const AccountSection = ({ company, user, authLoading }) => {
                     </div>
                     <div className="flex justify-between text-xs mt-1">
                       <span className="nb-text-muted">{PLAN_STATUS_LABELS[p.status] || p.status}</span>
-                      <span className="nb-text">{formatUGX(p.paid_ugx)} of {formatUGX(p.total_ugx)}</span>
+                      <span className="nb-text">{formatMoney(p.paid_amount, p.currency)} of {formatMoney(p.total_amount, p.currency)}</span>
                     </div>
                   </a>
                 ))}
@@ -2023,7 +2037,8 @@ const VEHICLE_TYPE_OPTIONS = [
 // pay with Mobile Money, card or bank -- that adds a small payment-processing
 // fee and is handled by useGuestCheckout / guestCheckoutService.
 const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user, authLoading }) => {
-  const [showCart, setShowCart] = useState(false);
+  const cartOpenKey = `icanera_cart_nbshop_${businessProfileId}`;
+  const [showCart, setShowCart] = useState(() => consumeCartOpen(cartOpenKey));
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -2107,6 +2122,19 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
     [cart, products]
   );
   const cartTotal = cartItems.reduce((sum, row) => sum + row.listing.listed_price * row.qty, 0);
+  // A shop priced in another currency is bought through "Pay in instalments" / pay-in-full (not the Ugandan rider checkout).
+  const [shelf, setShelf] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    getInstallmentShelf(businessProfileId)
+      .then((rows) => { if (!cancelled) setShelf(Object.fromEntries(rows.map((r) => [r.listing_id, r]))); })
+      .catch(() => { /* keep UGX pricing if the shelf can't be read */ });
+    return () => { cancelled = true; };
+  }, [businessProfileId]);
+  const currencyOf = (listing) => shelf[listing?.listing_id]?.currency || 'UGX';
+  const priceOf = (amount, listing) => (currencyOf(listing) === 'UGX' ? formatUGX(amount) : formatMoney(amount, currencyOf(listing)));
+  const foreignCurrency = currencyOf(cartItems[0]?.listing);
+  const foreign = cartItems.length > 0 && foreignCurrency !== 'UGX';
   const cartCount = cartItems.reduce((sum, row) => sum + row.qty, 0);
   const allFreeDelivery = cartItems.length > 0 && cartItems.every((row) => row.listing.free_delivery);
   // Preview only -- dropship_checkout always recomputes the REAL fare
@@ -2269,8 +2297,9 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                 </div>
                 <div className="p-2.5 flex-1 flex flex-col">
                   <p className="text-sm nb-text font-medium line-clamp-2 min-h-[2.5rem]">{listing.name}</p>
-                  <p className="nb-price font-bold mt-1">{formatUGX(listing.listed_price)}</p>
-                  {listing.free_delivery && (
+                  <p className="nb-price font-bold mt-1">{priceOf(listing.listed_price, listing)}</p>
+                  {shelf[listing.listing_id]?.cross_border && <p className="mt-0.5 text-[11px] nb-text-muted">Ships from {shelf[listing.listing_id].store_country || 'abroad'}</p>}
+                  {currencyOf(listing) === 'UGX' && listing.free_delivery && (
                     <p className="mt-0.5 flex items-center gap-1 text-[11px] nb-text-muted"><Truck className="w-3 h-3" />Free delivery</p>
                   )}
                   {!listing.in_stock ? (
@@ -2304,7 +2333,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                 <div key={row.listing.listing_id} className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm nb-text truncate">{row.listing.name}</p>
-                    <p className="text-xs nb-text-faint">{formatUGX(row.listing.listed_price)} × {row.qty}</p>
+                    <p className="text-xs nb-text-faint">{priceOf(row.listing.listed_price, row.listing)} × {row.qty}</p>
                   </div>
                   <button onClick={() => setCart((prev) => ({ ...prev, [row.listing.listing_id]: 0 }))} className="p-1.5 nb-text-faint hover:opacity-70"><Trash2 className="w-4 h-4" /></button>
                 </div>
@@ -2312,6 +2341,8 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
               <div className="space-y-2 pt-2 border-t nb-border">
                 <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your name" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
                 <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone number" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
+                {foreign && <p className="text-[11px] nb-text-muted">This shop is priced in {foreignCurrency} and ships from {shelf[pickupListing?.listing_id]?.store_country || 'abroad'}. Pay in full or in instalments below — you give your shipping address once it is paid.</p>}
+                {!foreign && (<>
                 <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Delivery address (e.g. street, landmark)" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
 
                 <button
@@ -2407,27 +2438,33 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                     <p className="mt-1 text-[11px] nb-text-faint">Real BodaGoera fare for the rider you pick — never a fee you set yourself.</p>
                   </div>
                 )}
+                </>)}
               </div>
               <div className="border-t nb-border pt-3 space-y-1">
-                <div className="flex justify-between text-sm nb-text-faint"><span>Items</span><span>{formatUGX(cartTotal)}</span></div>
-                {shownDeliveryFee > 0 && (
+                <div className="flex justify-between text-sm nb-text-faint"><span>Items</span><span>{foreign ? formatMoney(cartTotal, foreignCurrency) : formatUGX(cartTotal)}</span></div>
+                {!foreign && shownDeliveryFee > 0 && (
                   <div className="flex justify-between text-sm nb-text-faint"><span>Delivery</span><span>{formatUGX(shownDeliveryFee)}</span></div>
                 )}
-                <div className="flex justify-between nb-text font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>
+                {!foreign && <div className="flex justify-between nb-text font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>}
               </div>
               {checkoutError && <p className="nb-error-text text-xs">{checkoutError}</p>}
+              {!authLoading && !user && (
+                <ContinueWithGoogle skin="nb" pendingSection="shop" onUseEmail={() => setShowAuthModal(true)} onBeforeRedirect={() => markCartOpen(cartOpenKey)} />
+              )}
               <InstallmentOffer
                 businessProfileId={businessProfileId}
                 cartItems={cartItems}
                 user={user}
                 authLoading={authLoading}
                 onNeedAuth={() => setShowAuthModal(true)}
+                pendingSection="shop"
+                onBeforeAuthRedirect={() => markCartOpen(cartOpenKey)}
                 customerName={customerName}
                 customerPhone={customerPhone}
                 storeName={products[0]?.reseller_name || 'Store'}
                 skin="nb"
               />
-              {(
+              {!foreign && (
                 <div className="space-y-2">
                   <button
                     onClick={user ? handleCheckout : () => setShowAuthModal(true)}

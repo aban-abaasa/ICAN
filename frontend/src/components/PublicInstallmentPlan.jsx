@@ -1,16 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader, AlertCircle, CheckCircle, Store, Wallet, Smartphone, Package, Truck, Navigation, Clock, Bike, X, CalendarClock,
-  ShieldCheck, MapPin, ArrowLeft, QrCode,
+  ShieldCheck, MapPin, ArrowLeft, QrCode, Plane, ExternalLink, Globe,
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 import { PLAN_NOTICE_KEY } from './InstallmentOffer';
+import ContinueWithGoogle from './ContinueWithGoogle';
 import {
   getInstallmentPlan, payInstallmentFromWallet, payInstallmentWithFlutterwave, resumePendingInstallmentPayment,
   chooseInstallmentPickup, quoteInstallmentDelivery, chooseInstallmentDelivery, clearInstallmentDelivery, cancelInstallmentPlan,
-  formatUGX, STATUS_LABELS, FREQUENCY_LABELS,
+  chooseInstallmentShipping, confirmInstallmentReceived, reportInstallmentProblem,
+  formatMoney, formatCoins, formatCoinAmount, coinsFor, cleanAmountInput, unitDecimals,
+  COIN_RECOMMENDATION, STATUS_LABELS, FREQUENCY_LABELS, getWalletCoins,
 } from '../services/installmentService';
 
 const DELIVERY_WINDOWS = [
@@ -20,13 +23,13 @@ const DELIVERY_WINDOWS = [
 const VEHICLES = [
   { value: null, label: 'Any' }, { value: 'motorcycle', label: '🏍️ Boda' }, { value: 'car', label: '🚗 Car' }, { value: 'van', label: '🚐 Van' },
 ];
-const digits = (v) => String(v || '').replace(/[^0-9]/g, '');
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-UG', { day: 'numeric', month: 'short', year: 'numeric' }) : '');
-const WAITING = ['awaiting_deposit', 'active', 'pickup_ready', 'dispatched'];
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const DONE_PAYING = ['pickup_ready', 'dispatched', 'shipping_pending', 'shipped', 'disputed'];
+const WAITING = ['awaiting_deposit', 'active', 'pickup_ready', 'dispatched', 'shipping_pending', 'shipped', 'disputed'];
 
 const statusTone = (status) => ({
   ready: 'bg-emerald-500/15 text-emerald-300', pickup_ready: 'bg-emerald-500/15 text-emerald-300', completed: 'bg-emerald-500/15 text-emerald-300',
-  dispatched: 'bg-sky-500/15 text-sky-300', active: 'bg-indigo-500/15 text-indigo-300', awaiting_deposit: 'bg-amber-500/15 text-amber-300',
+  dispatched: 'bg-sky-500/15 text-sky-300', shipping_pending: 'bg-amber-500/15 text-amber-300', shipped: 'bg-sky-500/15 text-sky-300', disputed: 'bg-red-500/15 text-red-300', active: 'bg-indigo-500/15 text-indigo-300', awaiting_deposit: 'bg-amber-500/15 text-amber-300',
   cancelled: 'bg-slate-500/20 text-slate-300', lapsed: 'bg-red-500/15 text-red-300',
 }[status] || 'bg-slate-500/20 text-slate-300');
 
@@ -93,7 +96,9 @@ const PublicInstallmentPlan = ({ code }) => {
         <div className="max-w-md mx-auto px-4 pt-8 text-center">
           <ShieldCheck className="w-10 h-10 text-indigo-400 mx-auto mb-3" />
           <h1 className="text-xl font-bold text-white mb-1">Sign in to see your plan</h1>
-          <p className="text-sm text-slate-400 mb-4">Your payments and receipts are tied to your IcanEra account. No account yet? Create one free below.</p>
+          <p className="text-sm text-slate-400 mb-4">Your payments and receipts are tied to your IcanEra account.</p>
+          <ContinueWithGoogle skin="slate" title="New? Get your free IcanEra wallet" />
+          <p className="text-xs text-slate-500 mt-4">or sign in with email</p>
         </div>
         <AuthPage initialView="signin" onAuthSuccess={() => {}} />
       </div>
@@ -113,11 +118,12 @@ const PublicInstallmentPlan = ({ code }) => {
 
   const terms = data.terms;
   const closed = ['cancelled', 'lapsed', 'completed'].includes(plan.status);
-  const itemsPaidUp = plan.paid_ugx >= plan.items_ugx;
+  const money = (v) => formatMoney(v, plan.currency);
+  const itemsPaidUp = plan.paid_amount >= plan.items_amount;
   const deliveryFeeDue = plan.fulfilment === 'delivery' && plan.status === 'active' && itemsPaidUp;
   const canPay = plan.status === 'awaiting_deposit' || plan.status === 'active';
   const choosing = plan.status === 'ready';
-  const pct = Math.min(100, Math.round((plan.paid_ugx / Math.max(plan.total_ugx, 1)) * 100));
+  const pct = Math.min(100, Math.round((plan.paid_amount / Math.max(plan.total_amount, 1)) * 100));
   const voided = plan.status === 'cancelled' || plan.status === 'lapsed'; // nothing is owed on these any more
 
   return (
@@ -148,27 +154,31 @@ const PublicInstallmentPlan = ({ code }) => {
           <div className="flex items-end justify-between mb-2">
             <div>
               <p className="text-xs text-slate-500">{voided ? 'You had paid' : 'Paid so far'}</p>
-              <p className="text-2xl font-bold text-white">{formatUGX(plan.paid_ugx)}</p>
+              <p className="text-2xl font-bold text-white">{money(plan.paid_amount)}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-500">{voided ? 'Returned to your wallet' : plan.balance_ugx > 0 ? 'Still to pay' : 'Balance'}</p>
-              <p className="text-lg font-semibold text-slate-200">{formatUGX(voided ? plan.refunded_ugx : plan.balance_ugx)}</p>
+              <p className="text-xs text-slate-500">{voided ? 'Returned to your wallet' : plan.balance_amount > 0 ? 'Still to pay' : 'Balance'}</p>
+              <p className="text-lg font-semibold text-slate-200">{money(voided ? plan.refunded_amount : plan.balance_amount)}</p>
             </div>
           </div>
           {!voided && <div className="h-2 rounded-full bg-slate-800 overflow-hidden"><div className="h-full bg-indigo-500 transition-all" style={{ width: `${pct}%` }} /></div>}
           <p className="text-[11px] text-slate-500 mt-1.5">
-            Total {formatUGX(plan.total_ugx)}{plan.delivery_fee_ugx > 0 ? ` (items ${formatUGX(plan.items_ugx)} + delivery ${formatUGX(plan.delivery_fee_ugx)})` : ''}
-            {!closed && plan.status !== 'pickup_ready' && plan.status !== 'dispatched' ? ` · due in full by ${fmtDate(plan.final_due_at)}` : ''}
+            Total {money(plan.total_amount)}{plan.delivery_fee_amount > 0 ? ` (items ${money(plan.items_amount)} + delivery ${money(plan.delivery_fee_amount)})` : ''}
+            {!closed && !DONE_PAYING.includes(plan.status) ? ` · due in full by ${fmtDate(plan.final_due_at)}` : ''}
           </p>
+          {plan.held_ican > 0 && !closed && (
+            <p className="text-[11px] text-slate-500 mt-0.5">Held for you as {formatCoinAmount(plan.held_ican)} until your order is handed over.</p>
+          )}
           <div className="mt-3 space-y-1.5 border-t border-slate-800 pt-3">
             {plan.items.map((it) => (
               <div key={it.product_id} className="flex justify-between gap-2 text-sm">
                 <span className="text-slate-300 truncate">{it.name} × {Number(it.quantity)}</span>
-                <span className="text-slate-400 shrink-0">{formatUGX(it.line_total)}</span>
+                <span className="text-slate-400 shrink-0">{money(it.line_total)}</span>
               </div>
             ))}
           </div>
           <p className="text-[11px] text-slate-500 mt-3 flex items-start gap-1.5"><Store className="w-3.5 h-3.5 mt-0.5 shrink-0" />From {plan.store_name}{plan.store_address ? `, ${plan.store_address}` : ''}</p>
+          {plan.cross_border && <p className="text-[11px] text-sky-300 mt-1.5 flex items-start gap-1.5"><Globe className="w-3.5 h-3.5 mt-0.5 shrink-0" />This shop is abroad — it ships to you once you have paid in full.</p>}
         </Card>
 
         {plan.status === 'cancelled' || plan.status === 'lapsed' ? (
@@ -176,14 +186,16 @@ const PublicInstallmentPlan = ({ code }) => {
             <p className="text-white font-semibold mb-1">{plan.status === 'lapsed' ? 'This plan lapsed' : 'This plan was cancelled'}</p>
             <p className="text-sm text-slate-400">{plan.cancel_reason}</p>
             <p className="text-sm text-slate-300 mt-2">
-              {formatUGX(plan.refunded_ugx)} was returned to your IcanEra wallet{plan.cancel_fee_ugx > 0 ? `, after a ${formatUGX(plan.cancel_fee_ugx)} cancel fee` : ''}.
+              {money(plan.refunded_amount)} was returned to your IcanEra wallet{plan.cancel_fee_amount > 0 ? `, after a ${money(plan.cancel_fee_amount)} cancel fee` : ''}.
             </p>
           </Card>
         ) : null}
 
         {canPay && !deliveryFeeDue && <PayBox plan={plan} terms={terms} user={user} onDone={after} busyRef={busyRef} />}
 
-        {choosing && <Fulfilment plan={plan} onDone={after} busyRef={busyRef} />}
+        {choosing && plan.cross_border && <ShippingForm plan={plan} onDone={after} busyRef={busyRef} />}
+        {choosing && !plan.cross_border && <Fulfilment plan={plan} onDone={after} busyRef={busyRef} />}
+        {['shipping_pending', 'shipped', 'disputed'].includes(plan.status) && <ShipmentCard plan={plan} onDone={after} busyRef={busyRef} />}
 
         {deliveryFeeDue && (
           <>
@@ -192,7 +204,7 @@ const PublicInstallmentPlan = ({ code }) => {
                 <div className="min-w-0">
                   <p className="text-white font-semibold flex items-center gap-2"><Truck className="w-4 h-4" />Delivery chosen</p>
                   <p className="text-sm text-slate-400 mt-1">To {plan.delivery?.address || 'your location'} · within {plan.delivery?.max_hours}h of dispatch</p>
-                  <p className="text-sm text-slate-300 mt-1">The real rider fare is {formatUGX(plan.delivery_fee_ugx)}. Pay it and a rider is booked straight away.</p>
+                  <p className="text-sm text-slate-300 mt-1">The real rider fare is {money(plan.delivery_fee_amount)}. Pay it and a rider is booked straight away.</p>
                 </div>
                 <button
                   className="text-xs text-indigo-300 underline shrink-0"
@@ -220,11 +232,11 @@ const PublicInstallmentPlan = ({ code }) => {
           <Card className="text-center">
             <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
             <p className="text-white font-semibold">All done — thank you!</p>
-            <p className="text-sm text-slate-400 mt-1">{plan.fulfilment === 'pickup' ? 'You collected your order.' : 'Your order was delivered.'}</p>
+            <p className="text-sm text-slate-400 mt-1">{plan.fulfilment === 'pickup' ? 'You collected your order.' : plan.fulfilment === 'ship' ? 'You received your order.' : 'Your order was delivered.'}</p>
           </Card>
         )}
 
-        {plan.schedule && !closed && plan.status !== 'pickup_ready' && plan.status !== 'dispatched' && (
+        {plan.schedule && plan.n_installments > 0 && !closed && !DONE_PAYING.includes(plan.status) && (
           <Card>
             <p className="text-sm font-semibold text-white mb-2 flex items-center gap-2"><CalendarClock className="w-4 h-4" />Schedule</p>
             <div className="space-y-1.5">
@@ -232,7 +244,7 @@ const PublicInstallmentPlan = ({ code }) => {
                 <div key={row.n} className="flex items-center justify-between text-sm">
                   <span className="text-slate-400">{row.n === 0 ? 'Deposit' : `Payment ${row.n}`} · {fmtDate(row.due_at)}</span>
                   <span className={row.status === 'paid' ? 'text-emerald-400' : row.status === 'overdue' ? 'text-red-400' : 'text-slate-200'}>
-                    {row.status === 'paid' ? `Paid ${formatUGX(row.amount_ugx)}` : `${formatUGX(row.amount_ugx - row.paid_ugx)}${row.status === 'overdue' ? ' · overdue' : ''}`}
+                    {row.status === 'paid' ? `Paid ${money(row.amount)}` : `${money(row.amount - row.paid_amount)}${row.status === 'overdue' ? ' · overdue' : ''}`}
                   </span>
                 </div>
               ))}
@@ -248,7 +260,7 @@ const PublicInstallmentPlan = ({ code }) => {
               {[...plan.events].reverse().map((ev, i) => (
                 <div key={i} className="flex justify-between gap-2 text-xs">
                   <span className="text-slate-400">{ev.note || ev.kind}</span>
-                  <span className="text-slate-500 shrink-0">{ev.amount_ugx ? `${formatUGX(ev.amount_ugx)} · ` : ''}{fmtDate(ev.at)}</span>
+                  <span className="text-slate-500 shrink-0">{ev.amount ? `${money(ev.amount)} · ` : ''}{fmtDate(ev.at)}</span>
                 </div>
               ))}
             </div>
@@ -259,9 +271,9 @@ const PublicInstallmentPlan = ({ code }) => {
           <button
             className="w-full text-xs text-slate-500 hover:text-red-400 underline py-2"
             onClick={async () => {
-              const fee = plan.cancel_fee_ugx_now;
-              const ok = window.confirm(plan.paid_ugx > 0
-                ? `Cancel this plan? ${fee > 0 ? `A ${terms.cancel_fee_pct}% fee (${formatUGX(fee)}) applies and the rest (${formatUGX(plan.paid_ugx - fee)})` : `All ${formatUGX(plan.paid_ugx)}`} goes back to your IcanEra wallet.`
+              const fee = plan.cancel_fee_amount_now;
+              const ok = window.confirm(plan.paid_amount > 0
+                ? `Cancel this plan? ${fee > 0 ? `A ${terms.cancel_fee_pct}% fee (${money(fee)}) applies and the rest (${money(plan.paid_amount - fee)})` : `All ${money(plan.paid_amount)}`} goes back to your IcanEra wallet.`
                 : 'Cancel this plan and release the items?');
               if (!ok) return;
               try { await cancelInstallmentPlan(plan.code); await after('Plan cancelled — your money is back in your wallet.'); } catch (err) { setNotice(err.message); }
@@ -278,19 +290,31 @@ const PublicInstallmentPlan = ({ code }) => {
 // ── Pay more ────────────────────────────────────────────────────────────────
 
 const PayBox = ({ plan, terms, user, onDone, busyRef, feeMode = false }) => {
+  const money = (v) => formatMoney(v, plan.currency);
   const nextSlot = plan.schedule?.find((r) => r.status !== 'paid');
-  const fixed = feeMode ? plan.balance_ugx : plan.status === 'awaiting_deposit' ? plan.deposit_ugx : null;
-  const suggested = fixed ?? Math.min(plan.balance_ugx, nextSlot ? nextSlot.amount_ugx - nextSlot.paid_ugx : plan.balance_ugx);
+  const unit = Number(plan.unit || 1);
+  const dec = unitDecimals(unit);
+  const price = Number(plan.coin_price || 0);
+  const fixed = feeMode ? plan.balance_amount : plan.status === 'awaiting_deposit' ? plan.deposit_amount : null;
+  const suggested = fixed ?? Math.min(plan.balance_amount, nextSlot ? Number((nextSlot.amount - nextSlot.paid_amount).toFixed(dec)) : plan.balance_amount);
   const [amount, setAmount] = useState(String(suggested));
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState('');
+  const [walletCoins, setWalletCoins] = useState(null); // null = unknown
   useEffect(() => { setAmount(String(suggested)); }, [suggested]);
+  useEffect(() => {
+    let cancelled = false;
+    getWalletCoins(user.id).then((v) => { if (!cancelled) setWalletCoins(v); });
+    return () => { cancelled = true; };
+  }, [user.id, plan.paid_amount]);
 
-  const amt = fixed ?? (Number(digits(amount)) || 0);
-  const minPay = Math.min(Number(terms.min_payment_ugx || 1000), plan.balance_ugx);
-  const problem = !amt ? 'Enter an amount' : amt > plan.balance_ugx ? `The most you can pay is ${formatUGX(plan.balance_ugx)}` : amt < minPay ? `The smallest payment is ${formatUGX(minPay)}` : '';
+  const amt = fixed ?? (Number(amount) || 0);
+  const minPay = Math.min(Number(terms.min_payment_amount || unit), plan.balance_amount);
+  const problem = !amt ? 'Enter an amount' : amt > plan.balance_amount + 1e-9 ? `The most you can pay is ${money(plan.balance_amount)}` : amt + 1e-9 < minPay ? `The smallest payment is ${money(minPay)}` : '';
   const feePct = Number(terms.gateway_fee_pct ?? 3.5);
-  const charge = amt ? Math.ceil((amt / (1 - feePct / 100)) / 100) * 100 : 0;
+  const charge = amt ? Math.ceil(Number((amt / (1 - feePct / 100) / unit).toFixed(6))) * unit : 0;
+  const amtCoins = coinsFor(amt, price);
+  const walletShort = walletCoins !== null && amtCoins !== null && amt > 0 && walletCoins + 1e-9 < amtCoins;
 
   const run = async (kind) => {
     if (problem) { setError(problem); return; }
@@ -317,27 +341,33 @@ const PayBox = ({ plan, terms, user, onDone, busyRef, feeMode = false }) => {
         <>
           <input
             className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-white text-lg font-semibold"
-            inputMode="numeric" value={amt ? amt.toLocaleString('en-UG') : ''} onChange={(e) => setAmount(digits(e.target.value))} aria-label="Amount to pay"
+            inputMode={dec ? 'decimal' : 'numeric'} value={fixed == null ? amount : ''} onChange={(e) => setAmount(cleanAmountInput(e.target.value, unit))} aria-label={`Amount to pay (${plan.currency})`}
           />
           <div className="flex gap-2 mt-2">
-            {nextSlot && <button type="button" className="flex-1 py-1.5 rounded-lg border border-slate-800 text-xs text-slate-300 hover:bg-slate-800" onClick={() => setAmount(String(nextSlot.amount_ugx - nextSlot.paid_ugx))}>Next payment</button>}
-            <button type="button" className="flex-1 py-1.5 rounded-lg border border-slate-800 text-xs text-slate-300 hover:bg-slate-800" onClick={() => setAmount(String(plan.balance_ugx))}>Pay it all · {formatUGX(plan.balance_ugx)}</button>
+            {nextSlot && <button type="button" className="flex-1 py-1.5 rounded-lg border border-slate-800 text-xs text-slate-300 hover:bg-slate-800" onClick={() => setAmount(String(Number((nextSlot.amount - nextSlot.paid_amount).toFixed(dec))))}>Next payment</button>}
+            <button type="button" className="flex-1 py-1.5 rounded-lg border border-slate-800 text-xs text-slate-300 hover:bg-slate-800" onClick={() => setAmount(String(plan.balance_amount))}>Pay it all · {money(plan.balance_amount)}</button>
           </div>
         </>
       ) : (
-        <p className="text-2xl font-bold text-white">{formatUGX(fixed)}</p>
+        <p className="text-2xl font-bold text-white">{money(fixed)}</p>
       )}
       {(error || problem) && amt > 0 && <p className="text-xs text-red-400 mt-2">{error || problem}</p>}
       <div className="space-y-2 mt-3">
-        <button type="button" disabled={!!busy || !!problem} onClick={() => run('wallet')}
+        <p className="text-[11px] leading-relaxed text-emerald-400">★ {COIN_RECOMMENDATION}</p>
+        <button type="button" disabled={!!busy || !!problem || walletShort} onClick={() => run('wallet')}
           className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2">
-          {busy === 'wallet' ? <Loader className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}Pay {formatUGX(amt)} from IcanEra wallet
+          {busy === 'wallet' ? <Loader className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}Pay {formatCoins(amt, price) || money(amt)} from IcanEra wallet
         </button>
         <button type="button" disabled={!!busy || !!problem} onClick={() => run('flutterwave')}
           className="w-full py-2.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2">
-          {busy === 'flutterwave' ? <Loader className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}Pay {formatUGX(charge)} with Mobile Money, card or bank
+          {busy === 'flutterwave' ? <Loader className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}Pay {money(charge)} with {plan.currency === 'UGX' ? 'Mobile Money, card or bank' : 'card, bank or mobile money'}
         </button>
-        <p className="text-[11px] text-slate-500">Mobile Money, card or bank adds a {formatUGX(charge - amt)} processing fee; the wallet has none. Your money is held for you and is only released to the seller when you collect or it is delivered.</p>
+        {walletCoins !== null && (
+          <p className={`text-[11px] ${walletShort ? 'text-amber-400' : 'text-slate-500'}`}>
+            {walletShort ? `Your IcanEra wallet has ${formatCoinAmount(walletCoins)} (about ${money(walletCoins * price)}) — not enough for this payment. Use card, bank or mobile money, or add to your wallet first.` : `Your IcanEra wallet: ${formatCoinAmount(walletCoins)} (about ${money(walletCoins * price)}).`}
+          </p>
+        )}
+        <p className="text-[11px] text-slate-500">Card, bank or mobile money adds a {money(charge - amt)} processing fee; the wallet has none. Your money is held for you and is only released to the seller when you collect, it is delivered{plan.cross_border ? ', or you confirm it arrived' : ''}.</p>
       </div>
     </Card>
   );
@@ -346,6 +376,7 @@ const PayBox = ({ plan, terms, user, onDone, busyRef, feeMode = false }) => {
 // ── Collect or deliver ──────────────────────────────────────────────────────
 
 const Fulfilment = ({ plan, onDone, busyRef }) => {
+  const money = (v) => formatMoney(v, plan.currency);
   const [mode, setMode] = useState(null); // 'pickup' | 'delivery'
   const [coords, setCoords] = useState(null);
   const [locating, setLocating] = useState(false);
@@ -377,8 +408,8 @@ const Fulfilment = ({ plan, onDone, busyRef }) => {
     <Card>
       <p className="text-white font-semibold flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-400" />Your items are paid in full</p>
       <p className="text-sm text-slate-400 mt-1 mb-3">How would you like to get them?</p>
-      <div className="grid grid-cols-2 gap-2">
-        {[['pickup', Package, 'Collect', 'at the store · free'], ['delivery', Truck, 'Delivery', 'a rider brings it']].map(([id, Icon, title, sub]) => (
+      <div className={`grid gap-2 ${plan.delivery_available ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {[['pickup', Package, 'Collect', 'at the store · free'], ['delivery', Truck, 'Delivery', 'a rider brings it']].filter(([id]) => id !== 'delivery' || plan.delivery_available).map(([id, Icon, title, sub]) => (
           <button key={id} type="button" onClick={() => { setMode(id); setError(''); }}
             className={`rounded-xl border p-3 text-center transition ${mode === id ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-800 bg-slate-900 hover:bg-slate-800'}`}>
             <Icon className="w-6 h-6 mx-auto text-indigo-300 mb-1" />
@@ -433,15 +464,15 @@ const Fulfilment = ({ plan, onDone, busyRef }) => {
           ) : (
             <div className="rounded-lg border border-slate-800 p-3 space-y-1">
               <div className="flex justify-between text-sm"><span className="text-slate-400">Rider</span><span className="text-white">{quote.rider_name} · ~{quote.rider_eta_min} min</span></div>
-              {quote.subsidy_ugx > 0 && <div className="flex justify-between text-sm"><span className="text-slate-400">Covered by the seller</span><span className="text-emerald-400">-{formatUGX(quote.subsidy_ugx)}</span></div>}
-              <div className="flex justify-between text-base font-semibold border-t border-slate-800 pt-1"><span className="text-slate-300">Delivery fare</span><span className="text-white">{quote.delivery_fee_ugx > 0 ? formatUGX(quote.delivery_fee_ugx) : 'Free'}</span></div>
+              {quote.subsidy_amount > 0 && <div className="flex justify-between text-sm"><span className="text-slate-400">Covered by the seller</span><span className="text-emerald-400">-{money(quote.subsidy_amount)}</span></div>}
+              <div className="flex justify-between text-base font-semibold border-t border-slate-800 pt-1"><span className="text-slate-300">Delivery fare</span><span className="text-white">{quote.delivery_fee_amount > 0 ? money(quote.delivery_fee_amount) : 'Free'}</span></div>
               <button type="button" disabled={!!busy}
                 onClick={() => run('deliver', async () => {
                   const res = await chooseInstallmentDelivery(plan.code, { address, lat: coords.lat, lng: coords.lng, maxHours: hours, vehicleTypes: vehicle ? [vehicle] : null });
                   await onDone(res.status === 'dispatched' ? 'A rider has been booked — your delivery is on its way.' : 'Delivery chosen — pay the fare below and a rider is booked at once.');
                 })}
                 className="w-full mt-2 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2">
-                {busy === 'deliver' ? <Loader className="w-4 h-4 animate-spin" /> : null}{quote.delivery_fee_ugx > 0 ? 'Choose delivery' : 'Book my free delivery'}
+                {busy === 'deliver' ? <Loader className="w-4 h-4 animate-spin" /> : null}{quote.delivery_fee_amount > 0 ? 'Choose delivery' : 'Book my free delivery'}
               </button>
             </div>
           )}
@@ -464,6 +495,120 @@ const PickupCard = ({ plan }) => {
       <div className="inline-block bg-white p-3 rounded-xl"><QRCodeCanvas value={url} size={168} includeMargin={false} /></div>
       <p className="mt-3 font-mono text-2xl tracking-[0.25em] text-white">{code}</p>
       <p className="text-[11px] text-slate-500 mt-2">The store scans this QR (or types the code) when it hands over your items. Only then is the seller paid — until then your money is held safe.</p>
+    </Card>
+  );
+};
+
+// ── Shops abroad: where to send it, then follow the parcel ──────────────────
+
+const ADDRESS_KEY = 'icanera_ship_address';
+const readAddress = () => { try { return JSON.parse(localStorage.getItem(ADDRESS_KEY) || '{}') || {}; } catch { return {}; } };
+
+const FIELDS = [
+  ['name', 'Full name', 'name'], ['phone', 'Phone (with country code)', 'tel'], ['line1', 'Street address', 'address-line1'],
+  ['line2', 'Apartment, landmark (optional)', 'address-line2'], ['city', 'City / town', 'address-level2'],
+  ['region', 'State / region (optional)', 'address-level1'], ['postal_code', 'Postal code (optional)', 'postal-code'], ['country', 'Country', 'country-name'],
+];
+
+const ShippingForm = ({ plan, onDone, busyRef }) => {
+  const [addr, setAddr] = useState(() => ({ name: plan.customer_name || '', phone: plan.customer_phone || '', ...readAddress() }));
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const submit = async () => {
+    setError(''); setBusy(true); busyRef.current = true;
+    try {
+      await chooseInstallmentShipping(plan.code, { ...addr, note });
+      try { localStorage.setItem(ADDRESS_KEY, JSON.stringify(addr)); } catch { /* private mode */ }
+      await onDone('Thank you — the seller has been asked to ship your order.');
+    } catch (err) {
+      setError(err.message || 'Could not save your address.');
+    } finally {
+      setBusy(false); busyRef.current = false;
+    }
+  };
+  return (
+    <Card>
+      <p className="text-white font-semibold flex items-center gap-2"><CheckCircle className="w-4 h-4 text-emerald-400" />Your order is paid in full</p>
+      <p className="text-sm text-slate-400 mt-1 mb-3 flex items-start gap-2"><Plane className="w-4 h-4 mt-0.5 shrink-0 text-sky-300" />Where should {plan.seller_name || 'the seller'} send it? Your money stays held and is only paid to the seller when you confirm it arrived.</p>
+      <div className="grid grid-cols-1 gap-2">
+        {FIELDS.map(([key, label, auto]) => (
+          <input key={key} value={addr[key] || ''} onChange={(e) => setAddr((a) => ({ ...a, [key]: e.target.value }))} placeholder={label} aria-label={label} autoComplete={auto}
+            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
+        ))}
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything the courier should know (optional)" rows={2} aria-label="Note for the courier"
+          className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
+      </div>
+      {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
+      <button type="button" disabled={busy} onClick={submit}
+        className="w-full mt-3 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2">
+        {busy ? <Loader className="w-4 h-4 animate-spin" /> : <Plane className="w-4 h-4" />}Ship it to me
+      </button>
+      <p className="text-[11px] text-slate-500 mt-2">Import duties and taxes in your country, if any, are not included in the price.</p>
+    </Card>
+  );
+};
+
+const ShipmentCard = ({ plan, onDone, busyRef }) => {
+  const [reporting, setReporting] = useState(false);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const sh = plan.shipment || {};
+  const to = plan.shipping || {};
+  const run = async (name, fn, message) => {
+    setError(''); setBusy(name); busyRef.current = true;
+    try { await fn(); await onDone(message); } catch (err) { setError(err.message || 'Something went wrong. Please try again.'); } finally { setBusy(''); busyRef.current = false; }
+  };
+  return (
+    <Card>
+      {plan.status === 'shipping_pending' && (
+        <>
+          <p className="text-white font-semibold flex items-center gap-2"><Package className="w-4 h-4 text-amber-300" />Waiting for the seller to ship</p>
+          <p className="text-sm text-slate-400 mt-1">They have your address. If it isn't shipped by {fmtDate(plan.ship_deadline_at)} your money is returned to your wallet.</p>
+        </>
+      )}
+      {plan.status === 'shipped' && (
+        <>
+          <p className="text-white font-semibold flex items-center gap-2"><Plane className="w-4 h-4 text-sky-300" />On its way to you</p>
+          <div className="mt-2 space-y-1 text-sm">
+            <div className="flex justify-between"><span className="text-slate-400">Carrier</span><span className="text-white">{sh.carrier}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Tracking number</span><span className="text-white font-mono">{sh.tracking_no}</span></div>
+            {sh.eta_days && <div className="flex justify-between"><span className="text-slate-400">Usually takes</span><span className="text-white">about {sh.eta_days} days</span></div>}
+            {/^https?:\/\//i.test(sh.tracking_url || '') && <a href={sh.tracking_url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-indigo-300 underline text-sm mt-1">Track the parcel <ExternalLink className="w-3.5 h-3.5" /></a>}
+          </div>
+          {!reporting ? (
+            <div className="mt-3 space-y-2">
+              <button type="button" disabled={!!busy} onClick={() => run('received', () => confirmInstallmentReceived(plan.code), 'Thank you — the seller has been paid.')}
+                className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2">
+                {busy === 'received' ? <Loader className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}I received it — pay the seller
+              </button>
+              <button type="button" onClick={() => setReporting(true)} className="w-full text-xs text-slate-400 hover:text-red-400 underline py-1">There is a problem with my order</button>
+              <p className="text-[11px] text-slate-500">If you do nothing, the seller is paid automatically {plan.auto_release_at ? `on ${fmtDate(plan.auto_release_at)}` : 'after the protection period'}.</p>
+            </div>
+          ) : (
+            <div className="mt-3 space-y-2">
+              <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="What went wrong? (it hasn't arrived, it's damaged, it's not what you ordered…)" aria-label="What went wrong"
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
+              <button type="button" disabled={!!busy} onClick={() => run('report', () => reportInstallmentProblem(plan.code, text), 'We have your report — your money stays held while support looks at it.')}
+                className="w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2">
+                {busy === 'report' ? <Loader className="w-4 h-4 animate-spin" /> : null}Report the problem
+              </button>
+              <button type="button" onClick={() => setReporting(false)} className="w-full text-xs text-slate-400 underline py-1">Back</button>
+            </div>
+          )}
+        </>
+      )}
+      {plan.status === 'disputed' && (
+        <>
+          <p className="text-white font-semibold flex items-center gap-2"><AlertCircle className="w-4 h-4 text-red-300" />Under review</p>
+          <p className="text-sm text-slate-400 mt-1">Your report: “{plan.problem?.note}”. Your money stays held while support decides — you will get a refund or the seller is paid, based on what they find.</p>
+        </>
+      )}
+      {(to.line1 || to.city) && (
+        <p className="text-[11px] text-slate-500 mt-3 flex items-start gap-1.5"><MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />Sending to {[to.name, to.line1, to.line2, to.city, to.region, to.postal_code, to.country].filter(Boolean).join(', ')}</p>
+      )}
+      {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
     </Card>
   );
 };
