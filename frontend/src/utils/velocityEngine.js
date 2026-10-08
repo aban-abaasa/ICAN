@@ -272,7 +272,13 @@ export class VelocityEngine {
           id:               `coin_${tx.id}`,
           user_id:          this.userId,
           amount:           ugxAmount,
-          transaction_type: isPersonTransfer ? 'transfer' : isIncome ? 'income' : isExpense ? 'expense' : 'transfer',
+          // isIncome must win over isPersonTransfer: earn/cashback/sale/refund
+          // rows (e.g. a chairperson's ride-commission share) have no business
+          // tag and no sender, so classification falls through to
+          // 'person_transfer'. Checking that first rendered real income as a
+          // red "-" expense. isIncome already excludes genuine person-to-person
+          // transfer_in rows, so real transfers are unaffected.
+          transaction_type: isIncome ? 'income' : isPersonTransfer ? 'transfer' : isExpense ? 'expense' : 'transfer',
           description:      tx.note || tx.merchant_name || `${sourceLabels[tx.source_app] || tx.source_app} — ${tx.transaction_type}`,
           currency:         tx.local_currency || 'UGX',
           status:           'completed',
