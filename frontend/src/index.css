@@ -1515,6 +1515,9 @@ html {
 }
 @media (min-width: 768px) { .icn-masthead .icn-navtab { font-size: 0.875rem; padding: 0.55rem 1.05rem 0.65rem; } }
 @media (min-width: 1536px) { .icn-masthead .icn-navtab { font-size: 0.95rem; padding: 0.6rem 1.2rem 0.7rem; } }
+/* Tabs sharing the single header row with the wordmark and avatar */
+.icn-masthead .icn-navtab--inline { padding: 0.4rem 0.8rem 0.5rem; border-radius: 8px; }
+@media (min-width: 1536px) { .icn-masthead .icn-navtab--inline { padding: 0.45rem 0.95rem 0.55rem; } }
 .icn-masthead .icn-navtab-icon { color: #8b7f63; transition: color .2s ease; }
 .icn-masthead .icn-navtab::after {
   content: ''; position: absolute; left: 14%; right: 14%; bottom: 0; height: 2px; border-radius: 2px;

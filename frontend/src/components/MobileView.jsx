@@ -690,7 +690,11 @@ const HeaderAvatar = ({ url, name }) => {
   );
 };
 
-const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack }) => {
+// `inline` renders the tabs in the same row as the wordmark / search / avatar
+// (no second row, no gold rule). The number of tabs shown is then measured
+// against the width actually left over, so nothing is ever clipped or pushed
+// under the avatar; whatever doesn't fit goes into "More".
+const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack, inline = false }) => {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef(null);
 
@@ -700,8 +704,11 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack 
     return (
       <button
         key={tab.id}
+  const [fitCount, setFitCount] = useState(MAX_VISIBLE_HEADER_TABS);
         onClick={() => onTabClick(tab.id)}
-        className={`icn-navtab ${isActive ? 'is-active' : ''}`}
+  const slotRef = useRef(null);
+  const measureRef = useRef(null);
+        className={`icn-navtab ${inline ? 'icn-navtab--inline' : ''} ${isActive ? 'is-active' : ''}`}
         aria-current={isActive ? 'page' : undefined}
       >
         <TabIcon className="icn-navtab-icon w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -718,20 +725,72 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack 
       }
     };
     if (moreOpen) {
+  // Inline mode: measure the real tab widths (hidden copy below) against the
+  // space the slot has been given, and keep as many tabs as fit.
+  useEffect(() => {
+    if (!inline) return undefined;
+    const slot = slotRef.current;
+    const measure = measureRef.current;
+    if (!slot || !measure) return undefined;
+    const GAP = 8;
+    const recompute = () => {
+      const kids = Array.from(measure.children);
+      const moreW = (kids[kids.length - 1]?.offsetWidth || 0) + GAP;
+      const widths = kids.slice(0, -1).map(k => k.offsetWidth);
+      const avail = slot.clientWidth - (showBack ? 84 : 0);
+      let used = 0;
+      let n = 0;
+      for (let i = 0; i < widths.length; i++) {
+        const next = used + widths[i] + (i > 0 ? GAP : 0);
+        const reserve = i < widths.length - 1 ? moreW : 0;
+        if (next + reserve > avail) break;
+        used = next;
+        n = i + 1;
+      }
+      setFitCount(n);
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(slot);
+    return () => ro.disconnect();
+  }, [inline, tabs, showBack]);
+
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [moreOpen]);
 
-  const visibleTabs = tabs.slice(0, MAX_VISIBLE_HEADER_TABS);
-  const overflowTabs = tabs.slice(MAX_VISIBLE_HEADER_TABS);
+  const visibleCount = inline ? fitCount : MAX_VISIBLE_HEADER_TABS;
+  const visibleTabs = tabs.slice(0, visibleCount);
+  const overflowTabs = tabs.slice(visibleCount);
   // A small dot marks the "More" button when the active section is hidden
   // inside it, without the button taking over that section's label/color.
   const activeOverflowTab = overflowTabs.find(t => t.id === activeTab);
 
   return (
-    <div className="icn-rule mt-2.5 pt-3">
-      <div className="relative flex flex-nowrap items-center gap-1.5 md:gap-2 pb-1">
+    <div ref={slotRef} className={inline ? 'flex-1 min-w-0 relative' : 'icn-rule mt-2.5 pt-3'}>
+      {inline && (
+        <div
+          ref={measureRef}
+          aria-hidden="true"
+          className="absolute left-0 top-0 flex flex-nowrap items-center gap-2 w-max invisible pointer-events-none h-0 overflow-hidden"
+        >
+          {tabs.map(tab => {
+            const TabIcon = tab.icon;
+            return (
+              <span key={tab.id} className="icn-navtab icn-navtab--inline">
+                <TabIcon className="icn-navtab-icon w-3.5 h-3.5 md:w-4 md:h-4" />
+                {tab.label}
+              </span>
+            );
+          })}
+          <span className="icn-navtab icn-navtab--inline">
+            <span>More</span>
+            <ChevronDown className="w-3.5 h-3.5" />
+          </span>
+        </div>
+      )}
+      <div className={`relative flex flex-nowrap items-center gap-1.5 md:gap-2 ${inline ? 'justify-start' : 'pb-1'}`}>
         {/* Back button — visible only when there is history to go back to */}
         {showBack && (
           <button
@@ -745,7 +804,7 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack 
         )}
 
         {/* Tabs that fit directly */}
-        <div className="flex flex-nowrap items-center gap-1.5 md:gap-2 min-w-0 overflow-x-auto">
+        <div className={`flex flex-nowrap items-center gap-1.5 md:gap-2 min-w-0 ${inline ? '' : 'overflow-x-auto'}`}>
           {visibleTabs.map(tab => renderTabButton(tab))}
         </div>
 
@@ -5552,6 +5611,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         className={`${isWebDashboard ? 'icn-masthead fixed top-0 left-0 right-0 z-[70]' : 'sticky top-0 z-40'} border-b ${
         isWebDashboard
           ? 'bg-gradient-to-r from-slate-950/92 via-slate-900/88 to-slate-950/92 backdrop-blur-xl border-slate-700/60 shadow-[0_10px_30px_rgba(2,6,23,0.45)]'
+  const handleHeaderBack = () => {
+    if (navHistory.length === 0) return;
+    const prev = navHistory[navHistory.length - 1];
+    setNavHistory(h => h.slice(0, -1));
+
+    if (prev && typeof prev === 'object' && prev.panel && prev.tab) {
+      // Sub-page back: tell the open panel to switch its internal tab
+      const refMap = { wallet: walletNavRef, trust: trustNavRef, pitchin: pitchinNavRef, cmms: cmssNavRef };
+      refMap[prev.panel]?.current?.(prev.tab);
+    } else {
+      // Panel-level back: restore previous panel
+      restorePanel(prev || 'dashboard');
+    }
+  };
+
           : 'bg-gradient-to-b from-slate-950/95 to-purple-950/80 backdrop-blur-md border-purple-500/20'
       }`}>
         <div className={`px-3 py-2.5 sm:px-4 sm:py-3 relative ${isWebDashboard ? 'w-full px-4 sm:px-6 lg:px-8 2xl:px-12' : ''}`}>
@@ -5578,8 +5652,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               <Search className={`w-5 sm:w-6 h-5 sm:h-6 ${isWebDashboard ? 'text-slate-300 hover:text-white' : 'text-gray-300 hover:text-white'}`} />
             </button>
 
-            {/* Spacer */}
-            <div className="flex-1"></div>
+            {/* Section tabs share this row on the web dashboard (they used to sit in
+                a second row below); on mobile this is just a spacer. */}
+            {isWebDashboard ? (
+              <DashboardHeaderNavTabs
+                inline
+                tabs={headerNavTabs}
+                activeTab={activeHeaderTab}
+                onTabClick={handleHeaderTabClick}
+                showBack={navHistory.length > 0}
+                onBack={handleHeaderBack}
+              />
+            ) : (
+              <div className="flex-1"></div>
+            )}
 
             {/* Pending Badge - hidden on very small phones so it never crowds out the avatar/menu */}
             {pendingActionsCount > 0 && (
@@ -5700,28 +5786,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             })()}
           </div>
 
-          {isWebDashboard && (
-            <DashboardHeaderNavTabs
-              tabs={headerNavTabs}
-              activeTab={activeHeaderTab}
-              onTabClick={handleHeaderTabClick}
-              showBack={navHistory.length > 0}
-              onBack={() => {
-                if (navHistory.length === 0) return;
-                const prev = navHistory[navHistory.length - 1];
-                setNavHistory(h => h.slice(0, -1));
-
-                if (prev && typeof prev === 'object' && prev.panel && prev.tab) {
-                  // Sub-page back: tell the open panel to switch its internal tab
-                  const refMap = { wallet: walletNavRef, trust: trustNavRef, pitchin: pitchinNavRef, cmms: cmssNavRef };
-                  refMap[prev.panel]?.current?.(prev.tab);
-                } else {
-                  // Panel-level back: restore previous panel
-                  restorePanel(prev || 'dashboard');
-                }
-              }}
-            />
-          )}
           </div>
         </div>
       </div>
