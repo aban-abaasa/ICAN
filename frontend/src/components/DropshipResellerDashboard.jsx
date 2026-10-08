@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Search, Copy, Check, Loader, Store, TrendingUp, Package, ExternalLink, ClipboardList, Truck, ChevronDown } from 'lucide-react';
+import { Search, Copy, Check, Loader, Store, TrendingUp, Package, ExternalLink, ClipboardList, Truck, ChevronDown, CalendarClock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import InstallmentsSellerPanel from './InstallmentsSellerPanel';
 import { getDropshippableProducts, setDropshipListing, getResellerDropshipSales, getDropshipStorefront } from '../services/dropshipService';
 
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
@@ -119,6 +120,7 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
     { id: 'browse', label: 'Browse products', icon: Package, accent: '#3b82f6' },
     { id: 'listings', label: 'My listings', icon: ClipboardList, accent: '#a855f7' },
     { id: 'sales', label: 'Your sales', icon: TrendingUp, accent: '#ec4899' },
+    { id: 'installments', label: 'Instalments', icon: CalendarClock, accent: '#10b981' },
   ];
 
   return (
@@ -146,7 +148,7 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
           since those get force-flattened to one color by ThemeContext's
           dynamic override stylesheet) instead of every tab sharing the
           same teal. */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {tabs.map(({ id, label, icon: Icon, accent }) => (
           <button
             key={id}
@@ -329,6 +331,8 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
           )}
         </div>
       )}
+
+      {tab === 'installments' && <InstallmentsSellerPanel businessProfileId={businessProfileId} />}
 
       {tab === 'sales' && (
         <div>

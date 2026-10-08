@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Megaphone, Briefcase, MapPin, Calendar, Users, FileText, X, Loader,
   AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
@@ -6,13 +6,17 @@ import {
   Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
   Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe,
   Video, Play, Eye, Heart, Bike, Star, Sun, Moon, TrendingUp, MoreVertical, Home,
-  Download, Banknote
+  Download, Banknote, User
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
 import useGuestCheckout from '../hooks/useGuestCheckout';
+import InstallmentOffer from './InstallmentOffer';
+import ContinueWithGoogle from './ContinueWithGoogle';
+import usePersistedCart, { markCartOpen, consumeCartOpen } from '../hooks/usePersistedCart';
+import { getBusinessSiteInfo, joinBusinessSite, getMyInstallmentPlans, getMyBusinessAccounts, getInstallmentShelf, formatMoney, STATUS_LABELS as PLAN_STATUS_LABELS } from '../services/installmentService';
 import PayAnyAmountForm from './PayAnyAmountForm';
 import ReceiveRequestForm from './ReceiveRequestForm';
 import { getPayCodeInfoForBusiness, getReceiveInfoForBusiness } from '../services/publicTransactionService';
@@ -617,7 +621,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // company.business_profile_id, only known once the header result lands.
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
-  const [cart, setCart] = useState({}); // { [listing_id]: quantity }
+  const [cart, setCart] = usePersistedCart(`icanera_cart_nb_${companyId}`); // { [listing_id]: quantity } -- survives the round-trip to Google
 
   // Same "linked business_profile" as Products & Services above, just
   // surfacing that business's Pitchin videos instead of its storefront --
@@ -717,6 +721,15 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       setProducts(data || []);
       setProductsLoading(false);
     });
+    return () => { cancelled = true; };
+  }, [company?.business_profile_id]);
+
+  // Does this business invite customers to create an account on its site (and so offer instalments)?
+  const [accountsEnabled, setAccountsEnabled] = useState(true);
+  useEffect(() => {
+    if (!company?.business_profile_id) return undefined;
+    let cancelled = false;
+    getBusinessSiteInfo(company.business_profile_id).then((info) => { if (!cancelled) setAccountsEnabled(info.accounts_enabled !== false); });
     return () => { cancelled = true; };
   }, [company?.business_profile_id]);
 
@@ -941,6 +954,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     { id: 'careers', label: 'Careers', mobileLabel: 'Careers', icon: Briefcase },
     ...(payInfo ? [{ id: 'pay', label: 'Pay', mobileLabel: 'Pay', icon: Banknote }] : []),
     ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', mobileLabel: 'Deals', icon: Award }] : []),
+    ...(accountsEnabled && company?.business_profile_id ? [{ id: 'account', label: 'My account', mobileLabel: 'Account', icon: User }] : []),
     { id: 'track', label: 'Track my application', mobileLabel: 'Track', icon: Search },
     ...(opportunities.length > 0 ? [{ id: 'track-bid', label: 'Track my bid', mobileLabel: 'My bid', icon: Search }] : []),
   ];
@@ -1110,6 +1124,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           {section === 'opportunities' && (
             <OpportunityList opportunities={opportunities} onSelect={openOpportunityDetail} />
           )}
+          {section === 'account' && accountsEnabled && (
+            <AccountSection company={company} user={user} authLoading={authLoading} />
+          )}
           {section === 'track' && <TrackApplication companyId={companyId} viewerUser={user} onWantAccount={requestAccountCreation} />}
           {section === 'track-bid' && <TrackOpportunityBid viewerUser={user} onWantAccount={requestAccountCreation} />}
         </div>
@@ -1146,6 +1163,134 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       )}
     </div>
     </NoticeBoardThemeCtx.Provider>
+  );
+};
+
+// Customer accounts on a business website: anyone can create a free IcanEra account right here and become this
+// business's customer, so they can track every plan and payment they have with it (and the business can see who
+// its customers are). Joining is always the visitor's own choice -- merely browsing registers nobody.
+const JOIN_SITE_KEY = 'icanera_join_site';
+const AccountSection = ({ company, user, authLoading }) => {
+  const businessId = company.business_profile_id;
+  const [joined, setJoined] = useState(null); // null = not known yet
+  const [plans, setPlans] = useState([]);
+  const [showAuth, setShowAuth] = useState(null); // null | 'signup' | 'signin'
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const [accounts, allPlans] = await Promise.all([getMyBusinessAccounts(), getMyInstallmentPlans().catch(() => [])]);
+    setJoined(accounts.some((a) => a.business_profile_id === businessId));
+    setPlans(allPlans.filter((p) => p.seller_id === businessId));
+  }, [businessId]);
+
+  useEffect(() => {
+    if (!user) { setJoined(null); setPlans([]); return undefined; }
+    let cancelled = false;
+    (async () => {
+      // They chose to sign up or sign in from this page: that is their consent to become a customer here.
+      let wantsJoin = false;
+      try { wantsJoin = sessionStorage.getItem(JOIN_SITE_KEY) === businessId; } catch { /* ignore */ }
+      if (wantsJoin) {
+        await joinBusinessSite(businessId, 'website');
+        try { sessionStorage.removeItem(JOIN_SITE_KEY); } catch { /* ignore */ }
+      }
+      if (!cancelled) await load();
+    })();
+    return () => { cancelled = true; };
+  }, [user, businessId, load]);
+
+  const openAuth = (view) => {
+    try { sessionStorage.setItem(JOIN_SITE_KEY, businessId); } catch { /* ignore */ }
+    setShowAuth(view);
+  };
+  const join = async () => {
+    setBusy(true);
+    await joinBusinessSite(businessId, 'website');
+    await load();
+    setBusy(false);
+  };
+
+  // A customer may hold plans in different currencies (a shop abroad): they are listed side by side, never added together.
+  const sumMoney = (rows, pick) => {
+    const totals = {};
+    rows.forEach((p) => { const v = Number(pick(p) || 0); if (v > 0) totals[p.currency || 'UGX'] = (totals[p.currency || 'UGX'] || 0) + v; });
+    const parts = Object.entries(totals).map(([cur, v]) => formatMoney(v, cur));
+    return parts.length ? parts.join(' · ') : formatMoney(0, plans[0]?.currency || 'UGX');
+  };
+  const paid = sumMoney(plans.filter((p) => !['cancelled', 'lapsed'].includes(p.status)), (p) => p.paid_amount);
+  const owing = sumMoney(plans.filter((p) => ['awaiting_deposit', 'active', 'ready'].includes(p.status)), (p) => p.balance_amount);
+
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="nb-card rounded-2xl p-5 sm:p-7">
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 rounded-full nb-chip-green flex items-center justify-center mx-auto mb-3"><User className="w-6 h-6" /></div>
+          <h2 className="text-xl sm:text-2xl font-bold nb-text">{user ? `Your account with ${company.company_name}` : `Create your account with ${company.company_name}`}</h2>
+          <p className="text-sm nb-text-muted mt-1.5 leading-relaxed">
+            Track every payment and receipt in one place, pay for products in instalments, and collect them or have them delivered once they are paid in full.
+          </p>
+        </div>
+
+        {authLoading || (user && joined === null) ? (
+          <div className="flex justify-center py-6"><Loader className="w-6 h-6 animate-spin nb-text-faint" /></div>
+        ) : !user ? (
+          <div className="space-y-2">
+            <ContinueWithGoogle
+              skin="nb" compact pendingSection="account"
+              onBeforeRedirect={() => { try { sessionStorage.setItem(JOIN_SITE_KEY, businessId); } catch { /* ignore */ } }}
+            />
+            <p className="text-xs nb-text-faint text-center">New here? Google creates your free IcanEra wallet in one tap.</p>
+            <button onClick={() => openAuth('signup')} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-primary font-semibold transition">Create an account with email</button>
+            <button onClick={() => openAuth('signin')} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-secondary font-semibold transition">I already have an account</button>
+            <p className="text-xs nb-text-faint text-center leading-relaxed">The same IcanEra account works on every business website. {company.company_name} will see your name, phone and your payments with them — nothing else.</p>
+          </div>
+        ) : !joined ? (
+          <div className="space-y-2">
+            <button onClick={join} disabled={busy} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-primary font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2">
+              {busy ? <Loader className="w-4 h-4 animate-spin" /> : null}Become a customer of {company.company_name}
+            </button>
+            <p className="text-xs nb-text-faint text-center leading-relaxed">{company.company_name} will see your name, phone and your payments with them.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {[['Plans', plans.length], ['Paid', paid], ['Owing', owing]].map(([label, value]) => (
+                <div key={label} className="nb-surface-alt border nb-border rounded-xl p-2.5">
+                  <p className="text-[11px] nb-text-faint">{label}</p>
+                  <p className="text-sm font-bold nb-text break-words">{value}</p>
+                </div>
+              ))}
+            </div>
+            {plans.length === 0 ? (
+              <p className="text-sm nb-text-muted text-center py-4">No payments yet. Choose “Pay in instalments” in the Shop tab to start one.</p>
+            ) : (
+              <div className="space-y-2">
+                {plans.map((p) => (
+                  <a key={p.code} href={`/plan/${p.code}`} className="block nb-surface-alt border nb-border rounded-xl p-3 hover:opacity-90 transition">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm nb-text font-medium truncate flex-1">{p.items.map((i) => i.name).slice(0, 2).join(', ')}{p.items.length > 2 ? '…' : ''}</p>
+                      <ChevronRight className="w-4 h-4 nb-text-faint shrink-0" />
+                    </div>
+                    <div className="flex justify-between text-xs mt-1">
+                      <span className="nb-text-muted">{PLAN_STATUS_LABELS[p.status] || p.status}</span>
+                      <span className="nb-text">{formatMoney(p.paid_amount, p.currency)} of {formatMoney(p.total_amount, p.currency)}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+            <a href="/plans" className="block text-center text-sm nb-link font-semibold">See all my payments across businesses</a>
+          </div>
+        )}
+      </div>
+
+      {showAuth && (
+        <div className="icanera-nb fixed inset-0 z-[60] overflow-y-auto nb-surface">
+          <button onClick={() => setShowAuth(null)} className="fixed top-4 right-4 nb-share-btn p-2 rounded-full z-10"><X className="w-5 h-5" /></button>
+          <AuthPage initialView={showAuth} onAuthSuccess={() => setShowAuth(null)} />
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -1892,7 +2037,8 @@ const VEHICLE_TYPE_OPTIONS = [
 // pay with Mobile Money, card or bank -- that adds a small payment-processing
 // fee and is handled by useGuestCheckout / guestCheckoutService.
 const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user, authLoading }) => {
-  const [showCart, setShowCart] = useState(false);
+  const cartOpenKey = `icanera_cart_nbshop_${businessProfileId}`;
+  const [showCart, setShowCart] = useState(() => consumeCartOpen(cartOpenKey));
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -1976,6 +2122,19 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
     [cart, products]
   );
   const cartTotal = cartItems.reduce((sum, row) => sum + row.listing.listed_price * row.qty, 0);
+  // A shop priced in another currency is bought through "Pay in instalments" / pay-in-full (not the Ugandan rider checkout).
+  const [shelf, setShelf] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    getInstallmentShelf(businessProfileId)
+      .then((rows) => { if (!cancelled) setShelf(Object.fromEntries(rows.map((r) => [r.listing_id, r]))); })
+      .catch(() => { /* keep UGX pricing if the shelf can't be read */ });
+    return () => { cancelled = true; };
+  }, [businessProfileId]);
+  const currencyOf = (listing) => shelf[listing?.listing_id]?.currency || 'UGX';
+  const priceOf = (amount, listing) => (currencyOf(listing) === 'UGX' ? formatUGX(amount) : formatMoney(amount, currencyOf(listing)));
+  const foreignCurrency = currencyOf(cartItems[0]?.listing);
+  const foreign = cartItems.length > 0 && foreignCurrency !== 'UGX';
   const cartCount = cartItems.reduce((sum, row) => sum + row.qty, 0);
   const allFreeDelivery = cartItems.length > 0 && cartItems.every((row) => row.listing.free_delivery);
   // Preview only -- dropship_checkout always recomputes the REAL fare
@@ -2138,8 +2297,9 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                 </div>
                 <div className="p-2.5 flex-1 flex flex-col">
                   <p className="text-sm nb-text font-medium line-clamp-2 min-h-[2.5rem]">{listing.name}</p>
-                  <p className="nb-price font-bold mt-1">{formatUGX(listing.listed_price)}</p>
-                  {listing.free_delivery && (
+                  <p className="nb-price font-bold mt-1">{priceOf(listing.listed_price, listing)}</p>
+                  {shelf[listing.listing_id]?.cross_border && <p className="mt-0.5 text-[11px] nb-text-muted">Ships from {shelf[listing.listing_id].store_country || 'abroad'}</p>}
+                  {currencyOf(listing) === 'UGX' && listing.free_delivery && (
                     <p className="mt-0.5 flex items-center gap-1 text-[11px] nb-text-muted"><Truck className="w-3 h-3" />Free delivery</p>
                   )}
                   {!listing.in_stock ? (
@@ -2173,7 +2333,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                 <div key={row.listing.listing_id} className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm nb-text truncate">{row.listing.name}</p>
-                    <p className="text-xs nb-text-faint">{formatUGX(row.listing.listed_price)} × {row.qty}</p>
+                    <p className="text-xs nb-text-faint">{priceOf(row.listing.listed_price, row.listing)} × {row.qty}</p>
                   </div>
                   <button onClick={() => setCart((prev) => ({ ...prev, [row.listing.listing_id]: 0 }))} className="p-1.5 nb-text-faint hover:opacity-70"><Trash2 className="w-4 h-4" /></button>
                 </div>
@@ -2181,6 +2341,8 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
               <div className="space-y-2 pt-2 border-t nb-border">
                 <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your name" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
                 <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone number" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
+                {foreign && <p className="text-[11px] nb-text-muted">This shop is priced in {foreignCurrency} and ships from {shelf[pickupListing?.listing_id]?.store_country || 'abroad'}. Pay in full or in instalments below — you give your shipping address once it is paid.</p>}
+                {!foreign && (<>
                 <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Delivery address (e.g. street, landmark)" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
 
                 <button
@@ -2276,16 +2438,33 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                     <p className="mt-1 text-[11px] nb-text-faint">Real BodaGoera fare for the rider you pick — never a fee you set yourself.</p>
                   </div>
                 )}
+                </>)}
               </div>
               <div className="border-t nb-border pt-3 space-y-1">
-                <div className="flex justify-between text-sm nb-text-faint"><span>Items</span><span>{formatUGX(cartTotal)}</span></div>
-                {shownDeliveryFee > 0 && (
+                <div className="flex justify-between text-sm nb-text-faint"><span>Items</span><span>{foreign ? formatMoney(cartTotal, foreignCurrency) : formatUGX(cartTotal)}</span></div>
+                {!foreign && shownDeliveryFee > 0 && (
                   <div className="flex justify-between text-sm nb-text-faint"><span>Delivery</span><span>{formatUGX(shownDeliveryFee)}</span></div>
                 )}
-                <div className="flex justify-between nb-text font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>
+                {!foreign && <div className="flex justify-between nb-text font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>}
               </div>
               {checkoutError && <p className="nb-error-text text-xs">{checkoutError}</p>}
-              {(
+              {!authLoading && !user && (
+                <ContinueWithGoogle skin="nb" pendingSection="shop" onUseEmail={() => setShowAuthModal(true)} onBeforeRedirect={() => markCartOpen(cartOpenKey)} />
+              )}
+              <InstallmentOffer
+                businessProfileId={businessProfileId}
+                cartItems={cartItems}
+                user={user}
+                authLoading={authLoading}
+                onNeedAuth={() => setShowAuthModal(true)}
+                pendingSection="shop"
+                onBeforeAuthRedirect={() => markCartOpen(cartOpenKey)}
+                customerName={customerName}
+                customerPhone={customerPhone}
+                storeName={products[0]?.reseller_name || 'Store'}
+                skin="nb"
+              />
+              {!foreign && (
                 <div className="space-y-2">
                   <button
                     onClick={user ? handleCheckout : () => setShowAuthModal(true)}
