@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, Check, ChevronRight, GitBranch, Loader, Plug, PlugZap, Plus, Search, Unlink, X } from 'lucide-react';
+import { Building2, Check, ChevronRight, GitBranch, Loader, MapPin, Plug, PlugZap, Plus, Search, Unlink, X } from 'lucide-react';
+import BranchLocationEditor from './BranchLocationEditor';
 import {
   CMMS_ACCESS_LEVELS,
   RELATIONSHIPS,
   WALLET_CONTROL_LEVELS,
   endBranchLink,
+  getBranchLocations,
   getBranchTree,
   getMyBranchRequests,
   getMyUnlinkedBusinesses,
@@ -57,6 +59,9 @@ export default function BusinessBranchesPanel({ profile }) {
   const [history, setHistory] = useState([]);
   const [mine, setMine] = useState([]);
   const [feed, setFeed] = useState({});
+  // business_id -> location row (see BUSINESS_BRANCH_LOCATIONS.sql); empty until that file is run.
+  const [locations, setLocations] = useState({});
+  const [editingLocation, setEditingLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -76,12 +81,15 @@ export default function BusinessBranchesPanel({ profile }) {
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    const [treeResult, chainResult, requestResult, mineResult] = await Promise.all([
+    const [treeResult, chainResult, requestResult, mineResult, locationResult] = await Promise.all([
       getBranchTree(businessId),
       getOwnershipChain(businessId),
       getMyBranchRequests(),
-      getMyUnlinkedBusinesses()
+      getMyUnlinkedBusinesses(),
+      getBranchLocations(businessId)
     ]);
+    // A missing function just means the locations file has not been deployed yet - the tree still works.
+    setLocations(Object.fromEntries((locationResult.data || []).map((row) => [row.business_id, row])));
     const nodes = treeResult.data || [];
     setTree(nodes);
     setChain(chainResult.data || []);
@@ -170,6 +178,25 @@ export default function BusinessBranchesPanel({ profile }) {
     const next = !showHistory;
     setShowHistory(next);
     if (next) setHistory((await getOwnershipHistory(businessId)).data || []);
+  };
+
+  // Open a branch's map near the business's other places: its own pin, else the
+  // head office's, else the first located branch.
+  const centerFor = (businessIdToPlace) => {
+    const near = [locations[businessIdToPlace], locations[businessId], ...Object.values(locations)]
+      .find((row) => row && row.latitude != null && row.longitude != null);
+    return near ? [Number(near.latitude), Number(near.longitude)] : undefined;
+  };
+
+  const onLocationSaved = async (_row, result) => {
+    setEditingLocation(null);
+    const linkedNote = result?.supermarkets_synced > 0
+      ? ' Riders can now find it through the linked store.'
+      : result?.supermarket_sync === 'supermarket_schema_missing_coordinates'
+        ? ' The linked store could not take the pin yet - run ADD_SUPERMARKET_GEOLOCATION.sql so riders can see it.'
+        : '';
+    setNotice(`Location saved.${linkedNote}`);
+    await load();
   };
 
   const incoming = requests.filter((request) => request.direction === 'incoming' && request.child_id === businessId);
@@ -292,6 +319,25 @@ export default function BusinessBranchesPanel({ profile }) {
                     </span>
                   </div>
 
+                  {locations[node.business_id] && !pending && (() => {
+                    const loc = locations[node.business_id];
+                    const placed = loc.latitude != null && loc.longitude != null;
+                    return (
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                        <span className={`flex min-w-0 items-center gap-1 ${placed ? 'text-slate-300' : 'text-amber-300'}`}>
+                          <MapPin size={12} className="shrink-0" />
+                          <span className="truncate">{placed ? (loc.location_address || `${Number(loc.latitude).toFixed(5)}, ${Number(loc.longitude).toFixed(5)}`) : 'No location on the map yet'}</span>
+                        </span>
+                        {loc.can_set && (
+                          <button onClick={() => setEditingLocation(loc)} className="shrink-0 text-amber-300 hover:text-amber-200">
+                            {placed ? 'Update location' : 'Set location'}
+                          </button>
+                        )}
+                        {placed && loc.has_supermarket && <span className="rounded bg-emerald-900/30 px-1.5 py-0.5 text-[11px] text-emerald-300" title="Riders find this branch through its linked store">Visible to riders</span>}
+                      </div>
+                    );
+                  })()}
+
                   {feedRow && !isRoot && (
                     <p className="mt-1 text-xs text-slate-400">
                       Assets {formatMoney(feedRow.assets?.net_book_value, feedRow.currency)} net book
@@ -407,6 +453,15 @@ export default function BusinessBranchesPanel({ profile }) {
             <button type="button" onClick={() => setAdding(false)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">Cancel</button>
           </div>
         </form>
+      )}
+
+      {editingLocation && (
+        <BranchLocationEditor
+          branch={editingLocation}
+          fallbackCenter={centerFor(editingLocation.business_id)}
+          onClose={() => setEditingLocation(null)}
+          onSaved={onLocationSaved}
+        />
       )}
 
       <button onClick={toggleHistory} className="text-xs text-slate-400 hover:text-slate-200">{showHistory ? 'Hide' : 'Show'} ownership history</button>
