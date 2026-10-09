@@ -649,6 +649,12 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // Whether clients may also REQUEST money from this business (owner switched it on): the Pay tab then
   // has a "Receive" side (ADD_BUSINESS_RECEIVE_REQUESTS.sql).
   const [receiveInfo, setReceiveInfo] = useState(null);
+  // A store product the visitor tapped on the Market tab: opens the Pay tab with it already listed.
+  const [payPrefill, setPayPrefill] = useState(null);
+  const payForProduct = (item) => {
+    setPayPrefill({ key: `${item.product_id}-${Date.now()}`, items: [{ name: item.name, price: item.price, qty: 1 }] });
+    setSection('pay');
+  };
   useEffect(() => {
     if (!company?.business_profile_id) { setPayInfo(null); setReceiveInfo(null); return undefined; }
     let cancelled = false;
@@ -1117,6 +1123,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             <ShopSection
               products={products}
               storeProducts={storeProducts}
+              onPayForProduct={payInfo ? payForProduct : null}
               contact={{ phone: company.phone, whatsapp: company.whatsapp }}
               loading={productsLoading}
               cart={cart}
@@ -1127,7 +1134,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             />
           )}
           {section === 'pay' && payInfo && (
-            <PaySection company={company} info={payInfo} receiveInfo={receiveInfo} />
+            <PaySection company={company} info={payInfo} receiveInfo={receiveInfo} prefill={payPrefill} />
           )}
           {section === 'pitchin' && (
             <PitchinSection pitches={pitches} loading={pitchesLoading} liveOffer={liveOffer} onSelect={setSelectedPitch} />
@@ -1314,7 +1321,7 @@ const AccountSection = ({ company, user, authLoading }) => {
 //
 // When the owner has also switched on "Let clients request money from us", a Pay | Receive switch appears:
 // Receive files a request that an owner approves with the business-wallet PIN before anything is paid.
-const PaySection = ({ company, info, receiveInfo }) => {
+const PaySection = ({ company, info, receiveInfo, prefill = null }) => {
   const [side, setSide] = useState('pay'); // 'pay' | 'receive'
   const receiving = side === 'receive' && receiveInfo;
   return (
@@ -1345,7 +1352,7 @@ const PaySection = ({ company, info, receiveInfo }) => {
         </div>
         {receiving
           ? <ReceiveRequestForm businessProfileId={company.business_profile_id} businessName={company.company_name} info={receiveInfo} />
-          : <PayAnyAmountForm code={info.code} info={info} skin="nb" />}
+          : <PayAnyAmountForm key={prefill ? prefill.key : 'blank'} code={info.code} info={info} skin="nb" initialItems={prefill ? prefill.items : null} />}
       </div>
     </div>
   );
@@ -2050,7 +2057,7 @@ const VEHICLE_TYPE_OPTIONS = [
 // button then pays instantly. A visitor who doesn't want a wallet can instead
 // pay with Mobile Money, card or bank -- that adds a small payment-processing
 // fee and is handled by useGuestCheckout / guestCheckoutService.
-const ShopSection = ({ products, storeProducts = [], contact = {}, loading, cart, setCart, businessProfileId, user, authLoading }) => {
+const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, contact = {}, loading, cart, setCart, businessProfileId, user, authLoading }) => {
   const { askPin, pinDialog } = usePinPrompt();
   const cartOpenKey = `icanera_cart_nbshop_${businessProfileId}`;
   const [showCart, setShowCart] = useState(() => consumeCartOpen(cartOpenKey));
@@ -2345,7 +2352,7 @@ const ShopSection = ({ products, storeProducts = [], contact = {}, loading, cart
       {storeProducts.length > 0 && (
         <div className={products.length > 0 ? 'mt-8' : ''}>
           <h3 className="text-sm font-semibold nb-text mb-1">{products.length > 0 ? 'From our store' : 'Our products'}</h3>
-          <p className="text-xs nb-text-muted mb-3">Contact us to order these.</p>
+          <p className="text-xs nb-text-muted mb-3">{onPayForProduct ? 'Tap a product to pay for it — cash, IcanEra wallet, Mobile Money, card or bank.' : 'Contact us to order these.'}</p>
           {(buildWhatsAppLink(contact.whatsapp) || buildTelLink(contact.phone)) && (
             <div className="flex gap-2 mb-3">
               {buildWhatsAppLink(contact.whatsapp) && (
@@ -2361,8 +2368,15 @@ const ShopSection = ({ products, storeProducts = [], contact = {}, loading, cart
             </div>
           )}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-            {storeProducts.map((item) => (
-              <div key={item.product_id} className="nb-card rounded-2xl overflow-hidden flex flex-col">
+            {storeProducts.map((item) => {
+              // In-site payment is in UGX (the Pay tab's currency) and only for what can be bought right now.
+              const payable = !!onPayForProduct && String(item.currency || 'UGX').toUpperCase() === 'UGX' && (item.is_service || item.in_stock);
+              return (
+              <div
+                key={item.product_id}
+                {...(payable ? { role: 'button', tabIndex: 0, onClick: () => onPayForProduct(item), onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPayForProduct(item); } } } : {})}
+                className={`nb-card rounded-2xl overflow-hidden flex flex-col${payable ? ' cursor-pointer transition active:scale-[0.98]' : ''}`}
+              >
                 <div className="aspect-square nb-surface-alt flex items-center justify-center overflow-hidden">
                   {item.images?.[0] ? (
                     <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
@@ -2380,9 +2394,13 @@ const ShopSection = ({ products, storeProducts = [], contact = {}, loading, cart
                   ) : (
                     <p className="mt-1 text-[11px] nb-text-muted">In stock</p>
                   )}
+                  {payable && (
+                    <span className="mt-2 w-full min-h-[36px] rounded-lg nb-btn-primary text-xs font-semibold flex items-center justify-center">Pay</span>
+                  )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
