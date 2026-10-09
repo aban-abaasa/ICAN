@@ -37,6 +37,8 @@ const ITEM_TYPE_LABELS = {
   project: 'Project',
   presentation: 'Presentation / Competition',
 };
+// One colour per resume section; the tab, its panel and everything inside take it (see .rz in index.css)
+const TAB_ACCENT = { profile: 'sky', experience: 'amber', references: 'violet', notebook: 'teal', inbox: 'rose', work: 'orange' };
 const EMPTY_ITEM_FORM = { itemType: 'experience', title: '', orgName: '', description: '', startDate: '', endDate: '' };
 const EMPTY_REFERENCE_FORM = { name: '', title: '', organization: '', email: '', phone: '' };
 
@@ -380,8 +382,8 @@ export default function PortfolioTab() {
   if (isLoading) {
     return (
       <div className="rz py-16 flex flex-col items-center gap-3 text-center">
-        <Loader2 className="w-6 h-6 animate-spin text-[#c4a052]" />
-        <p className="rz-serif text-[#e6c980]">Preparing your resume…</p>
+        <Loader2 className="w-6 h-6 animate-spin text-[color:rgb(var(--rz-rgb))]" />
+        <p className="rz-serif text-[color:var(--rz-gold-text)]">Preparing your resume…</p>
       </div>
     );
   }
@@ -434,19 +436,21 @@ export default function PortfolioTab() {
       {/* Masthead — who you are, how complete the resume is, and your public link */}
       <header className="rz-card">
         <div className="flex items-center gap-4">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt={displayName} className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover flex-shrink-0 border-2 border-[#c4a052]/60 shadow-lg" />
-          ) : (
-            <div className="rz-serif w-16 h-16 sm:w-20 sm:h-20 rounded-full flex-shrink-0 flex items-center justify-center text-2xl font-bold text-[#1c1408] bg-gradient-to-br from-[#e6c980] to-[#a17c28]">
-              {displayName.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <span className="rz-ring flex-shrink-0">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={displayName} className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover flex-shrink-0 border-2 border-[color:rgb(var(--rz-rgb)/0.60)] shadow-lg" />
+            ) : (
+              <div className="rz-serif w-16 h-16 sm:w-20 sm:h-20 rounded-full flex-shrink-0 flex items-center justify-center text-2xl font-bold text-[color:var(--rz-on)] bg-gradient-to-br from-[var(--rz-gold-text)] to-[rgb(var(--rz-rgb-2))]">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+            )}
+          </span>
           <div className="min-w-0 flex-1">
             <p className="rz-eyebrow">Curriculum Vitae</p>
-            <h2 className="rz-serif text-xl sm:text-2xl font-bold text-white leading-tight break-words">{displayName}</h2>
+            <h2 className="rz-serif rz-gradient-text text-xl sm:text-2xl font-bold text-white leading-tight break-words">{displayName}</h2>
             <p className="text-sm text-slate-300 mt-0.5 line-clamp-2">{form.headline || 'Add a headline to introduce yourself'}</p>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-slate-400">
-              {form.location && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3 text-[#c4a052]" />{form.location}</span>}
+              {form.location && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3 text-[color:rgb(var(--rz-rgb))]" />{form.location}</span>}
               {profile?.is_verified && (
                 <span className="rz-badge text-emerald-300 bg-emerald-500/10 border border-emerald-500/30"><BadgeCheck className="w-3 h-3" /> Verified</span>
               )}
@@ -457,14 +461,14 @@ export default function PortfolioTab() {
         <div className="mt-4">
           <div className="flex items-center justify-between mb-1.5">
             <span className="rz-label !mb-0">Resume strength</span>
-            <span className="text-xs font-semibold text-[#e6c980]">{percent}%</span>
+            <span className="text-xs font-semibold text-[color:var(--rz-gold-text)]">{percent}%</span>
           </div>
           <div className="rz-meter" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label="Resume completeness">
             <span style={{ width: `${percent}%` }} />
           </div>
           {nextStep ? (
-            <button onClick={() => setActiveTab(nextStep.tab)} className="mt-2 text-xs text-slate-400 hover:text-[#e6c980] text-left transition-colors">
-              Next step: <span className="text-slate-200 underline decoration-[#c4a052]/50 underline-offset-2">{nextStep.label}</span>
+            <button onClick={() => setActiveTab(nextStep.tab)} className="mt-2 text-xs text-slate-400 hover:text-[color:var(--rz-gold-text)] text-left transition-colors">
+              Next step: <span className="text-slate-200 underline decoration-[color:rgb(var(--rz-rgb)/0.50)] underline-offset-2">{nextStep.label}</span>
             </button>
           ) : (
             <p className="mt-2 text-xs text-emerald-300">Your resume is complete — nicely done.</p>
@@ -477,7 +481,7 @@ export default function PortfolioTab() {
           <label className="rz-label" htmlFor="rz-handle">Your public link</label>
           {handle && (
             <p className="text-sm text-slate-200 break-all mb-2.5 select-all">
-              <Link2 className="w-3.5 h-3.5 text-[#c4a052] inline -mt-0.5 mr-1.5" />
+              <Link2 className="w-3.5 h-3.5 text-[color:rgb(var(--rz-rgb))] inline -mt-0.5 mr-1.5" />
               {shareUrl.replace(/^https?:\/\//, '')}
             </p>
           )}
@@ -524,19 +528,19 @@ export default function PortfolioTab() {
       {/* Section tabs */}
       <nav className="rz-tabs" role="tablist" aria-label="Resume sections">
         {tabs.map((t) => (
-          <button key={t.id} role="tab" id={`rz-tab-${t.id}`} aria-selected={activeTab === t.id} aria-controls={`rz-panel-${t.id}`} className="rz-tab" onClick={() => setActiveTab(t.id)}>
+          <button key={t.id} role="tab" data-accent={TAB_ACCENT[t.id]} id={`rz-tab-${t.id}`} aria-selected={activeTab === t.id} aria-controls={`rz-panel-${t.id}`} className="rz-tab" onClick={() => setActiveTab(t.id)}>
             {t.label}
             {t.count > 0 && <span className="rz-tab-count">{t.count}</span>}
           </button>
         ))}
       </nav>
 
-      <div role="tabpanel" id={`rz-panel-${activeTab}`} aria-labelledby={`rz-tab-${activeTab}`} key={activeTab} className="rz-panel space-y-4">
+      <div role="tabpanel" id={`rz-panel-${activeTab}`} aria-labelledby={`rz-tab-${activeTab}`} key={activeTab} data-accent={TAB_ACCENT[activeTab]} className="rz-panel space-y-4">
         {activeTab === 'profile' && (
           <>
             <section className="rz-card">
               <div className="flex items-start gap-3">
-                <Sparkles className="w-5 h-5 mt-0.5 flex-shrink-0 text-[#c4a052]" />
+                <Sparkles className="w-5 h-5 mt-0.5 flex-shrink-0 text-[color:rgb(var(--rz-rgb))]" />
                 <div className="min-w-0 flex-1">
                   <h3 className="rz-serif text-base font-bold text-white">Build your resume by talking</h3>
                   <p className="text-sm text-slate-300 mt-1">Tell your story in your own words, speak it, or paste a chat where you talked about yourself. You review everything before it is added.</p>
@@ -650,7 +654,7 @@ export default function PortfolioTab() {
             <section className="rz-card">
               <div className="rz-section-title"><h3>Verification</h3></div>
               <div className="flex items-start gap-3">
-                <ShieldCheck className={`w-5 h-5 mt-0.5 flex-shrink-0 ${profile?.is_verified ? 'text-emerald-400' : 'text-[#c4a052]'}`} />
+                <ShieldCheck className={`w-5 h-5 mt-0.5 flex-shrink-0 ${profile?.is_verified ? 'text-emerald-400' : 'text-[color:rgb(var(--rz-rgb))]'}`} />
                 <p className="text-sm text-slate-300">
                   {profile?.is_verified
                     ? 'Your profile is verified — a badge appears on your public resume.'
@@ -664,7 +668,7 @@ export default function PortfolioTab() {
               </label>
 
               {verifications.length > 0 && (
-                <ul className="mt-3 divide-y divide-[#c4a052]/15 border-t border-[#c4a052]/15">
+                <ul className="mt-3 divide-y divide-[color:rgb(var(--rz-rgb)/0.15)] border-t border-[color:rgb(var(--rz-rgb)/0.15)]">
                   {verifications.map((v) => (
                     <li key={v.id} className="flex items-center justify-between gap-2 py-2 text-sm">
                       <span className="text-slate-300 min-w-0 truncate">{v.document_type} <span className="text-slate-500">· {new Date(v.created_at).toLocaleDateString()}</span></span>
@@ -709,7 +713,7 @@ export default function PortfolioTab() {
             )}
 
             {itemForm && (
-              <div className="mb-5 p-4 rounded-xl border border-[#c4a052]/40 bg-[#c4a052]/[0.05] space-y-3">
+              <div className="mb-5 p-4 rounded-xl border border-[color:rgb(var(--rz-rgb)/0.40)] bg-[rgb(var(--rz-rgb))]/[0.05] space-y-3">
                 <p className="rz-eyebrow">{editingItemId ? 'Edit entry' : 'New entry'}</p>
                 <div>
                   <label className="rz-label" htmlFor="rz-item-type">Type</label>
@@ -759,11 +763,11 @@ export default function PortfolioTab() {
                     <li key={item.id}>
                       <div className="flex items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          {range && <p className="text-[0.7rem] font-semibold tracking-wider uppercase text-[#e6c980]">{range}</p>}
+                          {range && <p className="text-[0.7rem] font-semibold tracking-wider uppercase text-[color:var(--rz-gold-text)]">{range}</p>}
                           <h4 className="rz-serif text-base font-bold text-white leading-snug break-words">{item.title}</h4>
                           {item.org_name && <p className="text-sm text-slate-300">{item.org_name}</p>}
                           <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                            <span className="rz-badge text-[#e6c980] bg-[#c4a052]/10 border border-[#c4a052]/25"><Icon className="w-3 h-3" />{ITEM_TYPE_LABELS[item.item_type] || 'Experience'}</span>
+                            <span className="rz-badge text-[color:var(--rz-gold-text)] bg-[rgb(var(--rz-rgb)/0.10)] border border-[color:rgb(var(--rz-rgb)/0.25)]"><Icon className="w-3 h-3" />{ITEM_TYPE_LABELS[item.item_type] || 'Experience'}</span>
                             {item.source === 'cmms' && <span className="rz-badge text-blue-300 bg-blue-500/10 border border-blue-500/30">Auto · CMMS</span>}
                           </div>
                           {item.description && <p className="text-sm text-slate-400 mt-2 leading-relaxed whitespace-pre-line">{item.description}</p>}
@@ -782,7 +786,7 @@ export default function PortfolioTab() {
             ) : (
               !itemForm && (
                 <div className="rz-empty">
-                  <Briefcase className="w-8 h-8 mx-auto text-[#c4a052]/70" />
+                  <Briefcase className="w-8 h-8 mx-auto text-[color:rgb(var(--rz-rgb)/0.70)]" />
                   <p className="rz-serif">Your story starts here</p>
                   <p className="text-sm">Add jobs, projects, education and achievements.</p>
                   <button onClick={openAddItem} className="rz-btn rz-btn-primary mt-4"><Plus className="w-4 h-4" /> Add first entry</button>
@@ -802,7 +806,7 @@ export default function PortfolioTab() {
             </div>
 
             {referenceForm && (
-              <div className="mb-5 p-4 rounded-xl border border-[#c4a052]/40 bg-[#c4a052]/[0.05] space-y-3">
+              <div className="mb-5 p-4 rounded-xl border border-[color:rgb(var(--rz-rgb)/0.40)] bg-[rgb(var(--rz-rgb))]/[0.05] space-y-3">
                 <p className="rz-eyebrow">{editingReferenceId ? 'Edit reference' : 'New reference'}</p>
                 <div>
                   <label className="rz-label" htmlFor="rz-ref-name">Full name</label>
@@ -837,16 +841,16 @@ export default function PortfolioTab() {
             {references.length > 0 ? (
               <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {references.map((ref) => (
-                  <li key={ref.id} className="p-4 rounded-xl bg-slate-950/40 border border-[#c4a052]/20">
+                  <li key={ref.id} className="p-4 rounded-xl bg-slate-950/40 border border-[color:rgb(var(--rz-rgb)/0.20)]">
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <h4 className="rz-serif text-base font-bold text-white break-words">{ref.name}</h4>
                         {(ref.title || ref.organization) && (
-                          <p className="text-sm text-[#e6c980]/90 mt-0.5">{[ref.title, ref.organization].filter(Boolean).join(' — ')}</p>
+                          <p className="text-sm text-[color:var(--rz-gold-text)] mt-0.5">{[ref.title, ref.organization].filter(Boolean).join(' — ')}</p>
                         )}
                         <div className="mt-2 space-y-1 text-sm text-slate-400">
-                          {ref.email && <a href={`mailto:${ref.email}`} className="flex items-center gap-1.5 hover:text-white break-all"><Mail className="w-3.5 h-3.5 text-[#c4a052] flex-shrink-0" />{ref.email}</a>}
-                          {ref.phone && <a href={`tel:${ref.phone}`} className="flex items-center gap-1.5 hover:text-white"><Phone className="w-3.5 h-3.5 text-[#c4a052] flex-shrink-0" />{ref.phone}</a>}
+                          {ref.email && <a href={`mailto:${ref.email}`} className="flex items-center gap-1.5 hover:text-white break-all"><Mail className="w-3.5 h-3.5 text-[color:rgb(var(--rz-rgb))] flex-shrink-0" />{ref.email}</a>}
+                          {ref.phone && <a href={`tel:${ref.phone}`} className="flex items-center gap-1.5 hover:text-white"><Phone className="w-3.5 h-3.5 text-[color:rgb(var(--rz-rgb))] flex-shrink-0" />{ref.phone}</a>}
                         </div>
                       </div>
                       <div className="flex flex-shrink-0 -mr-1.5 -mt-1">
@@ -860,7 +864,7 @@ export default function PortfolioTab() {
             ) : (
               !referenceForm && (
                 <div className="rz-empty">
-                  <Users className="w-8 h-8 mx-auto text-[#c4a052]/70" />
+                  <Users className="w-8 h-8 mx-auto text-[color:rgb(var(--rz-rgb)/0.70)]" />
                   <p className="rz-serif">Let others vouch for you</p>
                   <p className="text-sm">Add a lecturer, manager or client who can speak to your work.</p>
                   <button onClick={openAddReference} className="rz-btn rz-btn-primary mt-4"><Plus className="w-4 h-4" /> Add reference</button>
@@ -898,7 +902,7 @@ export default function PortfolioTab() {
 
       <footer className="text-center pt-2">
         <div className="rz-rule" />
-        <p className="text-xs text-slate-500">Powered by <span className="rz-serif font-bold text-[#e6c980]">IcanEra</span></p>
+        <p className="text-xs text-slate-500">Powered by <span className="rz-serif font-bold text-[color:var(--rz-gold-text)]">IcanEra</span></p>
       </footer>
 
       {showPreview && handle && <PublicPortfolioPage handle={handle} onClose={() => setShowPreview(false)} />}

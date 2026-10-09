@@ -133,7 +133,7 @@ export default function NotebookTab() {
         <ul className="space-y-2">
           {notes.map((n) => (
             <li key={n.id}>
-              <button type="button" onClick={() => setOpenId(n.id)} className="w-full text-left rounded-lg border border-[rgba(196,160,82,0.28)] bg-white/5 hover:bg-white/10 px-3 py-2.5 transition-colors">
+              <button type="button" onClick={() => setOpenId(n.id)} className="w-full text-left rz-lift rounded-lg border border-[color:var(--rz-gold-soft)] bg-white/5 hover:bg-white/10 px-3 py-2.5">
                 <span className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-sm truncate">{n.title || 'Untitled note'}</span>
                   <span className="text-[11px] text-slate-400 whitespace-nowrap">{fmtWhen(n.updatedAt)}</span>
