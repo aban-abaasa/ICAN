@@ -19,6 +19,8 @@ import {
 // Import the service
 import cmmsReportService from '../services/cmmsReportAccessService';
 import ShareReportModal from './ShareReportModal';
+import VoiceDictateButton from './common/VoiceDictateButton';
+import { appendDictation } from '../utils/dictationText';
 
 const CMSSReportingManager = ({ 
   cmmsCompanyId, 
@@ -378,9 +380,17 @@ const CMSSReportingManager = ({
 
           {/* Description */}
           <div className="mb-4">
-            <label className="block text-gray-700 font-semibold mb-2">
-              Description *
-            </label>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <label className="block text-gray-700 font-semibold">
+                Description *
+              </label>
+              <VoiceDictateButton
+                label="cmms-report-description"
+                title="Report description"
+                idleText="Dictate report"
+                onText={(heard) => setFormData((prev) => ({ ...prev, reportBody: appendDictation(prev.reportBody, heard) }))}
+              />
+            </div>
             <textarea
               value={formData.reportBody}
               onChange={(e) => setFormData({ ...formData, reportBody: e.target.value })}

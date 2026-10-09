@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext';
 import { consumePendingReferralCode } from './services/referralService';
 import CountryCheckMiddleware from './components/auth/CountryCheckMiddleware';
 import ActionQueue from './components/ActionQueue';
+import DictationIndicator from './components/common/DictationIndicator';
 import { SplashScreen, ClassicLoadingScreen } from './components/SplashScreen';
 import { offlineManager } from './lib/offlineManager';
 import { lazyWithRetry, prefetchWhenIdle } from './lib/lazyWithRetry';
@@ -525,6 +526,7 @@ const App = () => {
       <ErrorBoundary>
         <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
         <ActionQueue />
+        <DictationIndicator />
         <CountryCheckMiddleware>
           <MobileView userProfile={user} />
         </CountryCheckMiddleware>
@@ -539,6 +541,7 @@ const App = () => {
     <ErrorBoundary>
       <SplashScreen show={showSplash} onHide={() => setShowSplash(false)} />
       <ActionQueue />
+      <DictationIndicator />
       <CountryCheckMiddleware>
         <ICANCapitalEngine />
       </CountryCheckMiddleware>
