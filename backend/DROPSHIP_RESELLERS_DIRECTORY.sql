@@ -4,7 +4,7 @@
 --
 -- get_dropship_resellers: one row per reseller (business profile) that
 -- currently has at least one live dropship listing -- powers the wallet's
--- "Resellers" tab. store_country is the source store's supermarkets.country,
+-- "Resellers" tab. store_country is the source store owner's signup country (user_accounts.country_code, else supermarkets.country),
 -- so prices can be shown in that country's currency. Same "no auth required to browse" posture as
 -- get_dropship_storefront / get_dropship_browsable_products.
 -- =============================================================================
@@ -32,12 +32,16 @@ CREATE OR REPLACE FUNCTION public.get_dropship_resellers(
     MIN(dl.listed_price) AS min_price,
     BOOL_OR(dl.free_delivery) AS any_free_delivery,
     BOOL_OR(GREATEST(COALESCE(inv.current_stock - inv.reserved_stock, 0), 0) > 0) AS any_in_stock,
-    MIN(s.country)::TEXT AS store_country
+    MIN(COALESCE(ua.country_code, s.country))::TEXT AS store_country
   FROM public.dropship_listings dl
   JOIN public.products p ON p.id = dl.product_id
   JOIN public.business_profiles bp ON bp.id = dl.reseller_business_profile_id
   LEFT JOIN public.inventory inv ON inv.product_id = p.id AND inv.supermarket_id = dl.supermarket_id
   LEFT JOIN public.supermarkets s ON s.id = dl.supermarket_id
+  LEFT JOIN LATERAL (
+    SELECT country_code FROM public.user_accounts
+    WHERE user_id = s.owner_user_id AND country_code IS NOT NULL LIMIT 1
+  ) ua ON TRUE
   WHERE dl.is_active = TRUE
     AND (p.is_active IS NULL OR p.is_active = TRUE)
     AND p.is_dropship_excluded = FALSE
