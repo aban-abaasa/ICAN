@@ -8,6 +8,7 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { hashPIN } from './walletAccountService';
 
 // Products a reseller can list, across every store, with their own listing status.
 export async function getDropshippableProducts(resellerBusinessProfileId, { query = '', limit = 40, offset = 0 } = {}) {
@@ -58,8 +59,14 @@ export async function setDropshipListing(resellerBusinessProfileId, productId, l
 // window. riderId is optional: pass one from findDeliveryRiders() to let the
 // customer pick a specific rider, or omit it to auto-match the nearest one
 // matching vehicleTypes (e.g. ['motorcycle'], ['car'], ['van'] — omit/null for any).
-export async function dropshipCheckout(resellerBusinessProfileId, cart, { customerName, customerPhone, deliveryAddress, storeLocation, deliveryLat, deliveryLng, maxDeliveryHours, riderId, vehicleTypes } = {}) {
-  const { data, error } = await supabase.rpc('dropship_checkout', {
+// pin: the customer's wallet PIN, required (see below).
+export async function dropshipCheckout(resellerBusinessProfileId, cart, { pin, customerName, customerPhone, deliveryAddress, storeLocation, deliveryLat, deliveryLng, maxDeliveryHours, riderId, vehicleTypes } = {}) {
+  // Paying from the wallet always needs the customer's wallet PIN, and the
+  // server checks it (dropship_checkout_with_pin, DROPSHIP_CHECKOUT_REQUIRE_PIN.sql)
+  // -- the plain dropship_checkout RPC is no longer callable from the client.
+  if (!pin) return { data: null, error: { message: 'Enter your wallet PIN to pay' } };
+  const { data, error } = await supabase.rpc('dropship_checkout_with_pin', {
+    p_pin_hash: hashPIN(String(pin)),
     p_reseller_business_profile_id: resellerBusinessProfileId,
     p_cart: cart,
     p_customer_name: customerName || null,
