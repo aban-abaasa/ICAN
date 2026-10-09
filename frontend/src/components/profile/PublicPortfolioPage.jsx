@@ -30,6 +30,7 @@ const ITEM_ICONS = {
 // by item_type; `achievement`/`project` share one catch-all section so older
 // data (created before entrepreneurship/research/presentation existed)
 // still has somewhere to land.
+const SECTION_ACCENT = { work: 'amber', research: 'teal', education: 'fuchsia', achievements: 'orange', presentations: 'indigo' };
 const SECTIONS = [
   { key: 'work', title: 'Technical Experience & Entrepreneurship', types: ['experience', 'entrepreneurship'] },
   { key: 'research', title: 'Research & Innovation', types: ['research'] },
@@ -60,7 +61,7 @@ function DescriptionBlock({ text }) {
       <ul className="mt-2 space-y-1.5 text-sm text-slate-400 leading-relaxed">
         {lines.map((line, i) => (
           <li key={i} className="flex gap-2">
-            <span className="mt-[0.55rem] w-1 h-1 rounded-full bg-[#c4a052] flex-shrink-0" aria-hidden="true" />
+            <span className="mt-[0.55rem] w-1 h-1 rounded-full bg-[rgb(var(--rz-rgb))] flex-shrink-0" aria-hidden="true" />
             <span className="min-w-0 break-words">{line}</span>
           </li>
         ))}
@@ -79,7 +80,7 @@ function StatusCard({ status, onOpenImage }) {
   const kind = !hasMedia ? 'text' : status.media_type === 'video' ? 'video' : 'image';
 
   return (
-    <div className="relative w-32 h-56 shrink-0 snap-start rounded-xl overflow-hidden border border-[#c4a052]/30 bg-slate-900">
+    <div className="relative w-32 h-56 shrink-0 snap-start rounded-xl overflow-hidden border border-[color:rgb(var(--rz-rgb)/0.30)] bg-slate-900">
       {kind === 'video' && (
         <video src={status.media_url} className="w-full h-full object-cover" muted playsInline preload="none" controls />
       )}
@@ -121,10 +122,10 @@ function SectionHeading({ children }) {
 }
 
 function ContactPill({ icon: Icon, href, children }) {
-  const cls = 'inline-flex items-center gap-2 min-h-[40px] max-w-full px-3.5 py-1.5 rounded-full border border-[#c4a052]/30 bg-[#c4a052]/[0.06] text-sm text-slate-300 break-all';
-  const inner = (<><Icon className="w-4 h-4 text-[#c4a052] flex-shrink-0" /><span className="min-w-0">{children}</span></>);
+  const cls = 'inline-flex items-center gap-2 min-h-[40px] max-w-full px-3.5 py-1.5 rounded-full border border-[color:rgb(var(--rz-rgb)/0.30)] bg-[rgb(var(--rz-rgb))]/[0.06] text-sm text-slate-300 break-all';
+  const inner = (<><Icon className="w-4 h-4 text-[color:rgb(var(--rz-rgb))] flex-shrink-0" /><span className="min-w-0">{children}</span></>);
   return href
-    ? <a href={href} className={`${cls} hover:border-[#c4a052]/70 hover:text-white transition-colors`}>{inner}</a>
+    ? <a href={href} className={`${cls} hover:border-[color:rgb(var(--rz-rgb)/0.70)] hover:text-white transition-colors`}>{inner}</a>
     : <span className={cls}>{inner}</span>;
 }
 
@@ -253,14 +254,14 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
       <div className="relative max-w-3xl mx-auto px-4 pt-5 pb-10 sm:pt-10 sm:pb-14">
         {isLoading && (
           <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
-            <Loader2 className="w-6 h-6 animate-spin text-[#c4a052]" />
-            <p className="rz-serif text-[#e6c980]">Loading resume…</p>
+            <Loader2 className="w-6 h-6 animate-spin text-[color:rgb(var(--rz-rgb))]" />
+            <p className="rz-serif text-[color:var(--rz-gold-text)]">Loading resume…</p>
           </div>
         )}
 
         {!isLoading && notFound && (
           <div className="text-center py-24 animate-fadeIn">
-            <Users className="w-10 h-10 mx-auto mb-4 text-[#c4a052]/70" />
+            <Users className="w-10 h-10 mx-auto mb-4 text-[color:rgb(var(--rz-rgb)/0.70)]" />
             <p className="rz-serif text-2xl font-bold mb-2 text-white">Profile not found</p>
             <p className="text-slate-400 text-sm">This IcanEra resume link isn't available or was made private.</p>
           </div>
@@ -271,27 +272,27 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
             {/* Masthead */}
             <header className="rz-card animate-fadeInDown">
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 text-center sm:text-left">
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 rz-ring">
                   {data.profile.avatar_url ? (
                     <img
                       src={data.profile.avatar_url}
                       alt={data.profile.full_name}
-                      className="w-28 h-28 sm:w-32 sm:h-32 rounded-full object-cover border-2 border-[#c4a052]/70 shadow-xl cursor-pointer"
+                      className="w-28 h-28 sm:w-32 sm:h-32 rounded-full object-cover border-2 border-[color:rgb(var(--rz-rgb)/0.70)] shadow-xl cursor-pointer"
                       onClick={() => setLightbox({ src: data.profile.avatar_url, alt: data.profile.full_name })}
                     />
                   ) : (
-                    <div className="rz-serif w-28 h-28 sm:w-32 sm:h-32 rounded-full flex items-center justify-center text-4xl font-bold text-[#1c1408] bg-gradient-to-br from-[#e6c980] to-[#a17c28] shadow-xl">
+                    <div className="rz-serif w-28 h-28 sm:w-32 sm:h-32 rounded-full flex items-center justify-center text-4xl font-bold text-[color:var(--rz-on)] bg-gradient-to-br from-[var(--rz-gold-text)] to-[rgb(var(--rz-rgb-2))] shadow-xl">
                       {(data.profile.full_name || 'U').charAt(0).toUpperCase()}
                     </div>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="rz-eyebrow">Curriculum Vitae</p>
-                  <h1 className="rz-serif text-3xl sm:text-4xl font-bold text-white leading-tight break-words mt-0.5">
+                  <h1 className="rz-serif rz-gradient-text text-3xl sm:text-4xl font-bold text-white leading-tight break-words mt-0.5">
                     {data.profile.full_name}
                   </h1>
                   <div className="mt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                    <span className="text-sm font-medium text-[#c4a052]">@{data.profile.handle}</span>
+                    <span className="text-sm font-medium text-[color:rgb(var(--rz-rgb))]">@{data.profile.handle}</span>
                     {data.profile.is_verified ? (
                       <span className="rz-badge text-emerald-300 bg-emerald-500/10 border border-emerald-500/30">
                         <ShieldCheck className="w-3.5 h-3.5" /> Verified
@@ -336,7 +337,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
               )}
 
               <div className="pp-noprint mt-4 flex justify-center sm:justify-end">
-                <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-[#e6c980] transition-colors min-h-[36px] px-2">
+                <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-[color:var(--rz-gold-text)] transition-colors min-h-[36px] px-2">
                   <Printer className="w-3.5 h-3.5" /> Save as PDF / print
                 </button>
               </div>
@@ -355,6 +356,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                 messages visitors have sent them here. */}
             {(data.statuses?.length > 0 || isOwnProfile) && (
               <section
+                data-accent="rose"
                 className={`pp-noprint animate-fadeInUp ${isOwnProfile ? 'grid grid-cols-1 sm:grid-cols-2 gap-4 items-start' : ''}`}
                 style={{ animationDelay: '0.07s', animationFillMode: 'backwards' }}
               >
@@ -376,6 +378,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                 client reach this professional directly from their resume page. */}
             {!isOwnProfile && (
               <section
+                data-accent="emerald"
                 className="pp-noprint rz-card animate-fadeIn"
                 style={{ animationDelay: '0.08s', animationFillMode: 'backwards' }}
               >
@@ -441,14 +444,14 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
             )}
 
             {data.portfolio?.summary && (
-              <section className="animate-fadeInUp" style={{ animationDelay: '0.1s', animationFillMode: 'backwards' }}>
+              <section data-accent="sky" className="animate-fadeInUp" style={{ animationDelay: '0.1s', animationFillMode: 'backwards' }}>
                 <SectionHeading>Professional Summary</SectionHeading>
                 <p className="text-slate-300 leading-relaxed whitespace-pre-wrap break-words">{data.portfolio.summary}</p>
               </section>
             )}
 
             {data.portfolio?.skills?.length > 0 && (
-              <section className="animate-fadeInUp" style={{ animationDelay: '0.2s', animationFillMode: 'backwards' }}>
+              <section data-accent="violet" className="animate-fadeInUp" style={{ animationDelay: '0.2s', animationFillMode: 'backwards' }}>
                 <SectionHeading>Core Competencies &amp; Technical Skills</SectionHeading>
                 <div className="flex flex-wrap gap-2">
                   {data.portfolio.skills.map((skill) => (
@@ -460,7 +463,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
 
             {data.items.length === 0 && !data.portfolio?.summary && !data.portfolio?.skills?.length && (
               <div className="rz-card rz-empty animate-fadeIn">
-                <FileText className="w-8 h-8 mx-auto text-[#c4a052]/70" />
+                <FileText className="w-8 h-8 mx-auto text-[color:rgb(var(--rz-rgb)/0.70)]" />
                 <p className="rz-serif">Resume coming soon</p>
                 <p className="text-sm">{data.profile.full_name} hasn't added their resume details yet — check back soon.</p>
               </div>
@@ -472,6 +475,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
               return (
                 <section
                   key={section.key}
+                  data-accent={SECTION_ACCENT[section.key]}
                   className="animate-fadeInUp"
                   style={{ animationDelay: `${0.3 + sIdx * 0.05}s`, animationFillMode: 'backwards' }}
                 >
@@ -481,7 +485,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
                       const dateRange = formatDateRange(item);
                       return (
                         <li key={item.id} className="pp-avoid-break">
-                          {dateRange && <p className="text-[0.7rem] font-semibold tracking-wider uppercase text-[#e6c980]">{dateRange}</p>}
+                          {dateRange && <p className="text-[0.7rem] font-semibold tracking-wider uppercase text-[color:var(--rz-gold-text)]">{dateRange}</p>}
                           <h3 className="rz-serif text-lg font-bold text-white leading-snug break-words">{item.title}</h3>
                           {item.org_name && <p className="text-sm text-slate-300 break-words">{item.org_name}</p>}
                           {item.source === 'cmms' && (
@@ -497,18 +501,18 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
             })}
 
             {data.references?.length > 0 && (
-              <section className="animate-fadeInUp" style={{ animationDelay: '0.55s', animationFillMode: 'backwards' }}>
+              <section data-accent="emerald" className="animate-fadeInUp" style={{ animationDelay: '0.55s', animationFillMode: 'backwards' }}>
                 <SectionHeading>References</SectionHeading>
                 <div className="grid sm:grid-cols-2 gap-3">
                   {data.references.map((ref) => (
-                    <div key={ref.id} className="pp-avoid-break p-4 rounded-xl bg-[#c4a052]/[0.05] border border-[#c4a052]/25">
+                    <div key={ref.id} className="pp-avoid-break p-4 rounded-xl bg-[rgb(var(--rz-rgb))]/[0.05] border border-[color:rgb(var(--rz-rgb)/0.25)]">
                       <h3 className="rz-serif text-base font-bold text-white leading-snug break-words">{ref.name}</h3>
                       {(ref.title || ref.organization) && (
-                        <p className="text-sm text-[#e6c980]/90 mt-0.5 break-words">{[ref.title, ref.organization].filter(Boolean).join(' — ')}</p>
+                        <p className="text-sm text-[color:var(--rz-gold-text)] mt-0.5 break-words">{[ref.title, ref.organization].filter(Boolean).join(' — ')}</p>
                       )}
                       <div className="mt-2 space-y-1 text-sm text-slate-400">
-                        {ref.email && <a href={`mailto:${ref.email}`} className="flex items-center gap-1.5 hover:text-white break-all"><Mail className="w-3.5 h-3.5 text-[#c4a052] flex-shrink-0" />{ref.email}</a>}
-                        {ref.phone && <a href={`tel:${ref.phone.replace(/\s+/g, '')}`} className="flex items-center gap-1.5 hover:text-white"><Phone className="w-3.5 h-3.5 text-[#c4a052] flex-shrink-0" />{ref.phone}</a>}
+                        {ref.email && <a href={`mailto:${ref.email}`} className="flex items-center gap-1.5 hover:text-white break-all"><Mail className="w-3.5 h-3.5 text-[color:rgb(var(--rz-rgb))] flex-shrink-0" />{ref.email}</a>}
+                        {ref.phone && <a href={`tel:${ref.phone.replace(/\s+/g, '')}`} className="flex items-center gap-1.5 hover:text-white"><Phone className="w-3.5 h-3.5 text-[color:rgb(var(--rz-rgb))] flex-shrink-0" />{ref.phone}</a>}
                       </div>
                     </div>
                   ))}
@@ -543,7 +547,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
 
             <footer className="mt-10 text-center">
               <div className="rz-rule" />
-              <p className="text-xs text-slate-500">Powered by <span className="rz-serif font-bold text-[#e6c980]">IcanEra</span></p>
+              <p className="text-xs text-slate-500">Powered by <span className="rz-serif font-bold text-[color:var(--rz-gold-text)]">IcanEra</span></p>
             </footer>
           </>
         )}
