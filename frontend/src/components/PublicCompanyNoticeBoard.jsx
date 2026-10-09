@@ -22,7 +22,7 @@ import usePersistedCart, { markCartOpen, consumeCartOpen } from '../hooks/usePer
 import { getBusinessSiteInfo, joinBusinessSite, getMyInstallmentPlans, getMyBusinessAccounts, getInstallmentShelf, formatMoney, STATUS_LABELS as PLAN_STATUS_LABELS } from '../services/installmentService';
 import PayAnyAmountForm from './PayAnyAmountForm';
 import ReceiveRequestForm from './ReceiveRequestForm';
-import { getPayCodeInfoForBusiness, getReceiveInfoForBusiness } from '../services/publicTransactionService';
+import { getPayCodeInfoForBusiness, getReceiveInfoForBusiness, getMyPayCode, updateMyPayCode } from '../services/publicTransactionService';
 import { getPitchesByBusinessProfileId, getPitchById, getBusinessProfileIdByName, PITCH_PLAN_SECTIONS } from '../services/pitchingService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useAuth } from '../context/AuthContext';
@@ -145,7 +145,7 @@ const SOCIAL_LINKS = [
 // patched server-side per business by api/share-preview.js; this effect is
 // the client-side half of the same "let this business actually be found"
 // goal, and keeps the tab title correct for a human visitor too.)
-const useBusinessSeo = (company, companyId, pageLabel = null) => {
+const useBusinessSeo = (company, companyId, pageLabel = null, canonicalQuery = '') => {
   useEffect(() => {
     if (!company) return;
     const previousTitle = document.title;
@@ -159,7 +159,9 @@ const useBusinessSeo = (company, companyId, pageLabel = null) => {
         : `${company.company_name}${company.industry ? ` — ${company.industry}` : ''} | ${siteName}`;
     document.title = title;
 
-    const canonicalUrl = `${window.location.origin}/notices/${companyId}`;
+    // An open notice/job is its own indexable page (?post=<id>, same URL the server-side head and the
+    // sitemap use); every other section canonicalises to the business's main page.
+    const canonicalUrl = `${window.location.origin}/notices/${companyId}${canonicalQuery}`;
     const description = (
       company.about?.trim()
       || company.tagline?.trim()
@@ -250,7 +252,7 @@ const useBusinessSeo = (company, companyId, pageLabel = null) => {
       createdNodes.forEach((node) => node.remove());
       if (createdScript) script.remove();
     };
-  }, [company, companyId, pageLabel]);
+  }, [company, companyId, pageLabel, canonicalQuery]);
 };
 
 const EMPLOYMENT_LABELS = {
@@ -698,6 +700,11 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // The business's standing "pay any amount" QR (ADD_PUBLIC_TRANSACTION_QR.sql). When it has one switched on,
   // this site grows a Pay tab, and the printed QR opens straight onto it (?pay=1).
   const [payInfo, setPayInfo] = useState(null);
+  // What the business has actually set up, live or not: null = nothing yet; { active: false } = switched off.
+  // payChecked flips true once that lookup has finished, so the Pay tab can tell "still loading" from "not set up".
+  const [payRaw, setPayRaw] = useState(null);
+  const [payChecked, setPayChecked] = useState(false);
+  const [payReload, setPayReload] = useState(0);
   // Whether clients may also REQUEST money from this business (owner switched it on): the Pay tab then
   // has a "Receive" side (ADD_BUSINESS_RECEIVE_REQUESTS.sql).
   const [receiveInfo, setReceiveInfo] = useState(null);
@@ -708,19 +715,22 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     setSection('pay');
   };
   useEffect(() => {
-    if (!company?.business_profile_id) { setPayInfo(null); setReceiveInfo(null); return undefined; }
+    if (!company) return undefined;
+    if (!company.business_profile_id) { setPayInfo(null); setPayRaw(null); setReceiveInfo(null); setPayChecked(true); return undefined; }
     let cancelled = false;
     getPayCodeInfoForBusiness(company.business_profile_id).then((info) => {
       if (cancelled) return;
       const live = info?.found && info.active ? info : null;
       setPayInfo(live);
+      setPayRaw(info?.found ? info : null);
+      setPayChecked(true);
       if (live && new URLSearchParams(window.location.search).get('pay')) setSection('pay');
     });
     getReceiveInfoForBusiness(company.business_profile_id).then((info) => {
       if (!cancelled) setReceiveInfo(info?.found ? info : null);
     });
     return () => { cancelled = true; };
-  }, [company?.business_profile_id]);
+  }, [company, payReload]);
 
   // One live share offer per business (not per pitch -- every pitch video
   // this business has posted sells the SAME underlying shares, see
@@ -775,7 +785,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   }, [companyId]);
 
   const pageLabel = selectedNotice?.title || selectedJob?.title || selectedOpportunity?.title || selectedPitch?.title || SECTION_TITLES[section] || null;
-  useBusinessSeo(company, companyId, pageLabel);
+  const openPost = selectedNotice || selectedJob;
+  useBusinessSeo(company, companyId, pageLabel, openPost ? `?post=${openPost.id}` : '');
 
   useEffect(() => {
     let cancelled = false;
@@ -1089,7 +1100,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     // PitchinSection's own empty state covers the zero-pitches case.
     ...(pitchesBusinessProfileId ? [{ id: 'pitchin', label: 'Pitches', mobileLabel: 'Pitches', icon: Video }] : []),
     { id: 'careers', label: 'Careers', mobileLabel: 'Careers', icon: Briefcase },
-    ...(payInfo ? [{ id: 'pay', label: 'Pay', mobileLabel: 'Pay', icon: Banknote }] : []),
+    // Always present: a visitor should be able to find out how to pay this business whether or not it has
+    // switched on online payments yet (PaySection explains and offers the alternatives).
+    { id: 'pay', label: 'Pay', mobileLabel: 'Pay', icon: Banknote },
     ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', mobileLabel: 'Deals', icon: Award }] : []),
     ...(accountsEnabled && company?.business_profile_id ? [{ id: 'account', label: 'My account', mobileLabel: 'Account', icon: User }] : []),
     // "Track" pages are follow-ups for people who already applied/bid, so they
@@ -1295,8 +1308,17 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
               authLoading={authLoading}
             />
           )}
-          {activeSection === 'pay' && payInfo && (
-            <PaySection company={company} info={payInfo} receiveInfo={receiveInfo} prefill={payPrefill} />
+          {activeSection === 'pay' && (
+            <PaySection
+              company={company}
+              info={payInfo}
+              raw={payRaw}
+              checked={payChecked}
+              receiveInfo={receiveInfo}
+              prefill={payPrefill}
+              user={user}
+              onEnabled={() => setPayReload((n) => n + 1)}
+            />
           )}
           {activeSection === 'pitchin' && (
             <PitchinSection pitches={pitches} loading={pitchesLoading} liveOffer={liveOffer} onSelect={openPitch} />
@@ -1488,9 +1510,13 @@ const AccountSection = ({ company, user, authLoading }) => {
 //
 // When the owner has also switched on "Let clients request money from us", a Pay | Receive switch appears:
 // Receive files a request that an owner approves with the business-wallet PIN before anything is paid.
-const PaySection = ({ company, info, receiveInfo, prefill = null }) => {
+const PaySection = ({ company, info, raw = null, checked = true, receiveInfo, prefill = null, user = null, onEnabled }) => {
   const [side, setSide] = useState('pay'); // 'pay' | 'receive'
   const receiving = side === 'receive' && receiveInfo;
+  if (!checked) {
+    return <div className="flex justify-center py-20"><Loader className="w-7 h-7 nb-link animate-spin" /></div>;
+  }
+  if (!info) return <PayUnavailable company={company} paused={Boolean(raw && raw.active === false)} user={user} onEnabled={onEnabled} />;
   return (
     <div className="max-w-xl mx-auto">
       <div className="nb-card rounded-2xl p-5 sm:p-7">
@@ -1520,6 +1546,66 @@ const PaySection = ({ company, info, receiveInfo, prefill = null }) => {
         {receiving
           ? <ReceiveRequestForm businessProfileId={company.business_profile_id} businessName={company.company_name} info={receiveInfo} />
           : <PayAnyAmountForm key={prefill ? prefill.key : 'blank'} code={info.code} info={info} skin="nb" initialItems={prefill ? prefill.items : null} />}
+      </div>
+    </div>
+  );
+};
+
+// The Pay tab's state before the business accepts online payments (or while they are paused): say so
+// plainly, give the visitor the real ways to pay -- the contact buttons -- and let a signed-in owner switch
+// payments on right here. The server decides who may: public_tx_paycode_get_or_create refuses anyone who
+// cannot manage this business, so the button is safe to show to any signed-in visitor.
+const PayUnavailable = ({ company, paused, user, onEnabled }) => {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const canTryEnable = Boolean(user && company.business_profile_id);
+  const enable = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const code = await getMyPayCode(company.business_profile_id);
+      if (!code.active) await updateMyPayCode(code.id, { active: true });
+      onEnabled?.();
+    } catch (err) {
+      setError(err.message || 'Could not turn on online payments.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="nb-card rounded-2xl p-5 sm:p-7 text-center">
+        <div className="w-12 h-12 rounded-full nb-chip-green flex items-center justify-center mx-auto mb-3">
+          <Banknote className="w-6 h-6" />
+        </div>
+        <h2 className="text-xl sm:text-2xl font-bold nb-text">Pay {company.company_name}</h2>
+        <p className="text-sm nb-text-muted mt-1.5 leading-relaxed">
+          {paused
+            ? 'Online payments are paused right now.'
+            : `${company.company_name} hasn't switched on online payments yet.`}
+          {' '}You can still reach them directly to arrange payment:
+        </p>
+        <div className="flex justify-center mt-4">
+          <ContactActions company={company} />
+        </div>
+        {canTryEnable && (
+          <div className="mt-6 pt-5 border-t nb-border">
+            <p className="text-xs nb-text-faint mb-2">Manage this business? Turn on "pay any amount" so customers can pay here with cash, wallet, Mobile Money, card or bank.</p>
+            <button
+              type="button"
+              onClick={enable}
+              disabled={busy}
+              className="nb-btn-primary rounded-xl px-5 py-2.5 text-sm font-bold inline-flex items-center gap-2 disabled:opacity-60"
+            >
+              {busy ? <Loader className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
+              {paused ? 'Switch online payments back on' : 'Turn on online payments'}
+            </button>
+            {error && <p className="nb-error-text text-xs mt-2">{error}</p>}
+          </div>
+        )}
+        {user && !company.business_profile_id && (
+          <p className="text-xs nb-text-faint mt-5">Owner? Link a business profile under "Board profile" in CMMS to accept payments on this site.</p>
+        )}
       </div>
     </div>
   );

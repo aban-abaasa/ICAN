@@ -63,6 +63,32 @@ const fetchResellerIds = async (supabaseUrl, anonKey) => {
   }
 };
 
+// Every public notice and job as its own URL (/notices/<company>?post=<id>) -- the same address the page
+// canonicalises to (api/share-preview.js), so each opening can show up in Google (and Google for Jobs) by name.
+// Optional like the reseller list: any failure just leaves the post URLs out of the sitemap.
+const MAX_POST_URLS = 2000;
+const fetchPostEntries = async (supabaseUrl, anonKey) => {
+  const entries = [];
+  try {
+    for (let offset = 0; offset < MAX_POST_URLS; offset += PAGE_SIZE * 5) {
+      const offsets = Array.from({ length: 5 }, (_, index) => offset + index * PAGE_SIZE);
+      const pages = await Promise.all(offsets.map((pageOffset) => rpcPage(supabaseUrl, anonKey, pageOffset, SOURCES.notices)));
+      let reachedEnd = false;
+      for (const page of pages) {
+        if (!Array.isArray(page)) { reachedEnd = true; break; }
+        for (const post of page) {
+          if (post.id && post.cmms_company_id) entries.push({ companyId: post.cmms_company_id, postId: post.id, publishedAt: post.published_at });
+        }
+        if (page.length < PAGE_SIZE) { reachedEnd = true; break; }
+      }
+      if (reachedEnd) break;
+    }
+  } catch (error) {
+    console.warn('[sitemap] could not list individual posts:', error.message);
+  }
+  return entries;
+};
+
 export default async function handler(_req, res) {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -108,7 +134,10 @@ export default async function handler(_req, res) {
     )).join('');
     const resellerUrls = (await fetchResellerIds(supabaseUrl, anonKey))
       .map((resellerId) => `<url><loc>${SITE_URL}/store/${escapeXml(resellerId)}</loc></url>`).join('');
-    const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url><url><loc>${SITE_URL}/shop</loc><changefreq>daily</changefreq></url>${resellerUrls}${companyUrls}</urlset>`;
+    const postUrls = (await fetchPostEntries(supabaseUrl, anonKey)).map((entry) => (
+      `<url><loc>${SITE_URL}/notices/${escapeXml(entry.companyId)}?post=${escapeXml(entry.postId)}</loc>${entry.publishedAt ? `<lastmod>${escapeXml(new Date(entry.publishedAt).toISOString())}</lastmod>` : ''}</url>`
+    )).join('');
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url><url><loc>${SITE_URL}/shop</loc><changefreq>daily</changefreq></url>${resellerUrls}${companyUrls}${postUrls}</urlset>`;
 
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
     res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=86400');
