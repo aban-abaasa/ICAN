@@ -28,6 +28,7 @@ import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useAuth } from '../context/AuthContext';
 import { usePinPrompt } from './PinPromptDialog';
 import { AuthPage } from './auth';
+import BusinessChatWidget from './BusinessChatWidget';
 
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
 
@@ -1351,6 +1352,18 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       </main>
 
       <SiteFooter company={company} tabs={tabs} activeSection={activeSection} onNavigate={navigateTo} onOpenApp={goToApp} />
+
+      {/* The "Ask us" bubble: an AI assistant that answers from this business's public facts, with a real
+          two-way line to the team (see BusinessChatWidget). Sits above the mobile bottom nav. */}
+      <BusinessChatWidget
+        company={company}
+        companyId={companyId}
+        availableTabs={tabs.map((tab) => tab.id)}
+        onNavigate={navigateTo}
+        jobCount={jobs.length}
+        noticeCount={notices.length}
+        payOnline={Boolean(payInfo)}
+      />
 
       {selectedNotice && <NoticeDetailModal notice={selectedNotice} onClose={closeDetail} onShare={handleShare} />}
       {selectedJob && <JobDetailModal job={selectedJob} onClose={closeDetail} onShare={handleShare} viewerUser={user} onWantAccount={requestAccountCreation} />}

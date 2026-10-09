@@ -16,6 +16,8 @@ import cmmsInterviewService from '../services/cmmsInterviewService';
 import CMMSWrittenTestBuilder from './CMMSWrittenTestBuilder';
 import CMMSEmploymentDocumentsPanel from './CMMSEmploymentDocumentsPanel';
 import CMMSBusinessOpportunitiesPanel from './CMMSBusinessOpportunitiesPanel';
+import CMMSInquiriesPanel from './CMMSInquiriesPanel';
+import businessChatService from '../services/businessChatService';
 import LiveBoardroom from './LiveBoardroom';
 import CMMSInvestorPitchPanel from './CMMSInvestorPitchPanel';
 
@@ -172,6 +174,10 @@ const CMMSAnnouncementsPanel = ({
   canManageOpportunities = false,
   canViewOpportunityBids = false,
 }) => {
+  // Visitor inquiries from the public page's chat bubble: how many are waiting, and whether the feature's SQL
+  // is installed / this user may see them at all (null = still checking; the tab only hides on a definite no).
+  const [inquiryUnread, setInquiryUnread] = useState(0);
+  const [inquiriesAvailable, setInquiriesAvailable] = useState(null);
   const [subTab, setSubTab] = useState(() => { try { return localStorage.getItem('cmms_announcements_tab') || 'posts'; } catch { return 'posts'; } });
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -777,7 +783,19 @@ const CMMSAnnouncementsPanel = ({
   // A remembered tab the user can no longer open (role changed) falls back to Posts.
   useEffect(() => {
     if ((subTab === "applications" && !canManageApplications) || ((subTab === "profile" || subTab === "pitch") && !canEdit)) setSubTab("posts");
-  }, [subTab, canManageApplications, canEdit]);
+    if (subTab === "inquiries" && (!(canEdit || canManageApplications) || inquiriesAvailable === false)) setSubTab("posts");
+  }, [subTab, canManageApplications, canEdit, inquiriesAvailable]);
+
+  useEffect(() => {
+    if (!companyId || !(canEdit || canManageApplications)) return;
+    let cancelled = false;
+    businessChatService.listInquiries(companyId).then((result) => {
+      if (cancelled) return;
+      setInquiriesAvailable(result.success);
+      if (result.success) setInquiryUnread(result.data.filter((t) => t.staff_unread).length);
+    });
+    return () => { cancelled = true; };
+  }, [companyId, canEdit, canManageApplications]);
 
   if (!canView && !canCreate && !canEdit && !canManageApplications) {
     return (
@@ -790,6 +808,7 @@ const CMMSAnnouncementsPanel = ({
   const apTabs = [
     { id: 'posts', label: 'Posts', accent: 'gold', show: true },
     { id: 'applications', label: `Applications${applications.length ? ` (${applications.length})` : ''}`, accent: 'emerald', show: canManageApplications },
+    { id: 'inquiries', label: `Inquiries${inquiryUnread ? ` (${inquiryUnread})` : ''}`, accent: 'emerald', show: (canEdit || canManageApplications) && inquiriesAvailable !== false },
     { id: 'profile', label: 'Board profile', accent: 'navy', show: canEdit },
     { id: 'pitch', label: 'Investor pitch', accent: 'plum', show: canEdit },
     { id: 'opportunities', label: 'Opportunities', accent: 'teal', show: true },
@@ -1193,6 +1212,10 @@ const CMMSAnnouncementsPanel = ({
             ))
           )}
         </div>
+      )}
+
+      {subTab === 'inquiries' && (canEdit || canManageApplications) && (
+        <CMMSInquiriesPanel companyId={companyId} onUnreadChange={setInquiryUnread} />
       )}
 
       {subTab === 'opportunities' && (
