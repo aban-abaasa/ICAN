@@ -1,7 +1,7 @@
-import React, { useMemo, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Plus, Trash2, Copy, Download, ArrowLeft, ClipboardList, BookOpen, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { getNotes, subscribeNotes, createNote, updateNote, deleteNote, appendToNote } from '../../services/notebookService';
+import { getNotes, subscribeNotes, createNote, updateNote, deleteNote, appendToNote, syncNotebook, getSyncStatus } from '../../services/notebookService';
 import { wordCount } from '../../utils/dictationText';
 import VoiceDictateButton from '../common/VoiceDictateButton';
 
@@ -18,9 +18,12 @@ export default function NotebookTab() {
   const { user } = useAuth();
   const userId = user?.id;
   const notes = useSyncExternalStore(subscribeNotes, () => getNotes(userId));
+  const sync = useSyncExternalStore(subscribeNotes, getSyncStatus);
   const [openId, setOpenId] = useState(null);
   const [copied, setCopied] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => { syncNotebook(userId); }, [userId]);
 
   const note = useMemo(() => notes.find((n) => n.id === openId) || null, [notes, openId]);
 
@@ -141,7 +144,9 @@ export default function NotebookTab() {
           ))}
         </ul>
       )}
-      <p className="text-xs text-slate-500">Notes are saved on this device.</p>
+      <p className="text-xs text-slate-500" role="status">
+        {sync.error || (sync.syncing ? 'Backing up…' : sync.lastSyncedAt ? 'Saved on this device and backed up to your account.' : 'Notes are saved on this device.')}
+      </p>
     </section>
   );
 }
