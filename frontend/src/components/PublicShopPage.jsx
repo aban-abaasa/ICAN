@@ -115,7 +115,7 @@ const PublicShopPage = () => {
           <h1 className="text-3xl md:text-5xl font-bold tracking-tight" style={{ fontFamily: SERIF }}>The IcanEra Shop</h1>
           <div className="mx-auto mt-3 h-px w-16" style={{ backgroundColor: C.gold }} />
           <p className="mt-3 text-sm md:text-base max-w-xl mx-auto" style={{ color: C.muted }}>
-            Get products at your comfort, indoors.
+            Skip the traffic and the queues. Shop from the comfort of your home — great finds from trusted sellers, delivered right to your door.
           </p>
 
           {coin && (
