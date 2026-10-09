@@ -126,6 +126,9 @@ import { supabase } from '../lib/supabase/client';
 import { deleteTransaction, TWO_ACCOUNT_DELETE_MESSAGE } from '../services/supabaseTransactions';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
 import { walletAccountService } from '../services/walletAccountService';
+import { usePinPrompt } from './PinPromptDialog';
+import ChurchTitheGiving from './ChurchTitheGiving';
+import { confirmWalletPin } from '../services/churchTitheService';
 import { walletService } from '../services/walletService';
 import {
   getUserNotifications,
@@ -867,6 +870,7 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack,
 };
 
 const MobileView = ({ userProfile, isWebDashboard = false }) => {
+  const { askPin: askTithePin, pinDialog: tithePinDialog } = usePinPrompt();
   const { actualTheme } = useTheme();
   const { isOfflineMode, queueAction, user: authContextUser, getAvatarUrl, getDisplayName } = useAuth();
   const { country: userSignupCountry } = useCountry();
@@ -2306,6 +2310,16 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       // that can't actually be covered never gets recorded as if it happened.
       // Cash given by hand skips this entirely: nothing in the wallet moves.
       if (tithePaymentMethod === 'wallet') {
+        // Spending from the IcanEra wallet always needs the wallet PIN.
+        const pinCheck = await confirmWalletPin(askTithePin, {
+          title: 'Confirm with your PIN',
+          message: `Pay UGX ${amount.toLocaleString()} of tithe from your IcanEra wallet.`,
+        });
+        if (!pinCheck.ok) {
+          setTithePaymentError(pinCheck.error);
+          setIsSubmittingTithe(false);
+          return;
+        }
         const { data: walletCheck } = await supabase
           .from('user_wallets')
           .select('balance')
@@ -4452,6 +4466,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     const amount = parseFloat(tithePayForm.amount);
     if (!amount || amount <= 0) { setTithePayMsg({ type: 'err', text: 'Enter a valid amount' }); return; }
     if (amount > tithePayTarget.amount) { setTithePayMsg({ type: 'err', text: `Cannot exceed transaction amount (${formatCurrency(tithePayTarget.amount)})` }); return; }
+
+    // This quick-pay always spends from the IcanEra wallet, so it needs the wallet PIN.
+    const quickPin = await confirmWalletPin(askTithePin, {
+      title: 'Confirm with your PIN',
+      message: `Pay UGX ${amount.toLocaleString()} of tithe from your IcanEra wallet.`,
+    });
+    if (!quickPin.ok) { setTithePayMsg({ type: 'err', text: quickPin.error }); return; }
 
     setTithePayLoading(true);
     setTithePayMsg(null);
@@ -9019,6 +9040,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 { id: 'business', label: '💼 Business', accent: 'navy' },
                 { id: 'personal', label: '👤 Personal', accent: 'emerald' },
                 { id: 'pay-in', label: '💳 Pay In', accent: 'burgundy' },
+                { id: 'church', label: '⛪ Church', accent: 'gold' },
               ]}
               tab={selectedTithingTab}
               onTab={(tab) => {
@@ -9033,6 +9055,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               }}
             >
               {/* Period selector — which stretch of time this whole calculator looks at */}
+              {selectedTithingTab !== 'church' && (<>
               <section className="cmms-accent-gold space-y-2.5">
                 <p className="cmms-classic-label">Tithe period</p>
                 <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap cmms-tabs-compact" role="tablist" aria-label="Tithe period" style={{ scrollbarWidth: 'none' }}>
@@ -9083,6 +9106,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               </section>
 
               <div className="cmms-ornament" aria-hidden="true" />
+              </>)}
+
+              {selectedTithingTab === 'church' && (
+                <div className="tithe-web">
+                  <ChurchTitheGiving askPin={askTithePin} />
+                </div>
+              )}
 
               {selectedTithingTab === 'quick' && (
                 <div className="space-y-4">
@@ -10113,6 +10143,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           console.log(' Transaction recorded:', transaction);
         }}
       />
+      {tithePinDialog}
     </div>
   );
 };
