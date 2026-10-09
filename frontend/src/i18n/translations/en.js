@@ -114,4 +114,8 @@ export default {
   'auth.signInWallet': 'Sign in with Wallet',
   'auth.enteringApp': 'Entering IcanEra...',
   'auth.authenticating': 'Authenticating with IcanEra...',
+
+  'settings.autoTranslate': 'Translate every page',
+  'settings.autoTranslateDesc': 'Pages without a built-in translation are translated automatically as you open them.',
+  'settings.autoTranslateUnavailable': 'Automatic translation is unavailable right now. Those pages stay in English.',
 };

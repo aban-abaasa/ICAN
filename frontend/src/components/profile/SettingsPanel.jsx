@@ -164,6 +164,7 @@ function LanguageSection() {
   const {
     t, language, preference, setLanguage, country, countryLanguages, untranslatedNationalLanguage,
     languages, countryName, formatMoney, formatDate, formatNumber,
+    autoTranslate, setAutoTranslate, translateStatus,
   } = useI18n();
   const [saved, setSaved] = useState(false);
 
@@ -199,6 +200,22 @@ function LanguageSection() {
         <p className="gr-row__d" style={{ margin: '0.5rem 0 0' }}>{t('settings.allLanguages')}</p>
         {others.map((l) => option(l.code, l.native, l.name !== l.native ? l.name : undefined))}
       </div>
+
+      {language !== 'en' && (
+        <div className="gr-row">
+          <div>
+            <p className="gr-row__t">{t('settings.autoTranslate')}</p>
+            <p className="gr-row__d">
+              {translateStatus === 'unavailable' ? t('settings.autoTranslateUnavailable') : t('settings.autoTranslateDesc')}
+              {autoTranslate && translateStatus === 'translating' ? ` ${t('common.loading')}` : ''}
+            </p>
+          </div>
+          <label className="gr-switch" style={{ minHeight: 44 }}>
+            <input type="checkbox" checked={autoTranslate} onChange={(e) => setAutoTranslate(e.target.checked)} aria-label={t('settings.autoTranslate')} />
+            <i aria-hidden="true" />
+          </label>
+        </div>
+      )}
 
       <div className="gr-block">
         <div className="gr-block__head"><h4 className="gr-block__title"><span>{t('settings.preview')}</span></h4></div>

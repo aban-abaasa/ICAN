@@ -113,4 +113,8 @@ export default {
   'auth.signInWallet': 'Se connecter avec le portefeuille',
   'auth.enteringApp': 'Connexion à IcanEra...',
   'auth.authenticating': 'Authentification auprès d’IcanEra...',
+
+  'settings.autoTranslate': 'Traduire chaque page',
+  'settings.autoTranslateDesc': 'Les pages sans traduction intégrée sont traduites automatiquement à l’ouverture.',
+  'settings.autoTranslateUnavailable': 'La traduction automatique est indisponible pour le moment. Ces pages restent en anglais.',
 };

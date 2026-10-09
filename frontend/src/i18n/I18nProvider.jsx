@@ -19,10 +19,13 @@ import {
   getDefaultLanguageForCountry, getLanguagesForCountry, getUntranslatedNationalLanguage,
   normalizeLanguage,
 } from './languages';
-import { makeFormatters, translate } from './translate';
+import { DICTIONARIES, makeFormatters, translate } from './translate';
+import { createPageTranslator } from './pageTranslator';
+import { getBackendUrl } from '../lib/backendUrl';
 
 const PREF_KEY = 'ican.language';
 const COUNTRY_KEY = 'ican.country';
+const AUTO_TRANSLATE_KEY = 'ican.autotranslate';
 export const COUNTRY_CHANGED_EVENT = 'ican:country-changed';
 
 const readStore = (key) => {
@@ -44,12 +47,30 @@ const makeValue = (language, extra = {}) => ({
   languages: LANGUAGES,
   setLanguage: () => {},
   previewCountry: () => {},
+  autoTranslate: false,
+  setAutoTranslate: () => {},
+  translateStatus: 'idle',
   t: (key, fallback, params) => translate(language, key, fallback, params),
   ...makeFormatters(language, null),
   ...extra,
 });
 
 const I18nContext = createContext(makeValue(DEFAULT_LANGUAGE));
+
+// Asks the server to translate interface text that has no dictionary entry (api/translate.js).
+const fetchTranslations = async (language, texts) => {
+  const res = await fetch(`${getBackendUrl()}/api/translate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ language, texts }),
+  });
+  if (!res.ok) { const error = new Error(`translate ${res.status}`); error.status = res.status; throw error; }
+  const data = await res.json();
+  if (!Array.isArray(data?.translations) || data.translations.length !== texts.length) {
+    const error = new Error('translate: bad response'); error.status = 502; throw error;
+  }
+  return data.translations;
+};
 
 export const useI18n = () => useContext(I18nContext);
 
@@ -71,6 +92,10 @@ export function I18nProvider({ children }) {
     const stored = readStore(PREF_KEY);
     return stored && normalizeLanguage(stored) ? normalizeLanguage(stored) : 'auto';
   });
+  // Everything without a dictionary entry is translated automatically (on by default).
+  const [autoTranslate, setAutoTranslateState] = useState(() => readStore(AUTO_TRANSLATE_KEY) !== 'off');
+  const [translateStatus, setTranslateStatus] = useState('idle');
+  const translatorRef = React.useRef(null);
   const [accountCountry, setAccountCountry] = useState(() => readStore(COUNTRY_KEY));
   // The country picked on the sign-up form, before any account exists.
   const [draftCountry, setDraftCountry] = useState(null);
@@ -123,6 +148,27 @@ export function I18nProvider({ children }) {
     root.dir = getDirection(language);
   }, [language]);
 
+  // Keep every page in the chosen language: start/stop the page translator with the language.
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    if (!translatorRef.current) {
+      let storage = null;
+      try { storage = window.localStorage; } catch (_) { /* blocked */ }
+      translatorRef.current = createPageTranslator({
+        doc: document, fetchTranslations, storage, dictionaries: DICTIONARIES, onStatus: setTranslateStatus,
+      });
+    }
+    const translator = translatorRef.current;
+    if (language === DEFAULT_LANGUAGE || !autoTranslate) { translator.stop(); return undefined; }
+    translator.start(language);
+    return () => translator.stop();
+  }, [language, autoTranslate]);
+
+  const setAutoTranslate = useCallback((on) => {
+    setAutoTranslateState(Boolean(on));
+    writeStore(AUTO_TRANSLATE_KEY, on ? 'on' : 'off');
+  }, []);
+
   const setLanguage = useCallback((next) => {
     const value = next === 'auto' ? 'auto' : normalizeLanguage(next);
     if (!value) return;
@@ -141,8 +187,11 @@ export function I18nProvider({ children }) {
     untranslatedNationalLanguage: getUntranslatedNationalLanguage(country),
     setLanguage,
     previewCountry,
+    autoTranslate,
+    setAutoTranslate,
+    translateStatus,
     ...makeFormatters(language, country),
-  }), [language, preference, country, setLanguage, previewCountry]);
+  }), [language, preference, country, setLanguage, previewCountry, autoTranslate, setAutoTranslate, translateStatus]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

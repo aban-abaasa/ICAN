@@ -113,4 +113,8 @@ export default {
   'auth.signInWallet': '使用钱包登录',
   'auth.enteringApp': '正在进入 IcanEra...',
   'auth.authenticating': '正在通过 IcanEra 验证...',
+
+  'settings.autoTranslate': '翻译每个页面',
+  'settings.autoTranslateDesc': '没有内置翻译的页面会在打开时自动翻译。',
+  'settings.autoTranslateUnavailable': '自动翻译目前不可用，这些页面将保持英文。',
 };

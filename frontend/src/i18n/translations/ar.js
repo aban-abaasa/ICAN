@@ -113,4 +113,8 @@ export default {
   'auth.signInWallet': 'تسجيل الدخول بالمحفظة',
   'auth.enteringApp': 'جارٍ الدخول إلى IcanEra...',
   'auth.authenticating': 'جارٍ المصادقة مع IcanEra...',
+
+  'settings.autoTranslate': 'ترجمة كل صفحة',
+  'settings.autoTranslateDesc': 'تُترجم الصفحات التي لا تحتوي على ترجمة مدمجة تلقائيًا عند فتحها.',
+  'settings.autoTranslateUnavailable': 'الترجمة التلقائية غير متاحة حاليًا. ستبقى هذه الصفحات بالإنجليزية.',
 };

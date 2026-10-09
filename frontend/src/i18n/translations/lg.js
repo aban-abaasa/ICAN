@@ -113,4 +113,8 @@ export default {
   'auth.signInWallet': 'Yingira n’Isawo ly’ensimbi',
   'auth.enteringApp': 'Tuyingira mu IcanEra...',
   'auth.authenticating': 'Tukakasa mu IcanEra...',
+
+  'settings.autoTranslate': 'Vvunula buli kitabo',
+  'settings.autoTranslateDesc': 'Empapula ezitalina kuvvuunulwa kwa kunnakkiriza zivvuunulwa mu ngeri ey’otoma ngaozibikkula.',
+  'settings.autoTranslateUnavailable': 'Okuvvuunula okw’otoma tekuliiwo kati. Empapula ezo zijja kusigala mu Lungereza.',
 };

@@ -113,4 +113,8 @@ export default {
   'auth.signInWallet': 'Iniciar sesión con la billetera',
   'auth.enteringApp': 'Entrando a IcanEra...',
   'auth.authenticating': 'Autenticando con IcanEra...',
+
+  'settings.autoTranslate': 'Traducir cada página',
+  'settings.autoTranslateDesc': 'Las páginas sin traducción integrada se traducen automáticamente al abrirlas.',
+  'settings.autoTranslateUnavailable': 'La traducción automática no está disponible ahora. Esas páginas siguen en inglés.',
 };
