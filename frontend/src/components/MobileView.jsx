@@ -127,6 +127,7 @@ import { deleteTransaction, TWO_ACCOUNT_DELETE_MESSAGE } from '../services/supab
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
 import { walletAccountService } from '../services/walletAccountService';
 import { usePinPrompt } from './PinPromptDialog';
+import ChurchTitheGiving from './ChurchTitheGiving';
 import { confirmWalletPin } from '../services/churchTitheService';
 import { walletService } from '../services/walletService';
 import {
@@ -9039,6 +9040,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                 { id: 'business', label: '💼 Business', accent: 'navy' },
                 { id: 'personal', label: '👤 Personal', accent: 'emerald' },
                 { id: 'pay-in', label: '💳 Pay In', accent: 'burgundy' },
+                { id: 'church', label: '⛪ Church', accent: 'gold' },
               ]}
               tab={selectedTithingTab}
               onTab={(tab) => {
@@ -9053,6 +9055,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               }}
             >
               {/* Period selector — which stretch of time this whole calculator looks at */}
+              {selectedTithingTab !== 'church' && (<>
               <section className="cmms-accent-gold space-y-2.5">
                 <p className="cmms-classic-label">Tithe period</p>
                 <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap cmms-tabs-compact" role="tablist" aria-label="Tithe period" style={{ scrollbarWidth: 'none' }}>
@@ -9103,6 +9106,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               </section>
 
               <div className="cmms-ornament" aria-hidden="true" />
+              </>)}
+
+              {selectedTithingTab === 'church' && (
+                <div className="tithe-web">
+                  <ChurchTitheGiving askPin={askTithePin} />
+                </div>
+              )}
 
               {selectedTithingTab === 'quick' && (
                 <div className="space-y-4">

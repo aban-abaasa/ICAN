@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, Wallet, Smartphone, Banknote, Lock, Check, AlertCircle, Loader2, Users, Heart } from 'lucide-react';
+import { getSupabaseClient } from '../lib/supabase/client';
 import {
   GIVING_TYPES, MIN_GIFT_UGX, searchChurches, confirmWalletPin, giveToChurch, giveToChurchWithFlutterwave,
   getMyChurches, getReceivedTithes, confirmCashReceived, setAcceptsTithe,
@@ -22,9 +23,20 @@ const saveLastChurch = (c) => { try { localStorage.setItem(LAST_CHURCH_KEY, JSON
  * Give to a church registered on IcanEra: search (or optionally load them all), choose how to give
  * — IcanEra wallet (PIN), mobile money / card (Flutterwave) or cash — and send.
  *
- * Props: askPin (from usePinPrompt), walletBalance, onGiven(payment) after a successful gift.
+ * Props: askPin (from usePinPrompt), onGiven(payment) after a successful gift, and optionally
+ * walletBalance (when the host page already tracks it; otherwise the IcanEra wallet balance is read here).
  */
-export default function ChurchTitheGiving({ askPin, walletBalance = 0, onGiven }) {
+export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, onGiven }) {
+  const [ownBalance, setOwnBalance] = useState(0);
+  const walletBalance = balanceProp ?? ownBalance;
+  const refreshBalance = useCallback(async () => {
+    try {
+      const { data } = await getSupabaseClient().from('wallet_accounts').select('balance').eq('currency', 'UGX').maybeSingle();
+      if (data) setOwnBalance(Number(data.balance) || 0);
+    } catch { /* balance is only a convenience; the server re-checks it */ }
+  }, []);
+  useEffect(() => { if (balanceProp === undefined) refreshBalance(); }, [balanceProp, refreshBalance]);
+
   const [query, setQuery] = useState('');
   const [includeAll, setIncludeAll] = useState(false);
   const [loaded, setLoaded] = useState(false); // churches are only fetched once the giver searches or taps "Browse"
@@ -94,6 +106,7 @@ export default function ChurchTitheGiving({ askPin, walletBalance = 0, onGiven }
         ({ titheId, churchName } = res);
       }
       saveLastChurch(church);
+      if (balanceProp === undefined) refreshBalance();
       const label = GIVING_TYPES.find((g) => g.id === givingType)?.label || 'Tithe';
       setMsg({ type: 'ok', text: `🙌 ${label} of UGX ${fmt(amountNum)} received by ${churchName}. God bless your giving.` });
       onGiven?.({
