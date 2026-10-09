@@ -113,4 +113,8 @@ export default {
   'auth.signInWallet': 'Injira ukoresheje ikofi',
   'auth.enteringApp': 'Turimo kukwinjiza muri IcanEra...',
   'auth.authenticating': 'Turimo kugenzura muri IcanEra...',
+
+  'settings.autoTranslate': 'Hindura imbuga zose',
+  'settings.autoTranslateDesc': 'Imbuga zidafite ihinduramvugo yihariye zihindurwa mu buryo bwikora uko uzifunguye.',
+  'settings.autoTranslateUnavailable': 'Guhindura mu buryo bwikora ntibishoboka ubu. Izo mbuga zizakomeza kuba mu Cyongereza.',
 };

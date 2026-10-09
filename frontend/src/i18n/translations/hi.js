@@ -113,4 +113,8 @@ export default {
   'auth.signInWallet': 'वॉलेट से साइन इन करें',
   'auth.enteringApp': 'IcanEra में प्रवेश हो रहा है...',
   'auth.authenticating': 'IcanEra से प्रमाणित हो रहा है...',
+
+  'settings.autoTranslate': 'हर पेज का अनुवाद करें',
+  'settings.autoTranslateDesc': 'जिन पेजों का अपना अनुवाद नहीं है, उन्हें खोलते ही अपने-आप अनुवादित किया जाता है।',
+  'settings.autoTranslateUnavailable': 'स्वचालित अनुवाद अभी उपलब्ध नहीं है। वे पेज अंग्रेज़ी में ही रहेंगे।',
 };

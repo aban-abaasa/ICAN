@@ -113,4 +113,8 @@ export default {
   'auth.signInWallet': 'Ingia kwa Pochi',
   'auth.enteringApp': 'Inaingia IcanEra...',
   'auth.authenticating': 'Inathibitisha na IcanEra...',
+
+  'settings.autoTranslate': 'Tafsiri kila ukurasa',
+  'settings.autoTranslateDesc': 'Kurasa zisizo na tafsiri ya ndani hutafsiriwa kiotomatiki unapozifungua.',
+  'settings.autoTranslateUnavailable': 'Tafsiri ya kiotomatiki haipatikani sasa. Kurasa hizo zitabaki kwa Kiingereza.',
 };

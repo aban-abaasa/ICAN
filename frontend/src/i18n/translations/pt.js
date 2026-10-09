@@ -113,4 +113,8 @@ export default {
   'auth.signInWallet': 'Iniciar sessão com a carteira',
   'auth.enteringApp': 'A entrar no IcanEra...',
   'auth.authenticating': 'A autenticar no IcanEra...',
+
+  'settings.autoTranslate': 'Traduzir todas as páginas',
+  'settings.autoTranslateDesc': 'As páginas sem tradução integrada são traduzidas automaticamente ao abri-las.',
+  'settings.autoTranslateUnavailable': 'A tradução automática não está disponível neste momento. Essas páginas ficam em inglês.',
 };
