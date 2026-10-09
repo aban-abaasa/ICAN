@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Wallet, Smartphone, Banknote, Lock, Check, AlertCircle, Users } from 'lucide-react';
 import ChurchPicker, { saveLastChurch } from './ChurchPicker';
+import PayerBusinessSelect from './PayerBusinessSelect';
 import { getSupabaseClient } from '../lib/supabase/client';
 import {
-  GIVING_TYPES, MIN_GIFT_UGX, confirmWalletPin, giveToChurch, giveToChurchWithFlutterwave,
+  GIVING_TYPES, MIN_GIFT_UGX, confirmWalletPin, confirmBusinessWalletPin, giveToChurch, giveToChurchWithFlutterwave,
   getMyChurches, getReceivedTithes, confirmCashReceived, setAcceptsTithe,
 } from '../services/churchTitheService';
 
@@ -41,6 +42,8 @@ export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, 
   const [amount, setAmount] = useState('');
   const [income, setIncome] = useState('');
   const [method, setMethod] = useState('wallet');
+  const [titheFor, setTitheFor] = useState('personal'); // 'personal' | 'business' — a business tithe is paid by one of your businesses
+  const [payer, setPayer] = useState(null);
   const [anonymous, setAnonymous] = useState(false);
   const [message, setMessage] = useState('');
   const [phone, setPhone] = useState('');
@@ -49,39 +52,40 @@ export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, 
 
   const amountNum = Math.floor(Number(amount) || 0);
   const tenPercent = Math.round((Number(income) || 0) * 0.1);
-  const walletShort = method === 'wallet' && amountNum > walletBalance;
+  const fromBusiness = titheFor === 'business' && method === 'wallet';
+  const walletShort = method === 'wallet' && (fromBusiness ? !!payer && amountNum > payer.balance : amountNum > walletBalance);
 
   const pick = (c) => { setChurch(c); setMsg(null); };
 
   const give = async () => {
     if (!church) return setMsg({ type: 'err', text: 'Choose a church first' });
     if (amountNum < MIN_GIFT_UGX) return setMsg({ type: 'err', text: `The smallest gift is UGX ${fmt(MIN_GIFT_UGX)}` });
-    if (walletShort) return setMsg({ type: 'err', text: `Your wallet has UGX ${fmt(walletBalance)}. Top up, or give by mobile money / cash.` });
+    if (fromBusiness && !payer) return setMsg({ type: 'err', text: 'Choose which of your businesses pays this tithe' });
+    if (walletShort) return setMsg({ type: 'err', text: fromBusiness ? `${payer.name}'s wallet has UGX ${fmt(payer.balance)}. Pick mobile money / cash instead.` : `Your wallet has UGX ${fmt(walletBalance)}. Top up, or give by mobile money / cash.` });
 
     setBusy(true); setMsg(null);
     try {
-      let titheId; let churchName = church.name;
+      let titheId; let churchName = church.name; let paidMessage = '';
       if (method === 'wallet') {
-        const pin = await confirmWalletPin(askPin, {
-          title: 'Confirm with your PIN',
-          message: `Send UGX ${fmt(amountNum)} to ${church.name} from your IcanEra wallet.`,
-        });
+        const pin = fromBusiness
+          ? await confirmBusinessWalletPin(askPin, { business: payer, message: `${payer.name} pays UGX ${fmt(amountNum)} to ${church.name} from its business wallet.` })
+          : await confirmWalletPin(askPin, { title: 'Confirm with your PIN', message: `Send UGX ${fmt(amountNum)} to ${church.name} from your IcanEra wallet.` });
         if (!pin.ok) { setMsg({ type: 'err', text: pin.error }); return; }
-        ({ titheId, churchName } = await giveToChurch({ churchId: church.id, amount: amountNum, givingType, method: 'wallet', isAnonymous: anonymous, message }));
+        ({ titheId, churchName, message: paidMessage } = await giveToChurch({ churchId: church.id, amount: amountNum, givingType, method: 'wallet', isAnonymous: anonymous, message, titheType: titheFor, payerBusinessId: fromBusiness ? payer.id : null }));
       } else if (method === 'cash') {
-        ({ titheId, churchName } = await giveToChurch({ churchId: church.id, amount: amountNum, givingType, method: 'cash', isAnonymous: anonymous, message }));
+        ({ titheId, churchName } = await giveToChurch({ churchId: church.id, amount: amountNum, givingType, method: 'cash', isAnonymous: anonymous, message, titheType: titheFor }));
       } else {
-        const res = await giveToChurchWithFlutterwave({ church, amount: amountNum, givingType, isAnonymous: anonymous, message, phone });
+        const res = await giveToChurchWithFlutterwave({ church, amount: amountNum, givingType, isAnonymous: anonymous, message, phone, titheType: titheFor });
         if (res.cancelled) { setMsg({ type: 'err', text: 'Payment cancelled — you were not charged.' }); return; }
-        ({ titheId, churchName } = res);
+        ({ titheId, churchName, message: paidMessage } = res);
       }
       saveLastChurch(church);
       if (balanceProp === undefined) refreshBalance();
       const label = GIVING_TYPES.find((g) => g.id === givingType)?.label || 'Tithe';
-      setMsg({ type: 'ok', text: `🙌 ${label} of UGX ${fmt(amountNum)} received by ${churchName}. God bless your giving.` });
+      setMsg({ type: 'ok', text: `🙌 ${label} of UGX ${fmt(amountNum)} — ${paidMessage || `received by ${churchName}`}. God bless your giving.` });
       onGiven?.({
         id: titheId, amount: amountNum, date: new Date(), givingType, recipientType: 'church', paymentMethod: method,
-        titheType: 'personal', isAnonymous: anonymous, description: `${label} to ${churchName}`, method,
+        titheType: titheFor, isAnonymous: anonymous, description: `${label} to ${churchName}`, method,
       });
       setAmount(''); setMessage('');
     } catch (e) {
@@ -145,6 +149,17 @@ export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, 
             </div>
           )}
 
+          <p className="text-xs font-medium text-gray-300 mt-4 mb-2">Whose tithe is this?</p>
+          <div className="grid grid-cols-2 gap-2">
+            {[{ id: 'personal', label: '👤 Personal', sub: 'From you' }, { id: 'business', label: '🏢 Business', sub: 'Your business pays' }].map((t) => (
+              <button key={t.id} type="button" onClick={() => setTitheFor(t.id)}
+                className={`rounded-lg border px-3 py-2 text-left transition ${titheFor === t.id ? 'bg-purple-600/30 border-purple-400' : 'bg-slate-700/40 border-slate-600 hover:border-purple-400'}`}>
+                <p className="text-sm font-semibold text-white">{t.label}</p>
+                <p className="text-[11px] text-gray-400">{t.sub}</p>
+              </button>
+            ))}
+          </div>
+
           <p className="text-xs font-medium text-gray-300 mt-4 mb-2">How would you like to give?</p>
           <div className="grid gap-2 sm:grid-cols-3">
             {PAY_METHODS.map(({ id, label, sub, Icon }) => (
@@ -152,11 +167,17 @@ export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, 
                 className={`rounded-lg border px-3 py-2 text-left transition ${method === id ? 'bg-purple-600/30 border-purple-400' : 'bg-slate-700/40 border-slate-600 hover:border-purple-400'}`}>
                 <Icon className="w-4 h-4 text-amber-300 mb-1" />
                 <p className="text-sm font-semibold text-white">{label}</p>
-                <p className="text-[11px] text-gray-400 flex items-center gap-1">{id === 'wallet' && <Lock className="w-3 h-3" />}{id === 'wallet' ? `UGX ${fmt(walletBalance)} · PIN required` : sub}</p>
+                <p className="text-[11px] text-gray-400 flex items-center gap-1">{id === 'wallet' && <Lock className="w-3 h-3" />}{id === 'wallet' ? (fromBusiness ? 'Business wallet · its PIN' : `UGX ${fmt(walletBalance)} · PIN required`) : sub}</p>
               </button>
             ))}
           </div>
-          {walletShort && <p className="text-xs text-rose-400 mt-2">Exceeds your wallet balance (UGX {fmt(walletBalance)}). Pick mobile money or cash.</p>}
+          {fromBusiness && (
+            <div className="mt-2">
+              <p className="text-xs font-medium text-gray-300 mb-1">Paid by — your business wallet (its own PIN is asked)</p>
+              <PayerBusinessSelect value={payer} onChange={setPayer} />
+            </div>
+          )}
+          {walletShort && <p className="text-xs text-rose-400 mt-2">{fromBusiness ? `${payer.name}'s wallet has UGX ${fmt(payer.balance)}.` : `Exceeds your wallet balance (UGX ${fmt(walletBalance)}).`} Pick mobile money or cash.</p>}
           {method === 'flutterwave' && (
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Mobile money number (optional, e.g. 0772…)" inputMode="tel"
               className="w-full mt-2 bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none" />

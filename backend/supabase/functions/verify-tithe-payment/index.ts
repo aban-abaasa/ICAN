@@ -83,6 +83,7 @@ Deno.serve(async (req) => {
     success: true,
     tithe_record_id: row.tithe_record_id,
     church_name: row.church_name,
+    message: row.message,
     already_processed: !!row.already_processed,
   });
 });

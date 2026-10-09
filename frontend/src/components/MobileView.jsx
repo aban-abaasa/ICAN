@@ -128,7 +128,8 @@ import { analyzeTransactionWithAI } from '../services/accountingAIService';
 import { walletAccountService } from '../services/walletAccountService';
 import { usePinPrompt } from './PinPromptDialog';
 import ChurchTitheGiving from './ChurchTitheGiving';
-import { confirmWalletPin, giveToChurch, giveToChurchWithFlutterwave } from '../services/churchTitheService';
+import { confirmWalletPin, confirmBusinessWalletPin, giveToChurch, giveToChurchWithFlutterwave } from '../services/churchTitheService';
+import PayerBusinessSelect from './PayerBusinessSelect';
 import ChurchPicker, { saveLastChurch } from './ChurchPicker';
 import { walletService } from '../services/walletService';
 import {
@@ -1328,6 +1329,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [tithePaymentNotes, setTithePaymentNotes] = useState('');
   const [tithePaymentMethod, setTithePaymentMethod] = useState('wallet'); // 'wallet' | 'cash' | 'flutterwave' (mobile money / card — only with a church or business picked)
   const [tithePayChurch, setTithePayChurch] = useState(null); // registered church / business this payment goes to
+  const [tithePayBusiness, setTithePayBusiness] = useState(null); // for a business tithe paid from a wallet: the business that pays
   const [tithePaymentDate, setTithePaymentDate] = useState(new Date().toISOString().split('T')[0]); // owner picks when this was given
   const [tithePaySourceTxId, setTithePaySourceTxId] = useState(''); // optional: a specific personal income being tithed
 
@@ -2280,6 +2282,12 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         setTithePaymentError('Pick the church or business you are paying to use Mobile Money / Card.');
         return;
       }
+      // A business tithe to a registered church / business is paid BY a business of yours, from its wallet.
+      const payingFromBusiness = !!church && tithePaymentType === 'business' && tithePaymentMethod === 'wallet';
+      if (payingFromBusiness && !tithePayBusiness) {
+        setTithePaymentError('Choose which of your businesses pays this tithe.');
+        return;
+      }
 
       setIsSubmittingTithe(true);
       setTithePaymentError(null);
@@ -2317,11 +2325,17 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       // that can't actually be covered never gets recorded as if it happened.
       // Cash given by hand skips this entirely: nothing in the wallet moves.
       if (tithePaymentMethod === 'wallet') {
-        // Spending from the IcanEra wallet always needs the wallet PIN.
-        const pinCheck = await confirmWalletPin(askTithePin, {
-          title: 'Confirm with your PIN',
-          message: `Pay UGX ${amount.toLocaleString()} of tithe from your IcanEra wallet.`,
-        });
+        // Spending from a wallet always needs that wallet's PIN: the business wallet's own PIN when a
+        // business tithe is paid by the business, otherwise the personal IcanEra wallet PIN.
+        const pinCheck = payingFromBusiness
+          ? await confirmBusinessWalletPin(askTithePin, {
+              business: tithePayBusiness,
+              message: `${tithePayBusiness.name} pays UGX ${amount.toLocaleString()} to ${church.name} from its business wallet.`,
+            })
+          : await confirmWalletPin(askTithePin, {
+              title: 'Confirm with your PIN',
+              message: `Pay UGX ${amount.toLocaleString()} of tithe from your IcanEra wallet.`,
+            });
         if (!pinCheck.ok) {
           setTithePaymentError(pinCheck.error);
           setIsSubmittingTithe(false);
@@ -2354,6 +2368,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
             givingType: church.isChurch === false ? 'other' : 'tithe',
             message: tithePaymentNotes,
             titheType: tithePaymentType === 'business' ? 'business' : 'personal',
+            payerBusinessId: payingFromBusiness ? tithePayBusiness.id : null,
           };
           if (tithePaymentMethod === 'flutterwave') {
             const res = await giveToChurchWithFlutterwave({ church, ...common });
@@ -2362,7 +2377,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
               setIsSubmittingTithe(false);
               return;
             }
-            churchPayment = { titheId: res.titheId };
+            churchPayment = { titheId: res.titheId, message: res.message };
           } else {
             churchPayment = await giveToChurch({ churchId: church.id, ...common, method: tithePaymentMethod, givingDate: tithePaymentDate });
           }
@@ -2484,8 +2499,10 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       }
 
       // 🔧 Update user's net_worth — a cash gift leaves personal wealth just
-      // as a wallet payment does, so this always runs regardless of method.
+      // as a wallet payment does, so this runs regardless of method — except when a business paid
+      // from its own wallet, which is not the person's personal wealth.
       try {
+        if (payingFromBusiness) throw new Error('paid by business wallet');
         const { data: profileData } = await supabase
           .from('user_profiles')
           .select('net_worth')
@@ -2506,7 +2523,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
           }
         }
       } catch (profileErr) {
-        console.warn('⚠️ Profile operation error:', profileErr);
+        if (profileErr?.message !== 'paid by business wallet') console.warn('⚠️ Profile operation error:', profileErr);
       }
 
       // Reload transactions first so remainingCombined recalculates to 0 before showing success
@@ -2515,7 +2532,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
 
       setTithePaymentSuccess(
         church
-          ? `✅ UGX ${amount.toLocaleString(undefined, {maximumFractionDigits: 0})} sent to ${church.name} ${tithePaymentMethod === 'cash' ? '(cash — they will confirm receipt)' : tithePaymentMethod === 'flutterwave' ? 'by Mobile Money / Card' : 'from your IcanEra wallet'} 🙏`
+          ? `✅ UGX ${amount.toLocaleString(undefined, {maximumFractionDigits: 0})} — ${churchPayment?.message || `sent to ${church.name}`} 🙏`
           : `✅ UGX ${amount.toLocaleString(undefined, {maximumFractionDigits: 0})} tithe paid & cleared! ${tithePaymentMethod === 'cash' ? '💵 Recorded as cash' : '💳 Wallet deducted'} | 🙏 Blockchain-secured`
       );
 
@@ -2523,6 +2540,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
         setTithePaymentAmount('');
         setTithePaymentRecipient('');
         setTithePayChurch(null);
+        setTithePayBusiness(null);
         setTithePaymentNotes('');
         setTithePaymentType('combined');
         setTithePaymentMethod('wallet');
@@ -9350,8 +9368,14 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                         )}
                         <button type="button" role="tab" aria-selected={tithePaymentMethod === 'cash'} onClick={() => setTithePaymentMethod('cash')} className={`cmms-ptab cmms-accent-burgundy flex-1 justify-center ${tithePaymentMethod === 'cash' ? 'is-active' : ''}`}>💵 Cash</button>
                       </div>
-                      {tithePaymentMethod === 'wallet' && <p className="cmms-classic-muted mt-1.5 text-xs">🔒 Your IcanEra wallet PIN is asked before any money leaves the wallet.</p>}
+                      {tithePaymentMethod === 'wallet' && <p className="cmms-classic-muted mt-1.5 text-xs">🔒 {tithePayChurch && tithePaymentType === 'business' ? 'The business wallet PIN' : 'Your IcanEra wallet PIN'} is asked before any money leaves the wallet.</p>}
                       {tithePaymentMethod === 'flutterwave' && <p className="cmms-classic-muted mt-1.5 text-xs">Pay with MTN / Airtel Mobile Money or a card — your wallet isn't touched.</p>}
+                      {tithePayChurch && tithePaymentType === 'business' && tithePaymentMethod === 'wallet' && (
+                        <div className="tithe-web mt-2">
+                          <p className="cmms-classic-label">Paid by — your business wallet</p>
+                          <div className="mt-1"><PayerBusinessSelect value={tithePayBusiness} onChange={setTithePayBusiness} /></div>
+                        </div>
+                      )}
                       {tithePaymentMethod === 'cash' && <p className="cmms-classic-muted mt-1.5 text-xs">Given by hand — recorded as given, your wallet balance won't be touched.</p>}
                     </div>
 

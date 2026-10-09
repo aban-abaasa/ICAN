@@ -6,7 +6,7 @@
  * Flutterwave settlement in backend/supabase/functions/verify-tithe-payment.
  */
 import { getSupabaseClient } from '../lib/supabase/client';
-import { walletAccountService } from './walletAccountService';
+import { walletAccountService, hashPIN } from './walletAccountService';
 import { payWithFlutterwave, generateTxRef } from './flutterwaveClient';
 
 export const MIN_GIFT_UGX = 500;
@@ -60,12 +60,67 @@ export async function confirmWalletPin(askPin, { title, message }) {
   return { ok: false, error: error || 'Too many wrong PIN attempts' };
 }
 
+/**
+ * The businesses the signed-in user owns that have a wallet account (user_accounts, account_type 'business'),
+ * with their UGX balance — the ones that can pay a business tithe. The PIN hash is never selected here.
+ */
+export async function getMyBusinessWallets() {
+  const user = await currentUser();
+  const { data: owned, error } = await client().from('business_profiles')
+    .select('id, business_name, status').eq('user_id', user.id).order('created_at');
+  if (error) throw new Error(error.message);
+  const active = (owned || []).filter((b) => (b.status || 'active') === 'active');
+  if (!active.length) return [];
+  const { data: accounts } = await client().from('user_accounts')
+    .select('business_id, ugx_balance, status')
+    .eq('account_type', 'business').in('business_id', active.map((b) => b.id));
+  const byBusiness = new Map((accounts || []).filter((a) => (a.status || 'active') === 'active').map((a) => [a.business_id, a]));
+  return active.map((b) => ({
+    id: b.id, name: b.business_name,
+    hasWallet: byBusiness.has(b.id), balance: Number(byBusiness.get(b.id)?.ugx_balance) || 0,
+  }));
+}
+
+/**
+ * Ask for the BUSINESS wallet's PIN (a business wallet has its own PIN, separate from the personal one)
+ * and check it, with the same 3-try lock as the personal wallet. Resolves { ok } or { ok:false, error, cancelled }.
+ */
+export async function confirmBusinessWalletPin(askPin, { business, message }) {
+  const db = client();
+  const { data: account, error: readErr } = await db.from('user_accounts')
+    .select('id, pin_hash, pin_attempts, pin_locked_until')
+    .eq('business_id', business.id).eq('account_type', 'business').maybeSingle();
+  if (readErr || !account) return { ok: false, error: `${business.name} has no business wallet account yet.` };
+  if (!account.pin_hash) return { ok: false, error: `Set a PIN for the ${business.name} wallet first.` };
+
+  let attempts = account.pin_attempts || 0;
+  let error = '';
+  for (let tries = 0; tries < MAX_PIN_TRIES; tries += 1) {
+    if (account.pin_locked_until && new Date(account.pin_locked_until) > new Date()) {
+      return { ok: false, error: `The ${business.name} wallet is locked after too many wrong PINs. Try again later.` };
+    }
+    const pin = await askPin({ title: `${business.name} wallet PIN`, message, error });
+    if (pin === null) return { ok: false, cancelled: true, error: 'Cancelled — nothing was charged.' };
+    if (/^\d{4,6}$/.test(pin) && hashPIN(pin) === account.pin_hash) {
+      if (attempts) await db.from('user_accounts').update({ pin_attempts: 0, pin_locked_until: null }).eq('id', account.id);
+      return { ok: true };
+    }
+    attempts += 1;
+    const lockedUntil = attempts >= 3 ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null;
+    await db.from('user_accounts').update({ pin_attempts: attempts, pin_locked_until: lockedUntil }).eq('id', account.id);
+    account.pin_locked_until = lockedUntil;
+    error = `Incorrect PIN. Attempts remaining: ${Math.max(0, 3 - attempts)}`;
+  }
+  return { ok: false, error: error || 'Too many wrong PIN attempts' };
+}
+
 /** Wallet or cash. Wallet callers must have passed confirmWalletPin first. */
-export async function giveToChurch({ churchId, amount, givingType = 'tithe', method, isAnonymous = false, message = '', titheType = 'personal', givingDate = null }) {
+export async function giveToChurch({ churchId, amount, givingType = 'tithe', method, isAnonymous = false, message = '', titheType = 'personal', givingDate = null, payerBusinessId = null }) {
   const { data, error } = await client().rpc('fn_give_tithe_to_church', {
     p_business_id: churchId, p_amount: amount, p_giving_type: givingType, p_payment_method: method,
     p_is_anonymous: isAnonymous, p_message: message || null, p_tithe_type: titheType,
     ...(givingDate ? { p_giving_date: givingDate } : {}),
+    ...(payerBusinessId ? { p_payer_business_id: payerBusinessId } : {}),
   });
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
@@ -95,7 +150,7 @@ export async function giveToChurchWithFlutterwave({ church, amount, givingType =
     // Charged but not recorded: surface the reference so nobody pays twice.
     throw new Error((data?.error || 'Your payment went through but we could not confirm it yet.') + ` Reference: ${txRef}`);
   }
-  return { titheId: data.tithe_record_id, churchName: data.church_name || church.name, txRef };
+  return { titheId: data.tithe_record_id, churchName: data.church_name || church.name, txRef, message: data.message };
 }
 
 /** Churches (businesses) the signed-in user owns, so they can see what their church received. */
