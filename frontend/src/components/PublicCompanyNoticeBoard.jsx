@@ -586,6 +586,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       const pending = sessionStorage.getItem(PENDING_SECTION_KEY);
       if (pending) { sessionStorage.removeItem(PENDING_SECTION_KEY); return pending; }
     } catch { /* ignore */ }
+    // /notices/<id>?tab=market opens straight on the Market tab.
+    if (new URLSearchParams(window.location.search).get('tab') === 'market') return 'shop';
     return 'notices';
   });
   const [notices, setNotices] = useState([]);
@@ -950,7 +952,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // narrower per-tab width.
   const tabs = [
     { id: 'notices', label: 'Notices', mobileLabel: 'Notices', icon: Megaphone },
-    ...(products.length > 0 || storeProducts.length > 0 ? [{ id: 'shop', label: 'Products & Services', mobileLabel: 'Shop', icon: ShoppingBag }] : []),
+    // The Market tab exists for every business website, even before anything is listed:
+    // a store always has a website, and its market is where its products and services live.
+    { id: 'shop', label: 'Market', mobileLabel: 'Market', icon: ShoppingBag },
     // Shown whenever this business has PitchIn enabled at all (a linked or
     // name-matched business_profile_id, see pitchesBusinessProfileId above)
     // not just once it already has a published pitch -- otherwise the
@@ -2290,7 +2294,7 @@ const ShopSection = ({ products, storeProducts = [], contact = {}, loading, cart
       </div>
 
       {products.length === 0 && storeProducts.length === 0 ? (
-        <EmptyState icon={ShoppingBag} text="Nothing listed right now. Check back later." />
+        <EmptyState icon={ShoppingBag} text="This market has nothing listed yet. Check back soon." />
       ) : products.length === 0 ? null : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           {products.map((listing) => {
