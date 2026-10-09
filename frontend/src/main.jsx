@@ -56,6 +56,10 @@ const portfolioShareMatch = window.location.pathname.match(/^\/portfolio\/([^/]+
 // Pitchin/status share links above. Only checkout (a real IcanEra payment)
 // prompts sign-in, in place, without losing the cart.
 const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
+// The public shop window (/shop): every reseller-listed product as a picture grid, for anyone (and
+// search engines, via /api/share-preview?type=shop). Self-styled and needs no auth, so it sits
+// outside both ThemeProvider and AuthProvider like the other standalone public pages.
+const isPublicShopPath = /^\/shop\/?$/.test(window.location.pathname);
 // An instalment plan (/plan/<code>) and the customer's list of them (/plans): the plan's code is a
 // handle, not a secret -- the page itself needs the customer (or the seller's team) to be signed in.
 const installmentPlanMatch = window.location.pathname.match(/^\/plan\/([A-Za-z0-9]{6,12})\/?$/);
@@ -131,6 +135,7 @@ const PublicShareFlow = lazyWithReloadOnChunkFailure(() => import('./components/
 const PrivatePitchInviteViewer = lazyWithReloadOnChunkFailure(() => import('./components/PrivatePitchInviteViewer'));
 const PublicPortfolioPage = lazyWithReloadOnChunkFailure(() => import('./components/profile/PublicPortfolioPage'));
 const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./components/PublicDropshipStorefront'));
+const PublicShopPage = lazyWithReloadOnChunkFailure(() => import('./components/PublicShopPage'));
 const PublicInstallmentPlan = lazyWithReloadOnChunkFailure(() => import('./components/PublicInstallmentPlan'));
 const PublicMyInstallments = lazyWithReloadOnChunkFailure(() => import('./components/PublicMyInstallments'));
 const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
@@ -182,6 +187,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AppErrorBoundary>
       <Suspense fallback={<Loading />}>
         {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn />
+          : isPublicShopPath ? <PublicShopPage />
           : isVisitorQrPath ? <PublicVisitorCheckIn />
           : isDocumentVerifyPath ? <PublicDocumentVerify />
           : isAgreementVerifyPath ? <PublicAgreementVerify />
