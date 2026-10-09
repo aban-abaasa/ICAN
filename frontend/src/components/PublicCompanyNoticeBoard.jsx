@@ -23,6 +23,7 @@ import { getPayCodeInfoForBusiness, getReceiveInfoForBusiness } from '../service
 import { getPitchesByBusinessProfileId, getPitchById, getBusinessProfileIdByName, PITCH_PLAN_SECTIONS } from '../services/pitchingService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useAuth } from '../context/AuthContext';
+import { usePinPrompt } from './PinPromptDialog';
 import { AuthPage } from './auth';
 
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
@@ -2057,6 +2058,7 @@ const VEHICLE_TYPE_OPTIONS = [
 // pay with Mobile Money, card or bank -- that adds a small payment-processing
 // fee and is handled by useGuestCheckout / guestCheckoutService.
 const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, contact = {}, loading, cart, setCart, businessProfileId, user, authLoading }) => {
+  const { askPin, pinDialog } = usePinPrompt();
   const cartOpenKey = `icanera_cart_nbshop_${businessProfileId}`;
   const [showCart, setShowCart] = useState(() => consumeCartOpen(cartOpenKey));
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -2205,11 +2207,16 @@ const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, con
       return;
     }
 
+    // Paying from the wallet always needs the wallet PIN -- verified again on the server.
+    const pin = await askPin({ title: 'Confirm with your wallet PIN', message: `Pay ${formatUGX(walletTotal)} from your IcanEra wallet.` });
+    if (pin === null) return;
+
     setPlacing(true);
     setCheckoutError(null);
     try {
       const cartPayload = cartItems.map((row) => ({ product_id: row.listing.product_id, quantity: row.qty }));
       const checkoutOptions = {
+        pin,
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         deliveryAddress: deliveryAddress.trim() || undefined,
@@ -2587,6 +2594,7 @@ const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, con
           <AuthPage initialView="signup" onAuthSuccess={() => setShowAuthModal(false)} />
         </div>
       )}
+      {pinDialog}
     </div>
   );
 };

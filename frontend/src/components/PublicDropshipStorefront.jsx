@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ShoppingCart, Plus, Minus, X, Loader, AlertCircle, CheckCircle, Store, Trash2, Truck, Navigation, Bike, Star, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { usePinPrompt } from './PinPromptDialog';
 import { AuthPage } from './auth';
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
 import useGuestCheckout from '../hooks/useGuestCheckout';
@@ -43,6 +44,7 @@ const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG',
 // Mobile Money, card or bank -- see useGuestCheckout / guestCheckoutService.
 const PublicDropshipStorefront = ({ businessProfileId }) => {
   const { user, loading: authLoading } = useAuth();
+  const { askPin, pinDialog } = usePinPrompt();
 
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -220,11 +222,16 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
       return;
     }
 
+    // Paying from the wallet always needs the wallet PIN -- verified again on the server.
+    const pin = await askPin({ title: 'Confirm with your wallet PIN', message: `Pay ${formatUGX(walletTotal)} from your IcanEra wallet.` });
+    if (pin === null) return;
+
     setPlacing(true);
     setCheckoutError(null);
     try {
       const cartPayload = cartItems.map((row) => ({ product_id: row.listing.product_id, quantity: row.qty }));
       const checkoutOptions = {
+        pin,
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         deliveryAddress: deliveryAddress.trim() || undefined,
@@ -579,6 +586,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
           <AuthPage initialView="signup" onAuthSuccess={() => setShowAuthModal(false)} />
         </div>
       )}
+      {pinDialog}
     </div>
   );
 };
