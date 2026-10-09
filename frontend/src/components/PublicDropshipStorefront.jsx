@@ -7,6 +7,8 @@ import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '.
 import useGuestCheckout from '../hooks/useGuestCheckout';
 import InstallmentOffer from './InstallmentOffer';
 import ContinueWithGoogle from './ContinueWithGoogle';
+import WalletSetupInline from './WalletSetupInline';
+import useWalletReady from '../hooks/useWalletReady';
 import { getInstallmentShelf, formatMoney } from '../services/installmentService';
 import usePersistedCart, { markCartOpen, consumeCartOpen } from '../hooks/usePersistedCart';
 
@@ -45,6 +47,7 @@ const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG',
 const PublicDropshipStorefront = ({ businessProfileId }) => {
   const { user, loading: authLoading } = useAuth();
   const { askPin, pinDialog } = usePinPrompt();
+  const { walletState, recheckWallet } = useWalletReady(user?.id);
 
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -217,6 +220,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
     if (authLoading) return;
     if (!user) { setShowAuthModal(true); return; }
     if (cartItems.length === 0) return;
+    if (walletState === 'missing') return;
     if (!deliveryCoords) {
       setCheckoutError('Share your delivery location first — a real rider is booked for this order');
       return;
@@ -522,7 +526,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                     {!foreign && <div className="flex justify-between text-white font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>}
                   </div>
                   {checkoutError && <p className="text-xs text-red-400">{checkoutError}</p>}
-                  {!authLoading && !user && (
+                  {!authLoading && !user && foreign && (
                     <ContinueWithGoogle skin="slate" onUseEmail={() => setShowAuthModal(true)} onBeforeRedirect={() => markCartOpen(cartKey)} />
                   )}
                   <InstallmentOffer
@@ -539,8 +543,18 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                   />
                   {!foreign && (
                     <div className="space-y-2">
+                      {!authLoading && !user ? (
+                        // No IcanEra account yet: one tap with Google creates it and brings them straight back to this cart.
+                        <div className="space-y-1.5">
+                          <ContinueWithGoogle skin="slate" compact onUseEmail={() => setShowAuthModal(true)} onBeforeRedirect={() => markCartOpen(cartKey)} />
+                          <p className="text-[11px] text-center text-indigo-200/80">Pay with a free IcanEra wallet · no extra fee · you come straight back here</p>
+                        </div>
+                      ) : user && walletState === 'missing' ? (
+                        // Signed in but no wallet PIN yet (e.g. just arrived with Google): wallet creation, right here.
+                        <WalletSetupInline skin="slate" defaultName={customerName} defaultPhone={customerPhone} onCheck={recheckWallet} />
+                      ) : (
                       <button
-                        onClick={user ? handleCheckout : () => setShowAuthModal(true)}
+                        onClick={handleCheckout}
                         disabled={authLoading || guest.paying || placing || (!!user && !deliveryCoords)}
                         className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition"
                       >
@@ -550,6 +564,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                           : `Pay with IcanEra wallet${deliveryCoords ? ` · ${formatUGX(walletTotal)}` : ''}`}
                         <span className="block text-[11px] font-medium text-indigo-200">{user ? 'Recommended · no extra fee' : 'Recommended · no extra fee · sign up free in a minute'}</span>
                       </button>
+                      )}
                       <div className="flex items-center gap-2 text-[11px] text-slate-500"><span className="flex-1 h-px bg-slate-800" />{user ? 'or pay another way' : 'or no wallet needed'}<span className="flex-1 h-px bg-slate-800" /></div>
                       <button
                         onClick={guest.payNow}
