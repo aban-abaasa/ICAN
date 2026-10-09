@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Loader, ShoppingBag, Truck, ArrowRight } from 'lucide-react';
+import { Search, Loader, ShoppingBag, Truck, ArrowRight, Moon, Sun } from 'lucide-react';
 import { getDropshipBrowseProducts } from '../services/dropshipService';
-import ShopTiles, { SHOP_TONES } from './shop/ShopTiles';
+import ShopTiles from './shop/ShopTiles';
 import ProductOffersSheet from './shop/ProductOffersSheet';
 import { useIcanCoinPrice } from './shop/useIcanCoinPrice';
 
@@ -14,7 +14,20 @@ const FILTERS = [
 
 // Ivory & gold, like the app's own "boardroom classic" theme. All colours are
 // inline: index.css repaints stock Tailwind colour classes app-wide.
-const C = { page: '#faf6ec', ink: '#1f2937', muted: '#8a7a55', line: '#e6dcc3', gold: '#b8862e', panel: '#fffdf8' };
+const PALETTES = {
+  classic: { page: '#faf6ec', ink: '#1f2937', muted: '#8a7a55', line: '#e6dcc3', gold: '#b8862e', panel: '#fffdf8', skeleton: '#f1ead8', up: '#15803d', down: '#b91c1c' },
+  dark: { page: '#0b1120', ink: '#e2e8f0', muted: '#94a3b8', line: '#1e293b', gold: '#d9a441', panel: '#0f172a', skeleton: '#1e293b', up: '#34d399', down: '#f87171' },
+};
+const THEME_KEY = 'icanera-shop-theme';
+
+// Saved choice first, then the visitor's device setting.
+const initialTheme = () => {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'dark' || saved === 'classic') return saved;
+  } catch { /* storage blocked */ }
+  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'classic';
+};
 const SERIF = "'Playfair Display', Georgia, 'Times New Roman', serif";
 
 // The public shop at /shop -- every product any IcanEra reseller currently
@@ -24,9 +37,16 @@ const SERIF = "'Playfair Display', Georgia, 'Times New Roman', serif";
 // wraps this same page in crawlable title/description/JSON-LD so it can be
 // found through search.
 //
-// Self-contained palette (not the app ThemeProvider), like the other public
-// share pages, so it always looks the same to a visitor.
+// Self-contained palettes (not the app ThemeProvider), like the other public
+// share pages. Visitors can switch between light and dark; the choice is kept.
 const PublicShopPage = () => {
+  const [theme, setTheme] = useState(initialTheme);
+  const C = PALETTES[theme];
+  const toggleTheme = () => setTheme((prev) => {
+    const next = prev === 'dark' ? 'classic' : 'dark';
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* storage blocked */ }
+    return next;
+  });
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [products, setProducts] = useState([]);
@@ -74,7 +94,19 @@ const PublicShopPage = () => {
             <span className="text-lg font-bold tracking-tight">IcanEra</span>
             <span className="text-sm italic" style={{ color: C.muted }}>Shop</span>
           </a>
-          <a href="/" className="text-xs font-semibold rounded px-3 py-1.5 hover:opacity-80 transition" style={{ border: `1px solid ${C.gold}`, color: C.ink }}>Open IcanEra</a>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              className="inline-flex items-center justify-center w-8 h-8 rounded hover:opacity-80 transition"
+              style={{ border: `1px solid ${C.line}`, color: C.ink }}
+            >
+              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <a href="/" className="text-xs font-semibold rounded px-3 py-1.5 hover:opacity-80 transition" style={{ border: `1px solid ${C.gold}`, color: C.ink }}>Open IcanEra</a>
+          </div>
         </div>
       </header>
 
@@ -83,14 +115,14 @@ const PublicShopPage = () => {
           <h1 className="text-3xl md:text-5xl font-bold tracking-tight" style={{ fontFamily: SERIF }}>The IcanEra Shop</h1>
           <div className="mx-auto mt-3 h-px w-16" style={{ backgroundColor: C.gold }} />
           <p className="mt-3 text-sm md:text-base max-w-xl mx-auto" style={{ color: C.muted }}>
-            Products from independent resellers around the world. Compare sellers, choose delivery, and check out securely — no account needed to browse.
+            Get products at your comfort, indoors.
           </p>
 
           {coin && (
             <p className="mt-3 inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-[11px] md:text-xs font-semibold tabular-nums" style={{ border: `1px solid ${C.line}`, backgroundColor: C.panel, color: C.ink }}>
               <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#16a34a' }} />
               1 ICAN = UGX {Math.round(coin.priceUGX).toLocaleString()}
-              <span style={{ color: coin.change24h >= 0 ? '#15803d' : '#b91c1c' }}>{coin.change24h >= 0 ? '▲' : '▼'} {Math.abs(coin.change24h).toFixed(2)}%</span>
+              <span style={{ color: coin.change24h >= 0 ? C.up : C.down }}>{coin.change24h >= 0 ? '▲' : '▼'} {Math.abs(coin.change24h).toFixed(2)}%</span>
               <span style={{ color: C.muted }}>live</span>
             </p>
           )}
@@ -125,14 +157,14 @@ const PublicShopPage = () => {
 
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-5">
-            {Array.from({ length: 10 }).map((_, i) => <div key={i} className="aspect-[3/4] rounded-lg animate-pulse" style={{ backgroundColor: SHOP_TONES.classic.imageBg }} />)}
+            {Array.from({ length: 10 }).map((_, i) => <div key={i} className="aspect-[3/4] rounded-lg animate-pulse" style={{ backgroundColor: C.skeleton }} />)}
           </div>
         ) : visible.length === 0 ? (
           <p className="text-center text-sm py-16" style={{ color: C.muted }}>
             {products.length === 0 ? 'No products found.' : 'Nothing matches that filter yet — try "All products".'}
           </p>
         ) : (
-          <ShopTiles products={visible} onSelect={setSelected} tone="classic" />
+          <ShopTiles products={visible} onSelect={setSelected} tone={theme} />
         )}
 
         {!loading && hasMore && (
@@ -158,7 +190,7 @@ const PublicShopPage = () => {
         </section>
       </main>
 
-      {selected && <ProductOffersSheet product={selected} tone="classic" onClose={() => setSelected(null)} />}
+      {selected && <ProductOffersSheet product={selected} tone={theme} onClose={() => setSelected(null)} />}
     </div>
   );
 };
