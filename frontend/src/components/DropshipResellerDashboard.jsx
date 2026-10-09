@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Search, Copy, Check, Loader, Store, TrendingUp, Package, ExternalLink, ClipboardList, Truck, ChevronDown, CalendarClock } from 'lucide-react';
+import { Search, Copy, Check, Loader, Store, TrendingUp, Package, ExternalLink, ClipboardList, Truck, ChevronDown, CalendarClock, ShoppingBag, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import InstallmentsSellerPanel from './InstallmentsSellerPanel';
+import DropshipBrowse from './DropshipBrowse';
+import DropshipResellersList from './DropshipResellersList';
 import { getDropshippableProducts, setDropshipListing, getResellerDropshipSales, getDropshipStorefront } from '../services/dropshipService';
 
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
@@ -14,7 +16,7 @@ const suggestPrice = (sellingPrice) => Math.ceil((Number(sellingPrice) || 0) * 1
 // keyed off business_profile_modules.module_key = 'dropship').
 const DropshipResellerDashboard = ({ businessProfileId }) => {
   const [businessName, setBusinessName] = useState('');
-  const [tab, setTab] = useState('browse');
+  const [tab, setTab] = useState('shop');
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -117,28 +119,29 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
   };
 
   const tabs = [
-    { id: 'browse', label: 'Browse products', icon: Package, accent: '#3b82f6' },
+    { id: 'shop', label: 'Shop', icon: ShoppingBag, accent: '#f97316' },
+    { id: 'resellers', label: 'Resellers', icon: Users, accent: '#06b6d4' },
+    { id: 'browse', label: 'Sell products', icon: Package, accent: '#3b82f6' },
     { id: 'listings', label: 'My listings', icon: ClipboardList, accent: '#a855f7' },
-    { id: 'sales', label: 'Your sales', icon: TrendingUp, accent: '#ec4899' },
+    { id: 'sales', label: 'Sales', icon: TrendingUp, accent: '#ec4899' },
     { id: 'installments', label: 'Instalments', icon: CalendarClock, accent: '#10b981' },
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-teal-400/30 bg-teal-500/10 p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wide text-teal-300 font-semibold">Your storefront</p>
-          <p className="text-white font-medium truncate">{businessName || 'Dropshipping business'}</p>
-        </div>
-        <div className="flex items-center gap-2 min-w-0">
-          <code className="text-xs text-teal-200 bg-black/30 rounded-lg px-2.5 py-1.5 truncate max-w-[160px] sm:max-w-[220px]">{storefrontUrl}</code>
-          <button onClick={copyLink} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white shrink-0" title="Copy link">
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-          </button>
-          <a href={storefrontUrl} target="_blank" rel="noreferrer" className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white shrink-0" title="Open storefront">
-            <ExternalLink className="w-4 h-4" />
-          </a>
-        </div>
+    <div className="space-y-2">
+      {/* Storefront collapsed to a single line: name + copy/open. The full
+          link is one tap away via Copy, so it no longer needs its own block. */}
+      <div className="rounded-lg border border-teal-400/30 bg-teal-500/10 px-3 py-1.5 flex items-center gap-2">
+        <Store className="w-3.5 h-3.5 text-teal-300 shrink-0" />
+        <p className="text-xs text-white font-medium truncate flex-1 min-w-0">
+          <span className="text-teal-300 font-normal">Your storefront · </span>{businessName || 'Dropshipping business'}
+        </p>
+        <button onClick={copyLink} className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white shrink-0" title="Copy storefront link">
+          {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+        <a href={storefrontUrl} target="_blank" rel="noreferrer" className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white shrink-0" title="Open storefront">
+          <ExternalLink className="w-3.5 h-3.5" />
+        </a>
       </div>
 
       {/* Three independent tab containers -- each its own bordered card,
@@ -148,21 +151,25 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
           since those get force-flattened to one color by ThemeContext's
           dynamic override stylesheet) instead of every tab sharing the
           same teal. */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-0.5" style={{ scrollbarWidth: 'none' }}>
         {tabs.map(({ id, label, icon: Icon, accent }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className="flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-center transition min-w-0"
+            className="flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] md:text-xs font-semibold whitespace-nowrap shrink-0 transition"
             style={tab === id
               ? { borderColor: accent, backgroundColor: `${accent}26`, color: 'var(--color-text)' }
               : { borderColor: `${accent}40`, backgroundColor: `${accent}14`, color: 'var(--color-textSecondary)' }}
           >
-            <Icon className="w-4 h-4" style={{ color: tab === id ? accent : `${accent}b0` }} />
-            <span className="text-[11px] font-semibold truncate w-full">{label}</span>
+            <Icon className="w-3.5 h-3.5" style={{ color: tab === id ? accent : `${accent}b0` }} />
+            {label}
           </button>
         ))}
       </div>
+
+      {tab === 'shop' && <DropshipBrowse />}
+
+      {tab === 'resellers' && <DropshipResellersList />}
 
       {tab === 'browse' && (
         <div>
@@ -171,8 +178,8 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search products across every store..."
-              className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-slate-500"
+              placeholder="Search products…"
+              className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs md:text-sm text-white placeholder-slate-500"
             />
           </div>
 
@@ -181,7 +188,7 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
           ) : products.length === 0 ? (
             <p className="text-sm text-slate-500 text-center py-10">No dropshippable products found.</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {products.map((product) => {
                 const draftValue = priceDrafts[product.product_id] ?? (product.already_listed ? product.listed_price : suggestPrice(product.selling_price));
                 const invalid = Number(draftValue) < Number(product.selling_price);
@@ -191,18 +198,18 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                   // the listing controls. Keeps the list itself simple and
                   // guarantees nothing can overflow a narrow phone, since
                   // only one row's controls are ever on screen at once.
-                  <div key={product.product_id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', borderLeft: '3px solid #3b82f6', backgroundColor: 'var(--color-bgSecondary)' }}>
+                  <div key={product.product_id} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)', borderLeft: '3px solid #3b82f6', backgroundColor: 'var(--color-bgSecondary)' }}>
                     <button
                       type="button"
                       onClick={() => setExpandedBrowseId(isOpen ? null : product.product_id)}
-                      className="w-full flex items-center gap-3 p-3 text-left"
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left"
                     >
-                      <div className={`rounded-lg flex items-center justify-center overflow-hidden shrink-0 transition-all duration-200 ${isOpen ? 'w-16 h-16' : 'w-10 h-10'}`} style={{ backgroundColor: 'rgba(59,130,246,0.14)' }}>
+                      <div className={`rounded-lg flex items-center justify-center overflow-hidden shrink-0 transition-all duration-200 ${isOpen ? 'w-12 h-12' : 'w-8 h-8'}`} style={{ backgroundColor: 'rgba(59,130,246,0.14)' }}>
                         {product.images?.[0] ? <img src={product.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className={`text-slate-600 ${isOpen ? 'w-6 h-6' : 'w-4 h-4'}`} />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-white truncate">{product.name}</p>
-                        <p className="text-xs text-slate-500 truncate">
+                        <p className="text-xs md:text-[13px] text-white truncate">{product.name}</p>
+                        <p className="text-[10px] md:text-[11px] text-slate-500 truncate">
                           {product.supermarket_name} · {formatUGX(product.selling_price)}
                           {product.already_listed && <span className="text-teal-400"> · Listed</span>}
                         </p>
@@ -267,24 +274,24 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
           ) : myListings.length === 0 ? (
             <p className="text-sm text-slate-500 text-center py-10">You haven't listed any products yet. List one from "Browse products".</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {myListings.map((item) => {
                 const draftValue = priceDrafts[item.product_id] ?? item.listed_price;
                 const isOpen = expandedListingId === item.listing_id;
                 return (
                   // Same collapsed-list-row pattern as Browse products.
-                  <div key={item.listing_id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', borderLeft: '3px solid #a855f7', backgroundColor: 'var(--color-bgSecondary)' }}>
+                  <div key={item.listing_id} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)', borderLeft: '3px solid #a855f7', backgroundColor: 'var(--color-bgSecondary)' }}>
                     <button
                       type="button"
                       onClick={() => setExpandedListingId(isOpen ? null : item.listing_id)}
-                      className="w-full flex items-center gap-3 p-3 text-left"
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left"
                     >
-                      <div className={`rounded-lg flex items-center justify-center overflow-hidden shrink-0 transition-all duration-200 ${isOpen ? 'w-16 h-16' : 'w-10 h-10'}`} style={{ backgroundColor: 'rgba(168,85,247,0.14)' }}>
+                      <div className={`rounded-lg flex items-center justify-center overflow-hidden shrink-0 transition-all duration-200 ${isOpen ? 'w-12 h-12' : 'w-8 h-8'}`} style={{ backgroundColor: 'rgba(168,85,247,0.14)' }}>
                         {item.images?.[0] ? <img src={item.images[0]} alt="" className="w-full h-full object-cover" /> : <Store className={`text-slate-600 ${isOpen ? 'w-6 h-6' : 'w-4 h-4'}`} />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-white truncate">{item.name}</p>
-                        <p className="text-xs text-slate-500 truncate">{item.in_stock ? `In stock · ${item.available_stock}` : 'Out of stock'} · {formatUGX(item.listed_price)}</p>
+                        <p className="text-xs md:text-[13px] text-white truncate">{item.name}</p>
+                        <p className="text-[10px] md:text-[11px] text-slate-500 truncate">{item.in_stock ? `In stock · ${item.available_stock}` : 'Out of stock'} · {formatUGX(item.listed_price)}</p>
                       </div>
                       <ChevronDown className={`w-4 h-4 text-slate-500 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                     </button>
