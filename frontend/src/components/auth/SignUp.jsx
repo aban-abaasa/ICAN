@@ -8,11 +8,14 @@ import IcanEraLogo from '../../IcanEra.png';
 import CanweFields from '../security/CanweFields';
 import ReferralCodeField from './ReferralCodeField';
 import { checkCanweFields } from '../../utils/canweGuard';
+import { useI18n } from '../../i18n/I18nProvider';
+import { getDefaultLanguageForCountry, getLanguage } from '../../i18n/languages';
 
 import { DiamondSpinner } from '../IcanDiamond';
 const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
   const { signUp, signInWithGoogle } = useAuth();
   const { actualTheme } = useOptionalTheme();
+  const { t, previewCountry } = useI18n();
   const [googleLoading, setGoogleLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: prefill?.email || '',
@@ -34,6 +37,11 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
   const [regions] = useState(CountryService.getRegions());
   const [selectedRegion, setSelectedRegion] = useState('East Africa');
   const [showCountrySelector, setShowCountrySelector] = useState(false);
+  const [countryPicked, setCountryPicked] = useState(false);
+
+  // "The app will open in Français" - shown once the visitor has picked a country.
+  const hintLanguage = countryPicked ? getLanguage(getDefaultLanguageForCountry(formData.countryCode)) : null;
+  const languageHint = hintLanguage ? t('auth.countryLanguageHint', { language: hintLanguage.native }) : '';
 
   const palette = getClassicAuthPalette(actualTheme);
   const inputClassName = `w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent transition-all ${palette.inputPlaceholder}`;
@@ -55,19 +63,19 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
 
   const validateForm = () => {
     if (!formData.email || !formData.password || !formData.fullName || !formData.countryCode) {
-      setError('Please fill in all required fields including country selection');
+      setError(t('auth.fillRequired'));
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+      setError(t('auth.passwordsMismatch'));
       return false;
     }
     if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long');
+      setError(t('auth.passwordTooShort'));
       return false;
     }
     if (!formData.termsAccepted) {
-      setError('Please accept the terms and conditions');
+      setError(t('auth.acceptTerms'));
       return false;
     }
     // Validate wallet address if provided
@@ -185,8 +193,8 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
               </div>
             )}
           </h2>
-          <p className="ia-kicker" style={{ color: palette.muted }}>Transform volatility into global capital</p>
-          {loading && <p className="text-xs animate-pulse mt-2" style={{ color: palette.link }}>Creating your account...</p>}
+          <p className="ia-kicker" style={{ color: palette.muted }}>{t('auth.tagline')}</p>
+          {loading && <p className="text-xs animate-pulse mt-2" style={{ color: palette.link }}>{t('auth.creatingAccount')}</p>}
         </div>
 
         {/* Error Message */}
@@ -213,7 +221,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
           <CanweFields />
           {/* Full Name */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>Full Name *</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>{t('auth.fullName')} *</label>
             <input
               type="text"
               name="fullName"
@@ -221,14 +229,14 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
               onChange={handleChange}
               className={inputClassName}
               style={inputStyle}
-              placeholder="Enter your full name"
+              placeholder={t('auth.fullNamePlaceholder')}
               required
             />
           </div>
 
           {/* Email */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>Email Address *</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>{t('auth.email')} *</label>
             <input
               type="email"
               name="email"
@@ -249,7 +257,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
 
           {/* 🌍 Country Selection */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>Country/Region * 🌍</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>{t('auth.countryRegion')} * 🌍</label>
             <button
               type="button"
               onClick={() => setShowCountrySelector((prev) => !prev)}
@@ -266,7 +274,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
                 </p>
               </div>
               <span className="text-sm font-bold" style={{ color: palette.link }}>
-                {showCountrySelector ? 'Hide' : 'Choose'}
+                {showCountrySelector ? t('auth.hide') : t('auth.change')}
               </span>
             </button>
 
@@ -300,6 +308,9 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
                       type="button"
                       onClick={() => {
                         setFormData(prev => ({ ...prev, countryCode: code }));
+                        // Picking a country switches the whole form into that country's language.
+                        previewCountry(code);
+                        setCountryPicked(true);
                         setShowCountrySelector(false);
                       }}
                       className={`w-full px-3 py-2 rounded-lg border transition-all text-left text-sm font-medium ${
@@ -322,11 +333,14 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
                 </div>
               </div>
             )}
+            {languageHint && (
+              <p className="text-xs mt-2" style={{ color: palette.muted }}>{languageHint}</p>
+            )}
           </div>
 
           {/* Password */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>Password *</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>{t('auth.password')} *</label>
             <input
               type="password"
               name="password"
@@ -334,7 +348,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
               onChange={handleChange}
               className={inputClassName}
               style={inputStyle}
-              placeholder="Minimum 8 characters"
+              placeholder={t('auth.passwordNew')}
               required
               minLength={8}
             />
@@ -342,7 +356,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
 
           {/* Confirm Password */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>Confirm Password *</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>{t('auth.confirmPassword')} *</label>
             <input
               type="password"
               name="confirmPassword"
@@ -350,14 +364,14 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
               onChange={handleChange}
               className={inputClassName}
               style={inputStyle}
-              placeholder="Confirm your password"
+              placeholder={t('auth.confirmPasswordPlaceholder')}
               required
             />
           </div>
 
           {/* Operating Mode Selection */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>I am a...</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>{t('auth.iAmA')}</label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
@@ -372,8 +386,8 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
                   : { borderColor: palette.inputBorder, backgroundColor: palette.inputBg, color: palette.muted }}
               >
                 <div className="text-lg mb-1">💼</div>
-                <div className="text-sm font-medium">Employee</div>
-                <div className="text-xs opacity-70">Career Growth</div>
+                <div className="text-sm font-medium">{t('auth.employee')}</div>
+                <div className="text-xs opacity-70">{t('auth.employeeSub')}</div>
               </button>
               <button
                 type="button"
@@ -388,8 +402,8 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
                   : { borderColor: palette.inputBorder, backgroundColor: palette.inputBg, color: palette.muted }}
               >
                 <div className="text-lg mb-1">🚀</div>
-                <div className="text-sm font-medium">Business Owner</div>
-                <div className="text-xs opacity-70">Scale & Contracts</div>
+                <div className="text-sm font-medium">{t('auth.businessOwner')}</div>
+                <div className="text-xs opacity-70">{t('auth.businessOwnerSub')}</div>
               </button>
             </div>
           </div>
@@ -469,10 +483,11 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
               required
             />
             <span className="text-sm" style={{ color: palette.muted }}>
-              I agree to the{' '}
-              <a href="/terms" style={{ color: palette.link }}>Terms of Service</a>
-              {' '}and{' '}
-              <a href="/privacy" style={{ color: palette.link }}>Privacy Policy</a>
+              {t('auth.agree').split(/(\{terms\}|\{privacy\})/).map((part, i) => {
+                if (part === '{terms}') return <a key={i} href="/terms" style={{ color: palette.link }}>{t('auth.termsOfService')}</a>;
+                if (part === '{privacy}') return <a key={i} href="/privacy" style={{ color: palette.link }}>{t('auth.privacyPolicy')}</a>;
+                return <React.Fragment key={i}>{part}</React.Fragment>;
+              })}
             </span>
           </label>
 
@@ -489,11 +504,11 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
             {loading ? (
               <>
                 <DiamondSpinner className="animate-spin w-5 h-5" />
-                Creating Account...
+                {t('auth.creatingAccount')}
               </>
             ) : (
               <>
-                Create Account
+                {t('auth.createAccount')}
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
@@ -508,7 +523,7 @@ const SignUp = ({ onSwitchToSignIn, onSuccess, prefill }) => {
             <div className="w-full border-t" style={{ borderColor: palette.divider }}></div>
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-4" style={{ backgroundColor: palette.cardBg, color: palette.muted }}>Or, the fast way</span>
+            <span className="px-4" style={{ backgroundColor: palette.cardBg, color: palette.muted }}>{t('auth.orFastWay')}</span>
           </div>
         </div>
 

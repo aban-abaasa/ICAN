@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
-  AlertTriangle, Bell, BellRing, Check, Loader2, LogOut, Palette, Trash2, User, Target, ShieldAlert,
+  AlertTriangle, Bell, BellRing, Check, Globe, Loader2, LogOut, Palette, Trash2, User, Target, ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { THEMES, useTheme } from '../../context/ThemeContext';
 import usePhoneAlerts from '../../hooks/usePhoneAlerts';
+import { useI18n } from '../../i18n/I18nProvider';
+import { getLanguage } from '../../i18n/languages';
+import { CountryService } from '../../services/countryService';
 import { loadGrowthProfile } from '../../services/growthScheduleService';
 import { loadSettings as loadReadinessSettings } from '../../services/readinessService';
 import { getTotpFactors, verifyTotpCode } from '../../services/securityService';
@@ -18,17 +21,19 @@ import './growth/growth.css';
  *   bridge = { config, danger, onOpenGrowth, onOpenReadiness }
  */
 export default function SettingsPanel({ bridge }) {
+  const { t } = useI18n();
   const sections = [
-    ...(bridge?.config ? [{ id: 'profile', label: 'Profile' }] : []),
-    { id: 'notifications', label: 'Notifications' },
-    { id: 'appearance', label: 'Appearance' },
-    { id: 'pillars', label: 'Pillars' },
-    ...(bridge?.danger ? [{ id: 'danger', label: 'Danger zone', danger: true }] : []),
+    ...(bridge?.config ? [{ id: 'profile', label: t('settings.profile') }] : []),
+    { id: 'notifications', label: t('settings.notifications') },
+    { id: 'appearance', label: t('settings.appearance') },
+    { id: 'language', label: t('settings.language') },
+    { id: 'pillars', label: t('settings.pillars') },
+    ...(bridge?.danger ? [{ id: 'danger', label: t('settings.danger'), danger: true }] : []),
   ];
   const [active, setActive] = useState(sections[0].id);
 
   return (
-    <section className="gr" aria-label="Settings">
+    <section className="gr" aria-label={t('settings.title')}>
       <div className="gr-subnav" role="group" aria-label="Settings sections">
         {sections.map((s) => (
           <button key={s.id} type="button" aria-pressed={active === s.id} className={s.danger ? 'is-danger' : ''} onClick={() => setActive(s.id)}>{s.label}</button>
@@ -37,6 +42,7 @@ export default function SettingsPanel({ bridge }) {
       {active === 'profile' && bridge?.config && <ProfileSection config={bridge.config} />}
       {active === 'notifications' && <NotificationsSection onOpenGrowth={bridge?.onOpenGrowth} />}
       {active === 'appearance' && <AppearanceSection />}
+      {active === 'language' && <LanguageSection />}
       {active === 'pillars' && <PillarsSection onOpenGrowth={bridge?.onOpenGrowth} onOpenReadiness={bridge?.onOpenReadiness} />}
       {active === 'danger' && bridge?.danger && <DangerSection danger={bridge.danger} />}
     </section>
@@ -130,6 +136,78 @@ function AppearanceSection() {
           </button>
         ))}
       </div>
+    </section>
+  );
+}
+
+/**
+ * Language & region. "Automatic" follows the country chosen at sign-up; any language can still be
+ * picked by hand (a Rwandan may want English, a Kenyan Swahili). The country's own languages are
+ * listed first, and a live preview shows how numbers, money and dates will read.
+ */
+function languageDisplayName(inLanguage, code) {
+  try { return new Intl.DisplayNames([inLanguage], { type: 'language' }).of(code) || code; } catch (_) { return code; }
+}
+
+function LanguageOption({ active, onPick, title, hint, onLabel }) {
+  return (
+    <button type="button" role="radio" aria-checked={active} onClick={onPick} className="gr-device"
+      style={{ textAlign: 'left', cursor: 'pointer', borderColor: active ? 'var(--gr-gold-hi)' : undefined, background: active ? 'var(--gr-tint)' : 'transparent' }}>
+      <span className="gr-device__icon" aria-hidden="true"><Globe /></span>
+      <span><span className="gr-device__t" style={{ display: 'block' }}>{title}</span>{hint && <span className="gr-device__m">{hint}</span>}</span>
+      {active ? <span className="gr-chip gr-chip--ok"><Check aria-hidden="true" />{onLabel}</span> : <span />}
+    </button>
+  );
+}
+
+function LanguageSection() {
+  const {
+    t, language, preference, setLanguage, country, countryLanguages, untranslatedNationalLanguage,
+    languages, countryName, formatMoney, formatDate, formatNumber,
+  } = useI18n();
+  const [saved, setSaved] = useState(false);
+
+  const choose = (code) => {
+    setLanguage(code);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const countryLabel = country ? countryName(country, CountryService.getCountry(country)?.name) : t('settings.notSet');
+  const autoLanguage = getLanguage(countryLanguages[0]);
+  const suggested = countryLanguages.map(getLanguage);
+  const others = languages.filter((l) => !countryLanguages.includes(l.code));
+  const currency = country ? CountryService.getCurrencyCode(country) : null;
+
+  const option = (value, title, hint) => (
+    <LanguageOption key={value} active={preference === value} onPick={() => choose(value)} title={title} hint={hint} onLabel={t('common.on')} />
+  );
+
+  return (
+    <section className="gr-card gr-form" aria-label={t('settings.languageTitle')}>
+      <div className="gr-status"><Globe aria-hidden="true" /><div className="gr-status__body"><h3 className="gr-title gr-h">{t('settings.languageTitle')}</h3><p className="gr-sub">{t('settings.languageDesc')}</p></div></div>
+
+      <p className="gr-row__d">{t('settings.yourCountry')}: <b>{countryLabel}</b></p>
+      {untranslatedNationalLanguage && country && (
+        <div className="gr-alert" role="note">{t('settings.comingSoon', { language: languageDisplayName(language, untranslatedNationalLanguage) })}</div>
+      )}
+
+      <div className="gr-list" role="radiogroup" aria-label={t('settings.language')}>
+        {option('auto', t('settings.automatic'), t('settings.automaticDesc', { country: countryLabel, language: autoLanguage.native }))}
+        {country && <p className="gr-row__d" style={{ margin: '0.5rem 0 0' }}>{t('settings.suggested', { country: countryLabel })}</p>}
+        {country && suggested.map((l) => option(l.code, l.native, l.name !== l.native ? l.name : undefined))}
+        <p className="gr-row__d" style={{ margin: '0.5rem 0 0' }}>{t('settings.allLanguages')}</p>
+        {others.map((l) => option(l.code, l.native, l.name !== l.native ? l.name : undefined))}
+      </div>
+
+      <div className="gr-block">
+        <div className="gr-block__head"><h4 className="gr-block__title"><span>{t('settings.preview')}</span></h4></div>
+        <p className="gr-block__why">
+          {currency ? formatMoney(1500000, currency, { maximumFractionDigits: 0 }) : formatNumber(1500000)} · {formatDate(new Date(), { dateStyle: 'full' })}
+        </p>
+      </div>
+
+      {saved && <div className="gr-alert gr-alert--ok" role="status"><Check aria-hidden="true" /><span>{t('settings.saved')}</span></div>}
     </section>
   );
 }

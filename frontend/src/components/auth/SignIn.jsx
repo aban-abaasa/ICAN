@@ -8,11 +8,13 @@ import CanweFields from '../security/CanweFields';
 import ReferralCodeField from './ReferralCodeField';
 import { checkCanweFields } from '../../utils/canweGuard';
 import { getSupabaseClient } from '../../lib/supabase/client';
+import { useI18n } from '../../i18n/I18nProvider';
 
 import { DiamondSpinner } from '../IcanDiamond';
 const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
   const { signIn, offlineSignIn, signInWithGoogle, signInWithWallet } = useAuth();
   const { actualTheme } = useOptionalTheme();
+  const { t } = useI18n();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -88,7 +90,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
     const password = formData.password;
 
     if (!normalizedEmail || !password) {
-      setError('Please enter both email and password');
+      setError(t('auth.enterBoth'));
       return;
     }
 
@@ -186,9 +188,9 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
               }}
             />
           </div>
-          <h2 className="text-2xl font-bold" style={{ color: palette.text }}>Welcome back</h2>
+          <h2 className="text-2xl font-bold" style={{ color: palette.text }}>{t('auth.welcomeBack')}</h2>
           <p className="ia-kicker" style={{ color: palette.muted }}>
-            {isAuthenticating ? 'Authenticating with IcanEra...' : 'Sign in to IcanEra'}
+            {isAuthenticating ? t('auth.authenticating') : t('auth.signInTitle')}
           </p>
         </div>
 
@@ -219,7 +221,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
           <CanweFields />
           {/* Email */}
           <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>Email Address</label>
+            <label className="block text-sm font-medium mb-2" style={{ color: palette.label }}>{t('auth.email')}</label>
             <input
               type="email"
               name="email"
@@ -241,7 +243,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
           {/* Password */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium" style={{ color: palette.label }}>Password</label>
+              <label className="block text-sm font-medium" style={{ color: palette.label }}>{t('auth.password')}</label>
               <button
                 type="button"
                 onClick={onForgotPassword}
@@ -250,7 +252,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
                 onMouseEnter={(e) => { e.currentTarget.style.color = palette.linkHover; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = palette.link; }}
               >
-                Forgot password?
+                {t('auth.forgotPassword')}
               </button>
             </div>
             <div className="relative">
@@ -260,7 +262,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
                 value={formData.password}
                 onChange={handleChange}
                 className={`w-full px-4 py-3 pr-16 border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent transition-all ${palette.inputPlaceholder}`}
-                placeholder="Enter your password"
+                placeholder={t('auth.passwordPlaceholder')}
                 style={{
                   backgroundColor: palette.inputBg,
                   borderColor: palette.inputBorder,
@@ -296,7 +298,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
                 backgroundColor: palette.inputBg
               }}
             />
-            <span className="text-sm" style={{ color: palette.muted }}>Remember me for 30 days</span>
+            <span className="text-sm" style={{ color: palette.muted }}>{t('auth.rememberMe')}</span>
           </label>
 
           {/* Optional referral code — saved before submit AND before "Continue with Google" */}
@@ -316,11 +318,11 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
             {loading ? (
               <>
                 <DiamondSpinner className="animate-spin w-5 h-5" />
-                Entering IcanEra...
+                {t('auth.enteringApp')}
               </>
             ) : (
               <>
-                Sign In
+                {t('auth.signIn')}
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
@@ -335,7 +337,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
             <div className="w-full border-t" style={{ borderColor: palette.divider }}></div>
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-4" style={{ backgroundColor: palette.cardBg, color: palette.muted }}>Or continue with</span>
+            <span className="px-4" style={{ backgroundColor: palette.cardBg, color: palette.muted }}>{t('auth.orContinueWith')}</span>
           </div>
         </div>
 
@@ -389,7 +391,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
             onClick={() => setShowWalletForm(true)}
           >
             <span className="text-xl">💳</span>
-            Sign in with Wallet
+            {t('auth.signInWallet')}
           </button>
         ) : (
           <form
@@ -444,7 +446,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
         {/* Sign Up Link */}
         <div className="mt-6 text-center">
           <p className="text-sm" style={{ color: palette.muted }}>
-            Don't have an account?{' '}
+            {t('auth.noAccount')}{' '}
             <button
               onClick={onSwitchToSignUp}
               className="font-medium transition-colors"
@@ -452,7 +454,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
               onMouseEnter={(e) => { e.currentTarget.style.color = palette.linkHover; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = palette.link; }}
             >
-              Create Account
+              {t('auth.createAccount')}
             </button>
           </p>
         </div>

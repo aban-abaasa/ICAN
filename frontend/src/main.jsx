@@ -8,6 +8,7 @@ import { installDiamondStyles } from './components/diamondArt';
 import { ClassicLoadingScreen } from './components/SplashScreen';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { I18nProvider } from './i18n/I18nProvider';
 // Dependency-free on purpose (no Supabase import) — see referralCapture.js.
 import { captureReferralFromUrl } from './services/referralCapture';
 import { lazyWithRetry } from './lib/lazyWithRetry';
@@ -219,6 +220,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           ) : (
             <ThemeProvider>
               <AuthProvider>
+                <I18nProvider>
                 {pitchShareMatch ? <PublicShareFlow kind="pitch" id={pitchShareMatch[1]} />
                   : privateInviteMatch ? <PrivatePitchInviteViewer token={privateInviteMatch[1]} />
                   : statusShareMatch ? <PublicShareFlow kind="status" id={statusShareMatch[1]} />
@@ -227,6 +229,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                   : isMyInstallmentsPath ? <PublicMyInstallments />
                   : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />
                   : <><App /><PhoneAlertsPrompt /></>}
+                </I18nProvider>
               </AuthProvider>
             </ThemeProvider>
           )}
