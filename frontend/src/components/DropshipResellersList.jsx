@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Search, Loader, Store, Truck, AlertCircle, ChevronRight } from 'lucide-react';
 import { getDropshipResellers } from '../services/dropshipService';
 
-const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
+const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
 // Compact directory of resellers that currently have a live storefront.
 // Plain list rows in small type: one column on phones, two on tablets and

@@ -274,10 +274,10 @@ const buildShopMeta = async ({ url, anonKey }) => {
     }
   };
 
-  const bodyHtml = list.length === 0 ? '' : `<noscript><main><h1>Shop — Products from IcanEra Resellers</h1><ul>${list.map((p) => `<li>${p.images?.[0] ? `<img src="${escapeAttr(p.images[0])}" alt="${escapeAttr(p.name)}" width="120" height="120"> ` : ''}${escapeHtml(p.name)} — from UGX ${Number(p.min_price || 0).toLocaleString('en-UG')}</li>`).join('')}</ul><p><a href="/">IcanEra</a></p></main></noscript>`;
+  const bodyHtml = list.length === 0 ? '' : `<noscript><main><h1>Shop — Products from IcanEra Resellers</h1><ul>${list.map((p) => `<li>${p.images?.[0] ? `<img src="${escapeAttr(p.images[0])}" alt="${escapeAttr(p.name)}" width="120" height="120"> ` : ''}${escapeHtml(p.name)} — from UGX ${Number(p.min_price || 0).toLocaleString('en-US')}</li>`).join('')}</ul><p><a href="/">IcanEra</a></p></main></noscript>`;
 
   return {
-    title: 'Shop — Products from IcanEra Resellers in Uganda | IcanEra',
+    title: 'Shop — Products from Resellers Worldwide | IcanEra',
     description: names.length > 0
       ? `Browse and buy ${names.join(', ')} and more from IcanEra resellers. Compare prices, free delivery, pay securely.`
       : 'Browse products from IcanEra resellers. Compare prices, free delivery, pay securely.',

@@ -5,10 +5,10 @@ import { getDropshipBrowseProducts } from '../../services/dropshipService';
 import ShopTiles from '../shop/ShopTiles';
 import ProductOffersSheet from '../shop/ProductOffersSheet';
 
-const SHOWCASE_SIZE = 13; // 1 hero (2x2) + 12 tiles fills a 4-column bento with no gaps
+const SHOWCASE_SIZE = 12; // three full rows of four
 
-// Landing-page shop window: a picture wall of dropship-listed products with
-// price tags, open to anyone with no account. Tapping a product opens its
+// Landing-page shop window: a grid of dropship-listed products with names and
+// prices, open to anyone with no account. Tapping a product opens its
 // reseller offers; "See the whole shop" goes to the public, search-indexed
 // /shop page.
 const DropshipPreview = () => {
@@ -36,7 +36,7 @@ const DropshipPreview = () => {
             The IcanEra Shop
           </div>
           <h2 className={`text-2xl md:text-4xl font-black ${isDarkTheme ? 'text-white' : 'text-slate-900'}`}>Fresh from our resellers</h2>
-          <p className={`mt-2 text-sm md:text-base ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Tap anything you like — compare resellers, then buy straight from their storefront. No account needed to look.</p>
+          <p className={`mt-2 text-sm md:text-base ${isDarkTheme ? 'text-slate-400' : 'text-slate-600'}`}>Browse products from resellers around the world — compare sellers, then buy straight from their storefront. No account needed to look.</p>
         </div>
 
         {loading ? (
@@ -46,7 +46,7 @@ const DropshipPreview = () => {
             ))}
           </div>
         ) : (
-          <ShopTiles products={products} onSelect={setSelected} featured columnsClass="grid-cols-2 md:grid-cols-4" />
+          <ShopTiles products={products} onSelect={setSelected} tone={isDarkTheme ? 'dark' : 'classic'} columnsClass="grid-cols-2 md:grid-cols-4" />
         )}
 
         <div className="mt-8 flex justify-center">
@@ -60,7 +60,7 @@ const DropshipPreview = () => {
         </div>
       </div>
 
-      {selected && <ProductOffersSheet product={selected} onClose={() => setSelected(null)} />}
+      {selected && <ProductOffersSheet product={selected} tone={isDarkTheme ? 'dark' : 'classic'} onClose={() => setSelected(null)} />}
     </section>
   );
 };
