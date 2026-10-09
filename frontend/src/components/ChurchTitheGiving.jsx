@@ -17,7 +17,7 @@ const PAY_METHODS = [
 ];
 
 const loadLastChurch = () => { try { return JSON.parse(localStorage.getItem(LAST_CHURCH_KEY) || 'null'); } catch { return null; } };
-const saveLastChurch = (c) => { try { localStorage.setItem(LAST_CHURCH_KEY, JSON.stringify({ id: c.id, name: c.name, type: c.type })); } catch { /* storage unavailable */ } };
+const saveLastChurch = (c) => { try { localStorage.setItem(LAST_CHURCH_KEY, JSON.stringify({ id: c.id, name: c.name, type: c.type, isChurch: c.isChurch })); } catch { /* storage unavailable */ } };
 
 /**
  * Give to a church registered on IcanEra: search (or optionally load them all), choose how to give
@@ -38,7 +38,7 @@ export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, 
   useEffect(() => { if (balanceProp === undefined) refreshBalance(); }, [balanceProp, refreshBalance]);
 
   const [query, setQuery] = useState('');
-  const [includeAll, setIncludeAll] = useState(false);
+  const [churchesOnly, setChurchesOnly] = useState(false); // every registered business is searchable; this narrows to churches
   const [loaded, setLoaded] = useState(false); // churches are only fetched once the giver searches or taps "Browse"
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -62,11 +62,11 @@ export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, 
 
   // Search as the giver types (debounced); a stale response never overwrites a newer one.
   const seq = useRef(0);
-  const runSearch = useCallback(async (q, all) => {
+  const runSearch = useCallback(async (q, churchesOnlyFlag) => {
     const mine = ++seq.current;
     setSearching(true); setSearchErr('');
     try {
-      const rows = await searchChurches({ query: q, includeAll: all });
+      const rows = await searchChurches({ query: q, includeAll: !churchesOnlyFlag });
       if (mine === seq.current) { setResults(rows); setLoaded(true); }
     } catch (e) {
       if (mine === seq.current) setSearchErr(e.message || 'Could not load churches');
@@ -77,9 +77,9 @@ export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, 
 
   useEffect(() => {
     if (!loaded && !query.trim()) return undefined; // optional load: nothing is fetched until asked
-    const t = setTimeout(() => runSearch(query, includeAll), 300);
+    const t = setTimeout(() => runSearch(query, churchesOnly), 300);
     return () => clearTimeout(t);
-  }, [query, includeAll, loaded, runSearch]);
+  }, [query, churchesOnly, loaded, runSearch]);
 
   const pick = (c) => { setChurch(c); setMsg(null); };
 
@@ -125,28 +125,28 @@ export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, 
     <div className="space-y-4">
       {/* 1 — find your church */}
       <section className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-5 border border-purple-500/30">
-        <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-1"><span aria-hidden="true">⛪</span> Find your church</h3>
-        <p className="text-xs text-gray-400 mb-3">Any church registered on IcanEra can receive your giving directly.</p>
+        <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-1"><span aria-hidden="true">⛪</span> Find a church or business</h3>
+        <p className="text-xs text-gray-400 mb-3">Any business registered on IcanEra can receive your payment directly — churches are listed first.</p>
 
         <div className="relative">
           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
-            value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by church name…"
+            value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by church or business name…"
             className="w-full bg-slate-700/50 border border-purple-500/30 rounded-lg pl-9 pr-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-            aria-label="Search churches"
+            aria-label="Search registered businesses"
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-3 mt-3">
           {!loaded && (
-            <button type="button" onClick={() => runSearch(query, includeAll)}
+            <button type="button" onClick={() => runSearch(query, churchesOnly)}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-purple-600/30 border border-purple-500/40 text-purple-200 hover:bg-purple-600/50">
-              ⛪ Browse registered churches
+              🔎 Browse registered businesses
             </button>
           )}
           <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
-            <input type="checkbox" checked={includeAll} onChange={(e) => { setIncludeAll(e.target.checked); setLoaded(true); }} />
-            Include all registered businesses
+            <input type="checkbox" checked={churchesOnly} onChange={(e) => { setChurchesOnly(e.target.checked); setLoaded(true); }} />
+            Churches only
           </label>
           {lastChurch && !church && (
             <button type="button" onClick={() => pick(lastChurch)}
@@ -160,7 +160,7 @@ export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, 
         {searchErr && <p className="text-xs text-rose-400 mt-3" role="alert">{searchErr}</p>}
         {loaded && !searching && !searchErr && results.length === 0 && (
           <p className="text-xs text-gray-400 mt-3">
-            No church found{query ? ` for “${query}”` : ''}. {includeAll ? '' : 'Try “Include all registered businesses”, or '}Ask your church to register on IcanEra and switch on “Accept tithe”.
+            Nothing found{query ? ` for “${query}”` : ''}. {churchesOnly ? 'Untick “Churches only” to search every registered business, or ' : ''}Ask them to register on IcanEra.
           </p>
         )}
 
@@ -185,12 +185,12 @@ export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, 
           <div className="flex items-start justify-between gap-3 mb-4">
             <div>
               <p className="text-[11px] uppercase tracking-wider text-amber-400">Giving to</p>
-              <h3 className="text-xl font-bold text-white">⛪ {church.name}</h3>
+              <h3 className="text-xl font-bold text-white">{church.isChurch === false ? '🏢' : '⛪'} {church.name}</h3>
             </div>
             <button type="button" onClick={() => setChurch(null)} className="text-xs text-gray-400 hover:text-white underline">Change</button>
           </div>
 
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
+          <div className="grid grid-cols-3 sm:grid-cols-7 gap-2 mb-4">
             {GIVING_TYPES.map((g) => (
               <button key={g.id} type="button" onClick={() => setGivingType(g.id)} title={g.hint}
                 className={`rounded-lg border px-2 py-2 text-center text-[11px] font-semibold transition ${givingType === g.id ? 'bg-purple-600 border-purple-400 text-white' : 'bg-slate-700/40 border-slate-600 text-gray-300 hover:border-purple-400'}`}>

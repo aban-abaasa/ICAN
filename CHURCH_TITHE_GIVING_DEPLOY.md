@@ -13,9 +13,7 @@ view) now asks for the wallet PIN too; cash only records a gift, so it does not.
    (`backend/supabase/functions/verify-tithe-payment`). Without it, only wallet and cash giving work.
 
 ## How it behaves
-- **Who shows up:** businesses whose type/name says church, ministry, parish, mosque, etc., or whose
-  owner ticked **Accept tithe** (My church’s giving, bottom of the tab). Giver can optionally load
-  every registered business. Nothing is fetched until the giver searches or taps *Browse*.
+- **Who shows up:** every active registered business is searchable; churches (type/name says church, ministry, parish, mosque, etc., or the owner ticked **Accept tithe**) are listed first and a **Churches only** filter narrows the list. Nothing is fetched until the giver searches or taps *Browse*.
 - **Wallet:** PIN check, then giver’s UGX wallet → church owner’s UGX wallet in one transaction.
 - **Flutterwave:** the browser never decides a payment worked; the Edge Function re-checks the charge
   with Flutterwave (status, UGX, amount, tx_ref) and calls a service-role-only SQL function. The same

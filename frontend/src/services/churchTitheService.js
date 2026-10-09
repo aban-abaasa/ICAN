@@ -19,6 +19,7 @@ export const GIVING_TYPES = [
   { id: 'mission', label: 'Missions', icon: '🌍', hint: 'Reach the unreached' },
   { id: 'charity', label: 'Charity', icon: '🤲', hint: 'Help the needy' },
   { id: 'alms', label: 'Alms / Zakat', icon: '🕊️', hint: 'Give to the poor' },
+  { id: 'other', label: 'Payment', icon: '💳', hint: 'Pay any registered business' },
 ];
 
 const client = () => getSupabaseClient();
