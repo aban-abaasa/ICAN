@@ -8,6 +8,7 @@ import useGuestCheckout from '../hooks/useGuestCheckout';
 import InstallmentOffer from './InstallmentOffer';
 import ContinueWithGoogle from './ContinueWithGoogle';
 import WalletSetupInline from './WalletSetupInline';
+import WalletTopUpInline from './WalletTopUpInline';
 import useWalletReady from '../hooks/useWalletReady';
 import { getInstallmentShelf, formatMoney } from '../services/installmentService';
 import usePersistedCart, { markCartOpen, consumeCartOpen } from '../hooks/usePersistedCart';
@@ -553,6 +554,10 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                         // Signed in but no wallet PIN yet (e.g. just arrived with Google): wallet creation, right here.
                         <WalletSetupInline skin="slate" defaultName={customerName} defaultPhone={customerPhone} onCheck={recheckWallet} />
                       ) : (
+                      <div className="space-y-2">
+                        {user && walletState === 'ready' && (
+                          <WalletTopUpInline skin="slate" neededUgx={walletTotal} forceOpen={/insufficient/i.test(checkoutError || '')} customerName={customerName} customerPhone={customerPhone} />
+                        )}
                       <button
                         onClick={handleCheckout}
                         disabled={authLoading || guest.paying || placing || (!!user && !deliveryCoords)}
@@ -564,6 +569,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                           : `Pay with IcanEra wallet${deliveryCoords ? ` · ${formatUGX(walletTotal)}` : ''}`}
                         <span className="block text-[11px] font-medium text-indigo-200">{user ? 'Recommended · no extra fee' : 'Recommended · no extra fee · sign up free in a minute'}</span>
                       </button>
+                      </div>
                       )}
                       <div className="flex items-center gap-2 text-[11px] text-slate-500"><span className="flex-1 h-px bg-slate-800" />{user ? 'or pay another way' : 'or no wallet needed'}<span className="flex-1 h-px bg-slate-800" /></div>
                       <button

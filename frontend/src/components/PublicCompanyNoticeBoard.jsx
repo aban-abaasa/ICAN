@@ -16,6 +16,7 @@ import useGuestCheckout from '../hooks/useGuestCheckout';
 import InstallmentOffer from './InstallmentOffer';
 import ContinueWithGoogle from './ContinueWithGoogle';
 import WalletSetupInline from './WalletSetupInline';
+import WalletTopUpInline from './WalletTopUpInline';
 import useWalletReady from '../hooks/useWalletReady';
 import usePersistedCart, { markCartOpen, consumeCartOpen } from '../hooks/usePersistedCart';
 import { getBusinessSiteInfo, joinBusinessSite, getMyInstallmentPlans, getMyBusinessAccounts, getInstallmentShelf, formatMoney, STATUS_LABELS as PLAN_STATUS_LABELS } from '../services/installmentService';
@@ -2561,6 +2562,10 @@ const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, con
                   ) : user && walletState === 'missing' ? (
                     <WalletSetupInline skin="nb" defaultName={customerName} defaultPhone={customerPhone} onCheck={recheckWallet} />
                   ) : (
+                  <div className="space-y-2">
+                    {user && walletState === 'ready' && (
+                      <WalletTopUpInline skin="nb" neededUgx={walletTotal} forceOpen={/insufficient/i.test(checkoutError || '')} customerName={customerName} customerPhone={customerPhone} />
+                    )}
                   <button
                     onClick={handleCheckout}
                     disabled={authLoading || guest.paying || placing || (!!user && !deliveryCoords)}
@@ -2572,6 +2577,7 @@ const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, con
                       : `Pay with IcanEra wallet${deliveryCoords ? ` · ${formatUGX(walletTotal)}` : ''}`}
                     <span className="block text-[11px] font-medium opacity-80">{user ? 'Recommended · no extra fee' : 'Recommended · no extra fee · sign up free in a minute'}</span>
                   </button>
+                  </div>
                   )}
                   <div className="flex items-center gap-2 text-[11px] nb-text-faint"><span className="flex-1 h-px nb-border-strong border-t" />{user ? 'or pay another way' : 'or no wallet needed'}<span className="flex-1 h-px nb-border-strong border-t" /></div>
                   <button
