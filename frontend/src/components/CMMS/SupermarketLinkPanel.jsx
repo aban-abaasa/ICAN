@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Loader, Store } from 'lucide-react';
+import { ExternalLink, Loader, MapPin, Store } from 'lucide-react';
+import BranchLocationEditor from '../BranchLocationEditor';
+import { getSupermarketLocation, setSupermarketLocation } from '../../services/businessOwnershipService';
 import {
   SUPERMARKET_URL,
   getLinkedSupermarket,
@@ -22,6 +24,9 @@ export default function SupermarketLinkPanel({ companyId, items = [], canAdmin, 
   const [mine, setMine] = useState([]);
   const [pick, setPick] = useState('');
   const [stock, setStock] = useState([]);
+  // The linked store's pin (null until it has been read); editing opens the shared map editor.
+  const [storePin, setStorePin] = useState(null);
+  const [editingPin, setEditingPin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -40,8 +45,12 @@ export default function SupermarketLinkPanel({ companyId, items = [], canAdmin, 
     if (sm) {
       const { data } = await getSupermarketStockLink(companyId);
       setStock(data || []);
+      // Only the store's owner / manager may read it; anyone else just does not see the row.
+      const { data: pin } = await getSupermarketLocation(sm.id);
+      setStorePin(pin || null);
     } else {
       setStock([]);
+      setStorePin(null);
       const { data } = await listMySupermarkets();
       setMine(data || []);
     }
@@ -104,6 +113,22 @@ export default function SupermarketLinkPanel({ companyId, items = [], canAdmin, 
         {canAdmin && <button type="button" onClick={() => window.confirm('Unlink the supermarket? Item mappings are cleared; the ledger keeps its history.') && act(() => unlinkSupermarket(companyId), 'Unlinked.')} className="ml-auto text-xs text-red-300 hover:text-red-200">Unlink</button>}
       </div>
 
+      {storePin && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white border-opacity-10 bg-white bg-opacity-5 p-3 text-sm">
+          <MapPin className={`h-4 w-4 shrink-0 ${storePin.latitude != null ? 'text-emerald-300' : 'text-amber-300'}`} />
+          <span className="min-w-0 flex-1 truncate text-gray-200">
+            {storePin.latitude != null
+              ? (storePin.address || `${Number(storePin.latitude).toFixed(5)}, ${Number(storePin.longitude).toFixed(5)}`)
+              : 'No location on the map yet - riders cannot find this store.'}
+          </span>
+          {canAdmin && (
+            <button type="button" onClick={() => setEditingPin(true)} className="text-xs font-medium text-amber-300 hover:text-amber-200">
+              {storePin.latitude != null ? 'Update location' : 'Set location'}
+            </button>
+          )}
+        </div>
+      )}
+
       {error && <p className="rounded border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-200">{error}</p>}
       {notice && <p className="rounded border border-emerald-500/40 bg-emerald-500/10 p-2 text-xs text-emerald-200">{notice}</p>}
 
@@ -156,6 +181,26 @@ export default function SupermarketLinkPanel({ companyId, items = [], canAdmin, 
             </li>
           ))}
         </ul>
+      )}
+      {editingPin && storePin && (
+        <BranchLocationEditor
+          branch={{
+            business_id: linked.id,
+            business_name: linked.name,
+            latitude: storePin.latitude,
+            longitude: storePin.longitude,
+            location_address: storePin.address,
+            location_directions: storePin.directions
+          }}
+          subtitle=" - store on the supermarket platform"
+          save={(payload) => setSupermarketLocation(linked.id, payload)}
+          onClose={() => setEditingPin(false)}
+          onSaved={async () => {
+            setEditingPin(false);
+            setNotice('Store location saved. Riders and the branch profile now show the same place.');
+            await load();
+          }}
+        />
       )}
     </div>
   );
