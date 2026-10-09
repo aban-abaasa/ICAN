@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Loader, Wallet, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getBalance } from '../services/icanWalletService';
-import { topUpIcanWallet, MIN_TOPUP_UGX, ICAN_TO_UGX } from '../services/walletTopUpService';
+import { topUpIcanWallet, ICAN_TO_UGX } from '../services/walletTopUpService';
+import { TOPUP_CURRENCIES, decimalsFor, formatMoney, getTopUpQuote, minTopUp, niceCeil } from '../services/topUpCurrency';
 
 const SKINS = {
   slate: {
@@ -25,22 +26,20 @@ const SKINS = {
   },
 };
 
-const fmt = (n) => Math.round(Number(n) || 0).toLocaleString();
-const roundUp = (n, step = 1000) => Math.ceil(n / step) * step;
-
 /**
  * "Your wallet has X ICAN" at checkout, with a top-up that works in place. When the balance can't cover the
  * order the panel opens by itself with the shortfall filled in; otherwise it stays a one-line balance with a
  * "Top up" link. Payment is a normal Flutterwave checkout (card, Mobile Money or bank) verified on the server,
  * which then credits the same ICAN wallet checkout spends from -- see walletTopUpService.
  *
- *   neededUgx   what this order costs in UGX
+ *   neededUgx   what this order costs in UGX (shown to the customer in their own currency)
  *   forceOpen   true after the server reported an insufficient balance
  */
 export default function WalletTopUpInline({ skin = 'slate', neededUgx = 0, forceOpen = false, customerName = '', customerPhone = '' }) {
   const k = SKINS[skin] || SKINS.slate;
   const { user } = useAuth();
-  const [balanceUgx, setBalanceUgx] = useState(null);
+  const [balanceIcan, setBalanceIcan] = useState(null);
+  const [quote, setQuote] = useState(null); // { currency, price }: the LIVE price of one coin in the customer's own currency
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
@@ -51,26 +50,44 @@ export default function WalletTopUpInline({ skin = 'slate', neededUgx = 0, force
     if (!user?.id) return null;
     try {
       const b = await getBalance(user.id);
-      setBalanceUgx(b.ican * ICAN_TO_UGX);
-      return b.ican * ICAN_TO_UGX;
+      setBalanceIcan(b.ican);
+      return b.ican;
     } catch {
-      setBalanceUgx(null);
+      setBalanceIcan(null);
       return null;
     }
   }, [user?.id]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const shortfall = balanceUgx == null ? 0 : Math.max(0, neededUgx - balanceUgx);
-  const isShort = shortfall > 0.5;
+  // The live price, kept fresh while this panel is on screen.
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let cancelled = false;
+    const load = () => getTopUpQuote().then((q) => { if (!cancelled) setQuote(q); }).catch(() => {});
+    load();
+    const timer = setInterval(load, 60 * 1000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [user?.id]);
+
+  const cur = quote?.currency || 'UGX';
+  const price = quote?.price || 0;
+  const money = (ican) => formatMoney(ican * price, cur);
+  const min = price ? minTopUp(cur, price) : 0;
+  // Checkout spends coins at ICAN_TO_UGX per coin, so that is what the order needs in coins.
+  const neededIcan = neededUgx / ICAN_TO_UGX;
+  const shortIcan = balanceIcan == null ? 0 : Math.max(0, neededIcan - balanceIcan);
+  const isShort = shortIcan > 1e-6;
+  const suggested = price ? Math.max(min, niceCeil(Math.max(shortIcan, 0.0001) * price * 1.01)) : 0;
 
   // Open by itself, with the shortfall filled in, whenever the wallet can't cover the order.
   useEffect(() => {
+    if (!quote) return;
     if (isShort || forceOpen) {
       setOpen(true);
-      setAmount((prev) => prev || String(Math.max(MIN_TOPUP_UGX, roundUp(shortfall || neededUgx))));
+      setAmount((prev) => prev || String(suggested));
     }
-  }, [isShort, forceOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isShort, forceOpen, quote?.currency]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pay = async () => {
     setError('');
@@ -78,16 +95,16 @@ export default function WalletTopUpInline({ skin = 'slate', neededUgx = 0, force
     setBusy(true);
     try {
       const res = await topUpIcanWallet({
-        ugx: Number(amount),
+        amount: Number(amount),
         customerEmail: user?.email,
         customerName: customerName || user?.user_metadata?.full_name,
         customerPhone,
       });
       if (res.success) {
         const now = await refresh();
-        setDone(`Added ${res.icanAmount.toFixed(4)} ICAN (UGX ${fmt(res.ugx)}) to your wallet.`);
+        setDone(`Added ${res.icanAmount.toFixed(4)} ICAN for ${formatMoney(res.local, res.currency)} (live price ${formatMoney(res.price, res.currency)} per coin).`);
         setAmount('');
-        if (now != null && now + 0.5 >= neededUgx) setOpen(false);
+        if (now != null && now + 1e-6 >= neededIcan) setOpen(false);
       } else if (!res.cancelled) {
         setError(res.error || 'Top-up failed. Please try again.');
         if (res.paid) refresh();
@@ -99,33 +116,54 @@ export default function WalletTopUpInline({ skin = 'slate', neededUgx = 0, force
     }
   };
 
-  if (balanceUgx == null && !open) return null; // balance unreadable: stay out of the way
+  if (balanceIcan == null && !open) return null; // balance unreadable: stay out of the way
 
-  const presets = [...new Set([isShort ? Math.max(MIN_TOPUP_UGX, roundUp(shortfall)) : null, 10000, 20000, 50000].filter(Boolean))].slice(0, 4);
+  const presets = price
+    ? [...new Set([isShort ? suggested : null, ...[0.5, 1, 2].map((n) => Math.max(min, niceCeil(price * n)))].filter(Boolean))].slice(0, 4)
+    : [];
+  const decimals = decimalsFor(cur);
+  const coinsForAmount = price && Number(amount) > 0 ? Number(amount) / price : 0;
 
   return (
     <div className={isShort ? k.short : k.wrap} data-testid="wallet-topup">
       <div className="flex items-center justify-between gap-2">
         <p className={`text-xs flex items-center gap-1.5 ${k.head}`}>
           <Wallet className="w-3.5 h-3.5" />
-          Wallet: <b>{(balanceUgx / ICAN_TO_UGX).toFixed(4)} ICAN</b> <span className={k.body}>(≈ UGX {fmt(balanceUgx)})</span>
+          Wallet: <b>{(balanceIcan ?? 0).toFixed(4)} ICAN</b> {price > 0 && <span className={k.body}>(≈ {money(balanceIcan ?? 0)})</span>}
         </p>
         {!open && <button type="button" onClick={() => setOpen(true)} className={`${k.link} flex items-center gap-1`}><Plus className="w-3 h-3" />Top up</button>}
       </div>
-      {isShort && <p className={`text-xs ${k.warn}`}>This order needs UGX {fmt(neededUgx)} — add at least UGX {fmt(roundUp(shortfall, 1))} to your wallet to pay with it.</p>}
+      {isShort && <p className={`text-xs ${k.warn}`}>This order needs {neededIcan.toFixed(4)} ICAN — add at least {shortIcan.toFixed(4)} ICAN{price > 0 ? ` (≈ ${money(shortIcan)})` : ''} to pay with your wallet.</p>}
       {done && <p className={`text-xs ${k.ok}`}>{done}</p>}
 
       {open && (
         <div className="space-y-2">
-          <div className="flex flex-wrap gap-1.5">
-            {presets.map((p) => <button key={p} type="button" onClick={() => setAmount(String(p))} className={k.chip}>UGX {fmt(p)}</button>)}
-          </div>
-          <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" placeholder={`Amount in UGX (min ${fmt(MIN_TOPUP_UGX)})`} aria-label="Top-up amount in UGX" className={k.input} />
-          <button type="button" onClick={pay} disabled={busy || Number(amount) < MIN_TOPUP_UGX} className={k.btn}>
-            {busy ? <Loader className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            {busy ? 'Waiting for payment…' : `Top up UGX ${fmt(amount)} with Mobile Money, card or bank`}
-          </button>
-          <p className={`text-[11px] ${k.body}`}>1 ICAN = UGX {fmt(ICAN_TO_UGX)} at checkout. Your coins arrive the moment the payment is confirmed.</p>
+          {price > 0 ? (
+            <>
+              <p className={`text-[11px] flex items-center gap-1.5 ${k.body}`}>
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live price: 1 ICAN = <b>{formatMoney(price, cur)}</b> — you pay in {cur}, your country's currency.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {presets.map((p) => <button key={p} type="button" onClick={() => setAmount(String(p))} className={k.chip}>{formatMoney(p, cur)}</button>)}
+              </div>
+              <input
+                value={amount}
+                onChange={(e) => setAmount(e.target.value.replace(decimals ? /[^\d.]/g : /[^\d]/g, ''))}
+                inputMode={decimals ? 'decimal' : 'numeric'}
+                placeholder={`Amount in ${cur} (min ${formatMoney(min, cur)})`}
+                aria-label={`Top-up amount in ${cur}`}
+                className={k.input}
+              />
+              <button type="button" onClick={pay} disabled={busy || !(Number(amount) >= min)} className={k.btn}>
+                {busy ? <Loader className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                {busy ? 'Waiting for payment…' : `Top up ${formatMoney(Number(amount) || 0, cur)} with ${TOPUP_CURRENCIES[cur].label}`}
+              </button>
+              {coinsForAmount > 0 && <p className={`text-[11px] ${k.body}`}>≈ {coinsForAmount.toFixed(4)} ICAN at the live price. The price is re-checked the moment you pay, and your coins arrive as soon as the payment is confirmed.</p>}
+            </>
+          ) : (
+            <p className={`text-xs ${k.body}`}><Loader className="w-3 h-3 animate-spin inline mr-1" />Getting the live coin price…</p>
+          )}
           {!isShort && <p className="text-center"><button type="button" onClick={() => { setOpen(false); setError(''); }} className={k.link}>Close</button></p>}
         </div>
       )}

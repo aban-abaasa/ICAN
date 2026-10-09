@@ -9,6 +9,12 @@ import { corsHeaders } from "../_shared/cors.ts";
 // all four apps (ican, digital-city-era, mybodaguy, farm-agent).
 
 const ICAN_UGX_FLOOR_PRICE = 5000;
+// A charge made through the IcanEra wallet top-up names its currency and is checked against the LIVE
+// price of one coin in that currency (ican_live_price_in_currency) -- never a fixed rate. The live
+// price can move a little between the customer's quote and this check, so up to 1% is absorbed.
+const LIVE_PRICE_TOLERANCE = 0.01;
+const FALLBACK_CHARGE_CURRENCY = "USD";
+
 const VALID_SOURCE_APPS = ["ican", "digital-city-era", "farm-agent", "mybodaguy"];
 
 const jsonResponse = (body: Record<string, unknown>, status = 200) =>
@@ -33,7 +39,19 @@ serve(async (req) => {
     }
     const accessToken = authHeader.replace("Bearer ", "").trim();
 
-    const { transaction_id, tx_ref, ican_amount, source_app } = await req.json();
+    const body = await req.json();
+
+    // Capability probe: lets a client find out whether this deployment checks charges against the
+    // live coin price BEFORE it takes anyone's money in a currency other than UGX.
+    if (body?.probe === true) {
+      return jsonResponse({ success: true, probe: true, live_pricing: true });
+    }
+
+    const { transaction_id, tx_ref, ican_amount, source_app } = body;
+    // Present only on wallet top-ups; absent = the older apps' UGX-at-floor-price check below.
+    const chargeCurrency = typeof body?.currency === "string" && body.currency
+      ? body.currency.toUpperCase()
+      : null;
 
     if (!transaction_id || !tx_ref || !(ican_amount > 0)) {
       return jsonResponse(
@@ -91,19 +109,52 @@ serve(async (req) => {
     const amountSettled = Number(paymentData.amount_settled ?? paymentData.amount ?? 0);
     const expectedUgx = Number(ican_amount) * ICAN_UGX_FLOOR_PRICE;
 
-    const isValid =
-      paymentData.status === "successful" &&
-      amountSettled > 0 &&
-      // Guards against a client requesting more ICAN than it actually paid
-      // for. Small tolerance for currency rounding.
-      amountSettled >= expectedUgx - 1 &&
-      paymentData.tx_ref === tx_ref;
+    let isValid: boolean;
+    if (!chargeCurrency) {
+      isValid =
+        paymentData.status === "successful" &&
+        amountSettled > 0 &&
+        // Guards against a client requesting more ICAN than it actually paid
+        // for. Small tolerance for currency rounding.
+        amountSettled >= expectedUgx - 1 &&
+        paymentData.tx_ref === tx_ref;
+    } else {
+      // Wallet top-up: the customer may only be charged in their own country's currency (or USD by
+      // card), and what they PAID (not what was settled to us, which is in our settlement
+      // currency) must cover the coins requested at the live price in that currency.
+      const { data: ownCurrency } = await adminClient.rpc("ican_user_currency", { p_user_id: currentUser.id });
+      const allowed = [String(ownCurrency || "").toUpperCase(), FALLBACK_CHARGE_CURRENCY];
+      if (!allowed.includes(chargeCurrency)) {
+        return jsonResponse({ success: false, error: "That currency is not available for your account." }, 400);
+      }
+      const { data: livePrice, error: priceError } = await adminClient.rpc(
+        "ican_live_price_in_currency",
+        { p_currency: chargeCurrency },
+      );
+      if (priceError || !(Number(livePrice) > 0)) {
+        console.error("live price unavailable:", priceError);
+        return jsonResponse(
+          { success: false, error: "The live coin price is unavailable right now. Your payment is safe — try again in a moment." },
+          503,
+        );
+      }
+      const expectedLocal = Number(ican_amount) * Number(livePrice);
+      const paidLocal = Number(paymentData.amount ?? 0);
+      isValid =
+        paymentData.status === "successful" &&
+        String(paymentData.currency || "").toUpperCase() === chargeCurrency &&
+        paidLocal > 0 &&
+        paidLocal >= expectedLocal * (1 - LIVE_PRICE_TOLERANCE) &&
+        paymentData.tx_ref === tx_ref;
+    }
 
     if (!isValid) {
       console.error("Flutterwave verification failed:", {
         status: paymentData.status,
         amountSettled,
         expectedUgx,
+        chargeCurrency,
+        chargedCurrency: paymentData.currency,
         txRefMatch: paymentData.tx_ref === tx_ref,
       });
       return jsonResponse(
