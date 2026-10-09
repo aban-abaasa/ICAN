@@ -3,6 +3,9 @@ import { Trash2, Plus, BarChart3, Lock, Eye, EyeOff, Check, AlertCircle } from '
 import { getSupabaseClient } from '../lib/supabase';
 import CmmsPageShell from './CmmsPageShell';
 import TransactionReceiptModal from './TransactionReceiptModal';
+import ChurchTitheGiving from './ChurchTitheGiving';
+import { usePinPrompt } from './PinPromptDialog';
+import { confirmWalletPin } from '../services/churchTitheService';
 import { titheToReceiptTx, makeReceiptNumber } from '../utils/transactionReceipt';
 
 /**
@@ -28,13 +31,25 @@ import { titheToReceiptTx, makeReceiptNumber } from '../utils/transactionReceipt
 
 export default function TitheManager() {
   const supabase = getSupabaseClient();
+  const { askPin, pinDialog } = usePinPrompt();
+
+  // Spending from the IcanEra wallet always needs the wallet PIN — cash only records a gift, so it doesn't.
+  // Returns an error message when the PIN is wrong or cancelled, or null when it is fine to go ahead.
+  const walletPinError = async (paymentMethod, amount) => {
+    if (paymentMethod !== 'wallet') return null;
+    const res = await confirmWalletPin(askPin, {
+      title: 'Confirm with your PIN',
+      message: `Pay UGX ${Number(amount).toLocaleString()} of tithe from your IcanEra wallet.`,
+    });
+    return res.ok ? null : res.error;
+  };
   
   // ============================================================
   // STATE
   // ============================================================
   
   // Form state
-  const [formMode, setFormMode] = useState('calculator'); // 'calculator' | 'add' | 'settle' | 'pay' | 'view' | 'analytics' | 'audit'
+  const [formMode, setFormMode] = useState('calculator'); // 'calculator' | 'add' | 'church' | 'settle' | 'pay' | 'view' | 'analytics' | 'audit'
   const [form, setForm] = useState({
     amount: '',
     givingType: 'tithe',
@@ -319,6 +334,9 @@ export default function TitheManager() {
         throw new Error(`Insufficient wallet balance. You have ${walletBalance} UGX. Choose Cash if you're giving this by hand.`);
       }
 
+      const pinErr = await walletPinError(form.paymentMethod, amount);
+      if (pinErr) throw new Error(pinErr);
+
       const { data, error } = await supabase.rpc('fn_add_tithe', {
         p_giving_type: form.givingType,
         p_amount: amount,
@@ -446,6 +464,9 @@ export default function TitheManager() {
       setError(`Tithe amount cannot exceed transaction amount (${selectedTransaction.amount} ${selectedTransaction.currency})`);
       return;
     }
+
+    const payPinErr = await walletPinError(form.paymentMethod, amount);
+    if (payPinErr) { setError(payPinErr); return; }
 
     setLoading(true);
     setError(null);
@@ -719,6 +740,9 @@ export default function TitheManager() {
     if (amount > remaining) { setCalcMsg({ type: 'err', text: `Only ${remaining.toLocaleString()} UGX remains owed on this income (already paid ${paidSoFar.toLocaleString()} of the ${due.toLocaleString()} due).` }); return; }
     if (calcForm.paymentMethod === 'wallet' && amount > walletBalance) { setCalcMsg({ type: 'err', text: `Exceeds wallet balance (${walletBalance.toLocaleString()} UGX). Choose Cash instead.` }); return; }
 
+    const pinErr = await walletPinError(calcForm.paymentMethod, amount);
+    if (pinErr) { setCalcMsg({ type: 'err', text: pinErr }); return; }
+
     setCalcLoading(true);
     setCalcMsg(null);
     try {
@@ -776,6 +800,9 @@ export default function TitheManager() {
     if (calcBizForm.paymentMethod === 'wallet' && amount > walletBalance) { setCalcBizMsg({ type: 'err', text: `Exceeds wallet balance (${walletBalance.toLocaleString()} UGX). Choose Cash instead.` }); return; }
     // Business giving beyond what's currently owed is allowed (paying ahead,
     // or simply giving more) — the UI warns about it inline but never blocks it.
+
+    const bizPinErr = await walletPinError(calcBizForm.paymentMethod, amount);
+    if (bizPinErr) { setCalcBizMsg({ type: 'err', text: bizPinErr }); return; }
 
     setCalcLoading(true);
     try {
@@ -1924,6 +1951,7 @@ export default function TitheManager() {
             { id: 'calculator', label: '🙏 Calculator', accent: 'gold' },
             { id: 'add', label: '➕ Add Tithe', accent: 'emerald' },
             { id: 'settle', label: '💰 Settle', accent: 'navy' },
+            { id: 'church', label: '⛪ Give to Church', accent: 'gold' },
             { id: 'pay', label: '💳 Pay Tithe', accent: 'burgundy' },
             { id: 'view', label: '👁️ View', accent: 'teal' },
             { id: 'analytics', label: '📊 Analytics', accent: 'plum' },
@@ -1964,6 +1992,16 @@ export default function TitheManager() {
             {formMode === 'calculator' && renderCalculator()}
             {formMode === 'add' && renderAddForm()}
             {formMode === 'settle' && renderSettleTithes()}
+            {formMode === 'church' && (
+              <ChurchTitheGiving
+                askPin={askPin}
+                walletBalance={walletBalance}
+                onGiven={(payment) => {
+                  openTitheReceipt(payment);
+                  Promise.all([fetchTithes(), fetchSummary(), fetchWalletBalance()]);
+                }}
+              />
+            )}
             {formMode === 'pay' && renderPayTithe()}
             {formMode === 'view' && renderTithesList()}
             {formMode === 'analytics' && renderAnalytics()}
@@ -2046,6 +2084,7 @@ export default function TitheManager() {
         </div>
         </CmmsPageShell>
       </div>
+      {pinDialog}
       {titheReceipt && <TransactionReceiptModal transaction={titheReceipt} onClose={() => setTitheReceipt(null)} />}
     </div>
   );
