@@ -170,3 +170,15 @@ export async function getUserStorefronts(userIds) {
   });
   return { data: data || [], error };
 }
+
+// Directory of resellers with a live storefront (one row each: product count,
+// cheapest price, free delivery / stock flags) -- powers the "Resellers" tab.
+// Needs backend/DROPSHIP_RESELLERS_DIRECTORY.sql.
+export async function getDropshipResellers({ query = '', limit = 60, offset = 0 } = {}) {
+  const { data, error } = await supabase.rpc('get_dropship_resellers', {
+    p_query: query,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  return { data: data || [], error };
+}
