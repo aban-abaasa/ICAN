@@ -6135,6 +6135,10 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           growth: 'Career & growth', resume: 'Career & growth', settings: 'Settings', franchise: 'IcanEra partners', insurer: 'IcanEra partners',
         }[selectedDetail.tab] || 'IcanEra';
         const isFranchisePage = selectedDetail.tab === 'franchise';
+        // One colour per destination; the sheet's gold-turned-accent rules in index.css follow it
+        const detailAccent = selectedDetail.item === 'Notifications' ? 'sky' : ({
+          profile: 'sky', security: 'rose', readiness: 'emerald', growth: 'violet', resume: 'indigo', settings: 'teal', franchise: 'amber', insurer: 'orange',
+        }[selectedDetail.tab] || 'indigo');
         return (
         <div
           className={`fixed inset-0 bg-black/70 backdrop-blur-[2px] z-40 flex ${isWebDashboard ? 'items-center justify-center p-4' : 'items-end'}`}
@@ -6144,6 +6148,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             role="dialog"
             aria-modal="true"
             aria-label={selectedDetail.item}
+            data-accent={detailAccent}
             className={`icn-sheet icn-classic ${isFranchisePage ? 'icn-sheet--bloom' : ''} ${isWebDashboard
               ? 'rounded-2xl w-full max-w-3xl max-h-[85vh]'
               : isOwnProfilePage
@@ -8844,6 +8849,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Professionals Directory Panel */}
       {showProfessionalsPanel && (
         <div
+          data-accent="fuchsia"
           className={`icn-page-surface icn-classic fixed inset-x-0 z-30 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
           style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
@@ -9434,6 +9440,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* Reports Panel - always a real full page, same placement as Wallet/Trust/Pitchin */}
       {showReportingSystem && (
         <div
+          data-accent="orange"
           className={`icn-page-surface icn-classic fixed inset-x-0 z-30 overflow-y-auto ${isWebDashboard ? '' : 'top-0'}`}
           style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >

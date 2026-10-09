@@ -146,7 +146,7 @@ export const BusinessLoanCalculator = ({ isOpen, onClose, preFilledAmount = '', 
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-3 overflow-y-auto">
-      <div className="icn-page-ivory w-full max-w-4xl my-4 mt-32 md:mt-28" role="dialog" aria-modal="true" aria-label="Business Loan Calculator">
+      <div data-accent="teal" className="icn-page-ivory w-full max-w-4xl my-4 mt-32 md:mt-28" role="dialog" aria-modal="true" aria-label="Business Loan Calculator">
         {/* ── Header ── */}
         <div className="icn-page-head" style={{ position: 'relative' }}>
           <div className="min-w-0">

@@ -9016,7 +9016,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
   // panel, opened directly so it is one click from the main navigation.
   const renderInsurance = () => (
     <div className="max-w-6xl mx-auto w-full">
-      <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
+      <div data-accent="orange" className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
         <ReadinessPanel key="insurance" initialTab="insurance" onComplianceData={setComplianceData} />
       </div>
     </div>
@@ -9026,7 +9026,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
   // of the franchise console, one click from the main navigation.
   const renderInsurer = () => (
     <div className="max-w-6xl mx-auto w-full">
-      <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
+      <div data-accent="amber" className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
         <InsurerPartnerPanel key="insurer" />
       </div>
     </div>
@@ -9034,7 +9034,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
   const renderReadinessMandate = () => (
     <div className="max-w-6xl mx-auto w-full">
-      <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
+      <div data-accent="emerald" className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
         <ReadinessPanel onComplianceData={setComplianceData} />
       </div>
     </div>
@@ -9042,7 +9042,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
 
   const renderGrowthMandate = () => (
     <div className="max-w-6xl mx-auto w-full">
-      <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
+      <div data-accent="violet" className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
         <GrowthPanel onScheduleData={setScheduleData} />
       </div>
     </div>
