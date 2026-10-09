@@ -17,7 +17,9 @@ import CMMSWrittenTestBuilder from './CMMSWrittenTestBuilder';
 import CMMSEmploymentDocumentsPanel from './CMMSEmploymentDocumentsPanel';
 import CMMSBusinessOpportunitiesPanel from './CMMSBusinessOpportunitiesPanel';
 import CMMSInquiriesPanel from './CMMSInquiriesPanel';
+import CMMSSiteLibraryPanel from './CMMSSiteLibraryPanel';
 import businessChatService from '../services/businessChatService';
+import siteLibraryService from '../services/siteLibraryService';
 import LiveBoardroom from './LiveBoardroom';
 import CMMSInvestorPitchPanel from './CMMSInvestorPitchPanel';
 
@@ -178,6 +180,9 @@ const CMMSAnnouncementsPanel = ({
   // is installed / this user may see them at all (null = still checking; the tab only hides on a definite no).
   const [inquiryUnread, setInquiryUnread] = useState(0);
   const [inquiriesAvailable, setInquiriesAvailable] = useState(null);
+  // The website Library (public links): how many are listed, and whether its SQL is installed (null = still checking).
+  const [libraryCount, setLibraryCount] = useState(0);
+  const [libraryAvailable, setLibraryAvailable] = useState(null);
   const [subTab, setSubTab] = useState(() => { try { return localStorage.getItem('cmms_announcements_tab') || 'posts'; } catch { return 'posts'; } });
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -782,9 +787,10 @@ const CMMSAnnouncementsPanel = ({
   // just without any of the write controls below.
   // A remembered tab the user can no longer open (role changed) falls back to Posts.
   useEffect(() => {
-    if ((subTab === "applications" && !canManageApplications) || ((subTab === "profile" || subTab === "pitch") && !canEdit)) setSubTab("posts");
+    if ((subTab === "applications" && !canManageApplications) || ((subTab === "profile" || subTab === "pitch" || subTab === "library") && !canEdit)) setSubTab("posts");
+    if (subTab === "library" && libraryAvailable === false) setSubTab("posts");
     if (subTab === "inquiries" && (!(canEdit || canManageApplications) || inquiriesAvailable === false)) setSubTab("posts");
-  }, [subTab, canManageApplications, canEdit, inquiriesAvailable]);
+  }, [subTab, canManageApplications, canEdit, inquiriesAvailable, libraryAvailable]);
 
   useEffect(() => {
     if (!companyId || !(canEdit || canManageApplications)) return;
@@ -796,6 +802,17 @@ const CMMSAnnouncementsPanel = ({
     });
     return () => { cancelled = true; };
   }, [companyId, canEdit, canManageApplications]);
+
+  useEffect(() => {
+    if (!companyId || !canEdit) return;
+    let cancelled = false;
+    siteLibraryService.getOverview(companyId).then((result) => {
+      if (cancelled) return;
+      setLibraryAvailable(result.success);
+      if (result.success) setLibraryCount((result.data?.listed || []).length);
+    });
+    return () => { cancelled = true; };
+  }, [companyId, canEdit]);
 
   if (!canView && !canCreate && !canEdit && !canManageApplications) {
     return (
@@ -809,6 +826,7 @@ const CMMSAnnouncementsPanel = ({
     { id: 'posts', label: 'Posts', accent: 'gold', show: true },
     { id: 'applications', label: `Applications${applications.length ? ` (${applications.length})` : ''}`, accent: 'emerald', show: canManageApplications },
     { id: 'inquiries', label: `Inquiries${inquiryUnread ? ` (${inquiryUnread})` : ''}`, accent: 'emerald', show: (canEdit || canManageApplications) && inquiriesAvailable !== false },
+    { id: 'library', label: `Library${libraryCount ? ` (${libraryCount})` : ''}`, accent: 'teal', show: canEdit && libraryAvailable !== false },
     { id: 'profile', label: 'Board profile', accent: 'navy', show: canEdit },
     { id: 'pitch', label: 'Investor pitch', accent: 'plum', show: canEdit },
     { id: 'opportunities', label: 'Opportunities', accent: 'teal', show: true },
@@ -1216,6 +1234,10 @@ const CMMSAnnouncementsPanel = ({
 
       {subTab === 'inquiries' && (canEdit || canManageApplications) && (
         <CMMSInquiriesPanel companyId={companyId} onUnreadChange={setInquiryUnread} />
+      )}
+
+      {subTab === 'library' && canEdit && (
+        <CMMSSiteLibraryPanel companyId={companyId} onCountChange={setLibraryCount} />
       )}
 
       {subTab === 'opportunities' && (

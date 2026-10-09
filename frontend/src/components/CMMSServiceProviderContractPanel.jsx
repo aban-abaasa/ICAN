@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Copy, ExternalLink, Lock, Mail, Plus, Share2, Wallet, X } from 'lucide-react';
+import { CheckCircle2, Copy, ExternalLink, FolderOpen, Lock, Mail, Plus, Share2, Wallet, X } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsServiceProviderContractsService from '../services/cmmsServiceProviderContractsService';
+import siteLibraryService from '../services/siteLibraryService';
 import { approveBusinessWalletTransaction, transferFromBusinessWallet, ugxToICAN } from '../services/icanWalletService';
 
 /**
@@ -35,13 +36,21 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
   const [form, setForm] = useState({
     providerName: '', providerContact: '', title: '', scopeOfWork: '', rate: '', terms: '',
     validDays: 30, jobAssignmentId: '', accessMode: 'pin', pin: '', allowedEmail: '',
+    listInLibrary: false, libraryTitle: '',
   });
   const [publishedLink, setPublishedLink] = useState(null);
   const [publishedTitle, setPublishedTitle] = useState('');
+  // Whether this user can put things on the website's Library tab (needs edit access to the board + its SQL installed).
+  const [libraryAvailable, setLibraryAvailable] = useState(false);
+  // contract id -> its Library listing id, for the per-contract "Show on website" toggle
+  const [libraryListings, setLibraryListings] = useState({});
+  const [libraryBusyId, setLibraryBusyId] = useState(null);
+  const [publishedNote, setPublishedNote] = useState('');
 
   const resetForm = () => setForm({
     providerName: '', providerContact: '', title: '', scopeOfWork: '', rate: '', terms: '',
     validDays: 30, jobAssignmentId: '', accessMode: 'pin', pin: '', allowedEmail: '',
+    listInLibrary: false, libraryTitle: '',
   });
 
   const loadAll = async () => {
@@ -54,6 +63,28 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
     setContracts(contractsResult.success ? contractsResult.data : []);
     setJobAssignments(assignmentsResult.data || []);
     setLoading(false);
+  };
+
+  const loadLibrary = async () => {
+    if (!companyId) return;
+    const result = await siteLibraryService.getOverview(companyId);
+    setLibraryAvailable(Boolean(result.success));
+    const map = {};
+    (result.data?.listed || []).forEach((l) => { if (l.kind === 'service_contract') map[l.source_id] = l.id; });
+    setLibraryListings(map);
+  };
+
+  const handleToggleWebsite = async (contract) => {
+    const listingId = libraryListings[contract.id];
+    if (!listingId && !window.confirm(`Show "${contract.title}" on your website's Library? Visitors will see only the title with a lock. They still need the ${contract.access_mode === 'email' ? 'email address' : 'PIN'} to open it, and the provider's name is never shown.`)) return;
+    setLibraryBusyId(contract.id);
+    const result = listingId
+      ? await siteLibraryService.removeLink(listingId)
+      : await siteLibraryService.listLink(companyId, { kind: 'service_contract', sourceId: contract.id });
+    setLibraryBusyId(null);
+    if (!result.success) { setError(result.error || 'Could not update the website Library.'); return; }
+    setError('');
+    await loadLibrary();
   };
 
   useEffect(() => {
@@ -69,6 +100,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
     };
     resolveMyCmmsUserId();
     loadAll();
+    loadLibrary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, currentUser?.email]);
 
@@ -92,6 +124,19 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
     setSaving(false);
     if (!published.success) { setError(published.error); return; }
 
+    // Optional: also list it on the business website's Library. The listing only ever shows the title (never the
+    // provider); visitors still need the PIN / allowed email to open it.
+    let note = '';
+    if (libraryAvailable && form.listInLibrary) {
+      const listed = await siteLibraryService.listLink(companyId, {
+        kind: 'service_contract', sourceId: published.data.id, title: form.libraryTitle.trim(),
+      });
+      note = listed.success
+        ? 'Also listed in your website\'s Library (visitors still need the PIN or email to open it).'
+        : `The contract is published, but it could not be added to your website's Library: ${listed.error || 'try again from Posts & Jobs > Library'}.`;
+    }
+    setPublishedNote(note);
+    loadLibrary();
     setPublishedLink(cmmsServiceProviderContractsService.buildServiceProviderContractUrl(published.data.access_token));
     setPublishedTitle(form.title);
     resetForm();
@@ -148,6 +193,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
             <X className="w-3.5 h-3.5 text-emerald-300" />
           </button>
           <p className="text-emerald-300 text-xs font-semibold mb-1 pr-6">Contract published. Share this link plus the PIN/email separately with the provider:</p>
+          {publishedNote && <p className="text-emerald-200/80 text-[11px] mb-2">{publishedNote}</p>}
           <div className="flex gap-2">
             <input readOnly value={publishedLink} className="flex-1 bg-slate-800 text-slate-300 text-xs rounded px-2 py-1.5 border border-slate-700" onFocus={(e) => e.target.select()} />
             <button onClick={() => navigator.clipboard?.writeText(publishedLink)} title="Copy link" className="text-xs px-2 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white">Copy</button>
@@ -236,6 +282,22 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
             <p className="text-slate-500 text-[11px] mt-1.5">The link alone will not open the contract -- whoever opens it must also know this {form.accessMode === 'pin' ? 'PIN' : 'email address'}.</p>
           </div>
 
+          {libraryAvailable && (
+            <div className="cmms-classic-callout !p-3">
+              <label className="flex items-start gap-2 text-xs text-gray-200 cursor-pointer">
+                <input type="checkbox" className="mt-0.5" checked={form.listInLibrary} onChange={(e) => setForm({ ...form, listInLibrary: e.target.checked })} />
+                <span>
+                  <span className="font-semibold flex items-center gap-1"><FolderOpen className="w-3.5 h-3.5" /> Also list it in my website's Library</span>
+                  <span className="block text-slate-400 text-[11px] mt-0.5">Visitors see only the contract title with a lock. They still need the {form.accessMode === 'pin' ? 'PIN' : 'email address'} to open it, and the provider's name is never shown.</span>
+                </span>
+              </label>
+              {form.listInLibrary && (
+                <input type="text" value={form.libraryTitle} maxLength={120} onChange={(e) => setForm({ ...form, libraryTitle: e.target.value })}
+                  className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 mt-2" placeholder={`Public title (optional) -- leave blank to use "${form.title || 'the contract title'}"`} />
+              )}
+            </div>
+          )}
+
           {error && <p className="text-red-400 text-xs">{error}</p>}
 
           <button onClick={handlePublish} disabled={saving || !form.providerName.trim() || !form.title.trim()}
@@ -261,6 +323,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
               onShareLink={() => handleShareLink(cmmsServiceProviderContractsService.buildServiceProviderContractUrl(c.access_token), c.title)}
               onRevoke={() => handleRevoke(c.id)}
               onExtend={() => handleExtend(c)}
+              onWebsite={libraryAvailable ? { on: Boolean(libraryListings[c.id]), busy: libraryBusyId === c.id, toggle: () => handleToggleWebsite(c) } : null}
               statusColor={statusColor}
               myCmmsUserId={myCmmsUserId}
               companyId={companyId}
@@ -274,7 +337,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
   );
 };
 
-const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, onRevoke, onExtend, statusColor, myCmmsUserId, companyId, businessProfileId, onChanged }) => {
+const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, onRevoke, onExtend, onWebsite, statusColor, myCmmsUserId, companyId, businessProfileId, onChanged }) => {
   const [followups, setFollowups] = useState([]);
   const [payments, setPayments] = useState([]);
   const [note, setNote] = useState('');
@@ -381,6 +444,13 @@ const ContractRow = ({ contract, expanded, onToggle, onCopyLink, onShareLink, on
               <button onClick={onCopyLink} title="Copy link" className="cmms-classic-btn-secondary p-1.5"><Copy className="w-3.5 h-3.5" /></button>
               <button onClick={onShareLink} title="Share link" className="cmms-classic-btn-secondary p-1.5"><Share2 className="w-3.5 h-3.5" /></button>
               <a href={`/service-provider-contract?token=${contract.access_token}`} target="_blank" rel="noreferrer" title="Open" className="cmms-classic-btn-secondary p-1.5 inline-flex"><ExternalLink className="w-3.5 h-3.5" /></a>
+              {onWebsite && (
+                <button onClick={onWebsite.toggle} disabled={onWebsite.busy} aria-pressed={onWebsite.on}
+                  title={onWebsite.on ? "Listed in your website's Library. Click to remove it." : "List this contract (title only, locked) in your website's Library"}
+                  className={`text-xs px-2 py-1 rounded inline-flex items-center gap-1 disabled:opacity-50 ${onWebsite.on ? 'bg-emerald-700/70 hover:bg-emerald-700 text-white' : 'cmms-classic-btn-secondary'}`}>
+                  <FolderOpen className="w-3.5 h-3.5" /> {onWebsite.on ? 'On website' : 'Show on website'}
+                </button>
+              )}
               <button onClick={onExtend} className="cmms-classic-btn-secondary text-xs px-2 py-1">Extend</button>
               <button onClick={onRevoke} className="text-xs px-2 py-1 rounded bg-red-900/50 hover:bg-red-900 text-red-300">Revoke</button>
             </>
