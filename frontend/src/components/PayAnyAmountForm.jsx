@@ -33,9 +33,12 @@ const formatMoney = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG
 const digits = (value) => String(value || '').replace(/[^0-9]/g, '');
 const blankRow = () => ({ name: '', price: '', qty: '1' });
 
-export default function PayAnyAmountForm({ code, info, skin = 'ptx' }) {
+export default function PayAnyAmountForm({ code, info, skin = 'ptx', initialItems = null }) {
   const k = SKINS[skin] || SKINS.ptx;
-  const [rows, setRows] = useState([blankRow()]);
+  // initialItems ([{ name, price, qty }]) pre-fills the list, e.g. when a visitor taps a product on the Market tab.
+  const [rows, setRows] = useState(() => (initialItems?.length
+    ? initialItems.map((it) => ({ name: String(it.name || '').slice(0, 80), price: String(Math.round(Number(it.price) || 0) || ''), qty: String(it.qty || 1) }))
+    : [blankRow()]));
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
