@@ -1,7 +1,8 @@
 import CountryService from '../../services/countryService';
 
 // Every price on the platform is stored in UGX. A store shows it in its own
-// country's currency (supermarkets.country, a code or a name), converted with
+// country's currency (the store owner's signup country, user_accounts.country_code,
+// else supermarkets.country -- a code or a name), converted with
 // the app's exchange-rate table; when the store has no known country or that
 // currency has no rate, the price simply stays in UGX instead of guessing.
 export const formatStorePrice = (amountUGX, storeCountry) => {
