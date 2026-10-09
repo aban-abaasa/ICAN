@@ -45,6 +45,24 @@ const addPublicBusinesses = (posts, companies) => {
   }
 };
 
+// Reseller storefronts (/store/<id>) from the same anon-granted RPC the
+// Resellers tab uses. Optional: if DROPSHIP_RESELLERS_DIRECTORY.sql hasn't been
+// run yet this returns [] and the sitemap simply omits them.
+const fetchResellerIds = async (supabaseUrl, anonKey) => {
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/get_dropship_resellers`, {
+      method: 'POST',
+      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_query: '', p_limit: 500, p_offset: 0 }),
+    });
+    if (!response.ok) return [];
+    const rows = await response.json();
+    return Array.isArray(rows) ? rows.map((row) => row.business_profile_id).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+};
+
 export default async function handler(_req, res) {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -88,7 +106,9 @@ export default async function handler(_req, res) {
     const companyUrls = Array.from(companies, ([companyId, lastModified]) => (
       `<url><loc>${SITE_URL}/notices/${escapeXml(companyId)}</loc>${lastModified ? `<lastmod>${escapeXml(new Date(lastModified).toISOString())}</lastmod>` : ''}</url>`
     )).join('');
-    const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url>${companyUrls}</urlset>`;
+    const resellerUrls = (await fetchResellerIds(supabaseUrl, anonKey))
+      .map((resellerId) => `<url><loc>${SITE_URL}/store/${escapeXml(resellerId)}</loc></url>`).join('');
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url><url><loc>${SITE_URL}/shop</loc><changefreq>daily</changefreq></url>${resellerUrls}${companyUrls}</urlset>`;
 
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
     res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=86400');
