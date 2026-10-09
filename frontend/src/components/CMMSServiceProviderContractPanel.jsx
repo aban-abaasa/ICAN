@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Copy, ExternalLink, Lock, Mail, Plus, Share2, Wallet, X } from 'lucide-react';
+import { CheckCircle2, Copy, ExternalLink, FolderOpen, Lock, Mail, Plus, Share2, Wallet, X } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsServiceProviderContractsService from '../services/cmmsServiceProviderContractsService';
+import siteLibraryService from '../services/siteLibraryService';
 import { approveBusinessWalletTransaction, transferFromBusinessWallet, ugxToICAN } from '../services/icanWalletService';
 
 /**
@@ -35,13 +36,18 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
   const [form, setForm] = useState({
     providerName: '', providerContact: '', title: '', scopeOfWork: '', rate: '', terms: '',
     validDays: 30, jobAssignmentId: '', accessMode: 'pin', pin: '', allowedEmail: '',
+    listInLibrary: false, libraryTitle: '',
   });
   const [publishedLink, setPublishedLink] = useState(null);
   const [publishedTitle, setPublishedTitle] = useState('');
+  // Whether this user can put things on the website's Library tab (needs edit access to the board + its SQL installed).
+  const [libraryAvailable, setLibraryAvailable] = useState(false);
+  const [publishedNote, setPublishedNote] = useState('');
 
   const resetForm = () => setForm({
     providerName: '', providerContact: '', title: '', scopeOfWork: '', rate: '', terms: '',
     validDays: 30, jobAssignmentId: '', accessMode: 'pin', pin: '', allowedEmail: '',
+    listInLibrary: false, libraryTitle: '',
   });
 
   const loadAll = async () => {
@@ -69,6 +75,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
     };
     resolveMyCmmsUserId();
     loadAll();
+    siteLibraryService.getOverview(companyId).then((result) => setLibraryAvailable(Boolean(result.success)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, currentUser?.email]);
 
@@ -92,6 +99,18 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
     setSaving(false);
     if (!published.success) { setError(published.error); return; }
 
+    // Optional: also list it on the business website's Library. The listing only ever shows the title (never the
+    // provider); visitors still need the PIN / allowed email to open it.
+    let note = '';
+    if (libraryAvailable && form.listInLibrary) {
+      const listed = await siteLibraryService.listLink(companyId, {
+        kind: 'service_contract', sourceId: published.data.id, title: form.libraryTitle.trim(),
+      });
+      note = listed.success
+        ? 'Also listed in your website\'s Library (visitors still need the PIN or email to open it).'
+        : `The contract is published, but it could not be added to your website's Library: ${listed.error || 'try again from Posts & Jobs > Library'}.`;
+    }
+    setPublishedNote(note);
     setPublishedLink(cmmsServiceProviderContractsService.buildServiceProviderContractUrl(published.data.access_token));
     setPublishedTitle(form.title);
     resetForm();
@@ -148,6 +167,7 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
             <X className="w-3.5 h-3.5 text-emerald-300" />
           </button>
           <p className="text-emerald-300 text-xs font-semibold mb-1 pr-6">Contract published. Share this link plus the PIN/email separately with the provider:</p>
+          {publishedNote && <p className="text-emerald-200/80 text-[11px] mb-2">{publishedNote}</p>}
           <div className="flex gap-2">
             <input readOnly value={publishedLink} className="flex-1 bg-slate-800 text-slate-300 text-xs rounded px-2 py-1.5 border border-slate-700" onFocus={(e) => e.target.select()} />
             <button onClick={() => navigator.clipboard?.writeText(publishedLink)} title="Copy link" className="text-xs px-2 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white">Copy</button>
@@ -235,6 +255,22 @@ const CMMSServiceProviderContractPanel = ({ companyId, currentUser, businessProf
             )}
             <p className="text-slate-500 text-[11px] mt-1.5">The link alone will not open the contract -- whoever opens it must also know this {form.accessMode === 'pin' ? 'PIN' : 'email address'}.</p>
           </div>
+
+          {libraryAvailable && (
+            <div className="cmms-classic-callout !p-3">
+              <label className="flex items-start gap-2 text-xs text-gray-200 cursor-pointer">
+                <input type="checkbox" className="mt-0.5" checked={form.listInLibrary} onChange={(e) => setForm({ ...form, listInLibrary: e.target.checked })} />
+                <span>
+                  <span className="font-semibold flex items-center gap-1"><FolderOpen className="w-3.5 h-3.5" /> Also list it in my website's Library</span>
+                  <span className="block text-slate-400 text-[11px] mt-0.5">Visitors see only the contract title with a lock. They still need the {form.accessMode === 'pin' ? 'PIN' : 'email address'} to open it, and the provider's name is never shown.</span>
+                </span>
+              </label>
+              {form.listInLibrary && (
+                <input type="text" value={form.libraryTitle} maxLength={120} onChange={(e) => setForm({ ...form, libraryTitle: e.target.value })}
+                  className="w-full bg-slate-700 text-white text-xs rounded px-2 py-2 border border-slate-600 mt-2" placeholder={`Public title (optional) -- leave blank to use "${form.title || 'the contract title'}"`} />
+              )}
+            </div>
+          )}
 
           {error && <p className="text-red-400 text-xs">{error}</p>}
 
