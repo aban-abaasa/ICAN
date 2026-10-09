@@ -26,8 +26,10 @@ import {
 } from 'lucide-react'
 import IcanEraLogo from '../IcanEra.png'
 import ThemeSwitcher from './ThemeSwitcher'
+import { useI18n } from '../i18n/I18nProvider'
 
 export default function MainNavigation({ onTrustClick, onShareClick, onWalletClick }) {
+  const { t } = useI18n()
   const [activeSection, setActiveSection] = useState('dashboard')
   const [expandedMenu, setExpandedMenu] = useState(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -41,92 +43,92 @@ export default function MainNavigation({ onTrustClick, onShareClick, onWalletCli
   const menuItems = [
     {
       id: 'dashboard',
-      label: 'Dashboard',
+      label: t('nav.dashboard'),
       icon: Home,
       path: '/dashboard',
       submenu: [
-        { label: 'Overview', path: '/dashboard', icon: Home },
-        { label: 'Portfolio', path: '/dashboard/portfolio', icon: BarChart3 },
-        { label: 'Analytics', path: '/dashboard/analytics', icon: TrendingUp }
+        { label: t('nav.overview'), path: '/dashboard', icon: Home },
+        { label: t('nav.portfolio'), path: '/dashboard/portfolio', icon: BarChart3 },
+        { label: t('nav.analytics'), path: '/dashboard/analytics', icon: TrendingUp }
       ]
     },
     {
       id: 'security',
-      label: 'Security',
+      label: t('nav.security'),
       icon: Shield,
       path: '/security',
       submenu: [
-        { label: 'Account', path: '/security', icon: Lock },
-        { label: 'Privacy', path: '/security/privacy', icon: Lock },
-        { label: 'Verification', path: '/security/verify', icon: Shield }
+        { label: t('nav.account'), path: '/security', icon: Lock },
+        { label: t('nav.privacy'), path: '/security/privacy', icon: Lock },
+        { label: t('nav.verification'), path: '/security/verify', icon: Shield }
       ]
     },
     {
       id: 'readiness',
-      label: 'Readiness',
+      label: t('nav.readiness'),
       icon: Globe,
       path: '/readiness',
       submenu: [
-        { label: 'Status', path: '/readiness', icon: Globe },
-        { label: 'Reports', path: '/readiness/reports', icon: BarChart3 }
+        { label: t('nav.status'), path: '/readiness', icon: Globe },
+        { label: t('nav.reports'), path: '/readiness/reports', icon: BarChart3 }
       ]
     },
     {
       id: 'growth',
-      label: 'Growth',
+      label: t('nav.growth'),
       icon: TrendingUp,
       path: '/growth',
       submenu: [
-        { label: 'Opportunities', path: '/growth', icon: Target },
-        { label: 'Strategies', path: '/growth/strategies', icon: TrendingUp }
+        { label: t('nav.opportunities'), path: '/growth', icon: Target },
+        { label: t('nav.strategies'), path: '/growth/strategies', icon: TrendingUp }
       ]
     },
     {
       id: 'trust',
-      label: '🏦 SACCO',
+      label: `🏦 ${t('nav.sacco')}`,
       icon: Banknote,
       path: '/trust',
       submenu: [
-        { label: '🔍 Explore', path: '/trust', icon: Users },
-        { label: '👥 My Trusts', path: '/trust/my', icon: Banknote },
-        { label: '🗳️ Vote', path: '/trust/vote', icon: Target },
-        { label: '📮 Applications', path: '/trust/applications', icon: BarChart3 },
-        { label: '✨ Create', path: '/trust/create', icon: Target }
+        { label: `🔍 ${t('nav.explore')}`, path: '/trust', icon: Users },
+        { label: `👥 ${t('nav.myTrusts')}`, path: '/trust/my', icon: Banknote },
+        { label: `🗳️ ${t('nav.vote')}`, path: '/trust/vote', icon: Target },
+        { label: `📮 ${t('nav.applications')}`, path: '/trust/applications', icon: BarChart3 },
+        { label: `✨ ${t('nav.create')}`, path: '/trust/create', icon: Target }
       ]
     },
     {
       id: 'share',
-      label: 'Share',
+      label: t('nav.share'),
       icon: Heart,
       path: '/share',
       submenu: [
-        { label: 'Opportunities', path: '/share', icon: Banknote },
-        { label: 'My Pitches', path: '/share/my-pitches', icon: Target },
-        { label: 'Invest', path: '/share/invest', icon: TrendingUp },
-        { label: 'Grants', path: '/share/grants', icon: Heart }
+        { label: t('nav.opportunities'), path: '/share', icon: Banknote },
+        { label: t('nav.myPitches'), path: '/share/my-pitches', icon: Target },
+        { label: t('nav.invest'), path: '/share/invest', icon: TrendingUp },
+        { label: t('nav.grants'), path: '/share/grants', icon: Heart }
       ]
     },
     {
       id: 'wallet',
-      label: 'Wallet',
+      label: t('nav.wallet'),
       icon: Wallet,
       path: '/wallet',
       submenu: [
-        { label: 'My Wallet', path: '/wallet', icon: Wallet },
-        { label: 'Send Money', path: '/wallet/send', icon: Banknote },
-        { label: 'Receive', path: '/wallet/receive', icon: TrendingUp },
-        { label: 'Transactions', path: '/wallet/transactions', icon: BarChart3 },
-        { label: 'Currency', path: '/wallet/currency', icon: Globe }
+        { label: t('nav.myWallet'), path: '/wallet', icon: Wallet },
+        { label: t('nav.sendMoney'), path: '/wallet/send', icon: Banknote },
+        { label: t('nav.receive'), path: '/wallet/receive', icon: TrendingUp },
+        { label: t('nav.transactions'), path: '/wallet/transactions', icon: BarChart3 },
+        { label: t('nav.currency'), path: '/wallet/currency', icon: Globe }
       ]
     },
     {
       id: 'settings',
-      label: 'Settings',
+      label: t('nav.settings'),
       icon: Settings,
       path: '/settings',
       submenu: [
-        { label: 'Profile', path: '/settings/profile', icon: Home },
-        { label: 'Preferences', path: '/settings/preferences', icon: Settings }
+        { label: t('nav.profile'), path: '/settings/profile', icon: Home },
+        { label: t('nav.preferences'), path: '/settings/preferences', icon: Settings }
       ]
     }
   ]

@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase/client';
 import icanCoinService from '../services/icanCoinService';
+import { announceCountryChange } from '../i18n/I18nProvider';
 
 export const useCountry = () => {
   const { user } = useAuth();
@@ -80,6 +81,8 @@ export const useCountry = () => {
 
       setCountry(countryCode);
       setIsCountrySet(true);
+      // The app's language follows the country (see i18n/I18nProvider).
+      announceCountryChange(countryCode);
       return { success: true, country: countryCode };
     } catch (err) {
       console.error('Failed to update country:', err);

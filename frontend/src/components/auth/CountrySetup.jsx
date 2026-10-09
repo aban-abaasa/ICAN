@@ -7,10 +7,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CountryService } from '../../services/countryService';
 import useCountry from '../../hooks/useCountry';
+import { useI18n } from '../../i18n/I18nProvider';
 import './CountrySetup.css';
 
 export default function CountrySetup({ onCountrySet, isModal = false, isMandatory = false }) {
   const { updateCountry } = useCountry();
+  const { t, countryName } = useI18n();
   const [isOpen, setIsOpen] = useState(true);
   const [selectedCountry, setSelectedCountry] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -176,9 +178,15 @@ export default function CountrySetup({ onCountrySet, isModal = false, isMandator
   };
 
   const country = selectedCountry ? CountryService.getCountry(selectedCountry) : null;
-  const filteredCountries = countries.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.code.toLowerCase().includes(searchQuery.toLowerCase())
+  // Names are shown (and searched) in the user's language; the English name still matches too.
+  const localizedCountries = countries
+    .map(c => ({ ...c, label: countryName(c.code, c.name) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const query = searchQuery.toLowerCase();
+  const filteredCountries = localizedCountries.filter(c =>
+    c.label.toLowerCase().includes(query) ||
+    c.name.toLowerCase().includes(query) ||
+    c.code.toLowerCase().includes(query)
   );
 
   if (success && country) {
@@ -186,14 +194,14 @@ export default function CountrySetup({ onCountrySet, isModal = false, isMandator
       <div className="country-setup-minimal">
         <div className="success-checkmark">
           <div className="checkmark">✓</div>
-          <p>{country.name}</p>
-          <div className="success-subtext">Location confirmed</div>
+          <p>{countryName(selectedCountry, country.name)}</p>
+          <div className="success-subtext">{t('country.confirmed')}</div>
         </div>
       </div>
     );
   }
 
-  const headerText = isMandatory ? "Almost done! Where are you?" : "Select Your Country";
+  const headerText = isMandatory ? t('country.almostDone') : t('country.title');
   const selectedCountryObj = selectedCountry ? CountryService.getCountry(selectedCountry) : null;
   const displayFlag = selectedCountryObj?.flag || '🌍';
 
@@ -223,8 +231,8 @@ export default function CountrySetup({ onCountrySet, isModal = false, isMandator
 
         {suggestedCountry && !selectedCountry && (
           <div className="suggested-country" onClick={() => handleSelectCountry(suggestedCountry)}>
-            <span>💡 We detected your location: <strong>{CountryService.getCountry(suggestedCountry)?.name}</strong></span>
-            <span style={{fontSize: '12px', color: '#667eea', cursor: 'pointer'}}>Tap to confirm</span>
+            <span>💡 {t('country.detected', { name: countryName(suggestedCountry, CountryService.getCountry(suggestedCountry)?.name) })}</span>
+            <span style={{fontSize: '12px', color: '#667eea', cursor: 'pointer'}}>{t('country.tapToConfirm')}</span>
           </div>
         )}
 
@@ -241,7 +249,7 @@ export default function CountrySetup({ onCountrySet, isModal = false, isMandator
               <input 
                 ref={searchInputRef}
                 type="text"
-                placeholder="🔍 Search country..."
+                placeholder={`🔍 ${t('country.search')}`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 disabled={loading}
@@ -258,18 +266,18 @@ export default function CountrySetup({ onCountrySet, isModal = false, isMandator
                     onClick={() => handleSelectCountry(c.code)}
                     disabled={loading}
                     className="country-item"
-                    title={`Select ${c.name}`}
-                    aria-label={`${c.name}`}
+                    title={c.label}
+                    aria-label={c.label}
                   >
                     <span className="country-flag">{c.flag}</span>
-                    <span className="country-name-text">{c.name}</span>
+                    <span className="country-name-text">{c.label}</span>
                     {loading && <span className="spinner-mini"></span>}
                   </button>
                 ))
               ) : (
                 <div className="no-results">
-                  <p>No countries found</p>
-                  <p style={{fontSize: '12px', color: '#999', marginTop: '4px'}}>Try a different search</p>
+                  <p>{t('country.noResults')}</p>
+                  <p style={{fontSize: '12px', color: '#999', marginTop: '4px'}}>{t('country.tryDifferent')}</p>
                 </div>
               )}
             </div>
@@ -279,7 +287,7 @@ export default function CountrySetup({ onCountrySet, isModal = false, isMandator
         {loading && isOpen && (
           <div className="loading-indicator">
             <div className="spinner-mini"></div>
-            <span>Saving country...</span>
+            <span>{t('country.saving')}</span>
           </div>
         )}
       </div>
