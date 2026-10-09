@@ -300,47 +300,136 @@ const normalizeExternalUrl = (url) => {
 // see the module doc comment for why. Reads the exact same anon-granted RPC
 // (fn_get_public_cmms_company_header) PublicCompanyNoticeBoard.jsx itself
 // calls, so this can never show a business fact the live page wouldn't.
-const buildNoticeMeta = async ({ url, anonKey, id }) => {
-  let company;
-  try {
-    const res = await fetch(`${url}/rest/v1/rpc/fn_get_public_cmms_company_header`, {
-      method: 'POST',
-      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_company_id: id })
-    });
-    const rows = res.ok ? await res.json() : null;
-    company = Array.isArray(rows) ? rows[0] : null;
-  } catch {
-    company = null;
-  }
-  if (!company) return null;
+// schema.org JobPosting employmentType values for this app's employment_type column.
+const JOB_EMPLOYMENT_TYPES = {
+  full_time: 'FULL_TIME',
+  part_time: 'PART_TIME',
+  contract: 'CONTRACTOR',
+  internship: 'INTERN',
+  temporary: 'TEMPORARY',
+  volunteer: 'VOLUNTEER',
+};
+const MAX_JOB_POSTINGS_IN_LD = 20;
+const MAX_LINKED_POSTS_IN_BODY = 15;
 
-  const canonicalPath = `/notices/${id}`;
-  const title = company.tagline
+const plainText = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+const toIsoDate = (value) => {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
+};
+const isJobOpen = (post) => {
+  if (post.post_type !== 'job') return false;
+  if (!post.application_deadline) return true;
+  // application_deadline is a plain DATE: open through the end of that day.
+  return new Date(`${post.application_deadline}T23:59:59Z`).getTime() >= Date.now();
+};
+
+// Google for Jobs reads JobPosting structured data from the page itself, so every open job on a business's
+// board gets one -- this is what makes "<role> at <business>" searchable on Google, not just the business name.
+const buildJobPostingLd = ({ post, company, companyId, logo, sameAs }) => {
+  const posted = toIsoDate(post.published_at);
+  const validThrough = post.application_deadline ? toIsoDate(`${post.application_deadline}T23:59:59Z`) : null;
+  const employmentType = JOB_EMPLOYMENT_TYPES[post.employment_type];
+  const locality = post.location || company.location;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'JobPosting',
+    title: post.title,
+    description: plainText(post.body || post.summary || post.title, 5000),
+    url: `${SITE_URL}/notices/${companyId}?post=${post.id}`,
+    directApply: true,
+    ...(posted && { datePosted: posted }),
+    ...(validThrough && { validThrough }),
+    ...(employmentType && { employmentType }),
+    hiringOrganization: {
+      '@type': 'Organization',
+      name: company.company_name,
+      ...(sameAs[0] && { sameAs: sameAs[0] }),
+      ...(logo && { logo }),
+    },
+    ...(locality && { jobLocation: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: locality } } }),
+  };
+};
+
+// What a crawler that never runs this app's JS (and any visitor with scripts off) sees inside #root: the
+// business's facts and real links to each public post, which is also how crawlers discover the post pages.
+const buildNoticeBodyHtml = ({ company, companyId, posts, activePost }) => {
+  const contact = [
+    company.location && `<li>Location: ${escapeHtml(company.location)}</li>`,
+    company.hours_text && `<li>Hours: ${escapeHtml(company.hours_text)}</li>`,
+    company.phone && `<li>Phone: <a href="tel:${escapeAttr(company.phone.replace(/[^\d+]/g, ''))}">${escapeHtml(company.phone)}</a></li>`,
+    company.email && `<li>Email: <a href="mailto:${escapeAttr(company.email)}">${escapeHtml(company.email)}</a></li>`,
+  ].filter(Boolean).join('');
+  const postLink = (post) => `<li><a href="/notices/${escapeAttr(companyId)}?post=${escapeAttr(post.id)}">${escapeHtml(post.title)}</a>${post.summary ? ` — ${escapeHtml(plainText(post.summary, 160))}` : ''}</li>`;
+  const jobs = posts.filter((post) => post.post_type === 'job').slice(0, MAX_LINKED_POSTS_IN_BODY);
+  const news = posts.filter((post) => post.post_type !== 'job').slice(0, MAX_LINKED_POSTS_IN_BODY);
+  const activeBlock = activePost
+    ? `<article><h1>${escapeHtml(activePost.title)}</h1><p>${escapeHtml(company.company_name)}</p>${activePost.summary ? `<p>${escapeHtml(activePost.summary)}</p>` : ''}<p>${escapeHtml(plainText(activePost.body, 3000))}</p><p><a href="/notices/${escapeAttr(companyId)}">More from ${escapeHtml(company.company_name)}</a></p></article>`
+    : `<h1>${escapeHtml(company.company_name)}</h1>${company.tagline ? `<p>${escapeHtml(company.tagline)}</p>` : ''}${company.about ? `<p>${escapeHtml(plainText(company.about, 1500))}</p>` : ''}`;
+  return `<noscript><main>${activeBlock}${contact ? `<ul>${contact}</ul>` : ''}${news.length ? `<h2>News</h2><ul>${news.map(postLink).join('')}</ul>` : ''}${jobs.length ? `<h2>Careers</h2><ul>${jobs.map(postLink).join('')}</ul>` : ''}<p><a href="/">IcanEra</a></p></main></noscript>`;
+};
+
+// The one branch that builds real structured data, not just an OG preview --
+// see the module doc comment for why. Reads the exact same anon-granted RPCs
+// (fn_get_public_cmms_company_header / fn_get_public_cmms_notices)
+// PublicCompanyNoticeBoard.jsx itself calls, so this can never show a
+// business fact the live page wouldn't. fn_get_public_cmms_notices (unlike the
+// single-post RPC) does not count a view, so a crawler visit can't inflate a
+// post's view count. postId (?post=) turns the page into that one post's own
+// indexable page: its own title, description, canonical URL and JobPosting.
+const buildNoticeMeta = async ({ url, anonKey, id, postId }) => {
+  const rpc = async (fn, body) => {
+    try {
+      const res = await fetch(`${url}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const rows = res.ok ? await res.json() : null;
+      return Array.isArray(rows) ? rows : null;
+    } catch {
+      return null;
+    }
+  };
+  const [headerRows, postRows] = await Promise.all([
+    rpc('fn_get_public_cmms_company_header', { p_company_id: id }),
+    rpc('fn_get_public_cmms_notices', { p_company_id: id, p_post_type: null }),
+  ]);
+  const company = headerRows?.[0];
+  if (!company) return null;
+  const posts = postRows || [];
+  const activePost = postId ? posts.find((post) => post.id === postId) || null : null;
+
+  const canonicalPath = activePost ? `/notices/${id}?post=${activePost.id}` : `/notices/${id}`;
+  const businessTitle = company.tagline
     ? `${company.company_name} — ${company.tagline} | IcanEra`
     : `${company.company_name}${company.industry ? ` — ${company.industry}` : ''} | IcanEra`;
-  const description = (
-    company.about?.trim()
-    || company.tagline?.trim()
-    || `${company.company_name} on IcanEra — announcements, careers, products and contact details.`
-  ).slice(0, 300);
+  const title = activePost ? `${activePost.title} — ${company.company_name} | IcanEra` : businessTitle;
+  const description = activePost
+    ? (plainText(activePost.summary, 300) || plainText(activePost.body, 300) || `${activePost.title} from ${company.company_name}.`)
+    : (
+      company.about?.trim()
+      || company.tagline?.trim()
+      || `${company.company_name} on IcanEra — announcements, careers, products and contact details.`
+    ).slice(0, 300);
 
-  const [resolvedCover, resolvedLogo] = await Promise.all([
+  const [resolvedCover, resolvedLogo, resolvedPoster] = await Promise.all([
     resolveMediaUrl(company.cover_image_url, { url, anonKey, defaultBucket: 'cmms-company-profile' }),
     resolveMediaUrl(company.logo_url, { url, anonKey, defaultBucket: 'cmms-company-profile' }),
+    activePost ? resolveMediaUrl(activePost.poster_url, { url, anonKey, defaultBucket: 'cmms-company-profile' }) : null,
   ]);
-  const image = resolvedCover || resolvedLogo || DEFAULT_IMAGE;
+  const image = resolvedPoster || resolvedCover || resolvedLogo || DEFAULT_IMAGE;
 
   const sameAs = [company.website, ...SOCIAL_URL_FIELDS.map((field) => company[field])]
     .map(normalizeExternalUrl)
     .filter(Boolean);
-  const structuredData = {
+  const businessLd = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
     name: company.company_name,
-    description,
-    image,
-    url: `${SITE_URL}${canonicalPath}`,
+    description: plainText(company.about || company.tagline, 300) || description,
+    image: resolvedCover || resolvedLogo || DEFAULT_IMAGE,
+    url: `${SITE_URL}/notices/${id}`,
     ...(resolvedLogo && { logo: resolvedLogo }),
     ...(company.phone && { telephone: company.phone }),
     ...(company.email && { email: company.email }),
@@ -350,7 +439,38 @@ const buildNoticeMeta = async ({ url, anonKey, id }) => {
     ...(sameAs.length > 0 && { sameAs }),
   };
 
-  return { title, description, image, path: canonicalPath, video: null, ogType: 'business.business', structuredData };
+  const jobLd = (post) => buildJobPostingLd({ post, company, companyId: id, logo: resolvedLogo, sameAs });
+  let structuredData;
+  if (activePost) {
+    const postLd = activePost.post_type === 'job'
+      ? (isJobOpen(activePost) ? jobLd(activePost) : null)
+      : {
+        '@context': 'https://schema.org',
+        '@type': 'NewsArticle',
+        headline: plainText(activePost.title, 110),
+        description,
+        image: [image],
+        ...(toIsoDate(activePost.published_at) && { datePublished: toIsoDate(activePost.published_at) }),
+        author: { '@type': 'Organization', name: company.company_name },
+        publisher: { '@type': 'Organization', name: company.company_name, ...(resolvedLogo && { logo: { '@type': 'ImageObject', url: resolvedLogo } }) },
+        mainEntityOfPage: `${SITE_URL}${canonicalPath}`,
+      };
+    structuredData = postLd ? [businessLd, postLd] : businessLd;
+  } else {
+    const openJobs = posts.filter(isJobOpen).slice(0, MAX_JOB_POSTINGS_IN_LD).map(jobLd);
+    structuredData = openJobs.length ? [businessLd, ...openJobs] : businessLd;
+  }
+
+  return {
+    title,
+    description,
+    image,
+    path: canonicalPath,
+    video: null,
+    ogType: activePost && activePost.post_type !== 'job' ? 'article' : 'business.business',
+    structuredData,
+    bodyHtml: buildNoticeBodyHtml({ company, companyId: id, posts, activePost }),
+  };
 };
 
 // JSON-LD's only unsafe character inside a <script> body is a literal
@@ -415,7 +535,7 @@ export default async function handler(req, res) {
         : type === 'pitch' ? await buildPitchMeta({ url, anonKey, id })
         : type === 'store' ? await buildStoreMeta({ url, anonKey, id })
         : type === 'shop' ? await buildShopMeta({ url, anonKey })
-        : await buildNoticeMeta({ url, anonKey, id });
+        : await buildNoticeMeta({ url, anonKey, id, postId: typeof req.query.post === 'string' && /^[0-9a-f-]{36}$/i.test(req.query.post) ? req.query.post.toLowerCase() : null });
       if (resolved) meta = resolved;
     } catch (err) {
       console.error(`share-preview: failed to resolve ${type} ${id}:`, err);
