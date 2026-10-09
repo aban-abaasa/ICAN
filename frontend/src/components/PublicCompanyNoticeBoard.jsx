@@ -145,14 +145,18 @@ const SOCIAL_LINKS = [
 // patched server-side per business by api/share-preview.js; this effect is
 // the client-side half of the same "let this business actually be found"
 // goal, and keeps the tab title correct for a human visitor too.)
-const useBusinessSeo = (company, companyId) => {
+const useBusinessSeo = (company, companyId, pageLabel = null) => {
   useEffect(() => {
     if (!company) return;
     const previousTitle = document.title;
     const siteName = 'IcanEra';
-    const title = company.tagline
-      ? `${company.company_name} — ${company.tagline} | ${siteName}`
-      : `${company.company_name}${company.industry ? ` — ${company.industry}` : ''} | ${siteName}`;
+    // pageLabel is the open section/item ("Careers", a job's title) so each
+    // browser tab and history entry reads as its own page, like a real site.
+    const title = pageLabel
+      ? `${pageLabel} — ${company.company_name} | ${siteName}`
+      : company.tagline
+        ? `${company.company_name} — ${company.tagline} | ${siteName}`
+        : `${company.company_name}${company.industry ? ` — ${company.industry}` : ''} | ${siteName}`;
     document.title = title;
 
     const canonicalUrl = `${window.location.origin}/notices/${companyId}`;
@@ -246,7 +250,7 @@ const useBusinessSeo = (company, companyId) => {
       createdNodes.forEach((node) => node.remove());
       if (createdScript) script.remove();
     };
-  }, [company, companyId]);
+  }, [company, companyId, pageLabel]);
 };
 
 const EMPLOYMENT_LABELS = {
@@ -307,6 +311,44 @@ const PENDING_APPLICATION_LINK_KEY = 'ican_notice_board_pending_application_link
 // sign-in) -- section is plain component state, not reflected in the URL
 // like ?post=<id> is, so it would otherwise silently reset to "Notices".
 const PENDING_SECTION_KEY = 'ican_notice_board_pending_section';
+
+// Every section of the site has its own address (/notices/<id>?tab=careers),
+// so the browser's Back/Forward buttons, bookmarks and "open in new tab" all
+// behave like they do on any other website. The default section (Home) keeps
+// the clean /notices/<id> URL, and 'shop' keeps its older, friendlier
+// ?tab=market spelling so existing shared links still work. The vercel
+// rewrite for /notices/:id passes the query string straight through.
+const SECTION_IDS = ['home', 'notices', 'shop', 'pitchin', 'careers', 'pay', 'opportunities', 'account', 'track', 'track-bid'];
+const TAB_PARAM_ALIASES = { market: 'shop' };
+const SECTION_TITLES = {
+  notices: 'News',
+  shop: 'Market',
+  pitchin: 'Pitches',
+  careers: 'Careers',
+  pay: 'Pay',
+  opportunities: 'Opportunities',
+  account: 'My account',
+  track: 'Track my application',
+  'track-bid': 'Track my bid',
+};
+const readSectionFromUrl = () => {
+  const raw = new URLSearchParams(window.location.search).get('tab');
+  const id = TAB_PARAM_ALIASES[raw] || raw;
+  return SECTION_IDS.includes(id) ? id : null;
+};
+// extra: detail-view params (post / opp / pitch). Everything else in the
+// current query string is dropped on purpose -- a tab link should be clean.
+const buildBoardUrl = (sectionId, extra = {}) => {
+  const params = new URLSearchParams();
+  if (sectionId && sectionId !== 'home') params.set('tab', sectionId === 'shop' ? 'market' : sectionId);
+  Object.entries(extra).forEach(([key, value]) => { if (value) params.set(key, value); });
+  const query = params.toString();
+  return `${window.location.pathname}${query ? `?${query}` : ''}`;
+};
+const hasDetailParam = () => {
+  const params = new URLSearchParams(window.location.search);
+  return Boolean(params.get('post') || params.get('opp') || params.get('pitch'));
+};
 
 const STATUS_STYLES = {
   submitted: 'nb-chip-neutral',
@@ -494,6 +536,14 @@ const NB_STYLES = `
 .nb-verified-badge { background: var(--nb-green-soft-bg); color: var(--nb-green-soft-text); }
 .nb-strip { background: var(--nb-surface); border-bottom: 1px solid var(--nb-border); }
 .nb-info-row:hover { background: var(--nb-surface-alt); }
+.nb-footer { background: var(--nb-surface); }
+.nb-footer-link:hover { color: var(--nb-green); }
+.nb-tile { background: var(--nb-surface); border: 1px solid var(--nb-border); transition: transform .2s, border-color .2s, box-shadow .2s; }
+.nb-tile:hover { transform: translateY(-2px); border-color: var(--nb-green); box-shadow: 0 8px 20px -12px rgba(0,0,0,.35); }
+.nb-skip-link { position: absolute; left: 12px; top: -48px; z-index: 60; padding: 8px 14px; border-radius: 10px; background: var(--nb-green); color: #ffffff; font-weight: 600; font-size: 14px; transition: top .15s; }
+.nb-skip-link:focus { top: 8px; }
+.icanera-nb a:focus-visible, .icanera-nb button:focus-visible { outline: 2px solid var(--nb-green); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .nb-tile { transition: none; } }
 /* Delivery vehicle/rider pickers in the shop cart -- an unselected option
    reads as a plain outlined pill, the selected one picks up the brand green
    the same way every other "chosen" state on this board does. */
@@ -590,9 +640,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       const pending = sessionStorage.getItem(PENDING_SECTION_KEY);
       if (pending) { sessionStorage.removeItem(PENDING_SECTION_KEY); return pending; }
     } catch { /* ignore */ }
-    // /notices/<id>?tab=market opens straight on the Market tab.
-    if (new URLSearchParams(window.location.search).get('tab') === 'market') return 'shop';
-    return 'notices';
+    // /notices/<id>?tab=careers (or ?tab=market) opens straight on that section.
+    return readSectionFromUrl() || 'home';
   });
   const [notices, setNotices] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -725,7 +774,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     return () => { cancelled = true; };
   }, [companyId]);
 
-  useBusinessSeo(company, companyId);
+  const pageLabel = selectedNotice?.title || selectedJob?.title || selectedOpportunity?.title || selectedPitch?.title || SECTION_TITLES[section] || null;
+  useBusinessSeo(company, companyId, pageLabel);
 
   useEffect(() => {
     let cancelled = false;
@@ -794,8 +844,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // announcement/job, not just the board's front page -- the whole point
   // of "Share" below is that the recipient lands exactly where the sharer
   // was looking, the same way a shared Pitchin link opens that one video.
-  useEffect(() => {
-    if (loading || notFound) return;
+  // Also runs on Back/Forward (popstate below) when the history entry being
+  // returned to is an open item.
+  const openDetailFromUrl = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
     const postId = params.get('post');
     const opportunityId = params.get('opp');
@@ -824,8 +875,65 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         setSelectedPitch(data);
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, notFound]);
+  }, []);
+
+  useEffect(() => {
+    if (loading || notFound) return;
+    openDetailFromUrl();
+  }, [loading, notFound, openDetailFromUrl]);
+
+  // Browser Back/Forward: the URL is the source of truth, so re-read it.
+  // No item param -> close whatever is open and show the section the URL names.
+  useEffect(() => {
+    const onPopState = () => {
+      if (hasDetailParam()) {
+        openDetailFromUrl();
+        return;
+      }
+      setSelectedNotice(null);
+      setSelectedJob(null);
+      setSelectedOpportunity(null);
+      setSelectedPitch(null);
+      setSection(readSectionFromUrl() || 'home');
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [openDetailFromUrl]);
+
+  // Switches section and records it in history (one entry per section change,
+  // so Back returns to the previous section instead of leaving the site).
+  const sectionRef = useRef(section);
+  sectionRef.current = section;
+  const navigateTo = useCallback((id) => {
+    setSelectedNotice(null);
+    setSelectedJob(null);
+    setSelectedOpportunity(null);
+    setSelectedPitch(null);
+    setSection(id);
+    const url = buildBoardUrl(id);
+    if (url !== `${window.location.pathname}${window.location.search}`) {
+      window.history.pushState({ nbSection: id }, '', url);
+    }
+  }, []);
+
+  // Opening an item (notice, job, bid, pitch) adds a history entry carrying
+  // its shareable ?post=/?opp=/?pitch= link, so the address bar always points
+  // at what is on screen and Back closes it.
+  const pushDetailUrl = (param, id) => {
+    window.history.pushState({ nbDetail: true }, '', buildBoardUrl(null, { [param]: id }));
+  };
+  const closeDetail = useCallback(() => {
+    if (window.history.state?.nbDetail) {
+      window.history.back(); // popstate clears the selection
+      return;
+    }
+    // Landed straight on a shared item link: there is no entry of ours to go back to.
+    setSelectedNotice(null);
+    setSelectedJob(null);
+    setSelectedOpportunity(null);
+    setSelectedPitch(null);
+    window.history.replaceState(null, '', buildBoardUrl(sectionRef.current));
+  }, []);
 
   // Shares the board's own front-page link (not the currently open tab/item)
   // -- same share-or-copy pattern as BusinessHero's shareBoard, duplicated
@@ -852,6 +960,11 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     }
   };
 
+  const openPitch = (pitch) => {
+    setSelectedPitch(pitch);
+    pushDetailUrl('pitch', pitch.id);
+  };
+
   const goToApp = () => {
     window.history.replaceState({}, '', '/');
     window.location.href = '/';
@@ -865,6 +978,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // would still show "Apply now" until this refresh corrects it.
   const openDetail = (item, setSelected) => {
     setSelected(item);
+    pushDetailUrl('post', item.id);
     cmmsAnnouncementsService.getPublicNotice(item.id).then((result) => {
       if (result.success && result.data) {
         setSelected((current) => (current?.id === item.id ? result.data : current));
@@ -874,6 +988,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 
   const openOpportunityDetail = (opportunity) => {
     setSelectedOpportunity(opportunity);
+    pushDetailUrl('opp', opportunity.id);
     cmmsBusinessOpportunitiesService.getPublicOpportunity(opportunity.id).then((result) => {
       if (result.success && result.data) {
         setSelectedOpportunity((current) => (current?.id === opportunity.id ? result.data : current));
@@ -961,7 +1076,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // wrapping or getting clipped under an icon in the bottom bar's much
   // narrower per-tab width.
   const tabs = [
-    { id: 'notices', label: 'Notices', mobileLabel: 'Notices', icon: Megaphone },
+    { id: 'home', label: 'Home', mobileLabel: 'Home', icon: Home },
+    { id: 'notices', label: 'News', mobileLabel: 'News', icon: Megaphone },
     // The Market tab exists for every business website, even before anything is listed:
     // a store always has a website, and its market is where its products and services live.
     { id: 'shop', label: 'Market', mobileLabel: 'Market', icon: ShoppingBag },
@@ -976,14 +1092,28 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     ...(payInfo ? [{ id: 'pay', label: 'Pay', mobileLabel: 'Pay', icon: Banknote }] : []),
     ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', mobileLabel: 'Deals', icon: Award }] : []),
     ...(accountsEnabled && company?.business_profile_id ? [{ id: 'account', label: 'My account', mobileLabel: 'Account', icon: User }] : []),
-    { id: 'track', label: 'Track my application', mobileLabel: 'Track', icon: Search },
-    ...(opportunities.length > 0 ? [{ id: 'track-bid', label: 'Track my bid', mobileLabel: 'My bid', icon: Search }] : []),
+    // "Track" pages are follow-ups for people who already applied/bid, so they
+    // live in the footer, the Careers/Opportunities pages and the mobile menu
+    // rather than crowding the main navigation.
+    { id: 'track', label: 'Track my application', mobileLabel: 'Track', icon: Search, secondary: true },
+    ...(opportunities.length > 0 ? [{ id: 'track-bid', label: 'Track my bid', mobileLabel: 'My bid', icon: Search, secondary: true }] : []),
   ];
+  const navTabs = tabs.filter((tab) => !tab.secondary);
+  // A ?tab= for a section this business doesn't have (e.g. Pay when no pay
+  // code is live) falls back to Home instead of rendering a blank page.
+  const activeSection = tabs.some((tab) => tab.id === section) ? section : 'home';
 
   return (
     <NoticeBoardThemeCtx.Provider value={theme}>
     <div className="icanera-nb min-h-screen" data-theme={theme}>
       <style>{NB_STYLES}</style>
+      <a
+        href="#nb-main"
+        onClick={(e) => { e.preventDefault(); document.getElementById('nb-main')?.focus(); }}
+        className="nb-skip-link"
+      >
+        Skip to content
+      </a>
       <header className={`border-b nb-header backdrop-blur sticky top-0 z-20 animate-fadeInDown transition-shadow duration-300 ${scrolled ? 'nb-header-elevated' : ''}`}>
         <div className="h-1 nb-accent-top" />
         {/* One row, every width: logo + name always lead, the tab strip
@@ -995,32 +1125,33 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             toggle/kebab pair floating with no business identity next to
             them at all. */}
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-3">
-          {company.logo_url ? (
-            <img src={company.logo_url} alt={company.company_name} className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl object-cover border nb-border shadow-sm flex-shrink-0" />
-          ) : (
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl nb-btn-primary flex items-center justify-center font-bold text-sm sm:text-lg shadow-sm flex-shrink-0">
-              {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-4 h-4 sm:w-6 sm:h-6" />}
+          <TabLink tab={{ id: 'home' }} onNavigate={navigateTo} className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink sm:flex-shrink-0" ariaLabel={`${company.company_name} home`}>
+            {company.logo_url ? (
+              <img src={company.logo_url} alt="" className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl object-cover border nb-border shadow-sm flex-shrink-0" />
+            ) : (
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl nb-btn-primary flex items-center justify-center font-bold text-sm sm:text-lg shadow-sm flex-shrink-0">
+                {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-4 h-4 sm:w-6 sm:h-6" />}
+              </div>
+            )}
+            <div className="min-w-0 max-w-[45vw] sm:max-w-none">
+              <p className="text-sm sm:text-lg font-extrabold tracking-tight nb-text truncate leading-tight">{company.company_name}</p>
+              <p className="text-[11px] nb-text-faint truncate hidden sm:block">
+                {[company.industry, company.location].filter(Boolean).join(' · ') || 'Welcome'}
+              </p>
             </div>
-          )}
-          <div className="min-w-0 max-w-[45%] sm:max-w-none flex-shrink sm:flex-shrink-0">
-            <h1 className="text-sm sm:text-lg font-extrabold tracking-tight nb-text truncate leading-tight">{company.company_name}</h1>
-            <p className="text-[11px] nb-text-faint truncate hidden sm:block">
-              {[company.industry, company.location].filter(Boolean).join(' · ') || 'Notice board'}
-            </p>
-          </div>
+          </TabLink>
 
-          <nav ref={tabNavRef} role="tablist" className="nb-tab-nav hidden sm:flex flex-1 min-w-0 flex-nowrap gap-1 overflow-x-auto">
-            {tabs.map((tab) => (
-              <button
+          <nav ref={tabNavRef} aria-label="Main" className="nb-tab-nav hidden sm:flex flex-1 min-w-0 flex-nowrap gap-1 overflow-x-auto">
+            {navTabs.map((tab) => (
+              <TabLink
                 key={tab.id}
-                data-tab-id={tab.id}
-                role="tab"
-                aria-selected={section === tab.id}
-                onClick={() => setSection(tab.id)}
-                className={`flex-shrink-0 px-3.5 sm:px-4 py-2.5 text-sm font-semibold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-colors ${section === tab.id ? 'nb-tab-active' : 'nb-tab'}`}
+                tab={tab}
+                active={activeSection === tab.id}
+                onNavigate={navigateTo}
+                className={`flex-shrink-0 px-3.5 sm:px-4 py-2.5 text-sm font-semibold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-colors ${activeSection === tab.id ? 'nb-tab-active' : 'nb-tab'}`}
               >
                 <tab.icon className="w-4 h-4" /> {tab.label}
-              </button>
+              </TabLink>
             ))}
           </nav>
 
@@ -1053,12 +1184,12 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
                     {tabs.map((tab) => (
                       <button
                         key={tab.id}
-                        onClick={() => { setSection(tab.id); setShowMoreMenu(false); }}
-                        className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors text-left ${section === tab.id ? 'nb-tab-active' : 'nb-text hover:opacity-80'}`}
+                        onClick={() => { navigateTo(tab.id); setShowMoreMenu(false); }}
+                        className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors text-left ${activeSection === tab.id ? 'nb-tab-active' : 'nb-text hover:opacity-80'}`}
                       >
-                        <tab.icon className={`w-4 h-4 flex-shrink-0 ${section === tab.id ? '' : 'nb-icon-muted'}`} />
+                        <tab.icon className={`w-4 h-4 flex-shrink-0 ${activeSection === tab.id ? '' : 'nb-icon-muted'}`} />
                         <span className="truncate">{tab.label}</span>
-                        {section === tab.id && <Check className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
+                        {activeSection === tab.id && <Check className="w-3.5 h-3.5 ml-auto flex-shrink-0" />}
                       </button>
                     ))}
                     <div className="my-1 border-t nb-border" />
@@ -1092,22 +1223,31 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         </div>
       </header>
 
-      <BottomNav tabs={tabs} section={section} setSection={setSection} navRef={bottomNavRef} />
+      <BottomNav tabs={navTabs} section={activeSection} onNavigate={navigateTo} navRef={bottomNavRef} />
 
       {/* jobs/notices here are the list RPC's rows, which (unlike the
           single-notice detail fetch) don't compute is_open -- fine for a
           rough "there's activity here" count, not meant as an exact "still
           accepting applications" figure. */}
-      {section === 'notices'
-        ? <BusinessHero company={company} noticeCount={notices.length} jobCount={jobs.length} pitchCount={pitches.length} />
+      {activeSection === 'home'
+        ? (
+          <BusinessHero
+            company={company}
+            noticeCount={notices.length}
+            jobCount={jobs.length}
+            pitchCount={pitches.length}
+            marketCount={products.length + storeProducts.length}
+            onNavigate={navigateTo}
+          />
+        )
         : <ContactStrip company={company} />}
 
       {/* pb clears the fixed BottomNav on mobile (its own height plus the
           safe-area inset it already pads itself with) -- sm:pb-7 drops that
           reservation the moment the bar itself disappears. */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 pt-7 pb-24 sm:pb-7">
-        <div key={section} className="animate-fadeInUp" style={{ animationDuration: '0.35s' }}>
-          {section === 'notices' && (
+      <main id="nb-main" tabIndex={-1} className="max-w-5xl mx-auto px-4 sm:px-6 pt-7 pb-12 sm:pb-12 outline-none">
+        <div key={activeSection} className="animate-fadeInUp" style={{ animationDuration: '0.35s' }}>
+          {activeSection === 'home' && (
             // A wide screen leaves a single centered column mostly empty on
             // either side -- give it a real second column (Google Business/
             // Yelp-style info panel) instead. Sidebar is lg+ only; on
@@ -1115,14 +1255,33 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             // hero's own action buttons above.
             <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-start">
               <div className="min-w-0">
+                <SectionTiles tabs={navTabs.filter((tab) => tab.id !== 'home')} counts={{ notices: notices.length, careers: jobs.length, pitchin: pitches.length, opportunities: opportunities.length }} onNavigate={navigateTo} />
                 {company.about && <AboutCard company={company} />}
                 <LocationCard company={company} className="lg:hidden" />
-                <NoticeList notices={notices} onSelect={(notice) => openDetail(notice, setSelectedNotice)} />
+                {notices.length > 0 && (
+                  <HomeBlock title="Latest news" actionLabel={notices.length > 3 ? `All ${notices.length} updates` : 'Open news page'} onNavigate={() => navigateTo('notices')}>
+                    <NoticeList notices={notices.slice(0, 3)} onSelect={(notice) => openDetail(notice, setSelectedNotice)} />
+                  </HomeBlock>
+                )}
+                {jobs.length > 0 && (
+                  <HomeBlock title="We're hiring" actionLabel={jobs.length > 3 ? `All ${jobs.length} openings` : 'Open careers page'} onNavigate={() => navigateTo('careers')}>
+                    <JobList jobs={jobs.slice(0, 3)} onSelect={(job) => openDetail(job, setSelectedJob)} />
+                  </HomeBlock>
+                )}
+                {notices.length === 0 && jobs.length === 0 && !company.about && (
+                  <EmptyState icon={Megaphone} text="Nothing has been posted yet. Check back soon." />
+                )}
               </div>
               <BusinessInfoSidebar company={company} className="hidden lg:block" />
             </div>
           )}
-          {section === 'shop' && (
+          {activeSection === 'notices' && (
+            <>
+              <PageTitle title="News & updates" subtitle={`The latest from ${company.company_name}`} />
+              <NoticeList notices={notices} onSelect={(notice) => openDetail(notice, setSelectedNotice)} />
+            </>
+          )}
+          {activeSection === 'shop' && (
             <ShopSection
               products={products}
               storeProducts={storeProducts}
@@ -1136,42 +1295,47 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
               authLoading={authLoading}
             />
           )}
-          {section === 'pay' && payInfo && (
+          {activeSection === 'pay' && payInfo && (
             <PaySection company={company} info={payInfo} receiveInfo={receiveInfo} prefill={payPrefill} />
           )}
-          {section === 'pitchin' && (
-            <PitchinSection pitches={pitches} loading={pitchesLoading} liveOffer={liveOffer} onSelect={setSelectedPitch} />
+          {activeSection === 'pitchin' && (
+            <PitchinSection pitches={pitches} loading={pitchesLoading} liveOffer={liveOffer} onSelect={openPitch} />
           )}
-          {section === 'careers' && (
-            <JobList jobs={jobs} onSelect={(job) => openDetail(job, setSelectedJob)} />
+          {activeSection === 'careers' && (
+            <>
+              <PageTitle title="Careers" subtitle={`Open positions at ${company.company_name} -- apply right here, no account needed.`} />
+              <JobList jobs={jobs} onSelect={(job) => openDetail(job, setSelectedJob)} />
+              <p className="text-sm nb-text-muted text-center mt-6">
+                Already applied?{' '}
+                <TabLink tab={{ id: 'track' }} onNavigate={navigateTo} className="nb-link font-semibold underline-offset-2 hover:underline">Track your application</TabLink>
+              </p>
+            </>
           )}
-          {section === 'opportunities' && (
-            <OpportunityList opportunities={opportunities} onSelect={openOpportunityDetail} />
+          {activeSection === 'opportunities' && (
+            <>
+              <OpportunityList opportunities={opportunities} onSelect={openOpportunityDetail} />
+              <p className="text-sm nb-text-muted text-center mt-6">
+                Already submitted a bid?{' '}
+                <TabLink tab={{ id: 'track-bid' }} onNavigate={navigateTo} className="nb-link font-semibold underline-offset-2 hover:underline">Track your bid</TabLink>
+              </p>
+            </>
           )}
-          {section === 'account' && accountsEnabled && (
+          {activeSection === 'account' && accountsEnabled && (
             <AccountSection company={company} user={user} authLoading={authLoading} />
           )}
-          {section === 'track' && <TrackApplication companyId={companyId} viewerUser={user} onWantAccount={requestAccountCreation} />}
-          {section === 'track-bid' && <TrackOpportunityBid viewerUser={user} onWantAccount={requestAccountCreation} />}
+          {activeSection === 'track' && <TrackApplication companyId={companyId} viewerUser={user} onWantAccount={requestAccountCreation} />}
+          {activeSection === 'track-bid' && <TrackOpportunityBid viewerUser={user} onWantAccount={requestAccountCreation} />}
         </div>
       </main>
 
-      <footer className="text-center text-xs nb-text-faint pb-24 sm:pb-8 pt-6">
-        <SocialRow company={company} className="justify-center mb-4" />
-        <p>
-          {company.company_name} · Powered by{' '}
-          <button onClick={goToApp} className="align-middle hover:opacity-80 transition-opacity">
-            <IcanEraWordmark />
-          </button>
-        </p>
-      </footer>
+      <SiteFooter company={company} tabs={tabs} activeSection={activeSection} onNavigate={navigateTo} onOpenApp={goToApp} />
 
-      {selectedNotice && <NoticeDetailModal notice={selectedNotice} onClose={() => setSelectedNotice(null)} onShare={handleShare} />}
-      {selectedJob && <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(null)} onShare={handleShare} viewerUser={user} onWantAccount={requestAccountCreation} />}
+      {selectedNotice && <NoticeDetailModal notice={selectedNotice} onClose={closeDetail} onShare={handleShare} />}
+      {selectedJob && <JobDetailModal job={selectedJob} onClose={closeDetail} onShare={handleShare} viewerUser={user} onWantAccount={requestAccountCreation} />}
       {selectedOpportunity && (
         <OpportunityDetailModal
           opportunity={selectedOpportunity}
-          onClose={() => setSelectedOpportunity(null)}
+          onClose={closeDetail}
           onShare={(item, onCopied) => handleShare(item, onCopied, cmmsBusinessOpportunitiesService.buildPublicOpportunityLink)}
           viewerUser={user}
           onWantAccount={requestAccountCreation}
@@ -1181,7 +1345,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         <PitchDetailModal
           pitch={selectedPitch}
           offer={liveOffer}
-          onClose={() => setSelectedPitch(null)}
+          onClose={closeDetail}
           onShare={(item, onCopied) => handleShare(item, onCopied, (cId, pitchId) => `${window.location.origin}/notices/${cId}?pitch=${pitchId}`)}
         />
       )}
@@ -1396,29 +1560,204 @@ const ThemeToggleButton = ({ theme, onToggle, className = '' }) => (
 // evenly without its own scroll in the overwhelming majority of cases; the
 // rare business with every optional section enabled still scrolls cleanly
 // via the same fade-masked overflow the top strip uses.
-const BottomNav = ({ tabs, section, setSection, navRef }) => (
+const BottomNav = ({ tabs, section, onNavigate, navRef }) => (
   <nav
     ref={navRef}
-    role="tablist"
     aria-label="Sections"
     className="nb-tab-nav sm:hidden fixed bottom-0 inset-x-0 z-30 nb-header border-t nb-border backdrop-blur flex overflow-x-auto"
     style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
   >
     {tabs.map((tab) => (
-      <button
+      <TabLink
         key={tab.id}
-        data-tab-id={tab.id}
-        role="tab"
-        aria-selected={section === tab.id}
-        onClick={() => setSection(tab.id)}
+        tab={tab}
+        active={section === tab.id}
+        onNavigate={onNavigate}
         className={`flex-1 min-w-[64px] flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold whitespace-nowrap transition-colors ${section === tab.id ? 'nb-tab-active' : 'nb-tab'}`}
       >
         <tab.icon className="w-5 h-5" />
         <span className="truncate max-w-[68px]">{tab.mobileLabel || tab.label}</span>
-      </button>
+      </TabLink>
     ))}
   </nav>
 );
+
+// A real link (href + click handler) rather than a button, so every section
+// can be opened in a new tab, bookmarked, copied, and found by crawlers -- a
+// plain click is still handled in place without a page reload.
+const TabLink = ({ tab, active = false, onNavigate, className = '', ariaLabel, children }) => (
+  <a
+    href={buildBoardUrl(tab.id)}
+    data-tab-id={tab.id}
+    aria-current={active ? 'page' : undefined}
+    aria-label={ariaLabel}
+    onClick={(e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      onNavigate(tab.id);
+    }}
+    className={className}
+  >
+    {children}
+  </a>
+);
+
+const TILE_COPY = {
+  notices: 'Announcements and updates from the team',
+  shop: 'Browse products and services',
+  pitchin: 'Watch pitch videos and plans',
+  careers: 'See open roles and apply -- no account needed',
+  pay: 'Pay the business securely, any amount',
+  opportunities: 'Tenders and deals you can bid on',
+  account: 'Follow your plans and payments',
+};
+const tileCount = (id, n) => {
+  if (!n) return null;
+  if (id === 'careers') return `${n} open`;
+  if (id === 'notices') return `${n} update${n === 1 ? '' : 's'}`;
+  if (id === 'pitchin') return `${n} video${n === 1 ? '' : 's'}`;
+  if (id === 'opportunities') return `${n} open`;
+  return null;
+};
+
+// The "what can I do here?" grid under the hero -- a real homepage's quick
+// links, so a first-time visitor sees every part of the site at a glance
+// instead of having to discover it through the tab bar.
+const SectionTiles = ({ tabs, counts, onNavigate }) => {
+  const visible = tabs.filter((tab) => TILE_COPY[tab.id]);
+  if (visible.length < 2) return null;
+  return (
+    <section aria-label="Explore" className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+      {visible.map((tab) => {
+        const count = tileCount(tab.id, counts[tab.id]);
+        return (
+          <TabLink
+            key={tab.id}
+            tab={tab}
+            onNavigate={onNavigate}
+            className="nb-tile group rounded-2xl p-4 flex flex-col gap-2 animate-fadeInUp"
+          >
+            <span className="flex items-center justify-between">
+              <span className="w-9 h-9 rounded-xl nb-chip-green flex items-center justify-center"><tab.icon className="w-[18px] h-[18px]" /></span>
+              {count && <span className="nb-chip-green text-[10px] font-bold px-2 py-0.5 rounded-full">{count}</span>}
+            </span>
+            <span className="font-bold nb-text text-sm">{tab.label}</span>
+            <span className="text-xs nb-text-muted leading-snug">{TILE_COPY[tab.id]}</span>
+          </TabLink>
+        );
+      })}
+    </section>
+  );
+};
+
+const PageTitle = ({ title, subtitle }) => (
+  <div className="mb-5">
+    <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight nb-text">{title}</h1>
+    {subtitle && <p className="nb-text-muted text-sm mt-1">{subtitle}</p>}
+  </div>
+);
+
+const HomeBlock = ({ title, actionLabel, onNavigate, children }) => (
+  <section className="mb-8">
+    <div className="flex items-end justify-between gap-3 mb-3">
+      <h2 className="text-lg sm:text-xl font-extrabold tracking-tight nb-text">{title}</h2>
+      <button type="button" onClick={onNavigate} className="nb-link text-sm font-semibold inline-flex items-center gap-1 flex-shrink-0">
+        {actionLabel} <ChevronRight className="w-4 h-4" />
+      </button>
+    </div>
+    {children}
+  </section>
+);
+
+// The page footer a real website has: who this is, where everything lives,
+// and how to reach them -- plus the sections that don't earn a spot in the
+// main navigation (Track my application / bid). Clears the fixed mobile
+// bottom bar with its own bottom padding.
+const SiteFooter = ({ company, tabs, activeSection, onNavigate, onOpenApp }) => {
+  const contactRows = [
+    company.location && { key: 'location', icon: MapPin, text: company.location, href: resolveLocationTarget(company).directionsHref, external: true },
+    company.hours_text && { key: 'hours', icon: Clock, text: company.hours_text },
+    company.phone && { key: 'phone', icon: Phone, text: company.phone, href: buildTelLink(company.phone) },
+    company.whatsapp && buildWhatsAppLink(company.whatsapp) && { key: 'whatsapp', icon: MessageCircle, text: `WhatsApp ${company.whatsapp}`, href: buildWhatsAppLink(company.whatsapp), external: true },
+    company.email && { key: 'email', icon: Mail, text: company.email, href: buildGmailComposeLink(company.email), external: true },
+    company.website && normalizeExternalUrl(company.website) && { key: 'website', icon: Globe, text: company.website.replace(/^https?:\/\//, ''), href: normalizeExternalUrl(company.website), external: true },
+  ].filter(Boolean);
+  const blurb = deriveHeroSubtitle(company);
+  return (
+    <footer className="nb-footer border-t nb-border">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1.3fr]">
+        <div>
+          <div className="flex items-center gap-3 mb-3">
+            {company.logo_url ? (
+              <img src={company.logo_url} alt="" className="w-10 h-10 rounded-xl object-cover border nb-border" />
+            ) : (
+              <div className="w-10 h-10 rounded-xl nb-btn-primary flex items-center justify-center font-bold">
+                {company.company_name?.charAt(0)?.toUpperCase() || <Building2 className="w-5 h-5" />}
+              </div>
+            )}
+            <p className="font-extrabold nb-text leading-tight">{company.company_name}</p>
+          </div>
+          {blurb && <p className="text-sm nb-text-muted leading-relaxed max-w-xs">{blurb}</p>}
+          <SocialRow company={company} className="mt-4" />
+        </div>
+
+        <nav aria-label="Explore this site">
+          <h2 className="text-xs font-bold uppercase tracking-wide nb-text-faint mb-3">Explore</h2>
+          <ul className="space-y-2">
+            {tabs.map((tab) => (
+              <li key={tab.id}>
+                <TabLink
+                  tab={tab}
+                  active={activeSection === tab.id}
+                  onNavigate={onNavigate}
+                  className={`text-sm inline-flex items-center gap-2 transition-colors ${activeSection === tab.id ? 'nb-link font-semibold' : 'nb-text-muted nb-footer-link'}`}
+                >
+                  <tab.icon className="w-3.5 h-3.5" /> {tab.label}
+                </TabLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {contactRows.length > 0 && (
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wide nb-text-faint mb-3">Contact</h2>
+            <ul className="space-y-2.5">
+              {contactRows.map((row) => {
+                const inner = (<><row.icon className="w-4 h-4 nb-icon-muted flex-shrink-0 mt-0.5" /><span className="min-w-0 break-words">{row.text}</span></>);
+                return (
+                  <li key={row.key}>
+                    {row.href ? (
+                      <a href={row.href} target={row.external ? '_blank' : undefined} rel={row.external ? 'noreferrer' : undefined} className="text-sm nb-text-muted nb-footer-link flex items-start gap-2.5">{inner}</a>
+                    ) : (
+                      <p className="text-sm nb-text-muted flex items-start gap-2.5">{inner}</p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t nb-border">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 pb-24 sm:pb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs nb-text-faint">
+          <p>
+            &copy; {new Date().getFullYear()} {company.company_name} · Powered by{' '}
+            <button onClick={onOpenApp} className="align-middle hover:opacity-80 transition-opacity"><IcanEraWordmark /></button>
+          </p>
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="nb-link font-semibold inline-flex items-center gap-1"
+          >
+            Back to top <ChevronRight className="w-3.5 h-3.5 -rotate-90" />
+          </button>
+        </div>
+      </div>
+    </footer>
+  );
+};
 
 // One row of circular icon links out to whichever social profiles this
 // business filled in (CMMSAnnouncementsPanel's "Website & contact" card) --
@@ -1551,7 +1890,7 @@ const HeroStats = ({ noticeCount, jobCount, pitchCount = 0 }) => {
 // The homepage hero -- shown only on the "Notices" (front page) tab, same
 // place a real business's own website would put its cover photo, logo and
 // tagline above the fold.
-const BusinessHero = ({ company, noticeCount = 0, jobCount = 0, pitchCount = 0 }) => {
+const BusinessHero = ({ company, noticeCount = 0, jobCount = 0, pitchCount = 0, marketCount = 0, onNavigate }) => {
   const [linkCopied, setLinkCopied] = useState(false);
   const shareBoard = async () => {
     const link = window.location.href.split('?')[0];
@@ -1612,6 +1951,23 @@ const BusinessHero = ({ company, noticeCount = 0, jobCount = 0, pitchCount = 0 }
             {company.hours_text && <span className="inline-flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {company.hours_text}</span>}
           </div>
           <HeroStats noticeCount={noticeCount} jobCount={jobCount} pitchCount={pitchCount} />
+
+          {/* The homepage's calls to action: what this site most wants a
+              visitor to do next, ahead of the generic contact buttons. */}
+          {(jobCount > 0 || marketCount > 0) && onNavigate && (
+            <div className="flex flex-wrap items-center gap-2.5 mt-4">
+              {jobCount > 0 && (
+                <TabLink tab={{ id: 'careers' }} onNavigate={onNavigate} className="nb-btn-primary rounded-xl px-5 py-2.5 text-sm font-bold inline-flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]">
+                  <Briefcase className="w-4 h-4" /> We're hiring · {jobCount} open role{jobCount === 1 ? '' : 's'}
+                </TabLink>
+              )}
+              {marketCount > 0 && (
+                <TabLink tab={{ id: 'shop' }} onNavigate={onNavigate} className={`${jobCount > 0 ? 'nb-action-btn' : 'nb-btn-primary'} rounded-xl px-5 py-2.5 text-sm font-bold inline-flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]`}>
+                  <ShoppingBag className="w-4 h-4" /> Visit our market
+                </TabLink>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
             <ContactActions company={company} onShare={shareBoard} />
