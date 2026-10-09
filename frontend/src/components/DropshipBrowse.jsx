@@ -6,7 +6,7 @@ import ProductOffersSheet from './shop/ProductOffersSheet';
 
 // In-app Shop: lets any ICAN user -- no reseller storefront of their own
 // required -- discover dropship-listed products across every reseller as a
-// compact picture grid with price tags. Tapping a tile opens a sheet with
+// compact product grid. Tapping a tile opens a sheet with
 // that product's reseller offers, from which "Buy" hands off to the real
 // reseller storefront (PublicDropshipStorefront) for cart + checkout.
 // The same products are public at /shop for anyone (and search engines).
@@ -54,7 +54,7 @@ const DropshipBrowse = () => {
           <p className="text-xs text-slate-500">No products found</p>
         </div>
       ) : (
-        <ShopTiles products={products} onSelect={setSelectedProduct} dense />
+        <ShopTiles products={products} onSelect={setSelectedProduct} dense tone="dark" />
       )}
 
       {selectedProduct && <ProductOffersSheet product={selectedProduct} onClose={() => setSelectedProduct(null)} />}

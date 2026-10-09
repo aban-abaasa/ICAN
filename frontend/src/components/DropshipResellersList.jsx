@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Search, Loader, Store, Truck, AlertCircle, ChevronRight } from 'lucide-react';
 import { getDropshipResellers } from '../services/dropshipService';
+import { formatStorePrice } from './shop/storeCurrency';
 
-const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
+const money = (ugx, country) => { const p = formatStorePrice(ugx, country); return `${p.currency} ${p.amount}`; };
 
 // Compact directory of resellers that currently have a live storefront.
 // Plain list rows in small type: one column on phones, two on tablets and
@@ -65,7 +66,7 @@ const DropshipResellersList = () => {
                   <span className="flex items-center gap-1.5 text-[10px] md:text-[11px] text-slate-400">
                     <span>{r.product_count} product{Number(r.product_count) === 1 ? '' : 's'}</span>
                     <span>·</span>
-                    <span className="text-indigo-300">from {formatUGX(r.min_price)}</span>
+                    <span className="text-indigo-300">from {money(r.min_price, r.store_country)}</span>
                     {r.any_free_delivery && <Truck className="w-3 h-3 text-emerald-400 shrink-0" title="Free delivery" />}
                     {!r.any_in_stock && <span className="text-red-400">Out of stock</span>}
                   </span>
