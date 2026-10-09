@@ -1,10 +1,7 @@
 import React from 'react';
 import { Store, Truck } from 'lucide-react';
-
-// Whole numbers in the viewer's own locale (1,234 / 1.234 / 1 234 ...) -- not
-// hard-wired to any one country. Prices are stored in UGX, so the label stays
-// UGX until per-viewer currency conversion exists.
-export const formatUGX = (amount) => Number(amount || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+import { useIcanCoinPrice, formatIcan } from './useIcanCoinPrice';
+import { formatStorePrice } from './storeCurrency';
 
 // Colours are inline (not Tailwind classes) on purpose: index.css repaints
 // stock colour classes like bg-white / text-slate-900 app-wide, which turned
@@ -21,6 +18,7 @@ export const SHOP_TONES = {
     free: '#0f766e',
     soldBadge: { backgroundColor: '#1f2937', color: '#fffdf8' },
     hover: '#b8862e',
+    coin: '#8a6a1f',
   },
   // For the app's dark screens and dark landing themes.
   dark: {
@@ -33,6 +31,7 @@ export const SHOP_TONES = {
     free: '#34d399',
     soldBadge: { backgroundColor: 'rgba(0,0,0,0.75)', color: '#ffffff' },
     hover: '#818cf8',
+    coin: '#fbbf24',
   },
 };
 
@@ -42,6 +41,7 @@ export const SHOP_TONES = {
 // overrides the responsive column counts.
 const ShopTiles = ({ products, onSelect, dense = false, tone = 'classic', columnsClass }) => {
   const t = SHOP_TONES[tone] || SHOP_TONES.classic;
+  const coin = useIcanCoinPrice();
   return (
     <ul
       className={`grid ${
@@ -52,12 +52,14 @@ const ShopTiles = ({ products, onSelect, dense = false, tone = 'classic', column
     >
       {products.map((product, index) => {
         const soldOut = product.any_in_stock === false;
+        const ican = formatIcan(product.min_price, coin);
+        const price = formatStorePrice(product.min_price, product.store_country);
         return (
           <li key={product.product_id}>
             <button
               type="button"
               onClick={() => onSelect?.(product)}
-              aria-label={`${product.name} — from ${formatUGX(product.min_price)} UGX`}
+              aria-label={`${product.name} — from ${price.currency} ${price.amount}`}
               className="group flex flex-col justify-start w-full h-full overflow-hidden rounded-lg text-left transition-shadow hover:shadow-lg outline-none focus-visible:ring-2"
               style={t.card}
             >
@@ -88,8 +90,11 @@ const ShopTiles = ({ products, onSelect, dense = false, tone = 'classic', column
                   {product.name}
                 </span>
                 <span className="mt-0.5 flex items-baseline gap-1 flex-wrap">
-                  <span className={dense ? 'text-[8px]' : 'text-[10px] md:text-[11px]'} style={{ color: t.muted }}>UGX</span>
-                  <span className={`font-bold tabular-nums ${dense ? 'text-[11px]' : 'text-sm md:text-base'}`} style={{ color: t.price }}>{formatUGX(product.min_price)}</span>
+                  <span className={dense ? 'text-[8px]' : 'text-[10px] md:text-[11px]'} style={{ color: t.muted }}>{price.currency}</span>
+                  <span className={`font-bold tabular-nums ${dense ? 'text-[11px]' : 'text-sm md:text-base'}`} style={{ color: t.price }}>{price.amount}</span>
+                  {ican && (
+                    <span className={`font-semibold tabular-nums ${dense ? 'text-[8px]' : 'text-[10px] md:text-[11px]'}`} style={{ color: t.coin }} title="Live IcanEra Coin value">≈ {ican} ICAN</span>
+                  )}
                   {Number(product.reseller_count) > 1 && !dense && (
                     <span className="text-[10px]" style={{ color: t.muted }}>· {product.reseller_count} sellers</span>
                   )}

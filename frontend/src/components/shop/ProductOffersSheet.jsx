@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { X, Loader, Truck, Store } from 'lucide-react';
 import { getDropshipProductOffers } from '../../services/dropshipService';
-import { formatUGX, SHOP_TONES } from './ShopTiles';
+import { SHOP_TONES } from './ShopTiles';
+import { useIcanCoinPrice, formatIcan } from './useIcanCoinPrice';
+import { formatStorePrice } from './storeCurrency';
 
 const SHEET = {
   classic: { panel: '#fffdf8', border: '#e6dcc3', title: '#1f2937', muted: '#8a7a55', line: '#ece3cc', button: '#1f2937', buttonText: '#fffdf8', accent: '#8a6a1f', closeBg: 'rgba(255,253,248,0.9)', closeText: '#1f2937' },
@@ -15,6 +17,9 @@ const ProductOffersSheet = ({ product, onClose, tone = 'dark' }) => {
   const c = SHEET[tone] || SHEET.dark;
   const tiles = SHOP_TONES[tone] || SHOP_TONES.dark;
   const [offers, setOffers] = useState(null);
+  const coin = useIcanCoinPrice();
+  const money = (ugx, country) => { const p = formatStorePrice(ugx, country); return `${p.currency} ${p.amount}`; };
+  const icanOf = (ugx) => { const v = formatIcan(ugx, coin); return v ? <span className="font-semibold" style={{ color: tiles.coin }}> · ≈ {v} ICAN</span> : null; };
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +54,7 @@ const ProductOffersSheet = ({ product, onClose, tone = 'dark' }) => {
         <div className="px-4 pt-3 pb-1">
           <h3 className="text-base font-bold leading-snug" style={{ color: c.title }}>{product.name}</h3>
           <p className="text-xs mt-0.5" style={{ color: c.muted }}>
-            From <span className="font-bold" style={{ color: c.accent }}>UGX {formatUGX(product.min_price)}</span>
+            From <span className="font-bold" style={{ color: c.accent }}>{money(product.min_price, product.store_country)}</span>{icanOf(product.min_price)}
             {product.brand ? ` · ${product.brand}` : ''}
           </p>
         </div>
@@ -67,7 +72,7 @@ const ProductOffersSheet = ({ product, onClose, tone = 'dark' }) => {
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: c.title }}>{offer.reseller_name}</p>
                     <p className="text-[11px] flex items-center gap-2" style={{ color: c.muted }}>
-                      UGX {formatUGX(offer.listed_price)}
+                      <span>{money(offer.listed_price, offer.store_country || product.store_country)}{icanOf(offer.listed_price)}</span>
                       {offer.free_delivery && <span className="flex items-center gap-0.5" style={{ color: tiles.free }}><Truck className="w-3 h-3" />Free delivery</span>}
                       {!offer.in_stock && <span style={{ color: '#dc2626' }}>Out of stock</span>}
                     </p>

@@ -3,6 +3,7 @@ import { Search, Loader, ShoppingBag, Truck, ArrowRight } from 'lucide-react';
 import { getDropshipBrowseProducts } from '../services/dropshipService';
 import ShopTiles, { SHOP_TONES } from './shop/ShopTiles';
 import ProductOffersSheet from './shop/ProductOffersSheet';
+import { useIcanCoinPrice } from './shop/useIcanCoinPrice';
 
 const PAGE_SIZE = 30;
 const FILTERS = [
@@ -33,6 +34,7 @@ const PublicShopPage = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [selected, setSelected] = useState(null);
+  const coin = useIcanCoinPrice();
 
   useEffect(() => {
     document.title = 'Shop — Products from Resellers Worldwide | IcanEra';
@@ -83,6 +85,15 @@ const PublicShopPage = () => {
           <p className="mt-3 text-sm md:text-base max-w-xl mx-auto" style={{ color: C.muted }}>
             Products from independent resellers around the world. Compare sellers, choose delivery, and check out securely — no account needed to browse.
           </p>
+
+          {coin && (
+            <p className="mt-3 inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-[11px] md:text-xs font-semibold tabular-nums" style={{ border: `1px solid ${C.line}`, backgroundColor: C.panel, color: C.ink }}>
+              <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#16a34a' }} />
+              1 ICAN = UGX {Math.round(coin.priceUGX).toLocaleString()}
+              <span style={{ color: coin.change24h >= 0 ? '#15803d' : '#b91c1c' }}>{coin.change24h >= 0 ? '▲' : '▼'} {Math.abs(coin.change24h).toFixed(2)}%</span>
+              <span style={{ color: C.muted }}>live</span>
+            </p>
+          )}
 
           <div className="mt-5 max-w-lg mx-auto relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: C.muted }} />

@@ -307,6 +307,32 @@ export class CountryService {
   }
 
   /**
+   * Resolve a stored country value -- an ISO code ("KE") or a name
+   * ("Kenya", any case) -- to the ISO code, or null when unrecognised.
+   */
+  static resolveCountryCode(value) {
+    const text = String(value || '').trim();
+    if (!text) return null;
+    const upper = text.toUpperCase();
+    if (COUNTRIES[upper]) return upper;
+    const lower = text.toLowerCase();
+    return Object.entries(COUNTRIES).find(([, c]) => c.name.toLowerCase() === lower)?.[0] || null;
+  }
+
+  /**
+   * Convert an amount held in UGX (how every price on the platform is
+   * stored) into a country's local currency. Returns { currency, amount },
+   * or null when the country is unknown or has no rate -- callers should
+   * then keep showing UGX rather than guess.
+   */
+  static convertFromUGX(amountUGX, countryCode) {
+    const country = COUNTRIES[countryCode];
+    const rate = country ? EXCHANGE_RATES[country.currency] : null;
+    if (!rate) return null;
+    return { currency: country.currency, amount: Number(amountUGX || 0) * rate };
+  }
+
+  /**
    * Get currency symbol for country
    */
   static getCurrencySymbol(countryCode) {
