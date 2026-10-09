@@ -17,6 +17,7 @@ import CertificateRequestsInbox from './CertificateRequestsInbox';
 import ResumeOpportunityBidsPanel from './ResumeOpportunityBidsPanel';
 import PublicPortfolioPage from './PublicPortfolioPage';
 import ConversationImportModal from '../common/ConversationImportModal';
+import NotebookTab from './NotebookTab';
 
 const ITEM_ICONS = {
   experience: Briefcase,
@@ -411,6 +412,7 @@ export default function PortfolioTab() {
     { id: 'profile', label: 'Profile' },
     { id: 'experience', label: 'Experience', count: items.length },
     { id: 'references', label: 'References', count: references.length },
+    { id: 'notebook', label: 'Notebook' },
     { id: 'inbox', label: 'Inbox' },
     { id: 'work', label: 'Opportunities' },
   ];
@@ -866,6 +868,13 @@ export default function PortfolioTab() {
               )
             )}
           </section>
+        )}
+
+        {/* Notebook — typed or dictated notes and minutes, kept on this device */}
+        {activeTab === 'notebook' && (
+          <div className="rz-dark">
+            <NotebookTab />
+          </div>
         )}
 
         {/* Messages — direct 1:1 chats started from the public resume page */}
