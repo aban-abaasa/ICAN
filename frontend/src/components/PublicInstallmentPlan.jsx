@@ -15,6 +15,7 @@ import {
   formatMoney, formatCoins, formatCoinAmount, coinsFor, cleanAmountInput, unitDecimals,
   COIN_RECOMMENDATION, STATUS_LABELS, FREQUENCY_LABELS, getWalletCoins,
 } from '../services/installmentService';
+import { getPublicAppUrl } from '../utils/publicAppUrl';
 
 const DELIVERY_WINDOWS = [
   { hours: 1, label: 'Within 1 hour' }, { hours: 2, label: 'Within 2 hours' }, { hours: 4, label: 'Within 4 hours' },
@@ -111,7 +112,7 @@ const PublicInstallmentPlan = ({ code }) => {
         <AlertCircle className="w-14 h-14 text-slate-500" />
         <p className="text-white text-lg font-semibold">{loadError || 'This plan isn\'t available'}</p>
         <p className="text-sm text-slate-400 max-w-sm">It may belong to a different account. Sign in with the account you used to start it.</p>
-        <a href="/plans" className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold transition">My plans</a>
+        <a href={getPublicAppUrl('/plans')} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold transition">My plans</a>
       </div>
     );
   }
@@ -129,7 +130,7 @@ const PublicInstallmentPlan = ({ code }) => {
   return (
     <div className="fixed inset-0 bg-slate-950 overflow-y-auto">
       <div className="sticky top-0 z-20 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center gap-2">
-        <a href="/plans" className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-white/10" aria-label="My plans"><ArrowLeft className="w-5 h-5" /></a>
+        <a href={getPublicAppUrl('/plans')} className="p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-white/10" aria-label="My plans"><ArrowLeft className="w-5 h-5" /></a>
         <div className="min-w-0 flex-1">
           <p className="text-white font-semibold truncate">{plan.seller_name || 'Your order'}</p>
           <p className="text-[11px] text-slate-500 font-mono">Plan {plan.code}</p>
