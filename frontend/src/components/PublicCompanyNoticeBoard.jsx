@@ -6,11 +6,12 @@ import {
   Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
   Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe,
   Video, Play, Eye, Heart, Bike, Star, Sun, Moon, TrendingUp, MoreVertical, Home,
-  Download, Banknote, User
+  Download, Banknote, User, Lock, FolderOpen, ExternalLink, Link2, KeyRound, ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
+import siteLibraryService from '../services/siteLibraryService';
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
 import useGuestCheckout from '../hooks/useGuestCheckout';
 import InstallmentOffer from './InstallmentOffer';
@@ -321,7 +322,7 @@ const PENDING_SECTION_KEY = 'ican_notice_board_pending_section';
 // the clean /notices/<id> URL, and 'shop' keeps its older, friendlier
 // ?tab=market spelling so existing shared links still work. The vercel
 // rewrite for /notices/:id passes the query string straight through.
-const SECTION_IDS = ['home', 'notices', 'shop', 'pitchin', 'careers', 'pay', 'opportunities', 'account', 'track', 'track-bid'];
+const SECTION_IDS = ['home', 'notices', 'shop', 'pitchin', 'careers', 'pay', 'opportunities', 'library', 'account', 'track', 'track-bid'];
 const TAB_PARAM_ALIASES = { market: 'shop' };
 const SECTION_TITLES = {
   notices: 'News',
@@ -330,6 +331,7 @@ const SECTION_TITLES = {
   careers: 'Careers',
   pay: 'Pay',
   opportunities: 'Opportunities',
+  library: 'Library',
   account: 'My account',
   track: 'Track my application',
   'track-bid': 'Track my bid',
@@ -649,6 +651,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   const [notices, setNotices] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [opportunities, setOpportunities] = useState([]);
+  // Public links the business chose to list (reports, forms, contracts, any link it added) -- see LibrarySection.
+  const [libraryLinks, setLibraryLinks] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedNotice, setSelectedNotice] = useState(null);
   const [selectedOpportunity, setSelectedOpportunity] = useState(null);
@@ -764,11 +768,12 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const [headerResult, noticesResult, jobsResult, opportunitiesResult] = await Promise.all([
+      const [headerResult, noticesResult, jobsResult, opportunitiesResult, libraryResult] = await Promise.all([
         cmmsAnnouncementsService.getPublicCompanyHeader(companyId),
         cmmsAnnouncementsService.getPublicNotices(companyId, 'announcement'),
         cmmsAnnouncementsService.getPublicNotices(companyId, 'job'),
         cmmsBusinessOpportunitiesService.getPublicCompanyOpportunities(companyId),
+        siteLibraryService.getPublicLinks(companyId),
       ]);
       if (cancelled) return;
       if (!headerResult.success || !headerResult.data) {
@@ -778,6 +783,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
         setNotices(noticesResult.data || []);
         setJobs(jobsResult.data || []);
         setOpportunities(opportunitiesResult.data || []);
+        setLibraryLinks(libraryResult.data || []);
       }
       setLoading(false);
     };
@@ -1105,6 +1111,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     // switched on online payments yet (PaySection explains and offers the alternatives).
     { id: 'pay', label: 'Pay', mobileLabel: 'Pay', icon: Banknote },
     ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', mobileLabel: 'Deals', icon: Award }] : []),
+    // The business's shared documents, forms and links. Only appears once it has listed something.
+    ...(libraryLinks.length > 0 ? [{ id: 'library', label: 'Library', mobileLabel: 'Library', icon: FolderOpen }] : []),
     ...(accountsEnabled && company?.business_profile_id ? [{ id: 'account', label: 'My account', mobileLabel: 'Account', icon: User }] : []),
     // "Track" pages are follow-ups for people who already applied/bid, so they
     // live in the footer, the Careers/Opportunities pages and the mobile menu
@@ -1269,7 +1277,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             // hero's own action buttons above.
             <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-start">
               <div className="min-w-0">
-                <SectionTiles tabs={navTabs.filter((tab) => tab.id !== 'home')} counts={{ notices: notices.length, careers: jobs.length, pitchin: pitches.length, opportunities: opportunities.length }} onNavigate={navigateTo} />
+                <SectionTiles tabs={navTabs.filter((tab) => tab.id !== 'home')} counts={{ notices: notices.length, careers: jobs.length, pitchin: pitches.length, opportunities: opportunities.length, library: libraryLinks.length }} onNavigate={navigateTo} />
                 {company.about && <AboutCard company={company} />}
                 <LocationCard company={company} className="lg:hidden" />
                 {notices.length > 0 && (
@@ -1341,6 +1349,12 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
                 Already submitted a bid?{' '}
                 <TabLink tab={{ id: 'track-bid' }} onNavigate={navigateTo} className="nb-link font-semibold underline-offset-2 hover:underline">Track your bid</TabLink>
               </p>
+            </>
+          )}
+          {activeSection === 'library' && (
+            <>
+              <PageTitle title="Library" subtitle={`Documents, forms and links shared by ${company.company_name}`} />
+              <LibrarySection links={libraryLinks} company={company} companyId={companyId} />
             </>
           )}
           {activeSection === 'account' && accountsEnabled && (
@@ -1708,6 +1722,7 @@ const TILE_COPY = {
   careers: 'See open roles and apply -- no account needed',
   pay: 'Pay the business securely, any amount',
   opportunities: 'Tenders and deals you can bid on',
+  library: 'Reports, forms and documents -- some need a PIN',
   account: 'Follow your plans and payments',
 };
 const tileCount = (id, n) => {
@@ -1716,6 +1731,7 @@ const tileCount = (id, n) => {
   if (id === 'notices') return `${n} update${n === 1 ? '' : 's'}`;
   if (id === 'pitchin') return `${n} video${n === 1 ? '' : 's'}`;
   if (id === 'opportunities') return `${n} open`;
+  if (id === 'library') return `${n} item${n === 1 ? '' : 's'}`;
   return null;
 };
 
@@ -2440,6 +2456,245 @@ const JobList = ({ jobs, onSelect }) => {
         </button>
       ))}
     </div>
+  );
+};
+
+// ---- Library: the business's shared documents, forms and links -----------------------------------
+// Everything here was explicitly listed by the business (CMMS > Posts & Jobs > Library). Opening a link that is
+// protected never happens silently: a visitor sees what it is and what they need (the password, PIN or invited
+// email the business gave them) before going on, and a PIN-protected manual link doesn't even carry its address
+// to this page until the right PIN is typed (fn_public_site_link_unlock).
+const LIBRARY_KIND_META = {
+  report: { icon: FileText, group: 'reports', fallback: 'Shared report' },
+  report_export: { icon: FolderOpen, group: 'reports', fallback: 'Bundle of reports' },
+  consultation_form: { icon: Users, group: 'forms', fallback: 'Fill in online' },
+  service_contract: { icon: Briefcase, group: 'contracts', fallback: 'Private contract' },
+  custom: { icon: Link2, group: 'links', fallback: 'External link' },
+};
+const LIBRARY_GROUPS = [
+  { id: 'reports', label: 'Reports' },
+  { id: 'forms', label: 'Forms' },
+  { id: 'contracts', label: 'Contracts' },
+  { id: 'links', label: 'Links' },
+];
+const LIBRARY_LOCK_COPY = {
+  password: { badge: 'Password needed', what: 'a password', how: 'You will be asked for the password on the next page.' },
+  pin: { badge: 'PIN needed', what: 'a PIN', how: 'You will be asked for the PIN on the next page.' },
+  email: { badge: 'Invited emails only', what: 'an invited email address', how: 'Only the email address the business invited can open it. You will be asked for it on the next page.' },
+};
+
+const libraryExpiry = (link) => {
+  if (!link.expires_at) return null;
+  const when = new Date(link.expires_at);
+  if (Number.isNaN(when.getTime()) || when.getTime() - Date.now() > 14 * 86400000) return null;
+  return `Expires ${when.toLocaleDateString()}`;
+};
+
+const LibraryGate = ({ link, company, companyId, onClose }) => {
+  const theme = useContext(NoticeBoardThemeCtx);
+  const isManualPin = link.kind === 'custom' && link.lock === 'pin';
+  const copy = LIBRARY_LOCK_COPY[link.lock] || LIBRARY_LOCK_COPY.password;
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [openUrl, setOpenUrl] = useState(null);
+  const href = isManualPin ? openUrl : siteLibraryService.resolveLinkHref(link);
+
+  useEffect(() => {
+    const onKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  const submitPin = async (e) => {
+    e.preventDefault();
+    if (!pin.trim() || busy) return;
+    setBusy(true);
+    setError('');
+    const result = await siteLibraryService.unlockLink(companyId, link.id, pin);
+    setBusy(false);
+    if (result?.success && result.url) { setOpenUrl(result.url); setPin(''); return; }
+    setError(result?.error || 'That PIN is not right');
+  };
+
+  const askLinks = [
+    company.whatsapp && buildWhatsAppLink(company.whatsapp) && { key: 'wa', icon: MessageCircle, label: 'WhatsApp', href: buildWhatsAppLink(company.whatsapp), external: true },
+    company.phone && buildTelLink(company.phone) && { key: 'call', icon: Phone, label: 'Call', href: buildTelLink(company.phone) },
+    company.email && { key: 'mail', icon: Mail, label: 'Email', href: `mailto:${company.email}` },
+  ].filter(Boolean);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${link.title} is protected`}
+      data-theme={theme}
+      className="icanera-nb nb-modal-backdrop fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 animate-fadeIn"
+      onClick={onClose}
+    >
+      <div className="nb-surface border nb-border rounded-2xl shadow-xl w-full max-w-md p-6 animate-fadeInUp" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl nb-chip-amber flex items-center justify-center flex-shrink-0">
+            {openUrl ? <ShieldCheck className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="font-extrabold nb-text leading-snug break-words">{link.title}</h2>
+            <p className="text-sm nb-text-muted mt-0.5">
+              {openUrl ? 'Unlocked. You can open it now.' : `This is protected. You need ${copy.what} from ${company.company_name}.`}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="p-1.5 -mr-1.5 -mt-1.5 rounded-lg nb-text-muted hover:opacity-80">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {isManualPin && !openUrl && (
+          <form onSubmit={submitPin} className="mt-5">
+            <label htmlFor="library-pin" className="block text-xs font-semibold nb-text-muted mb-1.5">Enter the PIN</label>
+            <div className="relative">
+              <KeyRound className="w-4 h-4 nb-icon-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                id="library-pin"
+                type="password"
+                autoFocus
+                autoComplete="off"
+                value={pin}
+                onChange={(e) => { setPin(e.target.value); setError(''); }}
+                maxLength={100}
+                className="nb-input w-full rounded-xl pl-10 pr-3 py-3 text-sm"
+                placeholder="PIN"
+              />
+            </div>
+            {error && <p role="alert" className="nb-error-text text-sm mt-2 flex items-start gap-1.5"><AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /> {error}</p>}
+            <button type="submit" disabled={busy || !pin.trim()} className="nb-btn-primary w-full mt-4 rounded-xl py-3 text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-60">
+              {busy ? <Loader className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />} Unlock
+            </button>
+          </form>
+        )}
+
+        {!isManualPin && (
+          <p className="text-sm nb-text-muted mt-4 leading-relaxed">{copy.how}</p>
+        )}
+
+        {href && (
+          <a href={href} target="_blank" rel="noopener noreferrer" onClick={() => setTimeout(onClose, 150)}
+             className="nb-btn-primary w-full mt-4 rounded-xl py-3 text-sm font-bold inline-flex items-center justify-center gap-2">
+            <ExternalLink className="w-4 h-4" /> {isManualPin ? 'Open it' : 'I have it -- continue'}
+          </a>
+        )}
+
+        {!openUrl && askLinks.length > 0 && (
+          <div className="mt-5 pt-4 border-t nb-border">
+            <p className="text-xs nb-text-muted mb-2">Do not have {copy.what} yet? Ask {company.company_name}:</p>
+            <div className="flex flex-wrap gap-2">
+              {askLinks.map((l) => (
+                <a key={l.key} href={l.href} {...(l.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                   className="nb-btn-secondary rounded-lg px-3 py-2 text-xs font-semibold inline-flex items-center gap-1.5">
+                  <l.icon className="w-3.5 h-3.5" /> {l.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const LibrarySection = ({ links, company, companyId }) => {
+  const [query, setQuery] = useState('');
+  const [group, setGroup] = useState('all');
+  const [gateLink, setGateLink] = useState(null);
+
+  const presentGroups = LIBRARY_GROUPS.filter((g) => links.some((l) => LIBRARY_KIND_META[l.kind]?.group === g.id));
+  const needle = query.trim().toLowerCase();
+  const shown = links.filter((l) => {
+    if (group !== 'all' && LIBRARY_KIND_META[l.kind]?.group !== group) return false;
+    return !needle || `${l.title} ${l.description || ''}`.toLowerCase().includes(needle);
+  });
+  const lockedCount = links.filter((l) => l.lock && l.lock !== 'none').length;
+
+  if (links.length === 0) return <EmptyState icon={FolderOpen} text="Nothing has been shared here yet. Check back soon." />;
+
+  return (
+    <>
+      <p className="text-xs nb-text-muted -mt-3 mb-4">
+        {links.length} item{links.length === 1 ? '' : 's'}
+        {lockedCount > 0 && <> -- <Lock className="w-3 h-3 inline -mt-0.5" /> {lockedCount} need a password or PIN from {company.company_name}</>}
+      </p>
+
+      {(links.length >= 6 || presentGroups.length > 1) && (
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          {links.length >= 6 && (
+            <div className="relative sm:w-64">
+              <Search className="w-4 h-4 nb-icon-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search the library"
+                     aria-label="Search the library" className="nb-input w-full rounded-xl pl-10 pr-3 py-2.5 text-sm" />
+            </div>
+          )}
+          {presentGroups.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto -mx-1 px-1" role="tablist" aria-label="Filter by type">
+              {[{ id: 'all', label: 'All' }, ...presentGroups].map((g) => (
+                <button key={g.id} type="button" role="tab" aria-selected={group === g.id} onClick={() => setGroup(g.id)}
+                        className={`flex-shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${group === g.id ? 'nb-chip-green-solid' : 'nb-chip-neutral'}`}>
+                  {g.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {shown.length === 0 ? (
+        <EmptyState icon={Search} text="Nothing matches that. Try another word." />
+      ) : (
+        <div className="nb-rows">
+          {shown.map((link, i) => {
+            const meta = LIBRARY_KIND_META[link.kind] || LIBRARY_KIND_META.custom;
+            const locked = link.lock && link.lock !== 'none';
+            const expiry = libraryExpiry(link);
+            const href = locked ? null : siteLibraryService.resolveLinkHref(link);
+            const Row = locked ? 'button' : 'a';
+            const rowProps = locked
+              ? { type: 'button', onClick: () => setGateLink(link) }
+              : { href, target: '_blank', rel: 'noopener noreferrer' };
+            return (
+              <Row key={link.id} {...rowProps}
+                   style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
+                   className="nb-row group w-full text-left flex items-center gap-3 animate-fadeInUp">
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-lg flex items-center justify-center flex-shrink-0 ${locked ? 'nb-chip-amber' : 'nb-chip-green'}`}>
+                  <meta.icon className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold nb-text line-clamp-2 flex-1 min-w-0">{link.title}</h3>
+                    {link.featured && <Star className="w-4 h-4 flex-shrink-0 nb-link" fill="currentColor" aria-label="Featured" />}
+                  </div>
+                  <p className="text-sm nb-text-muted line-clamp-1">{link.description || meta.fallback}</p>
+                  <div className="flex flex-wrap gap-2 mt-1.5">
+                    {locked && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-amber">
+                        <Lock className="w-3 h-3" /> {(LIBRARY_LOCK_COPY[link.lock] || LIBRARY_LOCK_COPY.password).badge}
+                      </span>
+                    )}
+                    {expiry && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-neutral">
+                        <Clock className="w-3 h-3" /> {expiry}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {locked
+                  ? <Lock className="w-5 h-5 nb-icon-muted flex-shrink-0" />
+                  : <ExternalLink className="w-5 h-5 nb-icon-muted flex-shrink-0 transition-transform duration-300 group-hover:translate-x-0.5" />}
+              </Row>
+            );
+          })}
+        </div>
+      )}
+
+      {gateLink && <LibraryGate link={gateLink} company={company} companyId={companyId} onClose={() => setGateLink(null)} />}
+    </>
   );
 };
 
