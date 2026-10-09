@@ -60,25 +60,25 @@ export default function ChurchTitheGiving({ askPin, walletBalance: balanceProp, 
 
     setBusy(true); setMsg(null);
     try {
-      let titheId; let churchName = church.name;
+      let titheId; let churchName = church.name; let paidMessage = '';
       if (method === 'wallet') {
         const pin = await confirmWalletPin(askPin, {
           title: 'Confirm with your PIN',
           message: `Send UGX ${fmt(amountNum)} to ${church.name} from your IcanEra wallet.`,
         });
         if (!pin.ok) { setMsg({ type: 'err', text: pin.error }); return; }
-        ({ titheId, churchName } = await giveToChurch({ churchId: church.id, amount: amountNum, givingType, method: 'wallet', isAnonymous: anonymous, message }));
+        ({ titheId, churchName, message: paidMessage } = await giveToChurch({ churchId: church.id, amount: amountNum, givingType, method: 'wallet', isAnonymous: anonymous, message }));
       } else if (method === 'cash') {
         ({ titheId, churchName } = await giveToChurch({ churchId: church.id, amount: amountNum, givingType, method: 'cash', isAnonymous: anonymous, message }));
       } else {
         const res = await giveToChurchWithFlutterwave({ church, amount: amountNum, givingType, isAnonymous: anonymous, message, phone });
         if (res.cancelled) { setMsg({ type: 'err', text: 'Payment cancelled — you were not charged.' }); return; }
-        ({ titheId, churchName } = res);
+        ({ titheId, churchName, message: paidMessage } = res);
       }
       saveLastChurch(church);
       if (balanceProp === undefined) refreshBalance();
       const label = GIVING_TYPES.find((g) => g.id === givingType)?.label || 'Tithe';
-      setMsg({ type: 'ok', text: `🙌 ${label} of UGX ${fmt(amountNum)} received by ${churchName}. God bless your giving.` });
+      setMsg({ type: 'ok', text: `🙌 ${label} of UGX ${fmt(amountNum)} — ${paidMessage || `received by ${churchName}`}. God bless your giving.` });
       onGiven?.({
         id: titheId, amount: amountNum, date: new Date(), givingType, recipientType: 'church', paymentMethod: method,
         titheType: 'personal', isAnonymous: anonymous, description: `${label} to ${churchName}`, method,

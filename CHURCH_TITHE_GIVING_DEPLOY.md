@@ -6,7 +6,7 @@ IcanEra-wallet tithe payment elsewhere in the app (Add Tithe, Pay Tithe, Calcula
 view) now asks for the wallet PIN too; cash only records a gift, so it does not.
 
 ## Deploy (in this order)
-1. Run `supabase/migrations/20261014100000_church_tithe_giving.sql` (safe to re-run).
+1. Run `supabase/migrations/20261014100000_church_tithe_giving.sql`, then `20261014110000_church_tithe_business_wallet.sql` (both safe to re-run).
 2. Set the secret and deploy the function that settles Flutterwave payments:
    `supabase secrets set FLUTTERWAVE_SECRET_KEY=...` then
    `supabase functions deploy verify-tithe-payment`
@@ -14,7 +14,7 @@ view) now asks for the wallet PIN too; cash only records a gift, so it does not.
 
 ## How it behaves
 - **Who shows up:** every active registered business is searchable; churches (type/name says church, ministry, parish, mosque, etc., or the owner ticked **Accept tithe**) are listed first and a **Churches only** filter narrows the list. Nothing is fetched until the giver searches or taps *Browse*.
-- **Wallet:** PIN check, then giver’s UGX wallet → church owner’s UGX wallet in one transaction.
+- **Wallet:** PIN check, then giver’s UGX wallet → the business’s own wallet account (`user_accounts`, account_type `business`) in one transaction. A business with no wallet account yet is credited to its owner’s wallet instead, and the giver is told.
 - **Flutterwave:** the browser never decides a payment worked; the Edge Function re-checks the charge
   with Flutterwave (status, UGX, amount, tx_ref) and calls a service-role-only SQL function. The same
   tx_ref can never settle twice.

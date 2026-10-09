@@ -95,7 +95,7 @@ export async function giveToChurchWithFlutterwave({ church, amount, givingType =
     // Charged but not recorded: surface the reference so nobody pays twice.
     throw new Error((data?.error || 'Your payment went through but we could not confirm it yet.') + ` Reference: ${txRef}`);
   }
-  return { titheId: data.tithe_record_id, churchName: data.church_name || church.name, txRef };
+  return { titheId: data.tithe_record_id, churchName: data.church_name || church.name, txRef, message: data.message };
 }
 
 /** Churches (businesses) the signed-in user owns, so they can see what their church received. */

@@ -2362,7 +2362,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
               setIsSubmittingTithe(false);
               return;
             }
-            churchPayment = { titheId: res.titheId };
+            churchPayment = { titheId: res.titheId, message: res.message };
           } else {
             churchPayment = await giveToChurch({ churchId: church.id, ...common, method: tithePaymentMethod, givingDate: tithePaymentDate });
           }
@@ -2515,7 +2515,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
 
       setTithePaymentSuccess(
         church
-          ? `✅ UGX ${amount.toLocaleString(undefined, {maximumFractionDigits: 0})} sent to ${church.name} ${tithePaymentMethod === 'cash' ? '(cash — they will confirm receipt)' : tithePaymentMethod === 'flutterwave' ? 'by Mobile Money / Card' : 'from your IcanEra wallet'} 🙏`
+          ? `✅ UGX ${amount.toLocaleString(undefined, {maximumFractionDigits: 0})} — ${churchPayment?.message || `sent to ${church.name}`} 🙏`
           : `✅ UGX ${amount.toLocaleString(undefined, {maximumFractionDigits: 0})} tithe paid & cleared! ${tithePaymentMethod === 'cash' ? '💵 Recorded as cash' : '💳 Wallet deducted'} | 🙏 Blockchain-secured`
       );
 
