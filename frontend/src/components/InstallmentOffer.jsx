@@ -5,6 +5,7 @@ import {
   quoteInstallments, getBusinessSiteInfo, createInstallmentPlan, payInstallmentWithFlutterwave, getWalletCoins,
   formatMoney, formatCoins, formatCoinAmount, coinsFor, cleanAmountInput, unitDecimals, COIN_RECOMMENDATION, previewSchedule, FREQUENCY_LABELS,
 } from '../services/installmentService';
+import { getPublicAppUrl } from '../utils/publicAppUrl';
 
 // Two looks for the same panel: the dark storefront (/store/<id>) and the
 // business website's own palette (/notices/<id>, the "nb" classes).
@@ -154,7 +155,7 @@ export default function InstallmentOffer({ businessProfileId, cartItems, user, a
           try { sessionStorage.setItem(PLAN_NOTICE_KEY, err.message || 'The deposit was not completed.'); } catch { /* ignore */ }
         }
       }
-      window.location.assign(`/plan/${plan.code}`);
+      window.location.assign(getPublicAppUrl(`/plan/${plan.code}`));
     } catch (err) {
       setError(err.message || 'Could not start this plan. Please try again.');
       setBusy(null);

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 import ContinueWithGoogle from './ContinueWithGoogle';
 import { getMyInstallmentPlans, getMyBusinessAccounts, formatMoney, STATUS_LABELS } from '../services/installmentService';
+import { getPublicAppUrl } from '../utils/publicAppUrl';
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
@@ -92,7 +93,7 @@ const PublicMyInstallments = () => {
             ) : (
               <div className="space-y-2">
                 {sorted.map((p) => (
-                  <a key={p.code} href={`/plan/${p.code}`} className="block rounded-xl border border-slate-800 bg-slate-900/70 p-3 hover:bg-slate-900 transition">
+                  <a key={p.code} href={getPublicAppUrl(`/plan/${p.code}`)} className="block rounded-xl border border-slate-800 bg-slate-900/70 p-3 hover:bg-slate-900 transition">
                     <div className="flex items-center gap-2">
                       <p className="text-sm text-white font-medium truncate flex-1">{p.seller_name || 'Order'} · {p.items.map((i) => i.name).slice(0, 2).join(', ')}{p.items.length > 2 ? '…' : ''}</p>
                       <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
