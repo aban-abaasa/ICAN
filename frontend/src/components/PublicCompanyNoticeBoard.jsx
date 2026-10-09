@@ -543,12 +543,42 @@ const NB_STYLES = `
 .nb-info-row:hover { background: var(--nb-surface-alt); }
 .nb-footer { background: var(--nb-surface); }
 .nb-footer-link:hover { color: var(--nb-green); }
-.nb-tile { background: var(--nb-surface); border: 1px solid var(--nb-border); transition: transform .2s, border-color .2s, box-shadow .2s; }
-.nb-tile:hover { transform: translateY(-2px); border-color: var(--nb-green); box-shadow: 0 8px 20px -12px rgba(0,0,0,.35); }
+.nb-tile { --tile-accent: var(--nb-green); background: var(--nb-surface); border: 1px solid var(--nb-border); transition: transform .25s, border-color .25s, box-shadow .25s; }
+.nb-tile:hover, .nb-tile:focus-visible { transform: translateY(-3px); border-color: var(--tile-accent); box-shadow: 0 14px 28px -14px color-mix(in srgb, var(--tile-accent) 75%, transparent); }
+.nb-tile:active { transform: scale(.98); }
+/* Photo header: a cross-fading slideshow of the business's own pictures under a
+   per-card colour wash, so every card reads as its own colour at a glance. */
+.nb-tile-media { position: relative; display: block; height: 104px; overflow: hidden; background: linear-gradient(135deg, var(--tile-accent), color-mix(in srgb, var(--tile-accent) 55%, #000)); }
+@media (min-width: 640px) { .nb-tile-media { height: 120px; } }
+.nb-tile-media-empty { background-size: 200% 200%; animation: nbTileDrift 8s ease-in-out infinite; }
+.nb-tile-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1.1s ease; }
+.nb-tile-slide-on { opacity: 1; }
+.nb-tile-slide img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.14); transition: transform 7s linear; }
+.nb-tile-slide-on img { transform: scale(1); }
+.nb-tile-tint { position: absolute; inset: 0; background: linear-gradient(135deg, color-mix(in srgb, var(--tile-accent) 72%, transparent) 0%, color-mix(in srgb, var(--tile-accent) 22%, transparent) 60%, rgba(0,0,0,.38) 100%); }
+.nb-tile-media::after { content: ''; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.35), transparent); transform: skewX(-18deg); transition: left .7s ease; pointer-events: none; }
+.nb-tile:hover .nb-tile-media::after { left: 130%; }
+.nb-tile-icon { background: rgba(255,255,255,.92); color: color-mix(in srgb, var(--tile-accent) 80%, #000); box-shadow: 0 4px 12px -4px rgba(0,0,0,.35); animation: nbTileFloat 3.6s ease-in-out infinite; }
+.nb-tile-count { background: rgba(255,255,255,.92); color: color-mix(in srgb, var(--tile-accent) 70%, #000); }
+.nb-tile-count i { width: 6px; height: 6px; border-radius: 999px; background: var(--tile-accent); position: relative; display: inline-block; }
+.nb-tile-count i::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--tile-accent); animation: nbTilePing 1.8s ease-out infinite; }
+.nb-tile-dot { height: 4px; width: 4px; border-radius: 999px; background: rgba(255,255,255,.55); transition: width .35s, background .35s; }
+.nb-tile-dot-on { width: 14px; background: #fff; }
+.nb-tile-title { color: var(--nb-text); }
+.nb-tile-arrow { color: var(--tile-accent); transition: transform .25s; }
+.nb-tile:hover .nb-tile-arrow { transform: translateX(3px); }
+.nb-tile-bar { height: 3px; background: linear-gradient(90deg, var(--tile-accent), color-mix(in srgb, var(--tile-accent) 30%, transparent)); }
+@keyframes nbTileFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes nbTilePing { 0% { transform: scale(1); opacity: .7; } 80%, 100% { transform: scale(2.6); opacity: 0; } }
+@keyframes nbTileDrift { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
 .nb-skip-link { position: absolute; left: 12px; top: -48px; z-index: 60; padding: 8px 14px; border-radius: 10px; background: var(--nb-green); color: #ffffff; font-weight: 600; font-size: 14px; transition: top .15s; }
 .nb-skip-link:focus { top: 8px; }
 .icanera-nb a:focus-visible, .icanera-nb button:focus-visible { outline: 2px solid var(--nb-green); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .nb-tile { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .nb-tile, .nb-tile-arrow, .nb-tile-slide, .nb-tile-slide img, .nb-tile-dot { transition: none; }
+  .nb-tile-icon, .nb-tile-media-empty, .nb-tile-count i::after { animation: none; }
+  .nb-tile-slide img { transform: none; }
+}
 /* Delivery vehicle/rider pickers in the shop cart -- an unselected option
    reads as a plain outlined pill, the selected one picks up the brand green
    the same way every other "chosen" state on this board does. */
@@ -1037,6 +1067,12 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     }
   };
 
+  // Hook, so it has to sit above the loading / not-found early returns below.
+  const tileImages = useMemo(
+    () => buildTileImages({ company, notices, jobs, opportunities, pitches, products, storeProducts }),
+    [company, notices, jobs, opportunities, pitches, products, storeProducts]
+  );
+
   if (loading) {
     return (
       <div className="icanera-nb min-h-screen flex items-center justify-center" data-theme={theme}>
@@ -1277,7 +1313,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             // hero's own action buttons above.
             <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-start">
               <div className="min-w-0">
-                <SectionTiles tabs={navTabs.filter((tab) => tab.id !== 'home')} counts={{ notices: notices.length, careers: jobs.length, pitchin: pitches.length, opportunities: opportunities.length, library: libraryLinks.length }} onNavigate={navigateTo} />
+                <SectionTiles tabs={navTabs.filter((tab) => tab.id !== 'home')} counts={{ notices: notices.length, careers: jobs.length, pitchin: pitches.length, opportunities: opportunities.length, library: libraryLinks.length }} getImages={tileImages} onNavigate={navigateTo} />
                 {company.about && <AboutCard company={company} />}
                 <LocationCard company={company} className="lg:hidden" />
                 {notices.length > 0 && (
@@ -1698,9 +1734,10 @@ const BottomNav = ({ tabs, section, onNavigate, navRef }) => (
 // A real link (href + click handler) rather than a button, so every section
 // can be opened in a new tab, bookmarked, copied, and found by crawlers -- a
 // plain click is still handled in place without a page reload.
-const TabLink = ({ tab, active = false, onNavigate, className = '', ariaLabel, children }) => (
+const TabLink = ({ tab, active = false, onNavigate, className = '', style, ariaLabel, children }) => (
   <a
     href={buildBoardUrl(tab.id)}
+    style={style}
     data-tab-id={tab.id}
     aria-current={active ? 'page' : undefined}
     aria-label={ariaLabel}
@@ -1735,29 +1772,138 @@ const tileCount = (id, n) => {
   return null;
 };
 
+// One colour per card so the grid reads as a row of distinct destinations
+// instead of eight identical green boxes.
+const TILE_ACCENTS = {
+  notices: '#3b82f6',
+  shop: '#f59e0b',
+  pitchin: '#8b5cf6',
+  careers: '#16a34a',
+  pay: '#14b8a6',
+  opportunities: '#e11d48',
+  library: '#6366f1',
+  account: '#ec4899',
+};
+
+const MAX_TILE_IMAGES = 6;
+const uniqueImages = (urls) => [...new Set(urls.filter((u) => typeof u === 'string' && u.trim()))].slice(0, MAX_TILE_IMAGES);
+
+// Real pictures per card, taken from what the business actually posted: notice
+// posters, product photos, pitch thumbnails, job posters. A card whose section
+// has no pictures borrows from the rest of the site (cover photo, then anything
+// else on the page), starting at a different picture for each card, so the grid
+// still shows real photos rather than empty boxes.
+const buildTileImages = ({ company, notices = [], jobs = [], opportunities = [], pitches = [], products = [], storeProducts = [] }) => {
+  const own = {
+    notices: uniqueImages(notices.map((n) => n.poster_url)),
+    shop: uniqueImages([...storeProducts.map((p) => p.images?.[0]), ...products.map((p) => p.images?.[0])]),
+    pitchin: uniqueImages(pitches.map((p) => p.thumbnail_url || p.plan_content?.image_url)),
+    careers: uniqueImages(jobs.map((j) => j.poster_url)),
+    opportunities: uniqueImages(opportunities.map((o) => o.poster_url || o.image_url)),
+  };
+  const pool = uniqueImages([company?.cover_image_url, ...Object.values(own).flat(), company?.logo_url]);
+  return (id, index) => {
+    if (own[id]?.length) return own[id];
+    if (pool.length === 0) return [];
+    const rotated = [...pool.slice(index % pool.length), ...pool.slice(0, index % pool.length)];
+    return rotated.slice(0, 4);
+  };
+};
+
+// Cross-fading photo slideshow for one card. Starts at a staggered moment per
+// card so the grid never flips in lockstep, pauses while off-screen or in a
+// background tab, stays still for visitors who ask for reduced motion, and
+// quietly drops a picture that fails to load.
+const TileSlides = ({ images, Icon, startDelay = 0, interval = 4500 }) => {
+  const ref = useRef(null);
+  const [index, setIndex] = useState(0);
+  const [visible, setVisible] = useState(true);
+  const [broken, setBroken] = useState(() => new Set());
+  const usable = images.filter((src) => !broken.has(src));
+  const count = usable.length;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { threshold: 0.1 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (count < 2 || !visible) return undefined;
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return undefined;
+    const advance = () => { if (!document.hidden) setIndex((i) => (i + 1) % count); };
+    let timer;
+    const kickoff = setTimeout(() => { advance(); timer = setInterval(advance, interval); }, startDelay);
+    return () => { clearTimeout(kickoff); clearInterval(timer); };
+  }, [count, visible, startDelay, interval]);
+
+  const active = count ? index % count : 0;
+  return (
+    <span ref={ref} className={`nb-tile-media ${count === 0 ? 'nb-tile-media-empty' : ''}`}>
+      {usable.map((src, i) => (
+        <span key={src} className={`nb-tile-slide ${i === active ? 'nb-tile-slide-on' : ''}`} aria-hidden="true">
+          <img
+            src={src}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onError={() => setBroken((prev) => new Set(prev).add(src))}
+          />
+        </span>
+      ))}
+      {count === 0 && <Icon className="absolute -right-3 -bottom-4 w-24 h-24 text-white/20" aria-hidden="true" />}
+      <span className="nb-tile-tint" />
+      {count > 1 && (
+        <span className="absolute bottom-2 left-3 flex items-center gap-1" aria-hidden="true">
+          {usable.map((src, i) => <span key={src} className={`nb-tile-dot ${i === active ? 'nb-tile-dot-on' : ''}`} />)}
+        </span>
+      )}
+    </span>
+  );
+};
+
 // The "what can I do here?" grid under the hero -- a real homepage's quick
 // links, so a first-time visitor sees every part of the site at a glance
 // instead of having to discover it through the tab bar.
-const SectionTiles = ({ tabs, counts, onNavigate }) => {
+const SectionTiles = ({ tabs, counts, getImages, onNavigate }) => {
   const visible = tabs.filter((tab) => TILE_COPY[tab.id]);
   if (visible.length < 2) return null;
   return (
     <section aria-label="Explore" className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-      {visible.map((tab) => {
+      {visible.map((tab, i) => {
         const count = tileCount(tab.id, counts[tab.id]);
         return (
           <TabLink
             key={tab.id}
             tab={tab}
             onNavigate={onNavigate}
-            className="nb-tile group rounded-2xl p-4 flex flex-col gap-2 animate-fadeInUp"
+            style={{ '--tile-accent': TILE_ACCENTS[tab.id], animationDelay: `${Math.min(i, 8) * 70}ms`, animationFillMode: 'backwards' }}
+            className="nb-tile group rounded-2xl overflow-hidden flex flex-col animate-fadeInUp"
           >
-            <span className="flex items-center justify-between">
-              <span className="w-9 h-9 rounded-xl nb-chip-green flex items-center justify-center"><tab.icon className="w-[18px] h-[18px]" /></span>
-              {count && <span className="nb-chip-green text-[10px] font-bold px-2 py-0.5 rounded-full">{count}</span>}
+            <span className="relative block">
+              <TileSlides images={getImages(tab.id, i)} Icon={tab.icon} startDelay={i * 700} />
+              <span
+                className="nb-tile-icon absolute top-3 left-3 w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{ animationDelay: `${i * 250}ms` }}
+              >
+                <tab.icon className="w-[18px] h-[18px]" />
+              </span>
+              {count && (
+                <span className="nb-tile-count absolute top-3 right-3 text-[10px] font-bold pl-2 pr-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                  <i aria-hidden="true" /> {count}
+                </span>
+              )}
             </span>
-            <span className="font-bold nb-text text-sm">{tab.label}</span>
-            <span className="text-xs nb-text-muted leading-snug">{TILE_COPY[tab.id]}</span>
+            <span className="nb-tile-bar" aria-hidden="true" />
+            <span className="p-3.5 flex flex-col gap-1">
+              <span className="nb-tile-title font-bold text-sm flex items-center justify-between gap-2">
+                {tab.label}
+                <ChevronRight className="nb-tile-arrow w-4 h-4 flex-shrink-0" aria-hidden="true" />
+              </span>
+              <span className="text-xs nb-text-muted leading-snug">{TILE_COPY[tab.id]}</span>
+            </span>
           </TabLink>
         );
       })}
