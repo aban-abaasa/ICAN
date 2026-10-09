@@ -61,10 +61,11 @@ export async function confirmWalletPin(askPin, { title, message }) {
 }
 
 /** Wallet or cash. Wallet callers must have passed confirmWalletPin first. */
-export async function giveToChurch({ churchId, amount, givingType = 'tithe', method, isAnonymous = false, message = '', titheType = 'personal' }) {
+export async function giveToChurch({ churchId, amount, givingType = 'tithe', method, isAnonymous = false, message = '', titheType = 'personal', givingDate = null }) {
   const { data, error } = await client().rpc('fn_give_tithe_to_church', {
     p_business_id: churchId, p_amount: amount, p_giving_type: givingType, p_payment_method: method,
     p_is_anonymous: isAnonymous, p_message: message || null, p_tithe_type: titheType,
+    ...(givingDate ? { p_giving_date: givingDate } : {}),
   });
   if (error) throw new Error(error.message);
   const row = Array.isArray(data) ? data[0] : data;
