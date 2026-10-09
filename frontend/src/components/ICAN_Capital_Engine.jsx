@@ -1,23 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getSupabaseClient } from '../lib/supabase/client';
-import { ProfileIcon, ProfilePage } from './auth';
+import ProfileIcon from './auth/ProfileIcon';
 import { Header } from './Header';
-import { StatusPage } from './StatusPage';
-import { StatusUploader } from './status/StatusUploader';
 import { StatusCarousel } from './status/StatusCarousel';
 import { StatusViewerUI } from './status/StatusViewerUI';
 import MainNavigation from './MainNavigation';
-import SACCOHub from './SACCOHub';
-import SHAREHub from './SHAREHub';
-import CMMSModule from './CMSSModule';
-import ICANWallet from './ICANWallet';
-import MobileView from './MobileView';
-import GrowthPanel from './profile/GrowthPanel';
-import ReadinessPanel from './profile/ReadinessPanel';
-import SecurityPanel from './profile/SecurityPanel';
-import SettingsPanel from './profile/SettingsPanel';
-import { EnhancedReportConfiguration } from './EnhancedReportConfiguration';
+import { ICANWallet, CMMSModule, PanelSuspense, lazyPanel } from './lazyPanels';
+import { lazyWithRetry } from '../lib/lazyWithRetry';
 import { 
   Shield, 
   Globe, 
@@ -81,9 +71,27 @@ import {
   Wifi,
   WifiOff,
   Plus,
-  Edit2
+  Edit2,
+  ShieldCheck,
+  Building2
 } from 'lucide-react';
 import IcanEraLogo from '../IcanEra.png';
+
+// ~520 KB of source: downloaded when the dashboard first renders it, not with the Engine.
+const MobileView = lazyWithRetry(() => import('./MobileView'));
+
+// Panels opened on demand — each downloads the first time it is shown.
+const ProfilePage = lazyPanel(() => import('./auth/ProfilePage'));
+const StatusPage = lazyPanel(() => import('./StatusPage'));
+const StatusUploader = lazyPanel(() => import('./status/StatusUploader'), { fallback: null });
+const SACCOHub = lazyPanel(() => import('./SACCOHub'));
+const SHAREHub = lazyPanel(() => import('./SHAREHub'));
+const GrowthPanel = lazyPanel(() => import('./profile/GrowthPanel'));
+const ReadinessPanel = lazyPanel(() => import('./profile/ReadinessPanel'));
+const InsurerPartnerPanel = lazyPanel(() => import('./insurance/partner/InsurerPartnerPanel'));
+const SecurityPanel = lazyPanel(() => import('./profile/SecurityPanel'));
+const SettingsPanel = lazyPanel(() => import('./profile/SettingsPanel'));
+const EnhancedReportConfiguration = lazyPanel(() => import('./EnhancedReportConfiguration'), { fallback: null });
 
 // AI Spending Advice Modal
 const AIAdviceModal = ({ isOpen, advice, transaction, onConfirm, onCancel }) => {
@@ -3523,7 +3531,7 @@ const ICANCapitalEngine = () => {
   const [showFinancialAnalytics, setShowFinancialAnalytics] = useState(false);
   const isRestoringHistoryRef = useRef(false);
 
-  const VALID_TABS = ['dashboard', 'security', 'readiness', 'growth', 'settings'];
+  const VALID_TABS = ['dashboard', 'security', 'readiness', 'insurance', 'insurer', 'growth', 'settings'];
 
   const closeFunctionPanels = () => {
     setShowTRUST(false);
@@ -8848,11 +8856,13 @@ Data Freshness: ${reportData.metadata.dataFreshness}
         />
 
         {/* CMMS (Computerized Maintenance Management System) */}
-        <CMMSModule
-          onDataUpdate={(data) => setCmmsData(prev => ({ ...prev, ...data }))}
-          netWorth={netWorth}
-          currentJourneyStage={currentJourneyStage}
-        />
+        <PanelSuspense>
+          <CMMSModule
+            onDataUpdate={(data) => setCmmsData(prev => ({ ...prev, ...data }))}
+            netWorth={netWorth}
+            currentJourneyStage={currentJourneyStage}
+          />
+        </PanelSuspense>
 
         {/* AI Financial Intelligence Dashboard */}
         <AIFinancialIntelligenceDashboard
@@ -8998,6 +9008,26 @@ Data Freshness: ${reportData.metadata.dataFreshness}
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+
+  // Insurance: buy cover, or apply and sell it as a licensed insurer. It is the Insurance tab of the readiness
+  // panel, opened directly so it is one click from the main navigation.
+  const renderInsurance = () => (
+    <div className="max-w-6xl mx-auto w-full">
+      <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
+        <ReadinessPanel key="insurance" initialTab="insurance" onComplianceData={setComplianceData} />
+      </div>
+    </div>
+  );
+
+  // Insurance partners: a licensed insurer applies, builds a public listing and sells cover. The counterpart
+  // of the franchise console, one click from the main navigation.
+  const renderInsurer = () => (
+    <div className="max-w-6xl mx-auto w-full">
+      <div className="icn-page-dialog icn-classic p-4 sm:p-6 lg:p-8">
+        <InsurerPartnerPanel key="insurer" />
       </div>
     </div>
   );
@@ -9184,7 +9214,7 @@ Data Freshness: ${reportData.metadata.dataFreshness}
           >
             Close Wallet
           </button>
-          <ICANWallet />
+          <PanelSuspense><ICANWallet /></PanelSuspense>
         </div>
       )}
 
@@ -9267,6 +9297,8 @@ Data Freshness: ${reportData.metadata.dataFreshness}
               { id: 'dashboard', label: 'Home',     icon: BarChart3  },
               { id: 'security',  label: 'Security', icon: Shield     },
               { id: 'readiness', label: 'Readiness',icon: Globe      },
+              { id: 'insurance', label: 'Insurance',icon: ShieldCheck },
+              { id: 'insurer',   label: 'Insurers', icon: Building2   },
               { id: 'growth',    label: 'Growth',   icon: TrendingUp },
               { id: 'trust',     label: 'SACCO',    icon: Heart      },
               { id: 'share',     label: 'Share',    icon: Send       },
@@ -9352,11 +9384,15 @@ Data Freshness: ${reportData.metadata.dataFreshness}
       <main className={activeTab === 'dashboard' ? 'p-4' : 'p-4 lg:p-8'}>
         {activeTab === 'dashboard' && (
           <section className="w-full min-h-screen overflow-y-auto -mx-4 -mt-4">
-            <MobileView userProfile={dashboardUserProfile} isWebDashboard />
+            <PanelSuspense>
+              <MobileView userProfile={dashboardUserProfile} isWebDashboard />
+            </PanelSuspense>
           </section>
         )}
         {activeTab === 'security' && renderSecurityMandate()}
         {activeTab === 'readiness' && renderReadinessMandate()}
+        {activeTab === 'insurance' && renderInsurance()}
+        {activeTab === 'insurer' && renderInsurer()}
         {activeTab === 'growth' && renderGrowthMandate()}
         {activeTab === 'settings' && renderSettings()}
       </main>

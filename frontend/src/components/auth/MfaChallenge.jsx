@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ShieldCheck, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useOptionalTheme } from '../../context/ThemeContext';
 import { DiamondSpinner } from '../IcanDiamond';
 import { getClassicAuthPalette, classicAuthClass } from './classicAuthTheme';
 import './classicAuth.css';
@@ -19,7 +19,7 @@ const friendly = (err) => {
  */
 export default function MfaChallenge() {
   const { verifyMfa, signOut, user } = useAuth();
-  const { actualTheme } = useTheme();
+  const { actualTheme } = useOptionalTheme();
   const palette = getClassicAuthPalette(actualTheme);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');

@@ -63,58 +63,68 @@ import {
   Loader2
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
-import TransactionReceiptModal from './TransactionReceiptModal';
+import PendingQrApprovals from './PendingQrApprovals';
 import ReceiptTally, { TruthBadge } from './ReceiptTally';
 import { getProofStatus, getProofLabel, getReceiptNumber } from '../utils/transactionReceipt';
 import {
   analyzeReceiptTruth, buildReceiptTruth, formatFlags, getEvidenceLabel, getTruthStatement, shortSeal,
 } from '../utils/receiptTruth';
 import CmmsPageShell from './CmmsPageShell';
-import { ProfilePage } from './auth/ProfilePage';
-import ShareholderApprovalsCenter from './ShareholderApprovalsCenter';
-import ReadinessPanel from './profile/ReadinessPanel';
-import FranchisePanel from './franchise/FranchisePanel';
-import GrowthPanel from './profile/GrowthPanel';
-import SecurityPanel from './profile/SecurityPanel';
-import SettingsPanel from './profile/SettingsPanel';
-import PortfolioTab from './profile/PortfolioTab';
-import ProfessionalsDirectory from './profile/ProfessionalsDirectory';
-import Pitchin from './Pitchin';
-import ICANWallet from './ICANWallet';
-import TrustSystem from './TrustSystem';
-import CMMSModule from './CMSSModule';
-import { StatusPage } from './StatusPage';
-import { StatusUploader } from './status/StatusUploader';
-import SearchModal from './SearchModal';
+import { ICANWallet, CMMSModule, PanelSuspense, prefetchHeavyPanels, lazyPanel } from './lazyPanels';
 import ThemeSwitcher from './ThemeSwitcher';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useCountry } from '../hooks/useCountry';
 import { useCmmsAccess } from '../hooks/useCmmsAccess';
-import { BusinessLoanCalculator } from './BusinessLoanCalculator';
-import { jsPDF } from 'jspdf';
-import * as XLSX from 'xlsx';
+// Screens opened from a tab or menu rather than shown on the home view. Each is
+// its own download (fetched when first opened) so the dashboard paints sooner.
+const ProfilePage = lazyPanel(() => import('./auth/ProfilePage'));
+const ShareholderApprovalsCenter = lazyPanel(() => import('./ShareholderApprovalsCenter'));
+const ReadinessPanel = lazyPanel(() => import('./profile/ReadinessPanel'));
+const FranchisePanel = lazyPanel(() => import('./franchise/FranchisePanel'));
+const InsurerPartnerPanel = lazyPanel(() => import('./insurance/partner/InsurerPartnerPanel'));
+const GrowthPanel = lazyPanel(() => import('./profile/GrowthPanel'));
+const SecurityPanel = lazyPanel(() => import('./profile/SecurityPanel'));
+const SettingsPanel = lazyPanel(() => import('./profile/SettingsPanel'));
+const PortfolioTab = lazyPanel(() => import('./profile/PortfolioTab'));
+const ProfessionalsDirectory = lazyPanel(() => import('./profile/ProfessionalsDirectory'));
+const Pitchin = lazyPanel(() => import('./Pitchin'));
+const TrustSystem = lazyPanel(() => import('./TrustSystem'));
+const StatusPage = lazyPanel(() => import('./StatusPage'));
+const StatusUploader = lazyPanel(() => import('./status/StatusUploader'), { fallback: null });
+const SearchModal = lazyPanel(() => import('./SearchModal'), { fallback: null });
+const BusinessLoanCalculator = lazyPanel(() => import('./BusinessLoanCalculator'), { fallback: null });
+// The charts pull in the recharts library (~350 KB); the rest of the home view
+// renders first and a quiet placeholder holds each chart's spot.
+const ChartSpot = ({ height = 160 }) => <div aria-hidden="true" style={{ minHeight: height }} />;
+const DailyTrackingChart = lazyPanel(() => import('./DailyTrackingChart'), { fallback: <ChartSpot height={220} /> });
+const BusinessTrendChart = lazyPanel(() => import('./BusinessTrendChart'), { fallback: <ChartSpot height={220} /> });
+const CmmsActivityWidget = lazyPanel(() => import('./CmmsActivityWidget'), { fallback: <ChartSpot /> });
+const IcanPriceChartWidget = lazyPanel(() => import('./IcanPriceChartWidget'), { fallback: <ChartSpot height={260} /> });
+const DropshipDashboardWidget = lazyPanel(() => import('./DropshipDashboardWidget'), { fallback: <ChartSpot height={120} /> });
+// Receipt modal builds PDFs (jsPDF ~400 KB); it only needs to exist once a receipt is opened.
+const TransactionReceiptModal = lazyPanel(() => import('./TransactionReceiptModal'), { fallback: null });
+const ReportPreviewCard = lazyPanel(() => import('./reports/ReportPreviewCard'));
+const DataCleanupModal = lazyPanel(() => import('./DataCleanupModal'), { fallback: null });
+
+// PDF and Excel libraries are ~800 KB together and only needed when someone
+// taps Download/Share/Import, so they load on demand instead of with the dashboard.
+const loadXLSX = () => import('xlsx');
+const loadJsPDF = async () => (await import('jspdf')).jsPDF;
 import {
   generateTaxReturn,
   generateBalanceSheet,
   generateIncomeStatement,
   generateCountryComplianceReport,
 } from '../services/advancedReportService';
-import ReportPreviewCard from './reports/ReportPreviewCard';
 import { COUNTRIES } from '../constants/countries';
 import { VelocityEngine } from '../utils/velocityEngine';
 import { journeyStages, determineCurrentStage, calculateStageProgress, getNextMilestone } from '../utils/journeyStages';
 import { getSharePriceHistory, getLatestSnapshot } from '../services/pitchinShareBlockchainService';
-import DailyTrackingChart from './DailyTrackingChart';
-import IcanPriceChartWidget from './IcanPriceChartWidget';
-import DropshipDashboardWidget from './DropshipDashboardWidget';
 import DashboardUpdatesCard from './DashboardUpdatesCard';
-import BusinessTrendChart from './BusinessTrendChart';
-import CmmsActivityWidget from './CmmsActivityWidget';
 import { supabase } from '../lib/supabase/client';
 import { deleteTransaction, TWO_ACCOUNT_DELETE_MESSAGE } from '../services/supabaseTransactions';
 import { analyzeTransactionWithAI } from '../services/accountingAIService';
-import DataCleanupModal from './DataCleanupModal';
 import { walletAccountService } from '../services/walletAccountService';
 import { walletService } from '../services/walletService';
 import {
@@ -689,9 +699,16 @@ const HeaderAvatar = ({ url, name }) => {
   );
 };
 
-const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack }) => {
+// `inline` renders the tabs in the same row as the wordmark / search / avatar
+// (no second row, no gold rule). The number of tabs shown is then measured
+// against the width actually left over, so nothing is ever clipped or pushed
+// under the avatar; whatever doesn't fit goes into "More".
+const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack, inline = false }) => {
   const [moreOpen, setMoreOpen] = useState(false);
+  const [fitCount, setFitCount] = useState(MAX_VISIBLE_HEADER_TABS);
   const moreRef = useRef(null);
+  const slotRef = useRef(null);
+  const measureRef = useRef(null);
 
   const renderTabButton = (tab) => {
     const isActive = activeTab === tab.id;
@@ -700,7 +717,7 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack 
       <button
         key={tab.id}
         onClick={() => onTabClick(tab.id)}
-        className={`icn-navtab ${isActive ? 'is-active' : ''}`}
+        className={`icn-navtab ${inline ? 'icn-navtab--inline' : ''} ${isActive ? 'is-active' : ''}`}
         aria-current={isActive ? 'page' : undefined}
       >
         <TabIcon className="icn-navtab-icon w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -708,6 +725,36 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack 
       </button>
     );
   };
+
+  // Inline mode: measure the real tab widths (hidden copy below) against the
+  // space the slot has been given, and keep as many tabs as fit.
+  useEffect(() => {
+    if (!inline) return undefined;
+    const slot = slotRef.current;
+    const measure = measureRef.current;
+    if (!slot || !measure) return undefined;
+    const GAP = 8;
+    const recompute = () => {
+      const kids = Array.from(measure.children);
+      const moreW = (kids[kids.length - 1]?.offsetWidth || 0) + GAP;
+      const widths = kids.slice(0, -1).map(k => k.offsetWidth);
+      const avail = slot.clientWidth - (showBack ? 84 : 0);
+      let used = 0;
+      let n = 0;
+      for (let i = 0; i < widths.length; i++) {
+        const next = used + widths[i] + (i > 0 ? GAP : 0);
+        const reserve = i < widths.length - 1 ? moreW : 0;
+        if (next + reserve > avail) break;
+        used = next;
+        n = i + 1;
+      }
+      setFitCount(n);
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(slot);
+    return () => ro.disconnect();
+  }, [inline, tabs, showBack]);
 
   // Close "More" dropdown when clicking outside
   useEffect(() => {
@@ -722,15 +769,37 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack 
     }
   }, [moreOpen]);
 
-  const visibleTabs = tabs.slice(0, MAX_VISIBLE_HEADER_TABS);
-  const overflowTabs = tabs.slice(MAX_VISIBLE_HEADER_TABS);
+  const visibleCount = inline ? fitCount : MAX_VISIBLE_HEADER_TABS;
+  const visibleTabs = tabs.slice(0, visibleCount);
+  const overflowTabs = tabs.slice(visibleCount);
   // A small dot marks the "More" button when the active section is hidden
   // inside it, without the button taking over that section's label/color.
   const activeOverflowTab = overflowTabs.find(t => t.id === activeTab);
 
   return (
-    <div className="icn-rule mt-2.5 pt-3">
-      <div className="relative flex flex-nowrap items-center gap-1.5 md:gap-2 pb-1">
+    <div ref={slotRef} className={inline ? 'flex-1 min-w-0 relative' : 'icn-rule mt-2.5 pt-3'}>
+      {inline && (
+        <div
+          ref={measureRef}
+          aria-hidden="true"
+          className="absolute left-0 top-0 flex flex-nowrap items-center gap-2 w-max invisible pointer-events-none h-0 overflow-hidden"
+        >
+          {tabs.map(tab => {
+            const TabIcon = tab.icon;
+            return (
+              <span key={tab.id} className="icn-navtab icn-navtab--inline">
+                <TabIcon className="icn-navtab-icon w-3.5 h-3.5 md:w-4 md:h-4" />
+                {tab.label}
+              </span>
+            );
+          })}
+          <span className="icn-navtab icn-navtab--inline">
+            <span>More</span>
+            <ChevronDown className="w-3.5 h-3.5" />
+          </span>
+        </div>
+      )}
+      <div className={`relative flex flex-nowrap items-center gap-1.5 md:gap-2 ${inline ? 'justify-start' : 'pb-1'}`}>
         {/* Back button — visible only when there is history to go back to */}
         {showBack && (
           <button
@@ -744,7 +813,7 @@ const DashboardHeaderNavTabs = ({ tabs, activeTab, onTabClick, showBack, onBack 
         )}
 
         {/* Tabs that fit directly */}
-        <div className="flex flex-nowrap items-center gap-1.5 md:gap-2 min-w-0 overflow-x-auto">
+        <div className={`flex flex-nowrap items-center gap-1.5 md:gap-2 min-w-0 ${inline ? '' : 'overflow-x-auto'}`}>
           {visibleTabs.map(tab => renderTabButton(tab))}
         </div>
 
@@ -803,6 +872,9 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const { country: userSignupCountry } = useCountry();
   const { hasCmmsAccess, cmmsMemberships } = useCmmsAccess();
   const [authUser, setAuthUser] = useState(null);
+
+  // Fetch the Wallet and CMMS screens quietly once the dashboard is up.
+  useEffect(() => prefetchHeavyPanels(), []);
   
   // Get the actual Supabase auth user
   useEffect(() => {
@@ -3867,6 +3939,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   const handleDownloadExcel = async (allFiltered, period, ownerArg) => {
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
+    const XLSX = await loadXLSX();
     const filtered = owner.records;
     const truth = analyzeReceiptTruth(filtered);
     const rows = filtered.map((t, idx) => ({
@@ -3933,6 +4006,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     setImportingExcel(true);
     try {
       const buffer = await file.arrayBuffer();
+      const XLSX = await loadXLSX();
       const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
@@ -4031,6 +4105,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
   const handleDownloadPDF = async (allFiltered, period, ownerArg) => {
     const owner = ownerArg || await askDownloadOwner(allFiltered);
     if (!owner) return;
+    const jsPDF = await loadJsPDF();
     const filtered = owner.records;
     const truth = analyzeReceiptTruth(filtered);
     const truthSummary = truth.summary;
@@ -4291,6 +4366,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       if (format === 'pdf') {
         // Generate PDF
         await handleDownloadPDF(filtered, period, owner);
+        const jsPDF = await loadJsPDF();
         const pdfBlob = await new Promise(resolve => {
           const doc = new jsPDF({ unit: 'mm', format: 'a4' });
           // PDF generation code is in handleDownloadPDF, we'll get the blob
@@ -4347,6 +4423,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           ]);
         });
         
+        const XLSX = await loadXLSX();
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet(ws_data);
         XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
@@ -5535,6 +5612,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     recognitionRef.current?.stop();
   };
 
+  const handleHeaderBack = () => {
+    if (navHistory.length === 0) return;
+    const prev = navHistory[navHistory.length - 1];
+    setNavHistory(h => h.slice(0, -1));
+
+    if (prev && typeof prev === 'object' && prev.panel && prev.tab) {
+      // Sub-page back: tell the open panel to switch its internal tab
+      const refMap = { wallet: walletNavRef, trust: trustNavRef, pitchin: pitchinNavRef, cmms: cmssNavRef };
+      refMap[prev.panel]?.current?.(prev.tab);
+    } else {
+      // Panel-level back: restore previous panel
+      restorePanel(prev || 'dashboard');
+    }
+  };
+
   return (
     <div
       className={`min-h-screen text-white overflow-x-hidden ${
@@ -5577,8 +5669,20 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               <Search className={`w-5 sm:w-6 h-5 sm:h-6 ${isWebDashboard ? 'text-slate-300 hover:text-white' : 'text-gray-300 hover:text-white'}`} />
             </button>
 
-            {/* Spacer */}
-            <div className="flex-1"></div>
+            {/* Section tabs share this row on the web dashboard (they used to sit in
+                a second row below); on mobile this is just a spacer. */}
+            {isWebDashboard ? (
+              <DashboardHeaderNavTabs
+                inline
+                tabs={headerNavTabs}
+                activeTab={activeHeaderTab}
+                onTabClick={handleHeaderTabClick}
+                showBack={navHistory.length > 0}
+                onBack={handleHeaderBack}
+              />
+            ) : (
+              <div className="flex-1"></div>
+            )}
 
             {/* Pending Badge - hidden on very small phones so it never crowds out the avatar/menu */}
             {pendingActionsCount > 0 && (
@@ -5661,6 +5765,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('readiness', 'Readiness'); setShowMenuDropdown(false); }}>
                       <Target /> <span>Readiness</span>
                     </button>
+                    <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('readiness', 'Readiness', 'insurance'); setShowMenuDropdown(false); }}>
+                      <Shield /> <span>Insurance</span>
+                    </button>
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('growth', 'Growth'); setShowMenuDropdown(false); }}>
                       <TrendingUp /> <span>Growth</span>
                     </button>
@@ -5669,6 +5776,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     </button>
                     <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('franchise', 'Franchise'); setShowMenuDropdown(false); }}>
                       <Network /> <span>Franchise</span>
+                    </button>
+                    <button role="menuitem" className="icn-menu-item" onClick={() => { openDetailView('insurer', 'Insurance partner'); setShowMenuDropdown(false); }}>
+                      <ShieldCheck /> <span>Insurance partner</span>
                     </button>
                     <button role="menuitem" className="icn-menu-item" onClick={() => { navigateTo('professionals'); setShowMenuDropdown(false); }}>
                       <Users /> <span>Professionals</span>
@@ -5696,28 +5806,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             })()}
           </div>
 
-          {isWebDashboard && (
-            <DashboardHeaderNavTabs
-              tabs={headerNavTabs}
-              activeTab={activeHeaderTab}
-              onTabClick={handleHeaderTabClick}
-              showBack={navHistory.length > 0}
-              onBack={() => {
-                if (navHistory.length === 0) return;
-                const prev = navHistory[navHistory.length - 1];
-                setNavHistory(h => h.slice(0, -1));
-
-                if (prev && typeof prev === 'object' && prev.panel && prev.tab) {
-                  // Sub-page back: tell the open panel to switch its internal tab
-                  const refMap = { wallet: walletNavRef, trust: trustNavRef, pitchin: pitchinNavRef, cmms: cmssNavRef };
-                  refMap[prev.panel]?.current?.(prev.tab);
-                } else {
-                  // Panel-level back: restore previous panel
-                  restorePanel(prev || 'dashboard');
-                }
-              }}
-            />
-          )}
           </div>
         </div>
       </div>
@@ -5731,6 +5819,23 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           openFeaturePanel('cmms');
           if (innerTab) {
             setCmmsOpenRequest({ tab: innerTab, requestId: `dashboard-widget:${Date.now()}` });
+          }
+        }}
+      />
+
+      {/* A customer paid a QR bill and an approver has to confirm it: Approve / Reject right here, no hunting for the notification */}
+      <PendingQrApprovals
+        onDecided={async () => {
+          try {
+            const decidedUserId = authContextUser?.id || user?.id || userProfile?.id;
+            const engine = new VelocityEngine(decidedUserId);
+            const loadResult = await engine.loadAllTransactions();
+            if (loadResult.success) {
+              setTransactions(loadResult.data || []);
+              setVelocityMetrics(engine.calculateMetrics());
+            }
+          } catch (error) {
+            console.warn('Could not refresh after an approval:', error);
           }
         }}
       />
@@ -5942,8 +6047,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         const isOwnProfilePage = selectedDetail.tab === 'profile' && selectedDetail.item === 'My Profile';
         const detailEyebrow = {
           profile: 'Account', security: 'Account', readiness: 'Career & growth',
-          growth: 'Career & growth', resume: 'Career & growth', settings: 'Settings',
+          growth: 'Career & growth', resume: 'Career & growth', settings: 'Settings', franchise: 'IcanEra partners', insurer: 'IcanEra partners',
         }[selectedDetail.tab] || 'IcanEra';
+        const isFranchisePage = selectedDetail.tab === 'franchise';
         return (
         <div
           className={`fixed inset-0 bg-black/70 backdrop-blur-[2px] z-40 flex ${isWebDashboard ? 'items-center justify-center p-4' : 'items-end'}`}
@@ -5953,7 +6059,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             role="dialog"
             aria-modal="true"
             aria-label={selectedDetail.item}
-            className={`icn-sheet icn-classic ${isWebDashboard
+            className={`icn-sheet icn-classic ${isFranchisePage ? 'icn-sheet--bloom' : ''} ${isWebDashboard
               ? 'rounded-2xl w-full max-w-3xl max-h-[85vh]'
               : isOwnProfilePage
                 ? 'w-full h-[100dvh] max-h-[100dvh] rounded-none'
@@ -5988,6 +6094,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                     onLogout={() => {
                       setSelectedDetail(null);
                     }}
+                    onOpenResume={() => openDetailView('resume', 'My Resume')}
                     section={['security', 'settings'].includes(selectedDetail.initialTab) ? selectedDetail.initialTab : 'profile'}
                     onSectionChange={(next) => setSelectedDetail((prev) => (prev ? { ...prev, initialTab: next } : prev))}
                     extraSections={{
@@ -6121,7 +6228,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
               {/* READINESS - GLOBAL NAVIGATOR */}
               {selectedDetail.tab === 'readiness' && selectedDetail.item === 'Readiness' && (
-                <ReadinessPanel />
+                <ReadinessPanel key={selectedDetail.initialTab === 'insurance' ? 'insurance' : 'readiness'} initialTab={selectedDetail.initialTab === 'insurance' ? 'insurance' : 'checklist'} onOpenResume={() => openDetailView('resume', 'My Resume')} />
               )}
 
               {/* GROWTH - PROSPERITY ARCHITECT */}
@@ -6132,6 +6239,11 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               {/* FRANCHISE - PARTNER CONSOLE */}
               {selectedDetail.tab === 'franchise' && selectedDetail.item === 'Franchise' && (
                 <FranchisePanel />
+              )}
+
+              {/* INSURANCE PARTNER - LIST AND SELL COVER */}
+              {selectedDetail.tab === 'insurer' && selectedDetail.item === 'Insurance partner' && (
+                <InsurerPartnerPanel />
               )}
 
               {/* MY RESUME / PORTFOLIO */}
@@ -7661,7 +7773,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           style={{ top: isWebDashboard ? dashboardHeaderHeight : 0, bottom: isWebDashboard ? '0' : overlayPanelBottomInset }}
         >
           <div className="pt-2 px-2 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <ICANWallet navRef={walletNavRef} onTabChange={(prev) => handlePanelTabChange('wallet', prev)} />
+            <PanelSuspense>
+              <ICANWallet navRef={walletNavRef} onTabChange={(prev) => handlePanelTabChange('wallet', prev)} />
+            </PanelSuspense>
           </div>
         </div>
       )}
@@ -8628,13 +8742,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               contained, padded shell at the md breakpoint, so wrapping it in
               padding here would just box in every CMMS page on phones. */}
           <div className="min-h-full pb-[calc(1rem+env(safe-area-inset-bottom))]">
-            <CMMSModule
-              user={userProfile}
-              navRef={cmssNavRef}
-              onTabChange={(prev) => handlePanelTabChange('cmms', prev)}
-              openRequest={cmmsOpenRequest}
-              onOpenRequestConsumed={() => setCmmsOpenRequest(null)}
-            />
+            <PanelSuspense>
+              <CMMSModule
+                user={userProfile}
+                navRef={cmssNavRef}
+                onTabChange={(prev) => handlePanelTabChange('cmms', prev)}
+                openRequest={cmmsOpenRequest}
+                onOpenRequestConsumed={() => setCmmsOpenRequest(null)}
+              />
+            </PanelSuspense>
           </div>
         </div>
       )}
@@ -9732,7 +9848,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                           {/* Excel */}
                           <button
-                            onClick={() => {
+                            onClick={async () => {
+                              const XLSX = await loadXLSX();
                               const rows = [];
                               const flatten = (obj, prefix='') => {
                                 Object.entries(obj).forEach(([k,v]) => {
@@ -9770,7 +9887,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
                           {/* PDF */}
                           <button
-                            onClick={() => {
+                            onClick={async () => {
+                              const jsPDF = await loadJsPDF();
                               const doc = new jsPDF({ unit: 'mm', format: 'a4' });
                               const rpt = generatedReportData;
                               const countryName = countries?.find(c => c.code === selectedCountry)?.name || selectedCountry || 'Uganda';
@@ -9973,6 +10091,21 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           setTransactionType(null);
           setPreselectedBusinessProfileId(null);
           setVoicePrefill('');
+        }}
+        // A QR bill was paid (cash confirmed, wallet, Mobile Money, card or bank): the server has just
+        // written the real income entry, so refresh the list and the report numbers right away.
+        onQrPaid={async () => {
+          try {
+            const qrUserId = authContextUser?.id || user?.id || userProfile?.id;
+            const engine = new VelocityEngine(qrUserId);
+            const loadResult = await engine.loadAllTransactions();
+            if (loadResult.success) {
+              setTransactions(loadResult.data || []);
+              setVelocityMetrics(engine.calculateMetrics());
+            }
+          } catch (error) {
+            console.warn('Could not refresh after a QR payment:', error);
+          }
         }}
         onSubmit={async (transaction) => {
           const result = await persistTransaction(transaction, { source: 'smart_entry' });

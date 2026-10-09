@@ -10,6 +10,7 @@ import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 // Dependency-free on purpose (no Supabase import) — see referralCapture.js.
 import { captureReferralFromUrl } from './services/referralCapture';
+import { lazyWithRetry } from './lib/lazyWithRetry';
 
 // A shared referral link (/?ref=CODE) can land on any page, signed in or not:
 // remember the code now, App redeems it once the visitor has an account.
@@ -55,6 +56,14 @@ const portfolioShareMatch = window.location.pathname.match(/^\/portfolio\/([^/]+
 // Pitchin/status share links above. Only checkout (a real IcanEra payment)
 // prompts sign-in, in place, without losing the cart.
 const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
+// The public shop window (/shop): every reseller-listed product as a picture grid, for anyone (and
+// search engines, via /api/share-preview?type=shop). Self-styled and needs no auth, so it sits
+// outside both ThemeProvider and AuthProvider like the other standalone public pages.
+const isPublicShopPath = /^\/shop\/?$/.test(window.location.pathname);
+// An instalment plan (/plan/<code>) and the customer's list of them (/plans): the plan's code is a
+// handle, not a secret -- the page itself needs the customer (or the seller's team) to be signed in.
+const installmentPlanMatch = window.location.pathname.match(/^\/plan\/([A-Za-z0-9]{6,12})\/?$/);
+const isMyInstallmentsPath = /^\/plans\/?$/.test(window.location.pathname);
 // A CMMS company's public notice board (announcements + job postings) at
 // /notices/<companyId> -- same no-login share-link reasoning as the links
 // above. Job applicants submit their application right on this page with
@@ -67,6 +76,14 @@ const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
 // stock Tailwind color class -- a hardcoded background this standalone,
 // bring-your-own-palette page must never inherit.
 const cmmsNoticeBoardMatch = window.location.pathname.match(/^\/notices\/([^/]+)/);
+// The QR printed on any recorded transaction's receipt (/r/<code>, see
+// ADD_PUBLIC_TRANSACTION_QR.sql): the receipt for anyone, no account, plus payment when the
+// owner switched it on. Same reasoning as the notice board -- AuthProvider (a visitor may sign
+// in in place to pay from their wallet) but never the app's ThemeProvider.
+const publicReceiptMatch = window.location.pathname.match(/^\/r\/([a-z0-9]{16,40})\/?$/);
+// A business's STANDING pay QR (/p/<code>): printed once, the customer types any amount / lists items and
+// pays. Standalone like the receipt page, but needs no providers at all (the bill it makes opens /r/<code>).
+const publicPayCodeMatch = window.location.pathname.match(/^\/p\/([a-z0-9]{16,40})\/?$/);
 // A candidate's written-test / live-interview link (see
 // CMMS_WRITTEN_TESTS.sql, CMMS_INTERVIEW_SCHEDULES.sql) -- like the notice
 // board, these need AuthProvider (a candidate must sign in/sign up with a
@@ -107,51 +124,9 @@ const reportExportShareMatch = window.location.pathname.match(/^\/report-exports
 // submits with no ICAN account (CMMS_CLINICAL_CONSULTATION_FORMS.sql gates
 // it by share_token + share_enabled instead of business membership).
 const consultationFormShareMatch = window.location.pathname.match(/^\/consultation-forms\/([^/]+)/);
-// A stale service-worker/browser cache can leave a phone holding an
-// index.html that points at a JS chunk hash the last deploy removed from the
-// server — the chunk 404s, the dynamic import() rejects, and with no retry
-// the Suspense fallback (a bare dark div) is the last thing that ever
-// renders: a silent blank screen with no error visible to the user or to us.
-// Reload once (bypassing every cache we control) before giving up, so the
-// fresh index.html/chunks a normal browser visit would get are fetched
-// instead of leaving the app permanently stuck.
-const lazyWithReloadOnChunkFailure = (importer) => React.lazy(() =>
-  importer().catch(async (error) => {
-    const reloadedKey = 'ican-chunk-reload-attempted';
-    // Offline, this chunk failure means the file simply was never cached
-    // (e.g. a deploy shipped a new hashed chunk name between the service
-    // worker activating and this device's next *online* visit) — a network
-    // fetch can't succeed either way. Unregistering the service worker and
-    // wiping every cache, as the online path below does, would destroy the
-    // one thing still letting the app open offline at all: turning "one
-    // chunk missing" into "nothing works offline, ever, until back online."
-    // Reloading into that state is exactly what produces Chrome's own
-    // "No internet" page instead of the app shell. Let it surface as a
-    // normal render error instead and leave the cache/service worker alone.
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      throw error;
-    }
-    if (sessionStorage.getItem(reloadedKey)) {
-      throw error; // Already retried once this session — a real error, not a stale cache.
-    }
-    sessionStorage.setItem(reloadedKey, '1');
-    console.warn('[App] Chunk load failed, clearing caches and reloading once:', error);
-    try {
-      if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(registrations.map((registration) => registration.unregister()));
-      }
-      if ('caches' in window) {
-        const names = await caches.keys();
-        await Promise.all(names.map((name) => caches.delete(name)));
-      }
-    } catch (cleanupError) {
-      console.warn('[App] Cache cleanup before reload failed:', cleanupError);
-    }
-    window.location.reload();
-    return new Promise(() => {}); // Hang here; the reload is already in flight.
-  })
-);
+// Chunk-load retry + stale-cache recovery lives in lib/lazyWithRetry.js so every
+// lazily loaded screen in the app shares it.
+const lazyWithReloadOnChunkFailure = lazyWithRetry;
 
 const App = lazyWithReloadOnChunkFailure(() => import('./App'));
 const PublicStaffAttendanceCheckIn = lazyWithReloadOnChunkFailure(() => import('./components/PublicStaffAttendanceCheckIn'));
@@ -160,7 +135,12 @@ const PublicShareFlow = lazyWithReloadOnChunkFailure(() => import('./components/
 const PrivatePitchInviteViewer = lazyWithReloadOnChunkFailure(() => import('./components/PrivatePitchInviteViewer'));
 const PublicPortfolioPage = lazyWithReloadOnChunkFailure(() => import('./components/profile/PublicPortfolioPage'));
 const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./components/PublicDropshipStorefront'));
+const PublicShopPage = lazyWithReloadOnChunkFailure(() => import('./components/PublicShopPage'));
+const PublicInstallmentPlan = lazyWithReloadOnChunkFailure(() => import('./components/PublicInstallmentPlan'));
+const PublicMyInstallments = lazyWithReloadOnChunkFailure(() => import('./components/PublicMyInstallments'));
 const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
+const PublicTransactionPage = lazyWithReloadOnChunkFailure(() => import('./components/PublicTransactionPage'));
+const PublicPayCodePage = lazyWithReloadOnChunkFailure(() => import('./components/PublicPayCodePage'));
 const PublicReportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportViewer'));
 const PublicReportExportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportExportViewer'));
 const PublicConsultationFormViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicConsultationFormViewer'));
@@ -207,6 +187,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AppErrorBoundary>
       <Suspense fallback={<Loading />}>
         {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn />
+          : isPublicShopPath ? <PublicShopPage />
           : isVisitorQrPath ? <PublicVisitorCheckIn />
           : isDocumentVerifyPath ? <PublicDocumentVerify />
           : isAgreementVerifyPath ? <PublicAgreementVerify />
@@ -214,9 +195,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           : reportShareMatch ? <PublicReportViewer shareToken={reportShareMatch[1]} />
           : reportExportShareMatch ? <PublicReportExportViewer shareToken={reportExportShareMatch[1]} />
           : consultationFormShareMatch ? <PublicConsultationFormViewer shareToken={consultationFormShareMatch[1]} />
+          : publicPayCodeMatch ? <PublicPayCodePage code={publicPayCodeMatch[1]} />
           : cmmsNoticeBoardMatch ? (
             <AuthProvider>
               <PublicCompanyNoticeBoard companyId={cmmsNoticeBoardMatch[1]} />
+            </AuthProvider>
+          ) : publicReceiptMatch ? (
+            <AuthProvider>
+              <PublicTransactionPage code={publicReceiptMatch[1]} />
             </AuthProvider>
           ) : isCandidateTestPath ? (
             <AuthProvider>
@@ -237,6 +223,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                   : privateInviteMatch ? <PrivatePitchInviteViewer token={privateInviteMatch[1]} />
                   : statusShareMatch ? <PublicShareFlow kind="status" id={statusShareMatch[1]} />
                   : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
+                  : installmentPlanMatch ? <PublicInstallmentPlan code={installmentPlanMatch[1].toUpperCase()} />
+                  : isMyInstallmentsPath ? <PublicMyInstallments />
                   : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />
                   : <><App /><PhoneAlertsPrompt /></>}
               </AuthProvider>

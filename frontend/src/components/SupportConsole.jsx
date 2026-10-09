@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Lock, Mail, KeyRound, Eye, EyeOff, ArrowLeft, AlertTriangle, Loader2, ShieldAlert } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase/client';
-import { ICANDevDashboard, DARK_VARS } from './ICANDevPanel';
+import { ICANDevDashboard, DARK_VARS, setDevToken } from './ICANDevPanel';
 import { PWAInstallButton } from './PWAInstallButton';
 
 // Scoped alternative to the full ICANDevPanel, reachable at
@@ -128,6 +128,8 @@ const SupportConsole = () => {
   };
 
   if (status === 'granted' && boardToken) {
+    // The scoped token comes back from the verified link, not the bundle.
+    setDevToken(boardToken);
     return (
       <ICANDevDashboard
         visibleTabs={allowedTabs}

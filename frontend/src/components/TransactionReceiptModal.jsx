@@ -1,13 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { jsPDF } from 'jspdf';
-import { X, Receipt, Paperclip, Download, Share2, Loader2, ShieldCheck, FileCheck2, ExternalLink } from 'lucide-react';
+import QRCode from 'qrcode';
+import { QRCodeCanvas } from 'qrcode.react';
+import { X, Receipt, Paperclip, Download, Share2, Loader2, ShieldCheck, FileCheck2, ExternalLink, Printer, Copy, Check, QrCode } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
+import {
+  buildPublicReceiptLink, getTransactionPublicLink, getTransactionReceiveState, setTransactionPublicPay, setTransactionPublicReceive,
+} from '../services/publicTransactionService';
 import { uploadToR2, resolveMediaValues, isR2Key } from '../services/r2StorageService';
 import {
   RECEIPT_FOLDER,
   RECEIPT_MAX_BYTES,
   compressReceiptImage,
+  getProofRequirement,
   getProofStatus,
   getReceiptImageRef,
   getReceiptLines,
@@ -25,6 +31,8 @@ const pickProof = (meta = {}) => ({
 });
 
 const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
+
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /**
  * Opens when a transaction is tapped. Shows the attached proof image when there
@@ -44,8 +52,39 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
   const [savingRef, setSavingRef] = useState(false);
   const [signer, setSigner] = useState('');
   const [seal, setSeal] = useState(null);
+  // Public QR: { code, pay_status, can_enable, blocker, paid } -- null when this row has none
+  // (a tithe receipt, a shared coin-feed row, an offline entry that has not synced yet).
+  const [pub, setPub] = useState(null);
+  const [pubBusy, setPubBusy] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  // Receive-by-QR (money-out entries of a business): { receive_status, can_enable, can_manage, blocker, expires_at, received }
+  const [recv, setRecv] = useState(null);
+  const [recvBusy, setRecvBusy] = useState(false);
 
   useEffect(() => { setTx(transaction); setRefInput(getReceiptRef(transaction) || ''); }, [transaction]);
+
+  // Every ledger entry has a public code; fetch it (older entries get theirs here, on first open).
+  useEffect(() => {
+    let cancelled = false;
+    setPub(null);
+    if (!transaction?.id || !isUuid(transaction.id)) return undefined;
+    getTransactionPublicLink(transaction.id)
+      .then((link) => { if (!cancelled) setPub(link); })
+      .catch(() => { /* not one of the viewer's own ledger entries: no QR section */ });
+    return () => { cancelled = true; };
+  }, [transaction?.id]);
+
+  // Money-out entries of a business can also pay the client who scans the QR.
+  useEffect(() => {
+    let cancelled = false;
+    setRecv(null);
+    if (!pub?.code || !transaction?.id || !isUuid(transaction.id)) return undefined;
+    if (transaction.transaction_type !== 'expense' || !transaction.business_profile_id) return undefined;
+    getTransactionReceiveState(transaction.id)
+      .then((state) => { if (!cancelled) setRecv(state); })
+      .catch(() => { /* no receive section */ });
+    return () => { cancelled = true; };
+  }, [pub?.code, transaction?.id, transaction?.transaction_type, transaction?.business_profile_id]);
 
   // Resolve which ledger row proof is saved on: the row itself when it's the
   // user's own, or -- for tithe receipts -- the ledger row the tithe page wrote
@@ -107,10 +146,74 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
   const lines = getReceiptLines(tx, { businessName });
   const receiptNumber = getReceiptNumber(tx);
   const proofStatus = getProofStatus(tx);
+  const proofNeed = getProofRequirement(tx);
   const evidence = EVIDENCE_GRADES[getEvidenceGrade(tx)];
   const hasImage = proofStatus === 'attached';
   const canAttach = Boolean(target);
   const isIncome = tx.transaction_type === 'income';
+  const publicLink = pub?.code ? buildPublicReceiptLink(pub.code) : '';
+  const payOpen = pub?.pay_status === 'open';
+  const payPaid = pub?.pay_status === 'paid';
+
+  const togglePay = async () => {
+    setError('');
+    setPubBusy(true);
+    try {
+      setPub(await setTransactionPublicPay(tx.id, !payOpen));
+    } catch (err) {
+      setError(err.message || 'Could not change the payment setting.');
+    } finally {
+      setPubBusy(false);
+    }
+  };
+
+  const recvOpen = recv?.receive_status === 'open';
+  const recvDone = recv?.receive_status === 'received';
+
+  const toggleReceive = async () => {
+    setError('');
+    setRecvBusy(true);
+    try {
+      setRecv(await setTransactionPublicReceive(tx.id, !recvOpen));
+    } catch (err) {
+      setError(err.message || 'Could not change the payout setting.');
+    } finally {
+      setRecvBusy(false);
+    }
+  };
+
+  const copyLink = async () => {
+    try { await navigator.clipboard?.writeText(publicLink); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); } catch { /* clipboard blocked */ }
+  };
+
+  // A narrow, print-ready page (works on a 58/80 mm receipt printer and on A4): the receipt lines and
+  // the public QR. Opens the browser's print dialog, which also offers "Save as PDF".
+  const printReceipt = async () => {
+    setError('');
+    try {
+      const qr = await QRCode.toDataURL(publicLink, { margin: 1, width: 320 });
+      const rows = lines.map(([k, v]) => `<tr><td class="k">${escapeHtml(k)}</td><td class="v">${escapeHtml(v)}</td></tr>`).join('');
+      const note = payOpen ? 'Scan to see this receipt or to pay it — no account needed' : 'Scan to see this receipt online — no account needed';
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(receiptNumber)}</title><style>
+        @page{margin:6mm}body{font:13px Georgia,serif;color:#111;margin:0;padding:8px;max-width:340px;margin:auto}
+        h1{font-size:16px;text-align:center;margin:0 0 2px}.sub{text-align:center;color:#555;font-size:11px;margin-bottom:8px}
+        .amt{text-align:center;font-size:22px;font-weight:bold;margin:6px 0 10px}table{width:100%;border-collapse:collapse}
+        td{padding:3px 0;vertical-align:top;border-bottom:1px dotted #bbb}.k{color:#555;width:38%}.v{text-align:right;word-break:break-word}
+        .qr{text-align:center;margin-top:12px}.qr img{width:170px;height:170px}.qr p{margin:4px 0;font-size:11px}.url{word-break:break-all;color:#333}
+      </style></head><body>
+        <h1>${escapeHtml(businessName || 'IcanEra receipt')}</h1><div class="sub">IcanEra transaction receipt</div>
+        <div class="amt">${isIncome ? '+' : '-'}${Math.abs(Number(tx.amount) || 0).toLocaleString()} ${escapeHtml(tx.currency || 'UGX')}</div>
+        <table>${rows}</table>
+        <div class="qr"><img src="${qr}" alt="QR"/><p><b>${escapeHtml(note)}</b></p><p class="url">${escapeHtml(publicLink)}</p></div>
+        <script>window.onload=function(){setTimeout(function(){window.print()},250)}<\/script></body></html>`;
+      const win = window.open('', '_blank', 'width=420,height=720');
+      if (!win) { setError('Allow pop-ups for this site to print the receipt.'); return; }
+      win.document.write(html);
+      win.document.close();
+    } catch (err) {
+      setError(err.message || 'Could not prepare the receipt for printing.');
+    }
+  };
 
   // Merge proof fields into the latest stored metadata so concurrent edits aren't clobbered.
   const saveProof = async (fields) => {
@@ -194,6 +297,18 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
       }
     }
     pdf.setFont(undefined, 'normal'); pdf.setFontSize(8); pdf.setTextColor(100, 116, 139);
+    // The public QR: anyone can scan the printed page to see (or pay) this receipt, no account needed.
+    if (publicLink) {
+      try {
+        const qrData = await QRCode.toDataURL(publicLink, { margin: 1, width: 300 });
+        pdf.addImage(qrData, 'PNG', 158, 238, 38, 38);
+        pdf.setFontSize(7); pdf.setTextColor(49, 46, 129);
+        pdf.text(payOpen ? 'Scan to see or pay' : 'Scan to see online', 177, 279, { align: 'center' });
+        pdf.setTextColor(100, 116, 139);
+      } catch (err) {
+        console.warn('QR not added to the PDF:', err);
+      }
+    }
     if (seal) {
       pdf.setFont('times', 'italic'); pdf.setFontSize(16); pdf.setTextColor(49, 46, 129);
       pdf.text(signer || 'IcanEra', 15, 272);
@@ -209,7 +324,7 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
   };
 
   const share = async () => {
-    const text = getReceiptText(tx, { businessName }, seal);
+    const text = getReceiptText(tx, { businessName }, seal) + (publicLink ? `\nView online: ${publicLink}` : '');
     if (navigator.share) { try { await navigator.share({ title: 'IcanEra receipt', text }); } catch { /* dismissed */ } return; }
     await navigator.clipboard?.writeText(text);
   };
@@ -247,6 +362,21 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
           </span>
         </div>
 
+        {proofNeed.required && (
+          <div className={`mb-4 rounded-lg border px-3 py-2 text-xs ${proofNeed.complete ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}`}>
+            <p className="font-bold">
+              {proofNeed.complete ? '100% proof — manual transaction fully evidenced' : 'Manual transaction between two parties — 100% proof required'}
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              <li>{proofNeed.hasPhoto ? '✅' : '⬜'} Receipt photo</li>
+              <li>{proofNeed.hasNumber ? '✅' : '⬜'} Receipt number</li>
+            </ul>
+            {!proofNeed.complete && !canAttach && (
+              <p className="mt-1 text-[11px] opacity-80">Only the person who recorded this entry can attach the proof.</p>
+            )}
+          </div>
+        )}
+
         {hasImage && (
           <div className="mb-4 overflow-hidden rounded-xl border border-slate-700 bg-slate-900">
             {imageLoading ? (
@@ -270,6 +400,94 @@ export default function TransactionReceiptModal({ transaction, businessName = nu
             </div>
           ))}
         </div>
+
+        {pub?.code && (
+          <div className="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300"><QrCode className="h-3.5 w-3.5" /> Public QR</p>
+            <div className="mt-3 flex items-center gap-4">
+              <div className="flex-shrink-0 rounded-lg bg-white p-1.5"><QRCodeCanvas value={publicLink} size={104} /></div>
+              <div className="min-w-0 text-xs text-slate-300">
+                <p className="font-semibold text-slate-100">
+                  {payPaid ? 'Paid through this QR' : payOpen ? 'Anyone can scan to see this receipt or pay it' : 'Anyone can scan to see this receipt'}
+                </p>
+                <p className="mt-1 text-slate-400">No account needed. It is printed on the PDF and the printout.</p>
+                <p className="mt-1 break-all font-mono text-[9px] text-slate-500">{publicLink}</p>
+              </div>
+            </div>
+
+            {payPaid && pub.paid && (
+              <p className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                Paid by {pub.paid.payer_name || 'a customer'}{pub.paid.payer_phone ? ` (${pub.paid.payer_phone})` : ''} with {pub.paid.via === 'wallet' ? 'an IcanEra wallet' : 'Mobile Money, card or bank'}
+                {pub.paid.paid_at ? ` · ${new Date(pub.paid.paid_at).toLocaleString()}` : ''}. The money is in your {tx.business_profile_id ? 'business wallet' : 'IcanEra wallet'}.
+              </p>
+            )}
+
+            {!payPaid && (pub.can_enable || payOpen) && (
+              <button
+                onClick={togglePay}
+                disabled={pubBusy}
+                className={`mt-3 flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left text-sm disabled:opacity-60 ${payOpen ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-slate-700 bg-slate-900'}`}
+              >
+                <span>
+                  <span className="block font-semibold text-slate-100">Let the customer pay by scanning</span>
+                  <span className="block text-[11px] text-slate-400">
+                    {payOpen
+                      ? 'On — they pay with Mobile Money, card, bank or an IcanEra wallet. You receive the full amount.'
+                      : 'Off — the QR only shows the receipt.'}
+                  </span>
+                </span>
+                <span className={`relative h-6 w-11 flex-shrink-0 rounded-full transition ${payOpen ? 'bg-emerald-500' : 'bg-slate-600'}`}>
+                  {pubBusy
+                    ? <Loader2 className="absolute left-3 top-1 h-4 w-4 animate-spin text-white" />
+                    : <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${payOpen ? 'left-[22px]' : 'left-0.5'}`} />}
+                </span>
+              </button>
+            )}
+            {!payPaid && !payOpen && !pub.can_enable && pub.blocker && (
+              <p className="mt-3 text-[11px] text-slate-500">Payment by QR is not available here: {pub.blocker}.</p>
+            )}
+
+            {recvDone && recv.received && (
+              <p className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                Received by {recv.received.recipient_name || 'the client'}
+                {recv.received.received_at ? ` · ${new Date(recv.received.received_at).toLocaleString()}` : ''}. UGX {Number(recv.received.amount_ugx || 0).toLocaleString()} was paid from your business wallet.
+              </p>
+            )}
+            {recv && !recvDone && (recv.can_enable || recvOpen) && (
+              <button
+                onClick={toggleReceive}
+                disabled={recvBusy}
+                className={`mt-3 flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left text-sm disabled:opacity-60 ${recvOpen ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-slate-700 bg-slate-900'}`}
+              >
+                <span>
+                  <span className="block font-semibold text-slate-100">Let the client receive this by scanning</span>
+                  <span className="block text-[11px] text-slate-400">
+                    {recvOpen
+                      ? `On — the client signs in with IcanEra and collects this amount from your business wallet, once${recv.expires_at ? ` (until ${new Date(recv.expires_at).toLocaleDateString()})` : ''}.`
+                      : 'Off — nobody can collect money through this QR. Turning it on is valid for 7 days.'}
+                  </span>
+                </span>
+                <span className={`relative h-6 w-11 flex-shrink-0 rounded-full transition ${recvOpen ? 'bg-emerald-500' : 'bg-slate-600'}`}>
+                  {recvBusy
+                    ? <Loader2 className="absolute left-3 top-1 h-4 w-4 animate-spin text-white" />
+                    : <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${recvOpen ? 'left-[22px]' : 'left-0.5'}`} />}
+                </span>
+              </button>
+            )}
+            {recv && !recvDone && !recvOpen && !recv.can_enable && (recv.blocker || recv.can_manage === false) && (
+              <p className="mt-3 text-[11px] text-slate-500">
+                Receiving by QR is not available here: {recv.blocker || 'only the business owner, a co-owner or finance team can switch it on'}.
+              </p>
+            )}
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button onClick={printReceipt} className="flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-3 py-2.5 text-sm font-bold text-white"><Printer className="h-4 w-4" /> Print with QR</button>
+              <button onClick={copyLink} className="flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-3 py-2.5 text-sm font-bold text-white">
+                {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} {linkCopied ? 'Copied' : 'Copy link'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {seal && (
           <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">

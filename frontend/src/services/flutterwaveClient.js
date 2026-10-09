@@ -15,7 +15,7 @@ export function generateTxRef(prefix) {
 
 /**
  * @param {{amount:number, currency?:string, customerEmail?:string, customerName?:string,
- *   customerPhone?:string, title?:string, description?:string, txRef:string}} params
+ *   customerPhone?:string, title?:string, description?:string, txRef:string, paymentOptions?:string}} params
  * @returns {Promise<{status:'successful'|'cancelled'|'failed', transaction_id?:string, tx_ref:string}>}
  */
 export function payWithFlutterwave(params) {
@@ -37,7 +37,7 @@ export function payWithFlutterwave(params) {
       // Uganda-supported channels only — 'card' covers Visa/Mastercard,
       // 'mobilemoneyuganda' covers both MTN and Airtel Uganda mobile money,
       // 'account' is bank-account/direct-debit.
-      payment_options: 'card,mobilemoneyuganda,account',
+      payment_options: params.paymentOptions || 'card,mobilemoneyuganda,account',
       customer: {
         email: params.customerEmail || 'customer@ican.io',
         phone_number: params.customerPhone || '',

@@ -11,9 +11,10 @@ import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { supabase } from '../lib/supabase/client';
 import { uploadToR2 } from '../services/r2StorageService';
 import { RECEIPT_FOLDER, RECEIPT_MAX_BYTES, compressReceiptImage } from '../utils/transactionReceipt';
+import QrPaymentPanel from './QrPaymentPanel';
 
 
-export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, preselectedBusinessProfileId = null, onClose = null, onSubmit = null, prefillText = '' }) => {
+export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, preselectedBusinessProfileId = null, onClose = null, onSubmit = null, onQrPaid = null, prefillText = '' }) => {
   const [textInput, setTextInput] = useState('');
   const [parsedData, setParsedData] = useState(null);
   const [aiAnalysis, setAiAnalysis] = useState(null);
@@ -37,7 +38,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
   const voiceSupported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
   // ── Quick Entry Tab state ──
-  const [quickMode, setQuickMode] = useState('free'); // 'free' | 'sold' | 'bought'
+  const [quickMode, setQuickMode] = useState('free'); // 'free' | 'sold' | 'bought' | 'qr'
 
   // ── Backdating — lets the user record a transaction under a past date
   // instead of always "now", so manual entries can match when the money
@@ -761,7 +762,7 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
   // Pre-fill the text input with "Sold " or "Bought " so the user just continues typing
   const handleQuickTab = (mode) => {
     setQuickMode(mode);
-    const prefix = mode === 'sold' ? 'Sold ' : mode === 'bought' ? 'Bought ' : '';
+    const prefix = (mode === 'sold' || mode === 'qr') ? 'Sold ' : mode === 'bought' ? 'Bought ' : '';
     setTextInput(prefix);
     setParsedData(prefix.trim() ? parseSmartInputWithMode(prefix, selectedMode) : null);
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -776,6 +777,8 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
 
   // Submit transaction with AI analysis
   const handleSubmit = async () => {
+    // The QR Pay tab bills by QR instead of recording now (see QrPaymentPanel).
+    if (quickMode === 'qr') return;
     if (needsBusinessSelection) return;
     if (parsedData?.isValid) {
       setIsAnalyzing(true);
@@ -1042,8 +1045,8 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
             )
           )}
 
-          {/* Transaction date — defaults to today, editable to backdate an entry */}
-          <div className="flex items-center gap-2">
+          {/* Transaction date — defaults to today, editable to backdate an entry (a QR bill is always dated when it is paid) */}
+          {quickMode !== 'qr' && <div className="flex items-center gap-2">
             <div className={`flex-1 flex items-center gap-2 border-2 rounded-lg px-3 py-2 ${
               selectedMode === 'business' ? 'border-blue-200 bg-white' : 'border-gray-200 bg-white'
             }`}>
@@ -1061,12 +1064,12 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
                 Backdated
               </span>
             )}
-          </div>
+          </div>}
 
           {/* Optional receipt photo — proof that backs this entry in reports */}
           <div>
             <input ref={receiptInputRef} type="file" accept="image/*" className="hidden" onChange={handleReceiptPicked} />
-            {receiptFile ? (
+            {quickMode === 'qr' ? null : receiptFile ? (
               <div className="flex items-center gap-2 border-2 border-emerald-200 bg-emerald-50 rounded-lg px-3 py-2">
                 {receiptPreview && <img src={receiptPreview} alt="Receipt preview" className="w-9 h-9 rounded object-cover flex-shrink-0" />}
                 <span className="flex-1 min-w-0 text-xs font-semibold text-emerald-800 truncate">🧾 Receipt attached · {receiptFile.name || 'photo'}</span>
@@ -1099,9 +1102,10 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
               { id: 'free',   label: '✍️ Free',   on: 'bg-gray-700 text-white',   off: 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50' },
               { id: 'sold',   label: '💵 Sold',   on: 'bg-green-500 text-white',  off: 'bg-white border border-green-200 text-green-700 hover:bg-green-50' },
               { id: 'bought', label: '📦 Bought', on: 'bg-amber-500 text-white',  off: 'bg-white border border-amber-200 text-amber-700 hover:bg-amber-50' },
+              { id: 'qr',     label: '🔳 QR Pay', on: 'bg-indigo-600 text-white', off: 'bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50' },
             ].map(tab => (
               <button key={tab.id} onClick={() => handleQuickTab(tab.id)}
-                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${quickMode === tab.id ? tab.on : tab.off}`}>
+                className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${quickMode === tab.id ? tab.on : tab.off}`}>
                 {tab.label}
               </button>
             ))}
@@ -1151,8 +1155,8 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
               )}
             </div>
 
-            {/* Send button — always fully visible */}
-            <button
+            {/* Send button — always fully visible (the QR Pay tab has its own "Generate payment QR" button below) */}
+            {quickMode !== 'qr' && <button
               onClick={handleSubmit}
               disabled={!parsedData?.isValid || isAnalyzing || isListening || needsBusinessSelection}
               className={`flex-shrink-0 w-12 h-12 rounded-xl font-bold transition flex items-center justify-center ${
@@ -1164,8 +1168,24 @@ export const SmartTransactionEntry = ({ isOpen = false, transactionType = null, 
               {isAnalyzing
                 ? <Loader className="w-5 h-5 animate-spin" />
                 : <Send className="w-5 h-5" />}
-            </button>
+            </button>}
           </div>
+
+          {/* QR Pay: bill by QR now, the sale reaches transactions and reports when it is paid */}
+          {quickMode === 'qr' && (
+            <QrPaymentPanel
+              parsed={parsedData}
+              rawInput={textInput}
+              mode={selectedMode}
+              businessProfileId={selectedBusinessProfileId || (businessProfiles.length === 1 ? businessProfiles[0].id : '')}
+              businessName={selectedMode === 'business'
+                ? (businessProfiles.find((p) => p.id === (selectedBusinessProfileId || (businessProfiles.length === 1 ? businessProfiles[0].id : '')))?.business_name || '')
+                : ''}
+              receiptRef={receiptRef.trim()}
+              blocked={needsBusinessSelection}
+              onPaid={(request) => { if (onQrPaid) onQrPaid(request); }}
+            />
+          )}
 
           {/* Smart Detection Display - Enhanced for Business */}
           {parsedData && (() => {

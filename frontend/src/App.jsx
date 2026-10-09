@@ -1,26 +1,54 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useAuth } from './context/AuthContext';
 import { consumePendingReferralCode } from './services/referralService';
-import { AuthPage } from './components/auth';
 import CountryCheckMiddleware from './components/auth/CountryCheckMiddleware';
-import MfaChallenge from './components/auth/MfaChallenge';
-import ICANCapitalEngine from './components/ICAN_Capital_Engine';
-import LandingPage from './components/LandingPage';
-import PricingPage from './components/PricingPage';
-import ContractPage from './components/ContractPage';
-import BillingPage from './components/BillingPage';
-import MobileView from './components/MobileView';
 import ActionQueue from './components/ActionQueue';
 import { SplashScreen, ClassicLoadingScreen } from './components/SplashScreen';
-import ICANDevPanel, { SESSION_KEY as ICAN_DEV_KEY } from './components/ICANDevPanel';
-import ResetPinPage from './components/ResetPinPage';
-import ConfirmDeleteAccountPage from './components/ConfirmDeleteAccountPage';
-import DecoyPortal from './components/DecoyPortal';
-import SupportConsole from './components/SupportConsole';
-import ChatWidget from './components/ChatWidget';
-import CardPayPage from './pages/CardPayPage';
 import { offlineManager } from './lib/offlineManager';
+import { lazyWithRetry, prefetchWhenIdle } from './lib/lazyWithRetry';
 import { Loader2, AlertCircle } from 'lucide-react';
+
+// Every screen below is its own download. They used to be imported statically,
+// which folded the whole product (wallet, CMMS, dev panel, landing page, ...)
+// into one ~6.6 MB script that a phone had to download AND parse before it
+// could paint anything. Now a visitor only fetches the screen they are on.
+// A screen that suspends falls back to the full-screen diamond in main.jsx.
+const AuthPage = lazyWithRetry(() => import('./components/auth/AuthPage'));
+const MfaChallenge = lazyWithRetry(() => import('./components/auth/MfaChallenge'));
+const ICANCapitalEngine = lazyWithRetry(() => import('./components/ICAN_Capital_Engine'));
+const LandingPage = lazyWithRetry(() => import('./components/LandingPage'));
+const PricingPage = lazyWithRetry(() => import('./components/PricingPage'));
+const ContractPage = lazyWithRetry(() => import('./components/ContractPage'));
+const BillingPage = lazyWithRetry(() => import('./components/BillingPage'));
+const MobileView = lazyWithRetry(() => import('./components/MobileView'));
+const ICANDevPanel = lazyWithRetry(() => import('./components/ICANDevPanel'));
+const ResetPinPage = lazyWithRetry(() => import('./components/ResetPinPage'));
+const ConfirmDeleteAccountPage = lazyWithRetry(() => import('./components/ConfirmDeleteAccountPage'));
+const DecoyPortal = lazyWithRetry(() => import('./components/DecoyPortal'));
+const SupportConsole = lazyWithRetry(() => import('./components/SupportConsole'));
+const CardPayPage = lazyWithRetry(() => import('./pages/CardPayPage'));
+const ChatWidgetLazy = lazyWithRetry(() => import('./components/ChatWidget'));
+
+// Same value ICANDevPanel exports as SESSION_KEY. Duplicated here (not imported)
+// because importing it from the panel would pull the whole 180 KB panel back
+// into the entry bundle just to read one string.
+const ICAN_DEV_KEY = 'ican_dev_panel_auth';
+
+// The support chat is never needed to paint the first screen, so it mounts after
+// the phone has gone quiet (and renders nothing while its code downloads, so it
+// can never blank the page the way a full-screen Suspense would).
+const ChatWidget = (props) => {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let timer;
+    const arm = () => { timer = setTimeout(() => setReady(true), 1500); };
+    if (document.readyState === 'complete') arm();
+    else window.addEventListener('load', arm, { once: true });
+    return () => { clearTimeout(timer); window.removeEventListener('load', arm); };
+  }, []);
+  if (!ready) return null;
+  return <Suspense fallback={null}><ChatWidgetLazy {...props} /></Suspense>;
+};
 
 // Error Boundary for mobile crashes
 class ErrorBoundary extends React.Component {

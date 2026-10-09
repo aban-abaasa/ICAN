@@ -130,7 +130,7 @@ DECLARE
   v_fair_ugx   NUMERIC := 5000;
   v_app_pct    NUMERIC := 0;
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   BEGIN
     SELECT pe.original_floor_ugx, pe.fx_adjusted_floor,
@@ -180,7 +180,7 @@ CREATE OR REPLACE FUNCTION public.ican_dev_update_rate(
 RETURNS VOID
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   IF p_rate_to_ugx <= 0 THEN RAISE EXCEPTION 'rate must be positive'; END IF;
   UPDATE public.ican_currency_rates
   SET rate_to_ugx = p_rate_to_ugx, updated_at = NOW()

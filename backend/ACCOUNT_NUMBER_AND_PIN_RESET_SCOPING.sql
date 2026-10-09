@@ -256,7 +256,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT sub.id::uuid, sub.user_id::uuid, sub.group_id::uuid, sub.group_name::text,
            sub.request_type::text, sub.account_type::text, sub.reason::text, sub.status::text, sub.created_at::timestamptz,
@@ -320,7 +320,7 @@ DECLARE
   v_group_id UUID;
   v_account_type TEXT;
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   IF p_action NOT IN ('unlock', 'reject') THEN
     RETURN QUERY SELECT false, 'Invalid action'::text;

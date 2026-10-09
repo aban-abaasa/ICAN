@@ -10,6 +10,28 @@ import { supabase } from '../../lib/supabase/client';
 import icanCoinService from '../../services/icanCoinService';
 import CountrySetup from './CountrySetup';
 
+// How long the country lookup may hold the loading screen. On a slow mobile connection
+// the request can stall (e.g. waiting on a token refresh) and never settle.
+const COUNTRY_CHECK_TIMEOUT_MS = 6000;
+
+const countryCacheKey = (userId) => `ican_country_set_${userId}`;
+
+const readCountryCache = (userId) => {
+  try { return localStorage.getItem(countryCacheKey(userId)) === '1'; } catch (_) { return false; }
+};
+
+const writeCountryCache = (userId) => {
+  try { localStorage.setItem(countryCacheKey(userId), '1'); } catch (_) { /* storage unavailable */ }
+};
+
+const withTimeout = (promise, ms) => new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error(`Country check timed out after ${ms}ms`)), ms);
+  Promise.resolve(promise).then(
+    (value) => { clearTimeout(timer); resolve(value); },
+    (error) => { clearTimeout(timer); reject(error); },
+  );
+});
+
 export default function CountryCheckMiddleware({ children }) {
   const { user, loading: authLoading, isOfflineMode } = useAuth();
   const [countrySet, setCountrySet] = useState(null);
@@ -18,19 +40,31 @@ export default function CountryCheckMiddleware({ children }) {
 
   // Check if user has country set
   useEffect(() => {
+    if (authLoading) return undefined;
+
+    // Nobody signed in: nothing to check, let the children (login/signup) render.
+    if (!user?.id) {
+      console.log('🔐 No user authenticated yet');
+      setCountrySet(null);
+      setShowCountrySetup(false);
+      setChecking(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+
     const checkCountryStatus = async () => {
-      try {
+      // A country already confirmed on this device lets the app open straight away;
+      // the lookup below still runs and can pull the user back to setup if it is gone.
+      if (readCountryCache(user.id)) {
+        setCountrySet(true);
+        setShowCountrySetup(false);
+        setChecking(false);
+      } else {
         setChecking(true);
+      }
 
-        // Only check if user is authenticated
-        if (!user?.id) {
-          console.log('🔐 No user authenticated yet');
-          setCountrySet(null);
-          setShowCountrySetup(false);
-          setChecking(false);
-          return;
-        }
-
+      try {
         // 📴 OFFLINE MODE: Skip country check when offline
         // User can set country later when back online
         if (!navigator.onLine || isOfflineMode) {
@@ -38,7 +72,6 @@ export default function CountryCheckMiddleware({ children }) {
           console.log('💡 User can set country later when back online.');
           setCountrySet(true);
           setShowCountrySetup(false);
-          setChecking(false);
           return;
         }
 
@@ -46,20 +79,26 @@ export default function CountryCheckMiddleware({ children }) {
 
         // Get user's country from database
         // Check user_accounts table (where ICAN wallets are managed)
-        const { data, error } = await supabase
-          .from('user_accounts')
-          .select('country_code, id, user_id')
-          .eq('user_id', user.id)
-          .limit(1)
-          .maybeSingle();
+        const { data, error } = await withTimeout(
+          supabase
+            .from('user_accounts')
+            .select('country_code, id, user_id')
+            .eq('user_id', user.id)
+            .limit(1)
+            .maybeSingle(),
+          COUNTRY_CHECK_TIMEOUT_MS,
+        );
+        if (cancelled) return;
 
         console.log('📊 Query result:', { data, error });
 
         if (error) {
+          // The lookup failed, which says nothing about whether a country is set.
+          // Don't lock the user into the mandatory setup over a failed request.
           console.error('❌ Error checking country from user_accounts:', error);
-          console.warn('⚠️ Could not find user_accounts record - showing country setup');
-          setCountrySet(false);
-          setShowCountrySetup(true);
+          console.warn('⚠️ Country check failed - allowing app access, will re-check next load');
+          setCountrySet(true);
+          setShowCountrySetup(false);
           return;
         }
 
@@ -72,29 +111,31 @@ export default function CountryCheckMiddleware({ children }) {
 
         // STRICT CHECK: country_code MUST be set (not null, not empty, not undefined)
         const hasCountry = data.country_code && data.country_code.trim().length > 0;
-        
+
         if (!hasCountry) {
           console.log('🌍 User has NO country set - BLOCKING - showing CountrySetup modal');
           setCountrySet(false);
           setShowCountrySetup(true);
         } else {
           console.log('✅ User country is SET:', data.country_code, '- ALLOWING app access');
+          writeCountryCache(user.id);
           setCountrySet(true);
           setShowCountrySetup(false);
         }
       } catch (error) {
-        console.error('❌ Error during country check:', error);
-        console.warn('⚠️ Exception occurred - showing country setup as safety measure');
-        setCountrySet(false);
-        setShowCountrySetup(true);
+        if (cancelled) return;
+        // Timeout or network failure: same as above, don't hold the app hostage.
+        console.warn('⚠️ Country check slow or failed - allowing app access:', error?.message || error);
+        setCountrySet(true);
+        setShowCountrySetup(false);
       } finally {
-        setChecking(false);
+        if (!cancelled) setChecking(false);
       }
     };
 
-    if (!authLoading && user?.id) {
-      checkCountryStatus();
-    }
+    checkCountryStatus();
+
+    return () => { cancelled = true; };
   }, [user?.id, authLoading, isOfflineMode]);
 
   // Still checking authentication and country

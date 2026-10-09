@@ -438,3 +438,70 @@
 .gr .gr-device[role="radio"] { color: var(--gr-ink) !important; }
 .gr .gr-device[role="radio"][aria-checked="true"] { border-color: var(--gr-gold-hi) !important; }
 .gr .gr-device[role="radio"][aria-checked="false"] { background-color: transparent !important; border-color: var(--gr-line-soft) !important; }
+
+/* ===================================================================
+   Readiness (Global Navigator): royal blue + coral, flat and collapsible.
+   Scoped to .rd so Growth, Security and Settings keep their own look.
+   Groups are plain <details> with hairline rows: no cards inside cards.
+   =================================================================== */
+.gr.rd {
+  --rd-bg: #0b1230; --rd-text: #eef2ff; --rd-muted: #9fadd8;
+  --rd-line: rgba(130, 160, 255, .22); --rd-tint: rgba(91, 130, 255, .12);
+  --rd-blue: #5b82ff; --rd-blue-deep: #2f55e0; --rd-coral: #ff6b57; --rd-ok: #34d399; --rd-err: #ff8a7a;
+  --gr-ink: var(--rd-text); --gr-ink-2: var(--rd-text); --gr-muted: var(--rd-muted); --gr-faint: var(--rd-muted);
+  --gr-gold: var(--rd-blue); --gr-gold-hi: var(--rd-coral); --gr-line: var(--rd-line); --gr-line-soft: var(--rd-line);
+  --gr-tint: var(--rd-tint); --gr-tint-2: var(--rd-tint); --gr-card: transparent; --gr-field: var(--rd-bg);
+  --gr-btn: linear-gradient(135deg, var(--rd-blue), var(--rd-blue-deep)); --gr-btn-ink: #fff;
+  --gr-ok: var(--rd-ok); --gr-err: var(--rd-err); --gr-value: var(--rd-blue); --gr-shadow: none;
+  --gr-serif: Inter, system-ui, sans-serif;
+  gap: 10px; padding: 16px; border-radius: 16px; background: var(--rd-bg); color: var(--rd-text);
+}
+:root[data-theme="light"] .gr.rd {
+  --rd-bg: #f4f7ff; --rd-text: #0e1a40; --rd-muted: #55628c;
+  --rd-line: rgba(37, 71, 208, .18); --rd-tint: rgba(37, 71, 208, .07);
+  --rd-blue: #2547d0; --rd-blue-deep: #1b36a8; --rd-coral: #e8503a; --rd-ok: #0f9d6e; --rd-err: #c8372a;
+}
+.rd .gr-eyebrow { color: var(--rd-coral); }
+.rd .gr-title { font-weight: 800; letter-spacing: -.01em; }
+.rd .gr-field, .rd .gr-select, .rd .gr-input { background-color: var(--rd-bg); }
+.rd .gr-card { border: 0; background: transparent; padding: 0; box-shadow: none; }
+.rd .gr-card::before { display: none; }
+.rd .gr-ring__value { stroke: var(--rd-coral); }
+
+.rd-head { display: flex; align-items: center; gap: 14px; padding: 2px 0 6px; }
+.rd-pick { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+@media (min-width: 560px) { .rd-pick { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; } }
+.rd .gr-seg { border: 0; background: var(--rd-tint); }
+
+/* Tabs: an underline strip, not a boxed control */
+.rd .gr-tabs { display: flex; gap: 20px; padding: 0; border: 0; border-bottom: 1px solid var(--rd-line); border-radius: 0; background: transparent; }
+.rd .gr-tab { min-height: 40px; padding: 0 2px; border-radius: 0; box-shadow: none; background: transparent; color: var(--rd-muted); }
+.rd .gr-tab:hover { background: transparent; color: var(--rd-text); }
+.rd .gr-tab[aria-selected="true"] { background: transparent; color: var(--rd-text); box-shadow: inset 0 -2px 0 var(--rd-coral); }
+
+/* Collapsible groups */
+.rd-sec { border-bottom: 1px solid var(--rd-line); }
+.rd-sec > summary { display: flex; align-items: center; gap: .6rem; padding: 13px 2px; cursor: pointer; list-style: none; font-weight: 700; color: var(--rd-text); }
+.rd-sec > summary::-webkit-details-marker, .rd-more > summary::-webkit-details-marker { display: none; }
+.rd-note { margin-left: auto; font-size: .72rem; font-weight: 500; color: var(--rd-muted); font-variant-numeric: tabular-nums; }
+.rd-sec > summary::after { content: ''; width: .5rem; height: .5rem; border-right: 2px solid var(--rd-muted); border-bottom: 2px solid var(--rd-muted); transform: rotate(45deg); transition: transform .15s ease; margin-left: .25rem; }
+.rd-sec[open] > summary::after { transform: rotate(-135deg); }
+.rd-body { display: grid; gap: 0; padding: 0 2px 10px; }
+.rd-tools { gap: 12px; }
+.rd-line { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--rd-line); font-size: .86rem; }
+.rd-line:first-child { border-top: 0; }
+.rd-line > span:last-child { text-align: right; overflow-wrap: anywhere; }
+
+/* Checklist rows: hairlines instead of a box per item */
+.rd-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--rd-line); }
+.rd-item:first-child { border-top: 0; }
+.rd-item .gr-tick { width: 36px; height: 36px; border-radius: 10px; }
+.rd-item.is-done .rd-item__title { color: var(--rd-muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--rd-muted) 55%, transparent); }
+.rd-item__main { min-width: 0; display: grid; gap: 6px; }
+.rd-item__title { font-size: .95rem; font-weight: 700; line-height: 1.3; color: var(--rd-text); }
+.rd-found { font-size: .78rem; color: var(--rd-ok); }
+.rd-more > summary { cursor: pointer; list-style: none; font-size: .78rem; font-weight: 600; color: var(--rd-blue); }
+.rd-more[open] > summary { margin-bottom: 6px; }
+.rd-more { display: grid; gap: 6px; }
+.rd-link { background: none; border: 0; padding: 0; cursor: pointer; font-weight: 600; font-size: .8rem; color: var(--rd-blue); text-align: left; }
+.rd-link:hover { color: var(--rd-coral); }

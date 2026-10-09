@@ -149,6 +149,40 @@ export const setCompanyBusinessProfileLink = async (companyId, businessProfileId
   return { success: true };
 };
 
+// Where the website's Shop tab gets its products: 'resellers' (the linked
+// business's Dropship listings), 'store' (the linked store's own products) or
+// 'both'. See site_products_source in 20261012100000_site_products_source.sql.
+export const setCompanySiteProductsSource = async (companyId, source) => {
+  if (!companyId) return { success: false, error: 'companyId is required' };
+  const { error } = await supabase.rpc('fn_set_cmms_company_site_products_source', {
+    p_company_id: companyId,
+    p_source: source,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+};
+
+/**
+ * The public website's chosen product source plus the store's own products
+ * (only when that source includes the store). Falls back to the original
+ * reseller-only behaviour if the database function isn't installed yet, so
+ * the website keeps working either way. Never throws.
+ */
+export const getPublicSiteProducts = async (companyId) => {
+  const fallback = { source: 'resellers', storeProducts: [] };
+  if (!companyId) return fallback;
+  try {
+    const { data, error } = await supabase.rpc('get_cmms_site_products', { p_company_id: companyId });
+    if (error || !data) return fallback;
+    return {
+      source: ['resellers', 'store', 'both'].includes(data.source) ? data.source : 'resellers',
+      storeProducts: Array.isArray(data.store_products) ? data.store_products : [],
+    };
+  } catch {
+    return fallback;
+  }
+};
+
 /**
  * Roles with Position Details set (CMMSRoleConfiguration.jsx), for the
  * "Fill from role" autofill when creating a job posting. Roles with no
@@ -459,6 +493,8 @@ export default {
   updateCompanyAbout,
   updateCompanyPublicProfile,
   setCompanyBusinessProfileLink,
+  setCompanySiteProductsSource,
+  getPublicSiteProducts,
   getRolesForAutofill,
   getJobApplications,
   updateApplicationStatus,

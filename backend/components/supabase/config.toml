@@ -380,6 +380,27 @@ verify_jwt = false
 [functions.flutterwave-banks]
 verify_jwt = false
 
+# Public guest checkout (no wallet, no session): trusts nothing in the request,
+# verifies the payment with Flutterwave itself.
+[functions.guest-checkout-pay]
+verify_jwt = false
+
+# Public Mobile Money / card / bank payment on an installment plan: the customer
+# was signed in when it started, but the confirmation trusts nothing in the
+# request and verifies the payment with Flutterwave itself.
+[functions.installment-pay]
+verify_jwt = false
+
+# Public QR payment on a recorded transaction's receipt (/r/<code>): no session,
+# verifies the payment with Flutterwave itself.
+[functions.public-tx-pay]
+verify_jwt = false
+
+# Public QR payment on a digital card (/card-pay/<token>, personal or business): no
+# session, verifies the payment with Flutterwave itself.
+[functions.card-qr-pay]
+verify_jwt = false
+
 # Called by Flutterwave (no Supabase JWT); checks its own verif-hash header.
 [functions.flutterwave-transfer-webhook]
 verify_jwt = false

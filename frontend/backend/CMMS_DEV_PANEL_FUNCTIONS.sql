@@ -22,7 +22,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public, auth LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT
       cp.id,
@@ -67,7 +67,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public, auth LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   RETURN QUERY
     SELECT
       p.id,

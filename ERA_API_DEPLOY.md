@@ -5,9 +5,11 @@ developers. All four apps share one Supabase project, so one key, one registry a
 
 **v1** (public, read-only data), **v2** (the business layer) and **developer accounts** (Sign in with Google) are all described here.
 
-- **`/developers`**: a single self-contained page. A live sandbox playground (no sign-up, now including the POST endpoints and a
-  sample-shop business sandbox), eight "what you can build" cards, an instant key, recipes, a business section, and reference docs
-  generated from the live registry (`frontend/public/developers/index.html`)
+- **`/developers`**: a single self-contained page built around the three APIs: **Transactions** (payment requests), **Trading data**
+  and **Rider bookings**. Hero with live specimens, one workbench with a tab per API (no sign-up, POST endpoints and the sample-shop
+  business sandbox included), business keys, an instant key, and reference docs generated from the live registry
+  (`frontend/public/developers/index.html`). Ivory/gold/indigo, light and dark (follows the system, with a toggle). Calls are filed
+  under the three APIs by id in the page script (`GROUPS`); anything not matched appears under "More", so a new endpoint still shows up
 - **`/api/v1/*`**: the API, served by a thin Vercel function in every app (`frontend/api/v1/[...path].js`)
 - an **API tab** in all four developer panels: approve developers, see usage, switch endpoints off, set the gas inputs, switch the
   "verified business" rule (`frontend/public/developers/admin.js`)

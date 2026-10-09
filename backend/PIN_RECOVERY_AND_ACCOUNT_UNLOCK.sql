@@ -212,7 +212,7 @@ RETURNS TABLE (
 )
 SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
   -- user_accounts.user_id is NOT unique (a user can have a personal AND a
   -- business account row), so joining straight on it can multiply one
   -- request into several rows. DISTINCT ON (r.id) picks a single account
@@ -279,7 +279,7 @@ DECLARE
   v_user_id UUID;
   v_group_id UUID;
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   IF p_action NOT IN ('unlock', 'reject') THEN
     RETURN QUERY SELECT false, 'Invalid action'::text;

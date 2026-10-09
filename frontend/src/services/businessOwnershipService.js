@@ -87,8 +87,47 @@ export const updateBranchArrangement = (linkId, { ownershipPercent = null, relat
 export const endBranchLink = (linkId, reason = null) =>
   call('fn_business_end_branch_link', { p_link_id: linkId, p_reason: reason });
 
+/**
+ * Where every business in the tree is on the map (itself included, active links only).
+ * Needs backend/BUSINESS_BRANCH_LOCATIONS.sql. Rows: business_id, latitude, longitude,
+ * location_address, location_directions, can_set, has_supermarket.
+ */
+export const getBranchLocations = (businessId) => call('fn_business_branch_locations', { p_business_id: businessId });
+
+/**
+ * Place a branch (or the business itself) on the map. When the branch is wired to a
+ * supermarket, the same pin is written to it so riders see it. Resolves to
+ * { data: { status, supermarkets_synced, supermarket_sync } }.
+ */
+export const setBusinessLocation = (businessId, { latitude, longitude, address = null, directions = null, country = null }) =>
+  call('fn_business_set_location', {
+    p_business_id: businessId,
+    p_latitude: latitude,
+    p_longitude: longitude,
+    p_address: address,
+    p_directions: directions,
+    p_country: country
+  });
+
+/**
+ * The store side of the same pin, for a supermarket's owner or manager. Reading returns
+ * { latitude, longitude, address, country, name, directions, business_id }; saving writes the
+ * supermarket and the branch business profile(s) wired to it, so both always agree.
+ */
+export const getSupermarketLocation = (supermarketId) => call('fn_supermarket_get_location', { p_supermarket_id: supermarketId });
+
+export const setSupermarketLocation = (supermarketId, { latitude, longitude, address = null, directions = null, country = null }) =>
+  call('fn_supermarket_set_location', {
+    p_supermarket_id: supermarketId,
+    p_latitude: latitude,
+    p_longitude: longitude,
+    p_address: address,
+    p_directions: directions,
+    p_country: country
+  });
+
 export default {
   RELATIONSHIPS, CMMS_ACCESS_LEVELS, WALLET_CONTROL_LEVELS, accessRank, walletRank,
   getBranchTree, getOwnershipChain, getOwnershipHistory, getMyBranchRequests, getMyUnlinkedBusinesses,
-  searchBusinessesForBranch, proposeBranch, respondToBranchRequest, updateBranchArrangement, endBranchLink
+  searchBusinessesForBranch, getBranchLocations, setBusinessLocation, getSupermarketLocation, setSupermarketLocation, proposeBranch, respondToBranchRequest, updateBranchArrangement, endBranchLink
 };

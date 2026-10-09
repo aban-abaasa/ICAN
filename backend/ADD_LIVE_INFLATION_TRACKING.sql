@@ -45,7 +45,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  _tok  CONSTANT TEXT    := 'dev_ICAN_Pr0_KV25';
+  _tok  CONSTANT TEXT    := public.ican_dev_secret();
   _curr VARCHAR(3)       := 'USD';
   _orig NUMERIC          := 5000;
   _fxfl NUMERIC          := 5000;
@@ -126,7 +126,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  _tok  CONSTANT TEXT := 'dev_ICAN_Pr0_KV25';
+  _tok  CONSTANT TEXT := public.ican_dev_secret();
   _orig NUMERIC := 5000;
   _fxfl NUMERIC := 5000;
   _fair NUMERIC := 5000;
@@ -199,7 +199,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  _tok     CONSTANT TEXT := 'dev_ICAN_Pr0_KV25';
+  _tok     CONSTANT TEXT := public.ican_dev_secret();
   _country VARCHAR(2);
   _bal     NUMERIC := 0;
   _curr    VARCHAR(3) := 'USD';

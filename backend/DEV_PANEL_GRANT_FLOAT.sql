@@ -30,7 +30,7 @@ SECURITY DEFINER SET search_path = public LANGUAGE plpgsql AS $$
 DECLARE
   v_new_balance NUMERIC;
 BEGIN
-  IF dev_token != 'dev_ICAN_Pr0_KV25' THEN RAISE EXCEPTION 'unauthorized'; END IF;
+  IF dev_token IS DISTINCT FROM public.ican_dev_secret() THEN RAISE EXCEPTION 'unauthorized'; END IF;
 
   IF p_amount IS NULL OR p_amount <= 0 THEN
     RETURN QUERY SELECT false, 'Amount must be greater than zero'::text, NULL::numeric;

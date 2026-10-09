@@ -144,6 +144,14 @@ export const adminSavePartner = (partnerId, patch) => rpc('ican_franchise_admin_
 export const adminSetStatus = (partnerId, status, note = null) => rpc('ican_franchise_admin_set_status', { p_partner_id: partnerId, p_status: status, p_note: note });
 export const adminTerminate = (partnerId, reassignTo = null, reason = null) =>
   rpc('ican_franchise_admin_terminate_partner', { p_partner_id: partnerId, p_reassign_to: reassignTo, p_reason: reason });
+/** Send (or re-send) a partner's franchise code to their Support chat, with an optional note from HQ. */
+export const adminSendCode = (partnerId, note = null) =>
+  rpc('ican_franchise_admin_send_code', { p_partner_id: partnerId, p_note: note || null });
+/** Support writes to a partner: lands in their Support chat thread, with a notification. */
+export const adminMessagePartner = (partnerId, body) =>
+  rpc('ican_franchise_admin_message_partner', { p_partner_id: partnerId, p_body: body });
+/** Send the code to every approved/active partner that has not received one yet. */
+export const adminSendPendingCodes = () => rpc('ican_franchise_admin_send_pending_codes');
 export const adminAssignCustomer = (businessId, partnerId = null) =>
   rpc('ican_franchise_admin_assign_customer', { p_business_profile_id: businessId, p_partner_id: partnerId });
 export const adminSaveTerritory = ({ country, name = null, tier = null, status = null, currency = null, notes = null }) =>

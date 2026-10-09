@@ -42,6 +42,51 @@ export const getProofLabel = (tx) => ({
   system: 'System receipt',
 }[getProofStatus(tx)]);
 
+// Gateway keywords that mean a transaction went through an automated/digital
+// channel; anything else (cash, agent entry, admin adjustment, no method
+// recorded at all) is treated as manually handled.
+const DIGITAL_PAYMENT_KEYWORDS = ['momo', 'mobile money', 'mtn', 'airtel', 'vodafone', 'card', 'visa', 'mastercard', 'verve', 'flutterwave', 'ussd'];
+const DIGITAL_SOURCE_APPS = ['digital-city-era', 'farm-agent', 'mybodaguy', 'ican'];
+
+/** 'digital' (shared coin ledger, gateway payments, platform apps) or 'manual' (everything a person typed in). */
+export const getTransactionChannel = (tx) => {
+  const stamped = tx?.metadata?.entry_channel;
+  if (stamped === 'digital' || stamped === 'manual') return stamped;
+  const method = (tx?.metadata?.paymentMethod || tx?.metadata?.method || '').toString().toLowerCase();
+  const sourceApp = (tx?.source_app || tx?.metadata?.source_app || '').toString().toLowerCase();
+  const isSharedLedger = String(tx?.id || '').startsWith('shared-') || Boolean(tx?.ican_amount);
+  const isDigital = isSharedLedger || DIGITAL_SOURCE_APPS.includes(sourceApp)
+    || DIGITAL_PAYMENT_KEYWORDS.some((keyword) => method.includes(keyword));
+  return isDigital ? 'digital' : 'manual';
+};
+
+/** True when the entry names a second party: a payer, a recipient, a merchant or a counterparty. */
+export const isTwoParty = (tx) => {
+  if (!tx) return false;
+  const meta = tx.metadata || {};
+  return Boolean(
+    tx.counterparty_type || tx.merchant_name || tx.recipient_user_id || tx.sender_user_id
+    || meta.payer_name || meta.recipient_name || meta.recipient || meta.counterparty_name
+    || meta.merchant_name || meta.recipient_user_id || meta.sender_user_id,
+  );
+};
+
+/**
+ * Proof rule: a manually recorded entry between two parties is only fully
+ * evidenced when BOTH a receipt photo and a receipt number are on file. Digital
+ * entries are already evidenced by the platform ledger, and one-sided entries
+ * have no counterparty to dispute them, so neither is asked for manual proof.
+ */
+export const getProofRequirement = (tx) => {
+  const hasPhoto = Boolean(getReceiptImageRef(tx));
+  const hasNumber = Boolean(getReceiptRef(tx));
+  const required = isTwoParty(tx) && getTransactionChannel(tx) === 'manual';
+  const missing = [];
+  if (required && !hasPhoto) missing.push('Receipt photo');
+  if (required && !hasNumber) missing.push('Receipt number');
+  return { required, hasPhoto, hasNumber, missing, complete: required && missing.length === 0 };
+};
+
 const titleCase = (value) => String(value || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 /** Ordered [label, value] rows describing the transaction on its receipt. */
@@ -64,6 +109,13 @@ export const getReceiptLines = (tx, { businessName = null, currency = 'UGX' } = 
   if (meta.product_name) lines.push(['Item', meta.product_name]);
   if (meta.quantity) lines.push(['Quantity', String(meta.quantity)]);
   if (meta.unit_price) lines.push(['Unit price', `${Number(meta.unit_price).toLocaleString()} ${currency}`]);
+  // A sale a customer listed themselves on the business's standing pay QR: one line per item.
+  if (Array.isArray(meta.items)) {
+    meta.items.slice(0, 20).forEach((it) => {
+      const qty = Number(it?.qty) || 1;
+      lines.push([`Item${qty > 1 ? ` × ${qty}` : ''}`, `${it?.name || 'Item'} — ${(Number(it?.price || 0) * qty).toLocaleString()} ${currency}`]);
+    });
+  }
   if (meta.payment_method) lines.push(['Method', titleCase(meta.payment_method)]);
   if (meta.payer_name) lines.push(['Paid by', meta.payer_name]);
   if (meta.recipient_name || meta.recipient) lines.push(['Received by', meta.recipient_name || meta.recipient]);
@@ -75,6 +127,8 @@ export const getReceiptLines = (tx, { businessName = null, currency = 'UGX' } = 
   if (source) lines.push(['Recorded via', titleCase(source)]);
   if (meta.reference_id) lines.push(['Reference', String(meta.reference_id)]);
   if (getReceiptRef(tx)) lines.push(['Receipt ref', getReceiptRef(tx)]);
+  const proof = getProofRequirement(tx);
+  if (proof.required) lines.push(['Manual proof', proof.complete ? '100% — photo and receipt no.' : `Incomplete — missing ${proof.missing.join(' & ').toLowerCase()}`]);
   if (tx?.id && !String(tx.id).startsWith('temp_')) lines.push(['Ledger ID', String(tx.id)]);
   return lines;
 };
@@ -134,6 +188,7 @@ export const walletTxToReceiptTx = (tx) => {
       category: tx.metadata?.category || tx.expense_classification || tx.transaction_type,
       source: tx.metadata?.source || tx.source_app || 'ican wallet',
       payment_method: tx.metadata?.payment_method || 'IcanEra wallet',
+      entry_channel: getTransactionChannel(tx),
       merchant_name: tx.merchant_name || tx.metadata?.merchant_name || null,
       reference_id: tx.reference_id || tx.metadata?.reference_id || null,
       ican_amount: Math.abs(Number(tx.amount) || 0),

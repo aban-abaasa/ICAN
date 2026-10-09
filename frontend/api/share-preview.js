@@ -21,6 +21,7 @@
  *   /status/:id  -> /api/share-preview?type=status&id=:id
  *   /pitchin/:id -> /api/share-preview?type=pitch&id=:id
  *   /store/:id   -> /api/share-preview?type=store&id=:id
+ *   /shop        -> /api/share-preview?type=shop   (no id: the public product grid)
  *   /notices/:id -> /api/share-preview?type=notices&id=:id
  *
  * Every other route still falls through to the plain SPA rewrite ("/(.*)"
@@ -221,6 +222,73 @@ const buildStoreMeta = async ({ url, anonKey, id }) => {
   };
 };
 
+
+// The public shop (/shop): the same anon-granted RPC the page itself calls
+// (get_dropship_browsable_products). Builds an ItemList of Products as
+// JSON-LD plus a <noscript> product list, so crawlers that never run this
+// SPA's JS still see real product names, images and prices.
+const SHOP_ITEMS = 40;
+const buildShopMeta = async ({ url, anonKey }) => {
+  let products;
+  try {
+    const res = await fetch(`${url}/rest/v1/rpc/get_dropship_browsable_products`, {
+      method: 'POST',
+      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_query: '', p_limit: SHOP_ITEMS, p_offset: 0 })
+    });
+    products = res.ok ? await res.json() : null;
+  } catch {
+    products = null;
+  }
+  const list = Array.isArray(products) ? products : [];
+  const withImage = list.find((p) => p.images?.[0]);
+  const names = list.slice(0, 4).map((p) => p.name).filter(Boolean);
+
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: 'Shop — Products from IcanEra Resellers',
+    url: `${SITE_URL}/shop`,
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: list.length,
+      itemListElement: list.map((p, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        item: {
+          '@type': 'Product',
+          name: p.name,
+          ...(p.images?.[0] && { image: p.images[0] }),
+          ...(p.brand && { brand: { '@type': 'Brand', name: p.brand } }),
+          ...(p.sku && { sku: p.sku }),
+          offers: {
+            '@type': 'AggregateOffer',
+            priceCurrency: 'UGX',
+            lowPrice: Number(p.min_price) || 0,
+            offerCount: Number(p.reseller_count) || 1,
+            availability: p.any_in_stock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            url: `${SITE_URL}/shop`
+          }
+        }
+      }))
+    }
+  };
+
+  const bodyHtml = list.length === 0 ? '' : `<noscript><main><h1>Shop — Products from IcanEra Resellers</h1><ul>${list.map((p) => `<li>${p.images?.[0] ? `<img src="${escapeAttr(p.images[0])}" alt="${escapeAttr(p.name)}" width="120" height="120"> ` : ''}${escapeHtml(p.name)} — from UGX ${Number(p.min_price || 0).toLocaleString('en-US')}</li>`).join('')}</ul><p><a href="/">IcanEra</a></p></main></noscript>`;
+
+  return {
+    title: 'Shop — Products from Resellers Worldwide | IcanEra',
+    description: names.length > 0
+      ? `Browse and buy ${names.join(', ')} and more from IcanEra resellers. Compare prices, free delivery, pay securely.`
+      : 'Browse products from IcanEra resellers. Compare prices, free delivery, pay securely.',
+    image: withImage?.images?.[0] || DEFAULT_IMAGE,
+    path: '/shop',
+    video: null,
+    structuredData,
+    bodyHtml
+  };
+};
+
 const SOCIAL_URL_FIELDS = ['website', 'facebook_url', 'instagram_url', 'twitter_url', 'linkedin_url', 'tiktok_url'];
 const normalizeExternalUrl = (url) => {
   const trimmed = typeof url === 'string' ? url.trim() : '';
@@ -317,7 +385,10 @@ const patchHead = (html, meta, canonicalUrl) => {
     .replace(/<title>[\s\S]*?<\/title>/i, '')
     .replace(/<meta\s+name="description"[^>]*>/i, '');
 
-  return patched.replace('</head>', `  ${tags}\n</head>`);
+  patched = patched.replace('</head>', () => `  ${tags}\n</head>`);
+  // Crawlable fallback content for visitors that never run the SPA's JS
+  // (<noscript>, so it is invisible to everyone else).
+  return meta.bodyHtml ? patched.replace('<div id="root"></div>', () => `<div id="root">${meta.bodyHtml}</div>`) : patched;
 };
 
 export default async function handler(req, res) {
@@ -333,15 +404,17 @@ export default async function handler(req, res) {
     : type === 'pitch' ? `/pitchin/${id || ''}`
     : type === 'store' ? `/store/${id || ''}`
     : type === 'notices' ? `/notices/${id || ''}`
+    : type === 'shop' ? '/shop'
     : '/';
   let meta = { title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION, image: DEFAULT_IMAGE, path: fallbackPath, video: null };
 
   const VALID_TYPES = ['status', 'pitch', 'store', 'notices'];
-  if (url && anonKey && id && VALID_TYPES.includes(type)) {
+  if (url && anonKey && (id || type === 'shop') && (VALID_TYPES.includes(type) || type === 'shop')) {
     try {
       const resolved = type === 'status' ? await buildStatusMeta({ url, anonKey, id })
         : type === 'pitch' ? await buildPitchMeta({ url, anonKey, id })
         : type === 'store' ? await buildStoreMeta({ url, anonKey, id })
+        : type === 'shop' ? await buildShopMeta({ url, anonKey })
         : await buildNoticeMeta({ url, anonKey, id });
       if (resolved) meta = resolved;
     } catch (err) {

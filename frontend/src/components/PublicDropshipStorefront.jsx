@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ShoppingCart, Plus, Minus, X, Loader, AlertCircle, CheckCircle, Store, Trash2, Truck, Navigation, Bike, Star, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { usePinPrompt } from './PinPromptDialog';
 import { AuthPage } from './auth';
-import { getDropshipStorefront, dropshipCheckout, findDeliveryRiders } from '../services/dropshipService';
+import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
+import useGuestCheckout from '../hooks/useGuestCheckout';
+import InstallmentOffer from './InstallmentOffer';
+import ContinueWithGoogle from './ContinueWithGoogle';
+import { getInstallmentShelf, formatMoney } from '../services/installmentService';
+import usePersistedCart, { markCartOpen, consumeCartOpen } from '../hooks/usePersistedCart';
 
 // Presets for the customer-chosen delivery deadline — mirrors the backend's
 // delivery.min_deadline_hours/delivery.max_deadline_hours bounds (1-48h by
@@ -33,17 +39,20 @@ const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG',
 // Rendered instead of the normal authenticated app (see main.jsx) when the URL
 // is a shared dropship storefront link (/store/:businessProfileId) -- same
 // "public to view, sign in in place to act" pattern as PublicStatusViewer and
-// PublicPitchViewer. Browsing works for anyone; checkout requires an IcanEra
-// wallet since payment is a live transfer_ican() split between the source
-// store and this reseller.
+// PublicPitchViewer. Browsing works for anyone. Paying with an IcanEra wallet
+// is recommended (no extra fee), but a visitor without one can also pay with
+// Mobile Money, card or bank -- see useGuestCheckout / guestCheckoutService.
 const PublicDropshipStorefront = ({ businessProfileId }) => {
   const { user, loading: authLoading } = useAuth();
+  const { askPin, pinDialog } = usePinPrompt();
 
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [cart, setCart] = useState({}); // { [listing_id]: quantity }
-  const [showCart, setShowCart] = useState(false);
+  // The cart survives the round-trip to Google when a new customer signs up in one tap.
+  const cartKey = `icanera_cart_store_${businessProfileId}`;
+  const [cart, setCart] = usePersistedCart(cartKey); // { [listing_id]: quantity }
+  const [showCart, setShowCart] = useState(() => consumeCartOpen(cartKey));
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -62,6 +71,19 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   const [ridersLoading, setRidersLoading] = useState(false);
   const [selectedRiderId, setSelectedRiderId] = useState(null); // null = auto-assign nearest
   const [vehicleType, setVehicleType] = useState(null); // null = any bike/car/van
+
+  // The shop's currency (a shop abroad is priced in its own currency, and is bought through "Pay in instalments" / pay-in-full,
+  // not the Ugandan rider checkout below).
+  const [shelf, setShelf] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    getInstallmentShelf(businessProfileId)
+      .then((rows) => { if (!cancelled) setShelf(Object.fromEntries(rows.map((r) => [r.listing_id, r]))); })
+      .catch(() => { /* keep UGX pricing if the shelf can't be read */ });
+    return () => { cancelled = true; };
+  }, [businessProfileId]);
+  const currencyOf = (listing) => shelf[listing?.listing_id]?.currency || 'UGX';
+  const priceOf = (amount, listing) => (currencyOf(listing) === 'UGX' ? formatUGX(amount) : formatMoney(amount, currencyOf(listing)));
 
   useEffect(() => {
     let cancelled = false;
@@ -82,25 +104,29 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   }, [businessProfileId]);
 
   const resellerName = listings[0]?.reseller_name || 'Store';
-  const storeLat = listings[0]?.store_lat;
-  const storeLng = listings[0]?.store_lng;
+  // The store this order is picked up from: the first item in the cart (an
+  // order is single-store), or the first listing before anything is added.
+  const pickupListing = listings.find((l) => (cart[l.listing_id] || 0) > 0) || listings[0];
+  const storeLat = pickupListing?.store_lat;
+  const storeLng = pickupListing?.store_lng;
+  const pickupProductId = pickupListing?.product_id;
+  const storeHasNoLocation = !!pickupListing && (storeLat == null || storeLng == null);
 
   // Once we know both the store's pickup point and where the customer wants
   // it delivered, look up real nearby riders so they can actually pick one —
-  // same list BodaGoera's own ride-request screen shows, not a silent
-  // auto-assign.
+  // the store's own nearby riders first, then any other available rider.
   useEffect(() => {
     let cancelled = false;
-    // mbg_find_available_riders is authenticated-only — an anonymous visitor
-    // can still share their location and pick a delivery window, they just
-    // won't see the picker (and checkout itself requires sign-in anyway).
+    // The rider list is authenticated-only — an anonymous visitor can still
+    // share their location and pick a delivery window, they just won't see
+    // the picker (the nearest store-first rider is booked for them).
     if (!user || storeLat == null || storeLng == null || !deliveryCoords) {
       setRiders([]);
       return;
     }
     setRidersLoading(true);
     setSelectedRiderId(null);
-    findDeliveryRiders(storeLat, storeLng, deliveryCoords.lat, deliveryCoords.lng, {
+    findStoreFirstRiders(businessProfileId, pickupProductId, storeLat, storeLng, deliveryCoords.lat, deliveryCoords.lng, {
       vehicleTypes: vehicleType ? [vehicleType] : null,
     }).then(({ data }) => {
       if (cancelled) return;
@@ -108,7 +134,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
       setRidersLoading(false);
     });
     return () => { cancelled = true; };
-  }, [user, storeLat, storeLng, deliveryCoords, vehicleType]);
+  }, [user, businessProfileId, pickupProductId, storeLat, storeLng, deliveryCoords, vehicleType]);
 
   const shareLocation = () => {
     if (!navigator.geolocation) {
@@ -137,6 +163,9 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
       .filter((row) => row.listing && row.qty > 0),
     [cart, listings]
   );
+  // An order from a shop priced in another currency can't use the Ugandan rider checkout; it is paid through the instalment flow.
+  const foreignCurrency = currencyOf(cartItems[0]?.listing);
+  const foreign = cartItems.length > 0 && foreignCurrency !== 'UGX';
   const cartTotal = cartItems.reduce((sum, row) => sum + row.listing.listed_price * row.qty, 0);
   const cartCount = cartItems.reduce((sum, row) => sum + row.qty, 0);
   const allFreeDelivery = cartItems.length > 0 && cartItems.every((row) => row.listing.free_delivery);
@@ -152,6 +181,25 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
     : cartItems.reduce((min, row) => Math.min(min, Number(row.listing.max_delivery_subsidy) || 0), Infinity);
   const deliveryFeeAmount = estimatedFare == null ? null : Math.max(estimatedFare - Math.min(subsidyCap, estimatedFare), 0);
   const orderTotal = cartTotal + (deliveryFeeAmount || 0);
+
+  // Pay without a wallet (Mobile Money / card / bank) for signed-out visitors.
+  const guest = useGuestCheckout({
+    enabled: !authLoading,
+    businessProfileId,
+    cartItems,
+    customerName,
+    customerPhone,
+    deliveryAddress,
+    deliveryCoords,
+    maxDeliveryHours,
+    vehicleType,
+    storeName: resellerName,
+    onPaid: (data) => { setReceipt({ ...data, paid_via: 'guest' }); setCart({}); },
+  });
+  // For a signed-out visitor the server's quote is the source of truth (it
+  // prices the rider who will actually be booked); otherwise the preview above.
+  const shownDeliveryFee = !user && guest.quote ? guest.quote.delivery_fee_ugx : deliveryFeeAmount;
+  const walletTotal = !user && guest.quote ? guest.quote.order_total_ugx : orderTotal;
 
   const changeQty = (listingId, delta, maxStock) => {
     setCart((prev) => {
@@ -174,20 +222,34 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
       return;
     }
 
+    // Paying from the wallet always needs the wallet PIN -- verified again on the server.
+    const pin = await askPin({ title: 'Confirm with your wallet PIN', message: `Pay ${formatUGX(walletTotal)} from your IcanEra wallet.` });
+    if (pin === null) return;
+
     setPlacing(true);
     setCheckoutError(null);
     try {
       const cartPayload = cartItems.map((row) => ({ product_id: row.listing.product_id, quantity: row.qty }));
-      const { data, error } = await dropshipCheckout(businessProfileId, cartPayload, {
+      const checkoutOptions = {
+        pin,
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         deliveryAddress: deliveryAddress.trim() || undefined,
         deliveryLat: deliveryCoords.lat,
         deliveryLng: deliveryCoords.lng,
         maxDeliveryHours,
-        riderId: selectedRiderId || undefined,
         vehicleTypes: vehicleType ? [vehicleType] : undefined,
+      };
+      // "Auto-assign" = the top of the list (the store's own nearby rider
+      // first, then the nearest other). If that rider got taken meanwhile,
+      // let the server auto-pick instead of failing the order.
+      const autoRiderId = selectedRiderId ? null : riders[0]?.rider_id;
+      let { data, error } = await dropshipCheckout(businessProfileId, cartPayload, {
+        ...checkoutOptions, riderId: selectedRiderId || autoRiderId || undefined,
       });
+      if (autoRiderId && (error || !data?.success) && /no longer available/i.test(error?.message || data?.error || '')) {
+        ({ data, error } = await dropshipCheckout(businessProfileId, cartPayload, checkoutOptions));
+      }
       if (error || !data?.success) {
         throw new Error(error?.message || data?.error || 'Checkout failed');
       }
@@ -236,7 +298,10 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
             {receipt.reseller_transport_subsidy > 0 && (
               <div className="flex justify-between text-sm"><span className="text-slate-400">Covered by seller</span><span className="text-emerald-400">-{formatUGX(receipt.reseller_transport_subsidy)}</span></div>
             )}
-            <div className="flex justify-between text-base font-semibold border-t border-slate-800 pt-2 mt-2"><span className="text-slate-300">Total paid</span><span className="text-white">{formatUGX(receipt.customer_paid_total)}</span></div>
+            {receipt.paid_via === 'guest' && receipt.processing_fee > 0 && (
+              <div className="flex justify-between text-sm"><span className="text-slate-400">Payment processing fee</span><span className="text-white">{formatUGX(receipt.processing_fee)}</span></div>
+            )}
+            <div className="flex justify-between text-base font-semibold border-t border-slate-800 pt-2 mt-2"><span className="text-slate-300">Total paid</span><span className="text-white">{formatUGX(receipt.paid_via === 'guest' ? receipt.guest_charged_total : receipt.customer_paid_total)}</span></div>
             {receipt.delivery_address && (
               <div className="flex justify-between text-sm"><span className="text-slate-400">Delivery to</span><span className="text-white text-right">{receipt.delivery_address}</span></div>
             )}
@@ -248,7 +313,9 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
               {receipt.verify_url ? (
                 <a href={receipt.verify_url} target="_blank" rel="noreferrer" className="text-indigo-400 underline">{receipt.verify_url}</a>
               ) : 'your receipt link'}.
-              {' '}If it misses the window above, you can reclaim your money from the rider's account there.
+              {' '}{receipt.paid_via === 'guest'
+                ? `Keep your receipt number (${receipt.customer_receipt_number}) — if the delivery misses the window above, contact the store with it to be refunded.`
+                : "If it misses the window above, you can reclaim your money from the rider's account there."}
             </p>
           </div>
           <button onClick={goToApp} className="mt-6 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold transition">
@@ -288,8 +355,9 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
               </div>
               <div className="p-2.5 flex-1 flex flex-col">
                 <p className="text-sm text-white font-medium line-clamp-2 min-h-[2.5rem]">{listing.name}</p>
-                <p className="text-indigo-300 font-bold mt-1">{formatUGX(listing.listed_price)}</p>
-                {listing.free_delivery ? (
+                <p className="text-indigo-300 font-bold mt-1">{priceOf(listing.listed_price, listing)}</p>
+                {shelf[listing.listing_id]?.cross_border && <p className="mt-0.5 text-[11px] text-sky-300">Ships from {shelf[listing.listing_id].store_country || 'abroad'}</p>}
+                {currencyOf(listing) !== 'UGX' ? null : listing.free_delivery ? (
                   <p className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-400"><Truck className="w-3 h-3" />Free delivery</p>
                 ) : listing.max_delivery_subsidy > 0 ? (
                   <p className="mt-0.5 flex items-center gap-1 text-[11px] text-emerald-400"><Truck className="w-3 h-3" />Up to {formatUGX(listing.max_delivery_subsidy)} off delivery</p>
@@ -328,7 +396,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                   <div key={row.listing.listing_id} className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm text-white truncate">{row.listing.name}</p>
-                      <p className="text-xs text-slate-400">{formatUGX(row.listing.listed_price)} × {row.qty}</p>
+                      <p className="text-xs text-slate-400">{priceOf(row.listing.listed_price, row.listing)} × {row.qty}</p>
                     </div>
                     <button onClick={() => setCart((prev) => ({ ...prev, [row.listing.listing_id]: 0 }))} className="p-1.5 text-slate-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
                   </div>
@@ -339,6 +407,8 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                   <div className="space-y-2 pt-2">
                     <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your name" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
                     <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone number" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
+                    {foreign && <p className="text-[11px] text-sky-300">This shop is priced in {foreignCurrency} and ships from {shelf[pickupListing?.listing_id]?.store_country || 'abroad'}. Pay in full or in instalments below — you give your shipping address once it is paid.</p>}
+                    {!foreign && (<>
                     <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Delivery address (e.g. street, landmark)" className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500" />
 
                     <button
@@ -368,7 +438,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                       <p className="mt-1 text-[11px] text-slate-500">If the rider misses this window, you can reclaim your money straight from their account.</p>
                     </div>
 
-                    {deliveryCoords && user && (
+                    {deliveryCoords && (
                       <div>
                         <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1"><Bike className="w-3.5 h-3.5" />Vehicle</label>
                         <div className="flex gap-1.5 mb-2">
@@ -385,11 +455,16 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                             </button>
                           ))}
                         </div>
-                        <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1"><Bike className="w-3.5 h-3.5" />Rider / driver</label>
-                        {ridersLoading ? (
+                        {!user && (
+                          <p className="text-[11px] text-slate-500 pb-1">The nearest available rider is booked for you automatically.</p>
+                        )}
+                        {user && <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1"><Bike className="w-3.5 h-3.5" />Rider / driver</label>}
+                        {!user ? null : ridersLoading ? (
                           <div className="flex items-center gap-2 text-xs text-slate-500 py-2"><Loader className="w-3.5 h-3.5 animate-spin" />Finding nearby riders…</div>
+                        ) : storeHasNoLocation ? (
+                          <p className="text-xs text-amber-400 py-1">This store hasn't set its pickup location yet, so a rider can't be routed to it. Please contact the store.</p>
                         ) : riders.length === 0 ? (
-                          <p className="text-xs text-amber-400 py-1">No riders nearby right now — we'll auto-assign one as soon as checkout completes.</p>
+                          <p className="text-xs text-amber-400 py-1">No riders are available right now — we'll auto-assign one as soon as checkout completes.</p>
                         ) : (
                           <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                             <button
@@ -399,7 +474,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                                 selectedRiderId === null ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-800 bg-slate-900 hover:bg-slate-800'
                               }`}
                             >
-                              <span className="text-white font-medium">Auto-assign nearest available</span>
+                              <span className="text-white font-medium">Auto-assign — store's rider first</span>
                               <span className="text-slate-500">Fastest</span>
                             </button>
                             {riders.map((r) => (
@@ -412,7 +487,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                                 }`}
                               >
                                 <span className="min-w-0">
-                                  <span className="block text-white font-medium truncate">{r.full_name} · {r.vehicle_type}</span>
+                                  <span className="block text-white font-medium truncate">{r.full_name} · {r.vehicle_type}{r.is_store_rider && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold">Store's rider</span>}</span>
                                   <span className="flex items-center gap-1 text-slate-400"><Star className="w-3 h-3 text-amber-400" />{Number(r.rating || 0).toFixed(1)} · {Number(r.distance_to_pickup_km || 0).toFixed(1)}km away</span>
                                 </span>
                                 <span className="shrink-0 text-slate-500 text-right">~{r.estimated_arrival_min}min<br />{formatUGX(r.fare)}</span>
@@ -429,31 +504,73 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
                       <div>
                         <label className="flex items-center gap-1.5 text-xs text-slate-400 mb-1"><Truck className="w-3.5 h-3.5" />Delivery fee</label>
                         <p className="text-sm text-white bg-slate-900 border border-slate-800 rounded-lg px-3 py-2">
-                          {deliveryFeeAmount == null ? 'Calculated once a rider is matched' : formatUGX(deliveryFeeAmount)}
-                          {isFinite(subsidyCap) && subsidyCap > 0 && deliveryFeeAmount != null && (
+                          {shownDeliveryFee == null ? 'Calculated once a rider is matched' : formatUGX(shownDeliveryFee)}
+                          {isFinite(subsidyCap) && subsidyCap > 0 && shownDeliveryFee != null && (
                             <span className="text-emerald-400 text-xs ml-1">(seller covers part of the real fare)</span>
                           )}
                         </p>
                         <p className="mt-1 text-[11px] text-slate-500">Real BodaGoera fare for the rider you pick — never a fee you set yourself.</p>
                       </div>
                     )}
+                    </>)}
                   </div>
                   <div className="border-t border-slate-800 pt-3 space-y-1">
-                    <div className="flex justify-between text-sm text-slate-400"><span>Items</span><span>{formatUGX(cartTotal)}</span></div>
-                    {deliveryFeeAmount > 0 && (
-                      <div className="flex justify-between text-sm text-slate-400"><span>Delivery</span><span>{formatUGX(deliveryFeeAmount)}</span></div>
+                    <div className="flex justify-between text-sm text-slate-400"><span>Items</span><span>{foreign ? formatMoney(cartTotal, foreignCurrency) : formatUGX(cartTotal)}</span></div>
+                    {!foreign && shownDeliveryFee > 0 && (
+                      <div className="flex justify-between text-sm text-slate-400"><span>Delivery</span><span>{formatUGX(shownDeliveryFee)}</span></div>
                     )}
-                    <div className="flex justify-between text-white font-semibold"><span>Total</span><span>{formatUGX(orderTotal)}</span></div>
+                    {!foreign && <div className="flex justify-between text-white font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>}
                   </div>
                   {checkoutError && <p className="text-xs text-red-400">{checkoutError}</p>}
-                  <button
-                    onClick={handleCheckout}
-                    disabled={placing || (!!user && !deliveryCoords)}
-                    className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2"
-                  >
-                    {placing ? <Loader className="w-4 h-4 animate-spin" /> : null}
-                    {!user ? 'Sign in to pay with IcanEra' : !deliveryCoords ? 'Share your delivery location to continue' : `Pay ${formatUGX(orderTotal)} with IcanEra`}
-                  </button>
+                  {!authLoading && !user && (
+                    <ContinueWithGoogle skin="slate" onUseEmail={() => setShowAuthModal(true)} onBeforeRedirect={() => markCartOpen(cartKey)} />
+                  )}
+                  <InstallmentOffer
+                    businessProfileId={businessProfileId}
+                    cartItems={cartItems}
+                    user={user}
+                    authLoading={authLoading}
+                    onNeedAuth={() => setShowAuthModal(true)}
+                    onBeforeAuthRedirect={() => markCartOpen(cartKey)}
+                    customerName={customerName}
+                    customerPhone={customerPhone}
+                    storeName={resellerName}
+                    skin="slate"
+                  />
+                  {!foreign && (
+                    <div className="space-y-2">
+                      <button
+                        onClick={user ? handleCheckout : () => setShowAuthModal(true)}
+                        disabled={authLoading || guest.paying || placing || (!!user && !deliveryCoords)}
+                        className="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition"
+                      >
+                        {placing ? <Loader className="w-4 h-4 animate-spin inline mr-2" /> : null}
+                        {user && !deliveryCoords
+                          ? 'Share your delivery location to continue'
+                          : `Pay with IcanEra wallet${deliveryCoords ? ` · ${formatUGX(walletTotal)}` : ''}`}
+                        <span className="block text-[11px] font-medium text-indigo-200">{user ? 'Recommended · no extra fee' : 'Recommended · no extra fee · sign up free in a minute'}</span>
+                      </button>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500"><span className="flex-1 h-px bg-slate-800" />{user ? 'or pay another way' : 'or no wallet needed'}<span className="flex-1 h-px bg-slate-800" /></div>
+                      <button
+                        onClick={guest.payNow}
+                        disabled={guest.paying || guest.quoting || !deliveryCoords || !guest.quote}
+                        className="w-full py-2.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2"
+                      >
+                        {guest.paying || guest.quoting ? <Loader className="w-4 h-4 animate-spin" /> : null}
+                        {!deliveryCoords
+                          ? 'Share your delivery location to continue'
+                          : guest.quote
+                            ? `Pay ${formatUGX(guest.quote.charge_ugx)} with Mobile Money, card or bank`
+                            : guest.quoting ? 'Pricing your order…' : 'Mobile Money, card or bank'}
+                      </button>
+                      {guest.quote && (
+                        <p className="text-[11px] text-slate-500">
+                          Includes a {formatUGX(guest.quote.processing_fee_ugx)} payment-processing fee. Pay with your IcanEra wallet to skip it and pay {formatUGX(walletTotal)}.
+                        </p>
+                      )}
+                      {(guest.quoteError || guest.payError) && <p className="text-xs text-red-400">{guest.payError || guest.quoteError}</p>}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -469,6 +586,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
           <AuthPage initialView="signup" onAuthSuccess={() => setShowAuthModal(false)} />
         </div>
       )}
+      {pinDialog}
     </div>
   );
 };

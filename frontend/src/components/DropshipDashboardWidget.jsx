@@ -73,8 +73,8 @@ const DropshipDashboardWidget = ({ userId, userEmail }) => {
     // to share -- that plain class gets force-flattened to one color by
     // ThemeContext's dynamic override stylesheet, which is why this used
     // to render as identical colorless white/gray boxes in every theme.
-    <div className="space-y-3">
-      <div className="dash-card dash-card-orange flex items-center gap-2 px-4 py-3">
+    <div className="space-y-2">
+      <div className="dash-card dash-card-orange flex items-center gap-2 px-3 py-1.5">
         <ShoppingBag className="w-4 h-4" style={{ color: '#f97316' }} />
         <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-textSecondary)' }}>Dropship</p>
       </div>

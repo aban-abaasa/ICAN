@@ -7,7 +7,7 @@
 // JS chunk hashes the server no longer has) can outlive the deploy that
 // replaced them — the classic "works on a fresh browser, blank screen on a
 // phone that visited before the last deploy" PWA bug.
-const CACHE_NAME = 'ican-era-v3';
+const CACHE_NAME = 'ican-era-v4';
 const CACHE_URLS = [
   '/',
   '/index.html',
@@ -180,9 +180,33 @@ async function networkFirstStrategy(request) {
   }
 }
 
+// How long a page navigation may wait on the network before an already-cached
+// copy is shown instead. On a weak mobile connection a bare network-first
+// navigation can sit on a white screen for as long as the browser's own
+// timeout; the cached shell loads instantly and the app refreshes its data
+// itself. The network request keeps going and refreshes the cache for next time.
+const NAVIGATION_NETWORK_TIMEOUT_MS = 4000;
+
 async function appShellStrategy(request) {
   try {
-    const response = await fetch(request);
+    const networkFetch = fetch(request);
+    const cachedNow = await caches.match(request, { ignoreSearch: true });
+    const response = cachedNow
+      ? await Promise.race([
+          networkFetch,
+          new Promise((resolve) => setTimeout(() => resolve(null), NAVIGATION_NETWORK_TIMEOUT_MS)),
+        ])
+      : await networkFetch;
+    if (!response) {
+      // Timed out: keep the slow request alive just to refresh the cache.
+      networkFetch.then(async (late) => {
+        if (late && late.ok) {
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(request, late.clone());
+        }
+      }).catch(() => {});
+      return cachedNow;
+    }
     // Cache under this exact request, NOT the shared '/' key. A few paths
     // (see vercel.json: /pitchin/:id, /status/:id, /store/:id) rewrite to a
     // distinct share-preview document with OG meta tags, not the SPA shell
@@ -231,7 +255,13 @@ async function cacheFirstStrategy(request) {
 
   try {
     const response = await fetch(request);
-    if (response.ok) {
+    // A script/stylesheet/image URL that answers with an HTML page is the SPA
+    // fallback standing in for a file the server no longer has (a chunk from
+    // the previous deploy). Caching it would make that URL "load" HTML forever
+    // and break the module import; let the caller see the failure and recover.
+    const contentType = response.headers.get('content-type') || '';
+    const isHtmlStandIn = /text\/html/i.test(contentType) && !/\.html?$/i.test(new URL(request.url).pathname);
+    if (response.ok && !isHtmlStandIn) {
       const cache = await caches.open(CACHE_NAME);
       cache.put(request, response.clone());
     }

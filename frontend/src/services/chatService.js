@@ -55,6 +55,23 @@ export const fetchConversation = async (conversationId) => {
   return data;
 };
 
+// The signed-in user's most recent support thread. The widget normally finds its thread through an id
+// remembered on this device, which misses a thread the team started for them (e.g. a franchise code
+// sent to their Support chat) or one opened on another device.
+export const fetchLatestSupportConversation = async (userId) => {
+  if (!userId) return null;
+  const { data } = await supabase
+    .from('chat_conversations')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('origin_app', 'ican')
+    .eq('kind', 'support')
+    .order('last_message_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data || null;
+};
+
 export const fetchMessages = async (conversationId) => {
   const { data } = await supabase
     .from('chat_messages')

@@ -48,6 +48,32 @@ Countries & rates, Franchise admins.
   (SupermarketEra marketplace). Edit anything; each row must add up to 100.
 - **Health, "Share missed fees":** picks up fees credited before the migration was applied.
 
+## Franchise codes in the Support chat
+
+Every partner has a code (for example `UG-AG-K7M2P`) that customers enter under Franchise, My agency. It is
+delivered to the partner's own account as a message in their IcanEra Support chat, plus an entry in the wallet
+inbox (which the push relay sends to installed phones).
+
+- **Automatic:** when HQ approves a partner that has an owner account (or adds a signed partner with an owner),
+  and once more when the partner goes live. If the owner account is attached later, it is sent then.
+- **Manual:** Developer panel, Franchise, Partners, open a partner, **Franchise code**: optional note, then
+  **Send code** / **Send again**. A partner with no owner account says so. At the top of the list, **Send codes to N
+  partners who have none** covers partners approved before this was switched on.
+- **The message carries three things:** the franchise code, a **share link** (`https://icanera.space/?agency=<code>`, which
+  the app already understands: it fills the code in under Franchise, My agency; not given to a Country Master) and a
+  **follow-up code** (`FU-K7M2P4`) the partner quotes to support. Every partner, existing ones too, gets a follow-up code.
+  Search for it, the franchise code, the company or the owner email in the Partners tab.
+- **Message partner:** each partner card shows their Support chat thread live, with a box for support to write to them
+  (any status except terminated, application stage included). They get the chat message and a notification; their reply
+  shows there and in the Messages inbox, where the thread is tagged `franchise`.
+- It never blocks an approval. If the chat and inbox are both unavailable the partner shows **Code not sent** and
+  the manual button works once they are back.
+
+Apply `supabase/migrations/20261007200000_franchise_code_delivery.sql` after the franchise migration (safe to run
+twice; either order with `backend/ADD_PUBLIC_TRANSACTION_QR.sql`). Rollback:
+`supabase/rollback/20261007_rollback_franchise_code_delivery.sql`. The chat widget change ships with the app: it now
+finds a thread by account, not only by an id remembered on the device.
+
 ## How the money works
 
 - HQ is paid exactly as today. Every platform fee still lands in the HQ platform-fee wallet in full.
@@ -83,9 +109,8 @@ Countries & rates, Franchise admins.
    an edge rate limit if that happens.
 5. **Not automated yet:** charging the upfront fee, enforcing the minimum annual royalty (it is tracked and shown),
    and wallet payouts.
-6. **Existing security finding, not changed here:** the developer panel PIN (`dev_ICAN_Pr0_KV25`) is committed in
-   the repo and in the public app, and several older dev functions accept it from anyone. Worth rotating and
-   moving those functions to a real signed-in check, as the franchise functions do.
+6. **Dev panel token:** the old fixed developer-panel token is replaced by a server-side secret, and the panel
+   is opened by an allowlisted Supabase account. See `supabase/migrations/20261009100000_secure_dev_access.sql`.
 
 ## Tests
 

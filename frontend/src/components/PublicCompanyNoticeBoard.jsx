@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Megaphone, Briefcase, MapPin, Calendar, Users, FileText, X, Loader,
   AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
@@ -6,15 +6,24 @@ import {
   Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
   Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe,
   Video, Play, Eye, Heart, Bike, Star, Sun, Moon, TrendingUp, MoreVertical, Home,
-  Download
+  Download, Banknote, User
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
-import { getDropshipStorefront, dropshipCheckout, findDeliveryRiders } from '../services/dropshipService';
+import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
+import useGuestCheckout from '../hooks/useGuestCheckout';
+import InstallmentOffer from './InstallmentOffer';
+import ContinueWithGoogle from './ContinueWithGoogle';
+import usePersistedCart, { markCartOpen, consumeCartOpen } from '../hooks/usePersistedCart';
+import { getBusinessSiteInfo, joinBusinessSite, getMyInstallmentPlans, getMyBusinessAccounts, getInstallmentShelf, formatMoney, STATUS_LABELS as PLAN_STATUS_LABELS } from '../services/installmentService';
+import PayAnyAmountForm from './PayAnyAmountForm';
+import ReceiveRequestForm from './ReceiveRequestForm';
+import { getPayCodeInfoForBusiness, getReceiveInfoForBusiness } from '../services/publicTransactionService';
 import { getPitchesByBusinessProfileId, getPitchById, getBusinessProfileIdByName, PITCH_PLAN_SECTIONS } from '../services/pitchingService';
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useAuth } from '../context/AuthContext';
+import { usePinPrompt } from './PinPromptDialog';
 import { AuthPage } from './auth';
 
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
@@ -578,6 +587,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       const pending = sessionStorage.getItem(PENDING_SECTION_KEY);
       if (pending) { sessionStorage.removeItem(PENDING_SECTION_KEY); return pending; }
     } catch { /* ignore */ }
+    // /notices/<id>?tab=market opens straight on the Market tab.
+    if (new URLSearchParams(window.location.search).get('tab') === 'market') return 'shop';
     return 'notices';
   });
   const [notices, setNotices] = useState([]);
@@ -612,8 +623,11 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // profile). Loaded separately from notices/jobs since it depends on
   // company.business_profile_id, only known once the header result lands.
   const [products, setProducts] = useState([]);
+  // The business's own store products, when its CMMS website profile says the
+  // Shop tab should show them (instead of / as well as resellers' listings).
+  const [storeProducts, setStoreProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
-  const [cart, setCart] = useState({}); // { [listing_id]: quantity }
+  const [cart, setCart] = usePersistedCart(`icanera_cart_nb_${companyId}`); // { [listing_id]: quantity } -- survives the round-trip to Google
 
   // Same "linked business_profile" as Products & Services above, just
   // surfacing that business's Pitchin videos instead of its storefront --
@@ -629,6 +643,32 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // name-match fallback (getBusinessProfileIdByName) so a business's pitches
   // still show up on its own public page without that extra manual step.
   const [pitchesBusinessProfileId, setPitchesBusinessProfileId] = useState(null);
+  // The business's standing "pay any amount" QR (ADD_PUBLIC_TRANSACTION_QR.sql). When it has one switched on,
+  // this site grows a Pay tab, and the printed QR opens straight onto it (?pay=1).
+  const [payInfo, setPayInfo] = useState(null);
+  // Whether clients may also REQUEST money from this business (owner switched it on): the Pay tab then
+  // has a "Receive" side (ADD_BUSINESS_RECEIVE_REQUESTS.sql).
+  const [receiveInfo, setReceiveInfo] = useState(null);
+  // A store product the visitor tapped on the Market tab: opens the Pay tab with it already listed.
+  const [payPrefill, setPayPrefill] = useState(null);
+  const payForProduct = (item) => {
+    setPayPrefill({ key: `${item.product_id}-${Date.now()}`, items: [{ name: item.name, price: item.price, qty: 1 }] });
+    setSection('pay');
+  };
+  useEffect(() => {
+    if (!company?.business_profile_id) { setPayInfo(null); setReceiveInfo(null); return undefined; }
+    let cancelled = false;
+    getPayCodeInfoForBusiness(company.business_profile_id).then((info) => {
+      if (cancelled) return;
+      const live = info?.found && info.active ? info : null;
+      setPayInfo(live);
+      if (live && new URLSearchParams(window.location.search).get('pay')) setSection('pay');
+    });
+    getReceiveInfoForBusiness(company.business_profile_id).then((info) => {
+      if (!cancelled) setReceiveInfo(info?.found ? info : null);
+    });
+    return () => { cancelled = true; };
+  }, [company?.business_profile_id]);
 
   // One live share offer per business (not per pitch -- every pitch video
   // this business has posted sells the SAME underlying shares, see
@@ -686,13 +726,26 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 
   useEffect(() => {
     let cancelled = false;
-    if (!company?.business_profile_id) { setProducts([]); return; }
+    if (!company?.business_profile_id) { setProducts([]); setStoreProducts([]); return; }
     setProductsLoading(true);
-    getDropshipStorefront(company.business_profile_id).then(({ data }) => {
+    Promise.all([
+      cmmsAnnouncementsService.getPublicSiteProducts(companyId),
+      getDropshipStorefront(company.business_profile_id),
+    ]).then(([site, { data }]) => {
       if (cancelled) return;
-      setProducts(data || []);
+      setStoreProducts(site.storeProducts);
+      setProducts(site.source === 'store' ? [] : (data || []));
       setProductsLoading(false);
     });
+    return () => { cancelled = true; };
+  }, [companyId, company?.business_profile_id]);
+
+  // Does this business invite customers to create an account on its site (and so offer instalments)?
+  const [accountsEnabled, setAccountsEnabled] = useState(true);
+  useEffect(() => {
+    if (!company?.business_profile_id) return undefined;
+    let cancelled = false;
+    getBusinessSiteInfo(company.business_profile_id).then((info) => { if (!cancelled) setAccountsEnabled(info.accounts_enabled !== false); });
     return () => { cancelled = true; };
   }, [company?.business_profile_id]);
 
@@ -906,7 +959,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   // narrower per-tab width.
   const tabs = [
     { id: 'notices', label: 'Notices', mobileLabel: 'Notices', icon: Megaphone },
-    ...(products.length > 0 ? [{ id: 'shop', label: 'Products & Services', mobileLabel: 'Shop', icon: ShoppingBag }] : []),
+    // The Market tab exists for every business website, even before anything is listed:
+    // a store always has a website, and its market is where its products and services live.
+    { id: 'shop', label: 'Market', mobileLabel: 'Market', icon: ShoppingBag },
     // Shown whenever this business has PitchIn enabled at all (a linked or
     // name-matched business_profile_id, see pitchesBusinessProfileId above)
     // not just once it already has a published pitch -- otherwise the
@@ -915,7 +970,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
     // PitchinSection's own empty state covers the zero-pitches case.
     ...(pitchesBusinessProfileId ? [{ id: 'pitchin', label: 'Pitches', mobileLabel: 'Pitches', icon: Video }] : []),
     { id: 'careers', label: 'Careers', mobileLabel: 'Careers', icon: Briefcase },
+    ...(payInfo ? [{ id: 'pay', label: 'Pay', mobileLabel: 'Pay', icon: Banknote }] : []),
     ...(opportunities.length > 0 ? [{ id: 'opportunities', label: 'Opportunities', mobileLabel: 'Deals', icon: Award }] : []),
+    ...(accountsEnabled && company?.business_profile_id ? [{ id: 'account', label: 'My account', mobileLabel: 'Account', icon: User }] : []),
     { id: 'track', label: 'Track my application', mobileLabel: 'Track', icon: Search },
     ...(opportunities.length > 0 ? [{ id: 'track-bid', label: 'Track my bid', mobileLabel: 'My bid', icon: Search }] : []),
   ];
@@ -1065,6 +1122,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           {section === 'shop' && (
             <ShopSection
               products={products}
+              storeProducts={storeProducts}
+              onPayForProduct={payInfo ? payForProduct : null}
+              contact={{ phone: company.phone, whatsapp: company.whatsapp }}
               loading={productsLoading}
               cart={cart}
               setCart={setCart}
@@ -1072,6 +1132,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
               user={user}
               authLoading={authLoading}
             />
+          )}
+          {section === 'pay' && payInfo && (
+            <PaySection company={company} info={payInfo} receiveInfo={receiveInfo} prefill={payPrefill} />
           )}
           {section === 'pitchin' && (
             <PitchinSection pitches={pitches} loading={pitchesLoading} liveOffer={liveOffer} onSelect={setSelectedPitch} />
@@ -1081,6 +1144,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           )}
           {section === 'opportunities' && (
             <OpportunityList opportunities={opportunities} onSelect={openOpportunityDetail} />
+          )}
+          {section === 'account' && accountsEnabled && (
+            <AccountSection company={company} user={user} authLoading={authLoading} />
           )}
           {section === 'track' && <TrackApplication companyId={companyId} viewerUser={user} onWantAccount={requestAccountCreation} />}
           {section === 'track-bid' && <TrackOpportunityBid viewerUser={user} onWantAccount={requestAccountCreation} />}
@@ -1118,6 +1184,177 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       )}
     </div>
     </NoticeBoardThemeCtx.Provider>
+  );
+};
+
+// Customer accounts on a business website: anyone can create a free IcanEra account right here and become this
+// business's customer, so they can track every plan and payment they have with it (and the business can see who
+// its customers are). Joining is always the visitor's own choice -- merely browsing registers nobody.
+const JOIN_SITE_KEY = 'icanera_join_site';
+const AccountSection = ({ company, user, authLoading }) => {
+  const businessId = company.business_profile_id;
+  const [joined, setJoined] = useState(null); // null = not known yet
+  const [plans, setPlans] = useState([]);
+  const [showAuth, setShowAuth] = useState(null); // null | 'signup' | 'signin'
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const [accounts, allPlans] = await Promise.all([getMyBusinessAccounts(), getMyInstallmentPlans().catch(() => [])]);
+    setJoined(accounts.some((a) => a.business_profile_id === businessId));
+    setPlans(allPlans.filter((p) => p.seller_id === businessId));
+  }, [businessId]);
+
+  useEffect(() => {
+    if (!user) { setJoined(null); setPlans([]); return undefined; }
+    let cancelled = false;
+    (async () => {
+      // They chose to sign up or sign in from this page: that is their consent to become a customer here.
+      let wantsJoin = false;
+      try { wantsJoin = sessionStorage.getItem(JOIN_SITE_KEY) === businessId; } catch { /* ignore */ }
+      if (wantsJoin) {
+        await joinBusinessSite(businessId, 'website');
+        try { sessionStorage.removeItem(JOIN_SITE_KEY); } catch { /* ignore */ }
+      }
+      if (!cancelled) await load();
+    })();
+    return () => { cancelled = true; };
+  }, [user, businessId, load]);
+
+  const openAuth = (view) => {
+    try { sessionStorage.setItem(JOIN_SITE_KEY, businessId); } catch { /* ignore */ }
+    setShowAuth(view);
+  };
+  const join = async () => {
+    setBusy(true);
+    await joinBusinessSite(businessId, 'website');
+    await load();
+    setBusy(false);
+  };
+
+  // A customer may hold plans in different currencies (a shop abroad): they are listed side by side, never added together.
+  const sumMoney = (rows, pick) => {
+    const totals = {};
+    rows.forEach((p) => { const v = Number(pick(p) || 0); if (v > 0) totals[p.currency || 'UGX'] = (totals[p.currency || 'UGX'] || 0) + v; });
+    const parts = Object.entries(totals).map(([cur, v]) => formatMoney(v, cur));
+    return parts.length ? parts.join(' · ') : formatMoney(0, plans[0]?.currency || 'UGX');
+  };
+  const paid = sumMoney(plans.filter((p) => !['cancelled', 'lapsed'].includes(p.status)), (p) => p.paid_amount);
+  const owing = sumMoney(plans.filter((p) => ['awaiting_deposit', 'active', 'ready'].includes(p.status)), (p) => p.balance_amount);
+
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="nb-card rounded-2xl p-5 sm:p-7">
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 rounded-full nb-chip-green flex items-center justify-center mx-auto mb-3"><User className="w-6 h-6" /></div>
+          <h2 className="text-xl sm:text-2xl font-bold nb-text">{user ? `Your account with ${company.company_name}` : `Create your account with ${company.company_name}`}</h2>
+          <p className="text-sm nb-text-muted mt-1.5 leading-relaxed">
+            Track every payment and receipt in one place, pay for products in instalments, and collect them or have them delivered once they are paid in full.
+          </p>
+        </div>
+
+        {authLoading || (user && joined === null) ? (
+          <div className="flex justify-center py-6"><Loader className="w-6 h-6 animate-spin nb-text-faint" /></div>
+        ) : !user ? (
+          <div className="space-y-2">
+            <ContinueWithGoogle
+              skin="nb" compact pendingSection="account"
+              onBeforeRedirect={() => { try { sessionStorage.setItem(JOIN_SITE_KEY, businessId); } catch { /* ignore */ } }}
+            />
+            <p className="text-xs nb-text-faint text-center">New here? Google creates your free IcanEra wallet in one tap.</p>
+            <button onClick={() => openAuth('signup')} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-primary font-semibold transition">Create an account with email</button>
+            <button onClick={() => openAuth('signin')} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-secondary font-semibold transition">I already have an account</button>
+            <p className="text-xs nb-text-faint text-center leading-relaxed">The same IcanEra account works on every business website. {company.company_name} will see your name, phone and your payments with them — nothing else.</p>
+          </div>
+        ) : !joined ? (
+          <div className="space-y-2">
+            <button onClick={join} disabled={busy} className="w-full min-h-[48px] py-3 rounded-xl nb-btn-primary font-semibold transition disabled:opacity-50 flex items-center justify-center gap-2">
+              {busy ? <Loader className="w-4 h-4 animate-spin" /> : null}Become a customer of {company.company_name}
+            </button>
+            <p className="text-xs nb-text-faint text-center leading-relaxed">{company.company_name} will see your name, phone and your payments with them.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {[['Plans', plans.length], ['Paid', paid], ['Owing', owing]].map(([label, value]) => (
+                <div key={label} className="nb-surface-alt border nb-border rounded-xl p-2.5">
+                  <p className="text-[11px] nb-text-faint">{label}</p>
+                  <p className="text-sm font-bold nb-text break-words">{value}</p>
+                </div>
+              ))}
+            </div>
+            {plans.length === 0 ? (
+              <p className="text-sm nb-text-muted text-center py-4">No payments yet. Choose “Pay in instalments” in the Shop tab to start one.</p>
+            ) : (
+              <div className="space-y-2">
+                {plans.map((p) => (
+                  <a key={p.code} href={`/plan/${p.code}`} className="block nb-surface-alt border nb-border rounded-xl p-3 hover:opacity-90 transition">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm nb-text font-medium truncate flex-1">{p.items.map((i) => i.name).slice(0, 2).join(', ')}{p.items.length > 2 ? '…' : ''}</p>
+                      <ChevronRight className="w-4 h-4 nb-text-faint shrink-0" />
+                    </div>
+                    <div className="flex justify-between text-xs mt-1">
+                      <span className="nb-text-muted">{PLAN_STATUS_LABELS[p.status] || p.status}</span>
+                      <span className="nb-text">{formatMoney(p.paid_amount, p.currency)} of {formatMoney(p.total_amount, p.currency)}</span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+            <a href="/plans" className="block text-center text-sm nb-link font-semibold">See all my payments across businesses</a>
+          </div>
+        )}
+      </div>
+
+      {showAuth && (
+        <div className="icanera-nb fixed inset-0 z-[60] overflow-y-auto nb-surface">
+          <button onClick={() => setShowAuth(null)} className="fixed top-4 right-4 nb-share-btn p-2 rounded-full z-10"><X className="w-5 h-5" /></button>
+          <AuthPage initialView={showAuth} onAuthSuccess={() => setShowAuth(null)} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// "Pay any amount": the customer types what they are paying for and the price (or lists several items), then
+// chooses cash / IcanEra wallet / Mobile Money / card / bank on the receipt page and keeps the receipt. The
+// printed standing QR opens this tab (?pay=1). The form itself is shared with the standalone /p/<code> page.
+//
+// When the owner has also switched on "Let clients request money from us", a Pay | Receive switch appears:
+// Receive files a request that an owner approves with the business-wallet PIN before anything is paid.
+const PaySection = ({ company, info, receiveInfo, prefill = null }) => {
+  const [side, setSide] = useState('pay'); // 'pay' | 'receive'
+  const receiving = side === 'receive' && receiveInfo;
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="nb-card rounded-2xl p-5 sm:p-7">
+        {receiveInfo && (
+          <div role="tablist" aria-label="Pay or receive" className="grid grid-cols-2 gap-2 mb-5">
+            {[['pay', 'Pay'], ['receive', 'Receive']].map(([id, label]) => (
+              <button
+                key={id} type="button" role="tab" aria-selected={side === id} onClick={() => setSide(id)}
+                className={`min-h-[44px] rounded-xl text-sm font-bold border transition ${side === id ? 'nb-btn-primary' : 'nb-surface-alt nb-border nb-text-muted'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 rounded-full nb-chip-green flex items-center justify-center mx-auto mb-3">
+            <Banknote className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold nb-text">{receiving ? `Receive from ${company.company_name}` : `Pay ${company.company_name}`}</h2>
+          <p className="text-sm nb-text-muted mt-1.5 leading-relaxed">
+            {receiving
+              ? 'Owed money, a refund or a payout? Send a request. The owner approves it, then it is paid into your IcanEra wallet.'
+              : 'Type what you are paying for and the price — or list several items. Pay with cash, your IcanEra wallet, Mobile Money, card or bank, and keep your receipt. No account needed.'}
+          </p>
+        </div>
+        {receiving
+          ? <ReceiveRequestForm businessProfileId={company.business_profile_id} businessName={company.company_name} info={receiveInfo} />
+          : <PayAnyAmountForm key={prefill ? prefill.key : 'blank'} code={info.code} info={info} skin="nb" initialItems={prefill ? prefill.items : null} />}
+      </div>
+    </div>
   );
 };
 
@@ -1814,14 +2051,16 @@ const VEHICLE_TYPE_OPTIONS = [
   { value: 'van', label: '🚐 Van' },
 ];
 
-// Browsing is free for anyone; paying is a real IcanEra wallet transfer, so
-// it needs an account. An anonymous visitor who hits "Pay" gets the signup
-// form right here (no navigating away, cart stays intact) -- once they have
-// an account, the exact same button pays instantly, same as anywhere else
-// in IcanEra. This is the whole "click a product -> get an IcanEra wallet,
-// or transact seamlessly if you already have one" flow.
-const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user, authLoading }) => {
-  const [showCart, setShowCart] = useState(false);
+// Browsing is free for anyone. Paying with an IcanEra wallet is the
+// recommended way (no extra fee): an anonymous visitor who picks it gets the
+// signup form right here (no navigating away, cart stays intact) and the same
+// button then pays instantly. A visitor who doesn't want a wallet can instead
+// pay with Mobile Money, card or bank -- that adds a small payment-processing
+// fee and is handled by useGuestCheckout / guestCheckoutService.
+const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, contact = {}, loading, cart, setCart, businessProfileId, user, authLoading }) => {
+  const { askPin, pinDialog } = usePinPrompt();
+  const cartOpenKey = `icanera_cart_nbshop_${businessProfileId}`;
+  const [showCart, setShowCart] = useState(() => consumeCartOpen(cartOpenKey));
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -1844,8 +2083,13 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
   const [selectedRiderId, setSelectedRiderId] = useState(null); // null = auto-assign nearest
   const [vehicleType, setVehicleType] = useState(null); // null = any bike/car/van
 
-  const storeLat = products[0]?.store_lat;
-  const storeLng = products[0]?.store_lng;
+  // The store this order is picked up from: the first item in the cart (an
+  // order is single-store), or the first listing before anything is added.
+  const pickupListing = products.find((p) => (cart[p.listing_id] || 0) > 0) || products[0];
+  const storeLat = pickupListing?.store_lat;
+  const storeLng = pickupListing?.store_lng;
+  const pickupProductId = pickupListing?.product_id;
+  const storeHasNoLocation = !!pickupListing && (storeLat == null || storeLng == null);
 
   // Once we know both the store's pickup point and where the customer wants
   // it delivered, look up real nearby riders/drivers -- same
@@ -1862,7 +2106,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
     }
     setRidersLoading(true);
     setSelectedRiderId(null);
-    findDeliveryRiders(storeLat, storeLng, deliveryCoords.lat, deliveryCoords.lng, {
+    findStoreFirstRiders(businessProfileId, pickupProductId, storeLat, storeLng, deliveryCoords.lat, deliveryCoords.lng, {
       vehicleTypes: vehicleType ? [vehicleType] : null,
     }).then(({ data }) => {
       if (cancelled) return;
@@ -1870,7 +2114,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
       setRidersLoading(false);
     });
     return () => { cancelled = true; };
-  }, [user, storeLat, storeLng, deliveryCoords, vehicleType]);
+  }, [user, businessProfileId, pickupProductId, storeLat, storeLng, deliveryCoords, vehicleType]);
 
   const shareLocation = () => {
     if (!navigator.geolocation) {
@@ -1900,6 +2144,19 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
     [cart, products]
   );
   const cartTotal = cartItems.reduce((sum, row) => sum + row.listing.listed_price * row.qty, 0);
+  // A shop priced in another currency is bought through "Pay in instalments" / pay-in-full (not the Ugandan rider checkout).
+  const [shelf, setShelf] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    getInstallmentShelf(businessProfileId)
+      .then((rows) => { if (!cancelled) setShelf(Object.fromEntries(rows.map((r) => [r.listing_id, r]))); })
+      .catch(() => { /* keep UGX pricing if the shelf can't be read */ });
+    return () => { cancelled = true; };
+  }, [businessProfileId]);
+  const currencyOf = (listing) => shelf[listing?.listing_id]?.currency || 'UGX';
+  const priceOf = (amount, listing) => (currencyOf(listing) === 'UGX' ? formatUGX(amount) : formatMoney(amount, currencyOf(listing)));
+  const foreignCurrency = currencyOf(cartItems[0]?.listing);
+  const foreign = cartItems.length > 0 && foreignCurrency !== 'UGX';
   const cartCount = cartItems.reduce((sum, row) => sum + row.qty, 0);
   const allFreeDelivery = cartItems.length > 0 && cartItems.every((row) => row.listing.free_delivery);
   // Preview only -- dropship_checkout always recomputes the REAL fare
@@ -1914,6 +2171,25 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
     : cartItems.reduce((min, row) => Math.min(min, Number(row.listing.max_delivery_subsidy) || 0), Infinity);
   const deliveryFeeAmount = estimatedFare == null ? null : Math.max(estimatedFare - Math.min(subsidyCap, estimatedFare), 0);
   const orderTotal = cartTotal + (deliveryFeeAmount || 0);
+
+  // Pay without a wallet (Mobile Money / card / bank) for signed-out visitors.
+  const guest = useGuestCheckout({
+    enabled: !authLoading,
+    businessProfileId,
+    cartItems,
+    customerName,
+    customerPhone,
+    deliveryAddress,
+    deliveryCoords,
+    maxDeliveryHours,
+    vehicleType,
+    storeName: products[0]?.reseller_name || 'Store',
+    onPaid: (data) => { setReceipt({ ...data, paid_via: 'guest' }); setCart({}); },
+  });
+  // For a signed-out visitor the server's quote is the source of truth (it
+  // prices the rider who will actually be booked); otherwise the preview above.
+  const shownDeliveryFee = !user && guest.quote ? guest.quote.delivery_fee_ugx : deliveryFeeAmount;
+  const walletTotal = !user && guest.quote ? guest.quote.order_total_ugx : orderTotal;
 
   const changeQty = (listingId, delta, maxStock) => {
     setCart((prev) => {
@@ -1931,20 +2207,34 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
       return;
     }
 
+    // Paying from the wallet always needs the wallet PIN -- verified again on the server.
+    const pin = await askPin({ title: 'Confirm with your wallet PIN', message: `Pay ${formatUGX(walletTotal)} from your IcanEra wallet.` });
+    if (pin === null) return;
+
     setPlacing(true);
     setCheckoutError(null);
     try {
       const cartPayload = cartItems.map((row) => ({ product_id: row.listing.product_id, quantity: row.qty }));
-      const { data, error } = await dropshipCheckout(businessProfileId, cartPayload, {
+      const checkoutOptions = {
+        pin,
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         deliveryAddress: deliveryAddress.trim() || undefined,
         deliveryLat: deliveryCoords.lat,
         deliveryLng: deliveryCoords.lng,
         maxDeliveryHours,
-        riderId: selectedRiderId || undefined,
         vehicleTypes: vehicleType ? [vehicleType] : undefined,
+      };
+      // "Auto-assign" = the top of the list (the store's own nearby rider
+      // first, then the nearest other). If that rider got taken meanwhile,
+      // let the server auto-pick instead of failing the order.
+      const autoRiderId = selectedRiderId ? null : riders[0]?.rider_id;
+      let { data, error } = await dropshipCheckout(businessProfileId, cartPayload, {
+        ...checkoutOptions, riderId: selectedRiderId || autoRiderId || undefined,
       });
+      if (autoRiderId && (error || !data?.success) && /no longer available/i.test(error?.message || data?.error || '')) {
+        ({ data, error } = await dropshipCheckout(businessProfileId, cartPayload, checkoutOptions));
+      }
       if (error || !data?.success) {
         throw new Error(error?.message || data?.error || 'Checkout failed');
       }
@@ -1972,7 +2262,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
           <CheckCircle2 className="w-9 h-9" />
         </div>
         <h3 className="text-lg font-bold nb-text mb-1">Order placed!</h3>
-        <p className="nb-text-muted text-sm mb-4">Paid with your IcanEra wallet.</p>
+        <p className="nb-text-muted text-sm mb-4">{receipt.paid_via === 'guest' ? 'Paid with Mobile Money, card or bank.' : 'Paid with your IcanEra wallet.'}</p>
         <div className="nb-card rounded-2xl p-4 text-left space-y-2">
           <div className="flex justify-between text-sm"><span className="nb-text-faint">Receipt number</span><span className="nb-text font-mono">{receipt.customer_receipt_number}</span></div>
           <div className="flex justify-between text-sm"><span className="nb-text-faint">Items</span><span className="nb-text">{receipt.items_count}</span></div>
@@ -1982,7 +2272,10 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
           {receipt.reseller_transport_subsidy > 0 && (
             <div className="flex justify-between text-sm"><span className="nb-text-faint">Covered by seller</span><span className="nb-price">-{formatUGX(receipt.reseller_transport_subsidy)}</span></div>
           )}
-          <div className="flex justify-between text-base font-semibold border-t nb-border pt-2 mt-2"><span className="nb-text">Total paid</span><span className="nb-text">{formatUGX(receipt.customer_paid_total)}</span></div>
+          {receipt.paid_via === 'guest' && receipt.processing_fee > 0 && (
+            <div className="flex justify-between text-sm"><span className="nb-text-faint">Payment processing fee</span><span className="nb-text">{formatUGX(receipt.processing_fee)}</span></div>
+          )}
+          <div className="flex justify-between text-base font-semibold border-t nb-border pt-2 mt-2"><span className="nb-text">Total paid</span><span className="nb-text">{formatUGX(receipt.paid_via === 'guest' ? receipt.guest_charged_total : receipt.customer_paid_total)}</span></div>
           {receipt.delivery_address && (
             <div className="flex justify-between text-sm"><span className="nb-text-faint">Delivery to</span><span className="nb-text text-right">{receipt.delivery_address}</span></div>
           )}
@@ -1993,7 +2286,9 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
         <p className="text-xs nb-text-faint mt-4">
           A BodaGoera rider has been booked for this order. The business only gets paid once the rider scans it out
           {receipt.verify_url ? <> — track that and confirm delivery at <a href={receipt.verify_url} target="_blank" rel="noreferrer" className="nb-link underline">your receipt link</a></> : null}.
-          {' '}If it misses the window above, you can reclaim your money from the rider's account there.
+          {' '}{receipt.paid_via === 'guest'
+            ? `Keep your receipt number (${receipt.customer_receipt_number}) — if the delivery misses the window above, contact the business with it to be refunded.`
+            : "If it misses the window above, you can reclaim your money from the rider's account there."}
         </p>
         <button onClick={() => setReceipt(null)} className="mt-6 px-5 py-2.5 rounded-xl nb-btn-secondary font-semibold transition">Keep browsing</button>
       </div>
@@ -2003,7 +2298,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm nb-text-muted">Browse for free. Pay with your IcanEra wallet when you're ready to order.</p>
+        <p className="text-sm nb-text-muted">Browse for free. Pay with your IcanEra wallet (no extra fee), or with Mobile Money, card or bank — no account needed.</p>
         <button onClick={() => setShowCart(true)} className="relative p-2.5 rounded-full nb-share-btn flex-shrink-0">
           <ShoppingCart className="w-4 h-4" />
           {cartCount > 0 && (
@@ -2012,9 +2307,9 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
         </button>
       </div>
 
-      {products.length === 0 ? (
-        <EmptyState icon={ShoppingBag} text="Nothing listed right now. Check back later." />
-      ) : (
+      {products.length === 0 && storeProducts.length === 0 ? (
+        <EmptyState icon={ShoppingBag} text="This market has nothing listed yet. Check back soon." />
+      ) : products.length === 0 ? null : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           {products.map((listing) => {
             const qty = cart[listing.listing_id] || 0;
@@ -2029,8 +2324,9 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                 </div>
                 <div className="p-2.5 flex-1 flex flex-col">
                   <p className="text-sm nb-text font-medium line-clamp-2 min-h-[2.5rem]">{listing.name}</p>
-                  <p className="nb-price font-bold mt-1">{formatUGX(listing.listed_price)}</p>
-                  {listing.free_delivery && (
+                  <p className="nb-price font-bold mt-1">{priceOf(listing.listed_price, listing)}</p>
+                  {shelf[listing.listing_id]?.cross_border && <p className="mt-0.5 text-[11px] nb-text-muted">Ships from {shelf[listing.listing_id].store_country || 'abroad'}</p>}
+                  {currencyOf(listing) === 'UGX' && listing.free_delivery && (
                     <p className="mt-0.5 flex items-center gap-1 text-[11px] nb-text-muted"><Truck className="w-3 h-3" />Free delivery</p>
                   )}
                   {!listing.in_stock ? (
@@ -2053,6 +2349,62 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
         </div>
       )}
 
+      {storeProducts.length > 0 && (
+        <div className={products.length > 0 ? 'mt-8' : ''}>
+          <h3 className="text-sm font-semibold nb-text mb-1">{products.length > 0 ? 'From our store' : 'Our products'}</h3>
+          <p className="text-xs nb-text-muted mb-3">{onPayForProduct ? 'Tap a product to pay for it — cash, IcanEra wallet, Mobile Money, card or bank.' : 'Contact us to order these.'}</p>
+          {(buildWhatsAppLink(contact.whatsapp) || buildTelLink(contact.phone)) && (
+            <div className="flex gap-2 mb-3">
+              {buildWhatsAppLink(contact.whatsapp) && (
+                <a href={buildWhatsAppLink(contact.whatsapp)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg nb-btn-primary text-xs font-semibold">
+                  <MessageCircle className="w-3.5 h-3.5" />WhatsApp
+                </a>
+              )}
+              {buildTelLink(contact.phone) && (
+                <a href={buildTelLink(contact.phone)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg nb-btn-secondary text-xs font-semibold">
+                  <Phone className="w-3.5 h-3.5" />Call
+                </a>
+              )}
+            </div>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+            {storeProducts.map((item) => {
+              // In-site payment is in UGX (the Pay tab's currency) and only for what can be bought right now.
+              const payable = !!onPayForProduct && String(item.currency || 'UGX').toUpperCase() === 'UGX' && (item.is_service || item.in_stock);
+              return (
+              <div
+                key={item.product_id}
+                {...(payable ? { role: 'button', tabIndex: 0, onClick: () => onPayForProduct(item), onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPayForProduct(item); } } } : {})}
+                className={`nb-card rounded-2xl overflow-hidden flex flex-col${payable ? ' cursor-pointer transition active:scale-[0.98]' : ''}`}
+              >
+                <div className="aspect-square nb-surface-alt flex items-center justify-center overflow-hidden">
+                  {item.images?.[0] ? (
+                    <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <Store className="w-8 h-8 nb-icon-muted" />
+                  )}
+                </div>
+                <div className="p-2.5 flex-1 flex flex-col">
+                  <p className="text-sm nb-text font-medium line-clamp-2 min-h-[2.5rem]">{item.name}</p>
+                  <p className="nb-price font-bold mt-1">{formatMoney(item.price, item.currency)}</p>
+                  {item.is_service ? (
+                    <p className="mt-1 text-[11px] nb-text-muted">Service</p>
+                  ) : !item.in_stock ? (
+                    <p className="mt-1 text-xs nb-out-of-stock font-semibold">Out of stock</p>
+                  ) : (
+                    <p className="mt-1 text-[11px] nb-text-muted">In stock</p>
+                  )}
+                  {payable && (
+                    <span className="mt-2 w-full min-h-[36px] rounded-lg nb-btn-primary text-xs font-semibold flex items-center justify-center">Pay</span>
+                  )}
+                </div>
+              </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {showCart && (
         <Modal onClose={() => setShowCart(false)}>
           <h2 className="text-lg font-bold nb-text mb-4">Your cart</h2>
@@ -2064,7 +2416,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                 <div key={row.listing.listing_id} className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm nb-text truncate">{row.listing.name}</p>
-                    <p className="text-xs nb-text-faint">{formatUGX(row.listing.listed_price)} × {row.qty}</p>
+                    <p className="text-xs nb-text-faint">{priceOf(row.listing.listed_price, row.listing)} × {row.qty}</p>
                   </div>
                   <button onClick={() => setCart((prev) => ({ ...prev, [row.listing.listing_id]: 0 }))} className="p-1.5 nb-text-faint hover:opacity-70"><Trash2 className="w-4 h-4" /></button>
                 </div>
@@ -2072,6 +2424,8 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
               <div className="space-y-2 pt-2 border-t nb-border">
                 <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your name" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
                 <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="Phone number" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
+                {foreign && <p className="text-[11px] nb-text-muted">This shop is priced in {foreignCurrency} and ships from {shelf[pickupListing?.listing_id]?.store_country || 'abroad'}. Pay in full or in instalments below — you give your shipping address once it is paid.</p>}
+                {!foreign && (<>
                 <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} placeholder="Delivery address (e.g. street, landmark)" className="w-full px-3 py-2 rounded-xl nb-input text-sm" />
 
                 <button
@@ -2099,7 +2453,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                   <p className="mt-1 text-[11px] nb-text-faint">If the rider misses this window, you can reclaim your money straight from their account.</p>
                 </div>
 
-                {deliveryCoords && user && (
+                {deliveryCoords && (
                   <div>
                     <label className="flex items-center gap-1.5 text-xs nb-text-faint mb-1"><Bike className="w-3.5 h-3.5" />Vehicle</label>
                     <div className="flex gap-1.5 mb-2">
@@ -2114,11 +2468,16 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                         </button>
                       ))}
                     </div>
-                    <label className="flex items-center gap-1.5 text-xs nb-text-faint mb-1"><Bike className="w-3.5 h-3.5" />Rider / driver</label>
-                    {ridersLoading ? (
+                    {!user && (
+                      <p className="text-[11px] nb-text-faint pb-1">The nearest available rider is booked for you automatically.</p>
+                    )}
+                    {user && <label className="flex items-center gap-1.5 text-xs nb-text-faint mb-1"><Bike className="w-3.5 h-3.5" />Rider / driver</label>}
+                    {!user ? null : ridersLoading ? (
                       <div className="flex items-center gap-2 text-xs nb-text-faint py-2"><Loader className="w-3.5 h-3.5 animate-spin" />Finding nearby riders…</div>
+                    ) : storeHasNoLocation ? (
+                      <p className="text-xs nb-text-muted py-1">This business hasn't set its pickup location yet, so a rider can't be routed to it. Please contact them.</p>
                     ) : riders.length === 0 ? (
-                      <p className="text-xs nb-text-muted py-1">No riders nearby right now — we'll auto-assign one as soon as checkout completes.</p>
+                      <p className="text-xs nb-text-muted py-1">No riders are available right now — we'll auto-assign one as soon as checkout completes.</p>
                     ) : (
                       <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                         <button
@@ -2126,7 +2485,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                           onClick={() => setSelectedRiderId(null)}
                           className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-left text-xs transition ${selectedRiderId === null ? 'nb-option-selected' : 'nb-option'}`}
                         >
-                          <span className="nb-text font-medium">Auto-assign nearest available</span>
+                          <span className="nb-text font-medium">Auto-assign — store's rider first</span>
                           <span className="nb-text-faint">Fastest</span>
                         </button>
                         {riders.map((r) => (
@@ -2137,7 +2496,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                             className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-left text-xs transition ${selectedRiderId === r.rider_id ? 'nb-option-selected' : 'nb-option'}`}
                           >
                             <span className="min-w-0">
-                              <span className="block nb-text font-medium truncate">{r.full_name} · {r.vehicle_type}</span>
+                              <span className="block nb-text font-medium truncate">{r.full_name} · {r.vehicle_type}{r.is_store_rider && <span className="ml-1.5 px-1.5 py-0.5 rounded nb-chip-green text-[10px] font-semibold">Store's rider</span>}</span>
                               <span className="flex items-center gap-1 nb-text-faint"><Star className="w-3 h-3 text-amber-400" />{Number(r.rating || 0).toFixed(1)} · {Number(r.distance_to_pickup_km || 0).toFixed(1)}km away</span>
                             </span>
                             <span className="shrink-0 nb-text-faint text-right">~{r.estimated_arrival_min}min<br />{formatUGX(r.fare)}</span>
@@ -2154,31 +2513,74 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
                   <div>
                     <label className="flex items-center gap-1.5 text-xs nb-text-faint mb-1"><Truck className="w-3.5 h-3.5" />Delivery fee</label>
                     <p className="text-sm nb-text nb-input rounded-xl px-3 py-2">
-                      {deliveryFeeAmount == null ? 'Calculated once a rider is matched' : formatUGX(deliveryFeeAmount)}
-                      {isFinite(subsidyCap) && subsidyCap > 0 && deliveryFeeAmount != null && (
+                      {shownDeliveryFee == null ? 'Calculated once a rider is matched' : formatUGX(shownDeliveryFee)}
+                      {isFinite(subsidyCap) && subsidyCap > 0 && shownDeliveryFee != null && (
                         <span className="nb-price text-xs ml-1">(seller covers part of the real fare)</span>
                       )}
                     </p>
                     <p className="mt-1 text-[11px] nb-text-faint">Real BodaGoera fare for the rider you pick — never a fee you set yourself.</p>
                   </div>
                 )}
+                </>)}
               </div>
               <div className="border-t nb-border pt-3 space-y-1">
-                <div className="flex justify-between text-sm nb-text-faint"><span>Items</span><span>{formatUGX(cartTotal)}</span></div>
-                {deliveryFeeAmount > 0 && (
-                  <div className="flex justify-between text-sm nb-text-faint"><span>Delivery</span><span>{formatUGX(deliveryFeeAmount)}</span></div>
+                <div className="flex justify-between text-sm nb-text-faint"><span>Items</span><span>{foreign ? formatMoney(cartTotal, foreignCurrency) : formatUGX(cartTotal)}</span></div>
+                {!foreign && shownDeliveryFee > 0 && (
+                  <div className="flex justify-between text-sm nb-text-faint"><span>Delivery</span><span>{formatUGX(shownDeliveryFee)}</span></div>
                 )}
-                <div className="flex justify-between nb-text font-semibold"><span>Total</span><span>{formatUGX(orderTotal)}</span></div>
+                {!foreign && <div className="flex justify-between nb-text font-semibold"><span>Total</span><span>{formatUGX(walletTotal)}</span></div>}
               </div>
               {checkoutError && <p className="nb-error-text text-xs">{checkoutError}</p>}
-              <button
-                onClick={handleCheckout}
-                disabled={placing || (!!user && !deliveryCoords)}
-                className="w-full py-2.5 rounded-xl nb-btn-primary disabled:opacity-50 text-sm font-semibold transition flex items-center justify-center gap-2"
-              >
-                {placing ? <Loader className="w-4 h-4 animate-spin" /> : null}
-                {!user ? 'Sign up free to pay with IcanEra' : !deliveryCoords ? 'Share your delivery location to continue' : `Pay ${formatUGX(orderTotal)} with IcanEra`}
-              </button>
+              {!authLoading && !user && (
+                <ContinueWithGoogle skin="nb" pendingSection="shop" onUseEmail={() => setShowAuthModal(true)} onBeforeRedirect={() => markCartOpen(cartOpenKey)} />
+              )}
+              <InstallmentOffer
+                businessProfileId={businessProfileId}
+                cartItems={cartItems}
+                user={user}
+                authLoading={authLoading}
+                onNeedAuth={() => setShowAuthModal(true)}
+                pendingSection="shop"
+                onBeforeAuthRedirect={() => markCartOpen(cartOpenKey)}
+                customerName={customerName}
+                customerPhone={customerPhone}
+                storeName={products[0]?.reseller_name || 'Store'}
+                skin="nb"
+              />
+              {!foreign && (
+                <div className="space-y-2">
+                  <button
+                    onClick={user ? handleCheckout : () => setShowAuthModal(true)}
+                    disabled={authLoading || guest.paying || placing || (!!user && !deliveryCoords)}
+                    className="w-full py-2.5 rounded-xl nb-btn-primary disabled:opacity-50 text-sm font-semibold transition"
+                  >
+                    {placing ? <Loader className="w-4 h-4 animate-spin inline mr-2" /> : null}
+                    {user && !deliveryCoords
+                      ? 'Share your delivery location to continue'
+                      : `Pay with IcanEra wallet${deliveryCoords ? ` · ${formatUGX(walletTotal)}` : ''}`}
+                    <span className="block text-[11px] font-medium opacity-80">{user ? 'Recommended · no extra fee' : 'Recommended · no extra fee · sign up free in a minute'}</span>
+                  </button>
+                  <div className="flex items-center gap-2 text-[11px] nb-text-faint"><span className="flex-1 h-px nb-border-strong border-t" />{user ? 'or pay another way' : 'or no wallet needed'}<span className="flex-1 h-px nb-border-strong border-t" /></div>
+                  <button
+                    onClick={guest.payNow}
+                    disabled={guest.paying || guest.quoting || !deliveryCoords || !guest.quote}
+                    className="w-full py-2.5 rounded-xl nb-btn-secondary disabled:opacity-50 text-sm font-semibold transition flex items-center justify-center gap-2"
+                  >
+                    {guest.paying || guest.quoting ? <Loader className="w-4 h-4 animate-spin" /> : null}
+                    {!deliveryCoords
+                      ? 'Share your delivery location to continue'
+                      : guest.quote
+                        ? `Pay ${formatUGX(guest.quote.charge_ugx)} with Mobile Money, card or bank`
+                        : guest.quoting ? 'Pricing your order…' : 'Mobile Money, card or bank'}
+                  </button>
+                  {guest.quote && (
+                    <p className="text-[11px] nb-text-faint">
+                      Includes a {formatUGX(guest.quote.processing_fee_ugx)} payment-processing fee. Pay with your IcanEra wallet to skip it and pay {formatUGX(walletTotal)}.
+                    </p>
+                  )}
+                  {(guest.quoteError || guest.payError) && <p className="nb-error-text text-xs">{guest.payError || guest.quoteError}</p>}
+                </div>
+              )}
             </div>
           )}
         </Modal>
@@ -2192,6 +2594,7 @@ const ShopSection = ({ products, loading, cart, setCart, businessProfileId, user
           <AuthPage initialView="signup" onAuthSuccess={() => setShowAuthModal(false)} />
         </div>
       )}
+      {pinDialog}
     </div>
   );
 };
