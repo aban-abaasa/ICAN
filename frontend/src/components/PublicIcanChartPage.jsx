@@ -181,6 +181,7 @@ const PublicIcanChartPage = () => {
   // A tap on one of the visitor's lines: a booked order opens the Book list; a past buy / sell price starts a new
   // booking at that same price.
   const handleLineSelect = useCallback((line) => {
+    if (line.kind === 'live') { setTradeTab('buy'); setSheetOpen(true); return; }
     setTradeTab('book');
     if (line.kind === 'buy' || line.kind === 'sell') {
       setDraft((d) => ({ ...d, side: line.kind, price: String(Math.round(line.price * 100) / 100) }));

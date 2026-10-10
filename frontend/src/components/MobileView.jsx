@@ -100,7 +100,7 @@ const ChartSpot = ({ height = 160 }) => <div aria-hidden="true" style={{ minHeig
 const DailyTrackingChart = lazyPanel(() => import('./DailyTrackingChart'), { fallback: <ChartSpot height={220} /> });
 const BusinessTrendChart = lazyPanel(() => import('./BusinessTrendChart'), { fallback: <ChartSpot height={220} /> });
 const CmmsActivityWidget = lazyPanel(() => import('./CmmsActivityWidget'), { fallback: <ChartSpot /> });
-const IcanPriceChartWidget = lazyPanel(() => import('./IcanPriceChartWidget'), { fallback: <ChartSpot height={260} /> });
+const IcanPriceChartWidget = lazyPanel(() => import('./IcanPriceChartWidget'), { fallback: <ChartSpot height={460} /> });
 const DropshipDashboardWidget = lazyPanel(() => import('./DropshipDashboardWidget'), { fallback: <ChartSpot height={120} /> });
 // Receipt modal builds PDFs (jsPDF ~400 KB); it only needs to exist once a receipt is opened.
 const TransactionReceiptModal = lazyPanel(() => import('./TransactionReceiptModal'), { fallback: null });
@@ -7442,7 +7442,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               onDrill={handleTrendDrill}
             />
 
-            {/* Live IcanEra price chart — real, not a shortcut into the wallet */}
+            {/* The icaneracoin trading chart (same as the public /icaneracoin page): real candles, not a shortcut into the wallet */}
             <div className="mt-4">
               <IcanPriceChartWidget />
             </div>
