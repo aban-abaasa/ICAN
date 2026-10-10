@@ -6,6 +6,8 @@
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/status/:id", "destination": "/api/share-preview?type=status&id=:id" },
     { "source": "/pitchin/:id", "destination": "/api/share-preview?type=pitch&id=:id" },
+    { "source": "/icaneracoin", "destination": "/api/share-preview?type=coin" },
+    { "source": "/icaneracoin/", "destination": "/api/share-preview?type=coin" },
     { "source": "/shop", "destination": "/api/share-preview?type=shop" },
     { "source": "/shop/", "destination": "/api/share-preview?type=shop" },
     { "source": "/store/:id", "destination": "/api/share-preview?type=store&id=:id" },

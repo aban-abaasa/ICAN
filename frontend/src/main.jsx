@@ -61,6 +61,10 @@ const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
 // search engines, via /api/share-preview?type=shop). Self-styled and needs no auth, so it sits
 // outside both ThemeProvider and AuthProvider like the other standalone public pages.
 const isPublicShopPath = /^\/shop\/?$/.test(window.location.pathname);
+// The public icaneracoin price chart (/icaneracoin): live candlesticks + chart analysis for anyone, signed in
+// or not, and what Google lands on when someone searches "icaneracoin". Self-styled and needs no auth, so
+// like the shop it sits outside both ThemeProvider and AuthProvider.
+const isPublicIcanChartPath = /^\/icaneracoin\/?$/i.test(window.location.pathname);
 // An instalment plan (/plan/<code>) and the customer's list of them (/plans): the plan's code is a
 // handle, not a secret -- the page itself needs the customer (or the seller's team) to be signed in.
 const installmentPlanMatch = window.location.pathname.match(/^\/plan\/([A-Za-z0-9]{6,12})\/?$/);
@@ -137,6 +141,7 @@ const PrivatePitchInviteViewer = lazyWithReloadOnChunkFailure(() => import('./co
 const PublicPortfolioPage = lazyWithReloadOnChunkFailure(() => import('./components/profile/PublicPortfolioPage'));
 const PublicDropshipStorefront = lazyWithReloadOnChunkFailure(() => import('./components/PublicDropshipStorefront'));
 const PublicShopPage = lazyWithReloadOnChunkFailure(() => import('./components/PublicShopPage'));
+const PublicIcanChartPage = lazyWithReloadOnChunkFailure(() => import('./components/PublicIcanChartPage'));
 const PublicInstallmentPlan = lazyWithReloadOnChunkFailure(() => import('./components/PublicInstallmentPlan'));
 const PublicMyInstallments = lazyWithReloadOnChunkFailure(() => import('./components/PublicMyInstallments'));
 const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
@@ -189,6 +194,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <Suspense fallback={<Loading />}>
         {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn />
           : isPublicShopPath ? <PublicShopPage />
+          : isPublicIcanChartPath ? <PublicIcanChartPage />
           : isVisitorQrPath ? <PublicVisitorCheckIn />
           : isDocumentVerifyPath ? <PublicDocumentVerify />
           : isAgreementVerifyPath ? <PublicAgreementVerify />

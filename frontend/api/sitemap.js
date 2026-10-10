@@ -137,7 +137,7 @@ export default async function handler(_req, res) {
     const postUrls = (await fetchPostEntries(supabaseUrl, anonKey)).map((entry) => (
       `<url><loc>${SITE_URL}/notices/${escapeXml(entry.companyId)}?post=${escapeXml(entry.postId)}</loc>${entry.publishedAt ? `<lastmod>${escapeXml(new Date(entry.publishedAt).toISOString())}</lastmod>` : ''}</url>`
     )).join('');
-    const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url><url><loc>${SITE_URL}/shop</loc><changefreq>daily</changefreq></url>${resellerUrls}${companyUrls}${postUrls}</urlset>`;
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url><url><loc>${SITE_URL}/icaneracoin</loc><changefreq>hourly</changefreq></url><url><loc>${SITE_URL}/shop</loc><changefreq>daily</changefreq></url>${resellerUrls}${companyUrls}${postUrls}</urlset>`;
 
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
     res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=86400');

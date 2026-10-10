@@ -22,6 +22,7 @@
  *   /pitchin/:id -> /api/share-preview?type=pitch&id=:id
  *   /store/:id   -> /api/share-preview?type=store&id=:id
  *   /shop        -> /api/share-preview?type=shop   (no id: the public product grid)
+ *   /icaneracoin -> /api/share-preview?type=coin   (no id: the public icaneracoin price chart)
  *   /notices/:id -> /api/share-preview?type=notices&id=:id
  *
  * Every other route still falls through to the plain SPA rewrite ("/(.*)"
@@ -36,7 +37,7 @@
  * (path-matched from window.location.pathname) for a human, while a crawler
  * that never runs the JS still gets the correct preview tags and facts.
  *
- * Route: GET /api/share-preview?type=status|pitch|store|notices&id=<uuid>
+ * Route: GET /api/share-preview?type=status|pitch|store|notices&id=<uuid> (or type=shop|coin, no id)
  * Env vars: SUPABASE_URL, SUPABASE_ANON_KEY (or VITE_SUPABASE_ANON_KEY) --
  * reads are anon-key only, relying on the same public RLS/RPC grants the app
  * itself depends on (ican_statuses: visibility public/followers; pitches:
@@ -289,6 +290,96 @@ const buildShopMeta = async ({ url, anonKey }) => {
   };
 };
 
+// The public icaneracoin price chart (/icaneracoin). The page itself is client-rendered, so this is what makes
+// it findable: a crawler that never runs JS still gets the title, the live price and a readable summary.
+// Reads only the anon-granted functions the page calls (ican_get_market_snapshot, ican_get_public_candles) and
+// never writes anything -- a crawler visit cannot move or paint the chart.
+const COIN_TITLE = 'icaneracoin (ICAN) Price Chart — Live Candlestick Chart & Analysis | IcanEra';
+const COIN_BLURB = 'Live icaneracoin (ICAN) price chart: real-time candlesticks, trend, RSI, moving averages, support and resistance, built from real IcanEra transactions.';
+const buildCoinMeta = async ({ url, anonKey }) => {
+  const rpc = async (fn, body) => {
+    try {
+      const res = await fetch(`${url}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const rows = res.ok ? await res.json() : null;
+      return Array.isArray(rows) ? rows : null;
+    } catch {
+      return null;
+    }
+  };
+  const [snapshotRows, candleRows] = await Promise.all([
+    rpc('ican_get_market_snapshot', {}),
+    rpc('ican_get_public_candles', { p_limit: 120 }),
+  ]);
+  const snapshot = snapshotRows?.[0];
+  const candles = candleRows || [];
+
+  const priceUgx = Number(snapshot?.price_ugx ?? candles[0]?.close_price);
+  const priceUsd = Number(snapshot?.price_usd);
+  const hasPrice = Number.isFinite(priceUgx) && priceUgx > 0;
+  const fmt = (n, max = 2) => Number(n).toLocaleString('en-US', { maximumFractionDigits: max });
+
+  // candles come newest first
+  let rangeText = '';
+  if (candles.length > 1) {
+    const high = Math.max(...candles.map((c) => Number(c.high_price)));
+    const low = Math.min(...candles.map((c) => Number(c.low_price)));
+    const oldestOpen = Number(candles[candles.length - 1].open_price);
+    const newestClose = Number(candles[0].close_price);
+    if ([high, low, oldestOpen, newestClose].every(Number.isFinite) && oldestOpen > 0) {
+      const change = ((newestClose - oldestOpen) / oldestOpen) * 100;
+      rangeText = `Across the last ${candles.length} five-minute candles it has ${change > 0 ? 'risen' : change < 0 ? 'fallen' : 'held steady'}${change === 0 ? '' : ` ${Math.abs(change).toFixed(2)}%`}, trading between UGX ${fmt(low)} and UGX ${fmt(high)}.`;
+    }
+  }
+
+  const priceText = hasPrice
+    ? `icaneracoin is currently UGX ${fmt(priceUgx)}${Number.isFinite(priceUsd) && priceUsd > 0 ? ` (about USD ${fmt(priceUsd, 6)})` : ''}.`
+    : '';
+  const description = [priceText, COIN_BLURB].filter(Boolean).join(' ').slice(0, 300);
+  const pageUrl = `${SITE_URL}/icaneracoin`;
+
+  const structuredData = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      name: COIN_TITLE,
+      url: pageUrl,
+      description: COIN_BLURB,
+      ...(candles[0]?.close_time && { dateModified: new Date(candles[0].close_time).toISOString() }),
+      isPartOf: { '@type': 'WebSite', name: 'IcanEra', url: SITE_URL },
+      about: {
+        '@type': 'Thing',
+        name: 'icaneracoin',
+        alternateName: ['ICAN', 'IcanEra coin'],
+        description: 'icaneracoin (ICAN) is the coin behind IcanEra, a blockchain application for sending money across the globe and managing business and personal finances.'
+      }
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'IcanEra', item: SITE_URL },
+        { '@type': 'ListItem', position: 2, name: 'icaneracoin price chart', item: pageUrl }
+      ]
+    }
+  ];
+
+  const bodyHtml = `<noscript><main><h1>icaneracoin (ICAN) price chart</h1>${priceText ? `<p>${escapeHtml(priceText)}</p>` : ''}${rangeText ? `<p>${escapeHtml(rangeText)}</p>` : ''}<p>${escapeHtml(COIN_BLURB)}</p><p>icaneracoin is the coin behind IcanEra, a blockchain application for sending money across the globe. Every candle on the chart is built from real transactions on the platform.</p><p><a href="/?auth=signup">Create a free IcanEra account</a> to buy, sell and send icaneracoin. <a href="/">IcanEra home</a></p></main></noscript>`;
+
+  return {
+    title: COIN_TITLE,
+    description,
+    image: DEFAULT_IMAGE,
+    path: '/icaneracoin',
+    video: null,
+    structuredData,
+    bodyHtml
+  };
+};
+
 const SOCIAL_URL_FIELDS = ['website', 'facebook_url', 'instagram_url', 'twitter_url', 'linkedin_url', 'tiktok_url'];
 const normalizeExternalUrl = (url) => {
   const trimmed = typeof url === 'string' ? url.trim() : '';
@@ -525,16 +616,20 @@ export default async function handler(req, res) {
     : type === 'store' ? `/store/${id || ''}`
     : type === 'notices' ? `/notices/${id || ''}`
     : type === 'shop' ? '/shop'
+    : type === 'coin' ? '/icaneracoin'
     : '/';
   let meta = { title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION, image: DEFAULT_IMAGE, path: fallbackPath, video: null };
+  // If the live price can't be fetched, /icaneracoin must still be titled and described as the coin chart.
+  if (type === 'coin') meta = { ...meta, title: COIN_TITLE, description: COIN_BLURB };
 
   const VALID_TYPES = ['status', 'pitch', 'store', 'notices'];
-  if (url && anonKey && (id || type === 'shop') && (VALID_TYPES.includes(type) || type === 'shop')) {
+  if (url && anonKey && (id || type === 'shop' || type === 'coin') && (VALID_TYPES.includes(type) || type === 'shop' || type === 'coin')) {
     try {
       const resolved = type === 'status' ? await buildStatusMeta({ url, anonKey, id })
         : type === 'pitch' ? await buildPitchMeta({ url, anonKey, id })
         : type === 'store' ? await buildStoreMeta({ url, anonKey, id })
         : type === 'shop' ? await buildShopMeta({ url, anonKey })
+        : type === 'coin' ? await buildCoinMeta({ url, anonKey })
         : await buildNoticeMeta({ url, anonKey, id, postId: typeof req.query.post === 'string' && /^[0-9a-f-]{36}$/i.test(req.query.post) ? req.query.post.toLowerCase() : null });
       if (resolved) meta = resolved;
     } catch (err) {
