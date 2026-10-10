@@ -9,6 +9,7 @@ import {
   Bar,
   ResponsiveContainer,
 } from "recharts";
+import { calculateIndicators } from "../utils/candleIndicators";
 
 const BUY_COLOR = "#34d399";     // emerald-400 — executed buys
 const SELL_COLOR = "#fb7185";    // rose-400 — executed sells
@@ -61,70 +62,6 @@ const CandlestickChart = React.memo(({
   };
 
   const chartSettings = useMemo(() => ({ ...defaultSettings, ...settings }), [settings]);
-
-  const calculateIndicators = useCallback((data) => {
-    if (!data || data.length < 2) return null;
-
-    const closes = data.map((d) => parseFloat(d.close));
-    const highs = data.map((d) => parseFloat(d.high));
-    const lows = data.map((d) => parseFloat(d.low));
-
-    const rsiPeriod = Math.min(14, data.length - 1);
-    let gains = 0, losses = 0;
-    for (let i = 1; i <= rsiPeriod; i++) {
-      const change = closes[closes.length - i] - closes[closes.length - i - 1];
-      if (change > 0) gains += change;
-      else losses += Math.abs(change);
-    }
-
-    const avgGain = gains / rsiPeriod;
-    const avgLoss = losses / rsiPeriod;
-    const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-    const rsi = 100 - 100 / (1 + rs);
-
-    const ma20 = data.length >= 20
-      ? (data.slice(-20).reduce((sum, d) => sum + parseFloat(d.close), 0) / 20).toFixed(8)
-      : closes[closes.length - 1].toFixed(8);
-
-    const ma50 = data.length >= 50
-      ? (data.slice(-50).reduce((sum, d) => sum + parseFloat(d.close), 0) / 50).toFixed(8)
-      : closes[closes.length - 1].toFixed(8);
-
-    const highPrice = Math.max(...highs).toFixed(8);
-    const lowPrice = Math.min(...lows).toFixed(8);
-    const currentPrice = closes[closes.length - 1].toFixed(8);
-
-    const resistance = (parseFloat(highPrice) + parseFloat(currentPrice)) / 2;
-    const support = (parseFloat(lowPrice) + parseFloat(currentPrice)) / 2;
-
-    const priceChange = closes[closes.length - 1] - closes[0];
-    let trend = "Neutral", trendColor = "#eab308";
-    if (priceChange > 0) {
-      trend = "Bullish 📈";
-      trendColor = "#10b981";
-    } else if (priceChange < 0) {
-      trend = "Bearish 📉";
-      trendColor = "#ef4444";
-    }
-
-    const volatility = ((Math.max(...highs) - Math.min(...lows)) / Math.min(...lows)).toFixed(2);
-    const momentum = ((priceChange / closes[0]) * 100).toFixed(2);
-
-    return {
-      rsi: rsi.toFixed(2),
-      ma20,
-      ma50,
-      resistance: resistance.toFixed(8),
-      support: support.toFixed(8),
-      currentPrice,
-      highPrice,
-      lowPrice,
-      trend,
-      trendColor,
-      volatility,
-      momentum,
-    };
-  }, []);
 
   // Track the chart's real on-screen width so candle count/sizing adapts to phones vs desktop
   useEffect(() => {
@@ -319,7 +256,7 @@ const CandlestickChart = React.memo(({
     setDisplayData(processed);
     setAnalysis(calculateIndicators(processed));
     setPrevDataLength(candleData.length);
-  }, [candleData, prevDataLength, calculateIndicators]);
+  }, [candleData, prevDataLength]);
 
   // Memoize tooltip content
   const renderTooltip = useCallback(({ active, payload }) => {

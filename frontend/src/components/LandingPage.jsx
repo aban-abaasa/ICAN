@@ -5,6 +5,7 @@ import { PWAInstallButton } from './PWAInstallButton';
 import CommunityStoriesCarousel from './landing/CommunityStoriesCarousel';
 import PitchinPreview from './landing/PitchinPreview';
 import WalletMockTrader from './landing/WalletMockTrader';
+import IcanChartSection from './landing/IcanChartSection';
 import TrustGroupsPreview from './landing/TrustGroupsPreview';
 import DropshipPreview from './landing/DropshipPreview';
 import CMMSNoticeBoardPreview from './landing/CMMSNoticeBoardPreview';
@@ -252,6 +253,7 @@ const LandingPage = ({ onGetStarted }) => {
     { id: 'business-tools', group: 'Jump to', label: 'Business tools', description: 'Manage your team, hiring and website in one place', keywords: ['suite', 'cmms', 'employment', 'hiring', 'payroll', 'website'], onSelect: () => scrollToSection('business-suite') },
     { id: 'pitchin', group: 'Jump to', label: 'PitchIn', description: 'Investment marketplace for pitches and capital', keywords: ['invest', 'investment', 'capital', 'pitch', 'marketplace'], onSelect: () => scrollToSection('pitchin-preview') },
     { id: 'wallet', group: 'Jump to', label: 'Wallet & icaneracoin', description: 'Send and receive money across the globe', keywords: ['trade', 'coin', 'blockchain', 'money', 'transactions', 'mock'], onSelect: () => scrollToSection('wallet-mock-trader') },
+    { id: 'coin-chart', group: 'Jump to', label: 'icaneracoin price chart', description: 'Live candlestick chart and chart analysis', keywords: ['chart', 'price', 'candlestick', 'icaneracoin', 'ican', 'analysis', 'trade'], onSelect: () => scrollToSection('icaneracoin-chart') },
     { id: 'trust-groups', group: 'Jump to', label: 'Trust groups', description: 'Savings groups and SACCOs', keywords: ['sacco', 'savings', 'community', 'group'], onSelect: () => scrollToSection('trust-groups-preview') },
     { id: 'dropship', group: 'Jump to', label: 'Dropshipping', description: 'Sell products without holding stock', keywords: ['shop', 'store', 'sell', 'supplier', 'products'], onSelect: () => scrollToSection('dropship-preview') },
     { id: 'professionals', group: 'Jump to', label: 'Professionals', description: 'Find talent and professional portfolios', keywords: ['talent', 'hire', 'jobs', 'portfolio', 'freelance'], onSelect: () => scrollToSection('professionals') },
@@ -1132,7 +1134,8 @@ const LandingPage = ({ onGetStarted }) => {
                     { label: 'Franchise', section: 'franchise' },
                     { label: 'Insurance', section: 'insurance' },
                     { label: 'Testimonials', section: 'testimonials' },
-                    { label: 'Community', section: 'community-board' }
+                    { label: 'Community', section: 'community-board' },
+                    { label: 'Coin chart', section: 'icaneracoin-chart' }
                   ].map((item) => (
                     <button
                       key={item.label}
@@ -1158,6 +1161,7 @@ const LandingPage = ({ onGetStarted }) => {
               { label: 'Insurance', go: () => scrollToSection('insurance') },
               { label: 'Testimonials', go: () => scrollToSection('testimonials') },
               { label: 'Community', go: () => scrollToSection('community-board') },
+              { label: 'Coin Chart', go: () => scrollToSection('icaneracoin-chart') },
               { label: 'Try It Live', go: () => scrollToSection('live-explore') }
             ].map((item) => (
               <button
@@ -1239,6 +1243,7 @@ const LandingPage = ({ onGetStarted }) => {
                     { label: 'Insurance', section: 'insurance' },
                     { label: 'Testimonials', section: 'testimonials' },
                     { label: 'Community', section: 'community-board' },
+                    { label: 'Coin chart', section: 'icaneracoin-chart' },
                     { label: 'Try it live', section: 'live-explore' }
                   ].map((item) => (
                     <button
@@ -1369,6 +1374,7 @@ const LandingPage = ({ onGetStarted }) => {
       <ProfessionalsCarousel />
       <CommunityStoriesCarousel />
       <TrustGroupsPreview onGetStarted={onGetStarted} />
+      <IcanChartSection onGetStarted={onGetStarted} />
       <WalletMockTrader onGetStarted={onGetStarted} authId={identity?.authId ?? null} />
 
       {/* Image Carousel Section - Our Platforms */}
