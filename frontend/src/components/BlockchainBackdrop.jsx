@@ -22,7 +22,7 @@ import './blockchain.css';
  * `bg` overrides the palette's ground colour and must be a 6-digit hex.
  */
 
-const VIEW = 1200;   // square viewBox, scaled with "slice" so it always covers
+export const VIEW = 1200;   // square viewBox, scaled with "slice" so it always covers
 const STEP = 72;     // lattice step
 const HALF = STEP / 2;
 const R = 50;        // block half-diagonal; R > STEP/2 is what makes them interlock
@@ -70,11 +70,11 @@ export const useIsDarkTheme = () => {
   return isDark;
 };
 
-const rhombus = (cx, cy, r = R) => `M${cx} ${cy - r}L${cx + r} ${cy}L${cx} ${cy + r}L${cx - r} ${cy}Z`;
+export const rhombus = (cx, cy, r = R) => `M${cx} ${cy - r}L${cx + r} ${cy}L${cx} ${cy + r}L${cx - r} ${cy}Z`;
 
 // Chains of linked blocks: a start point on the lattice and a zig-zag of
 // half-steps, so consecutive blocks sit on alternating (interlocked) lattices.
-const CHAINS = [
+export const CHAINS = [
   { x: 144, y: 216, dir: 1, n: 8 },
   { x: 936, y: 288, dir: -1, n: 7 },
   { x: 288, y: 936, dir: 1, n: 7 },
@@ -88,7 +88,7 @@ const CHAINS = [
 }));
 
 // Blocks that get "mined" — glow and send a packet round their edge.
-const MINED = [
+export const MINED = [
   [216, 576], [1008, 576], [504, 360], [720, 792], [72, 1008], [1152, 144], [432, 1080], [864, 72],
 ];
 
@@ -99,7 +99,7 @@ const HASHES = [
 ];
 
 // `sets`: 'A' / 'B' draw one of the two interlocked lattices, 'both' the weave.
-const latticePattern = (id, stroke, strokeOpacity, fill, fillOpacity, withNodes, sets = 'both') => {
+export const latticePattern = (id, stroke, strokeOpacity, fill, fillOpacity, withNodes, sets = 'both') => {
   const A = [0, STEP];
   const B = [-HALF, HALF, STEP + HALF];
   const shapes = [];

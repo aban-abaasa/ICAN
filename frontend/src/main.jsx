@@ -6,6 +6,7 @@ import './index.css';
 import './components/diamond.css';
 import { installDiamondStyles } from './components/diamondArt';
 import { ClassicLoadingScreen } from './components/SplashScreen';
+import AmbientBackdrop from './components/AmbientBackdrop';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { I18nProvider } from './i18n/I18nProvider';
@@ -234,7 +235,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                   : installmentPlanMatch ? <PublicInstallmentPlan code={installmentPlanMatch[1].toUpperCase()} />
                   : isMyInstallmentsPath ? <PublicMyInstallments />
                   : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />
-                  : <><App /><PhoneAlertsPrompt /></>}
+                  : <><App /><PhoneAlertsPrompt /><AmbientBackdrop /></>}
                 </I18nProvider>
               </AuthProvider>
             </ThemeProvider>

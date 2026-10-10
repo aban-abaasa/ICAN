@@ -1,0 +1,44 @@
+/* ==========================================================================
+   Ambient blockchain background (AmbientBackdrop.jsx) -- Settings > Appearance.
+
+   A faint overlay of interlocking diamonds over every signed-in page.
+   --am-k scales it: subtle .55 / balanced 1 / vivid 1.7.
+   The two lattices breathe in turn with an opacity-only animation (composited,
+   so it costs no repaint); the chain layer reuses the .bc-* shapes from
+   blockchain.css. Colours are set inline by the component, not by Tailwind
+   classes, because the app-wide theme override repaints those.
+   ========================================================================== */
+
+.am-root {
+  position: fixed; inset: 0; z-index: 40;      /* over the page, under z-50 dialogs */
+  pointer-events: none; overflow: hidden;
+  contain: layout paint style;
+}
+.am-root--contained { position: absolute; z-index: 0; }
+
+/* fade toward the middle, where the content lives */
+.am-mask {
+  position: absolute; inset: 0;
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, rgba(0, 0, 0, .4) 0%, #000 100%);
+          mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, rgba(0, 0, 0, .4) 0%, #000 100%);
+}
+.am-lat, .am-chains { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.am-lat { opacity: calc(var(--am-k, 1) * .5); will-change: opacity; }
+.am-lat--a { animation: am-breathe 6s ease-in-out infinite; }
+.am-lat--b { animation: am-breathe 6s ease-in-out -3s infinite; }
+@keyframes am-breathe {
+  0%, 100% { opacity: calc(var(--am-k, 1) * .18); }
+  50%      { opacity: calc(var(--am-k, 1) * .8); }
+}
+
+.am-chains { opacity: calc(var(--am-k, 1) * .42); }
+
+/* motion off, or asked for less of it: hold still */
+.am-root[data-motion="off"] .am-lat,
+.am-root[data-motion="off"] .am-chains * { animation: none !important; }
+.am-root[data-motion="off"] .bc-pulse { opacity: 0 !important; }
+@media (prefers-reduced-motion: reduce) {
+  .am-lat { animation: none !important; }
+}
+.am-root[data-motion="off"] .bc-node { fill-opacity: .25; stroke-opacity: .6; }
