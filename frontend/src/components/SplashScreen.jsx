@@ -19,7 +19,7 @@ import BlockLedger from './BlockLedger';
  * Colours are inline on purpose: the global theme override sheet repaints
  * Tailwind gradient/slate classes, which is what washed the old splash out to
  * a white page in light themes. The look follows the active theme family --
- * ivory paper by day, warm ink and amber by night -- matching the landing page.
+ * ivory paper by day, ink and diamond-ice with a little violet by night.
  */
 
 const PALETTES = {
@@ -28,16 +28,16 @@ const PALETTES = {
     ink: '#1f1a12',
     muted: '#6b5f49',
     accent: '#14532d',
-    brass: '#8a6a1f',
+    brass: '#6a5bc0',
     rule: 'rgba(31, 26, 18, 0.45)',
   },
   dark: {
-    bg: '#0f0d0a',
-    ink: '#f6f1e4',
-    muted: '#bfb49a',
-    accent: '#fcd34d',
-    brass: '#fcd34d',
-    rule: 'rgba(252, 211, 77, 0.5)',
+    bg: '#0b0a14',
+    ink: '#f0eeff',
+    muted: '#aeaad0',
+    accent: '#b9c6ff',
+    brass: '#c9b6ff',
+    rule: 'rgba(185, 198, 255, 0.5)',
   },
 };
 

@@ -28,15 +28,15 @@ const HALF = STEP / 2;
 const R = 50;        // block half-diagonal; R > STEP/2 is what makes them interlock
 
 export const BACKDROP_PALETTES = {
-  // ivory paper, forest green and brass — the editorial splash by day
+  // ivory paper and forest green, with the diamond's violet in the lines — the editorial splash by day
   light: {
-    bg: '#f6f1e4', ink: '#1f1a12', muted: '#6b5f49', accent: '#14532d', brass: '#8a6a1f',
-    line: '#8a6a1f', lineAlpha: 0.2, fillAlpha: 0.035,
+    bg: '#f6f1e4', ink: '#1f1a12', muted: '#6b5f49', accent: '#14532d', brass: '#6a5bc0',
+    line: '#6a5bc0', lineAlpha: 0.22, fillAlpha: 0.04,
   },
-  // warm ink and amber — the same splash by night
+  // diamond: cool ice-white with a little violet, on violet-tinged ink — the same splash by night
   dark: {
-    bg: '#0f0d0a', ink: '#f6f1e4', muted: '#bfb49a', accent: '#fcd34d', brass: '#fcd34d',
-    line: '#fcd34d', lineAlpha: 0.2, fillAlpha: 0.03,
+    bg: '#0b0a14', ink: '#f0eeff', muted: '#aeaad0', accent: '#b9c6ff', brass: '#c9b6ff',
+    line: '#a7b4ff', lineAlpha: 0.22, fillAlpha: 0.035,
   },
   // cool ice on slate — for the dark standalone pages (payments, public links)
   ice: {
