@@ -58,7 +58,8 @@ import DropshipBrowse from './DropshipBrowse';
 import DropshipResellersList from './DropshipResellersList';
 import AgentDashboard from './AgentDashboard';
 import UnifiedApprovalModal from './UnifiedApprovalModal';
-import CandlestickChart from './CandlestickChart';
+import IcanTradingChart from './IcanTradingChart';
+import { useLineStyles } from './chartLineStyles';
 import BuyIcan from './ICAN/BuyIcan';
 import ReferralCard from './ReferralCard';
 import DigitalCardPanel from './DigitalCardPanel';
@@ -313,6 +314,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [requestConfirmationLoading, setRequestConfirmationLoading] = useState(false);
   
   // 📊 Candlestick Chart States
+  // How the trading lines look (colour / dashes / thickness): one saved choice shared with the public chart page.
+  const { lineStyles: chartLineStyles, updateLineStyle: updateChartLineStyle, resetLineStyles: resetChartLineStyles } = useLineStyles();
   const [candleData, setCandleData] = useState([]);
   const [candleLoading, setCandleLoading] = useState(false);
   const [candleSettings, setCandleSettings] = useState({
@@ -518,7 +521,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         (payload) => {
           const incoming = formatCandleRow(payload.new);
           setCandleData(prev => {
-            const next = [...prev, incoming].slice(-100);
+            const next = [...prev, incoming].slice(-500);
             return next;
           });
         }
@@ -563,12 +566,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         await supabase.rpc('ican_ensure_current_candle');
       } catch {}
 
-      // Fetch latest 100 candlesticks
+      // Fetch the latest 500 candlesticks (about 5 days: the chart fills quiet 5-minute windows itself)
       const { data, error } = await supabase
         .from('ican_price_ohlc')
         .select('*')
         .order('open_time', { ascending: false })
-        .limit(100);
+        .limit(500);
 
       if (error) {
         console.error('Error loading candlesticks:', error);
@@ -7709,16 +7712,20 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                   <div className="tp-keep h-[calc(100dvh-11.5rem)] min-h-[420px] bg-slate-950 overflow-hidden">
                     {candleData && candleData.length > 0 ? (
                       <div className="h-full w-full">
-                        <CandlestickChart
-                          candleData={candleData}
+                        <IcanTradingChart
+                          rows={candleData}
                           loading={candleLoading}
-                          settings={candleSettings}
+                          theme="dark"
                           buyMarkers={chartBuyMarkers}
                           sellMarkers={chartSellMarkers}
-                          bookingOrders={openOrders}
-                          orderPlacementEnabled={true}
-                          onPlaceOrderClick={handleChartPlaceOrder}
+                          orders={openOrders}
+                          draftPrice={chartOrderDraftOpen && Number(bookTargetPrice) > 0 ? Number(bookTargetPrice) : null}
+                          allowPlacement
+                          onPickPrice={handleChartPlaceOrder}
                           onLineSelect={handleChartLineSelect}
+                          lineStyles={chartLineStyles}
+                          onLineStyleChange={updateChartLineStyle}
+                          onLineStylesReset={resetChartLineStyles}
                         />
                       </div>
                     ) : candleLoading ? (

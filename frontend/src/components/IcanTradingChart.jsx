@@ -114,6 +114,8 @@ const IcanTradingChart = ({
   onLineStyleChange, onLineStylesReset, placement = false, onPickPrice, onLineSelect,
   // On a page that scrolls (the dashboard) the wheel should scroll the page, not zoom the chart under the mouse.
   wheelZoom = true,
+  // Shows a "tap to book" switch in the toolbar (the wallet's chart). A page that drives placement itself passes `placement`.
+  allowPlacement = false,
 }) => {
   const looks = useMemo(() => sanitizeLineStyles(lineStyles), [lineStyles]);
   const narrow = useNarrow();
@@ -131,6 +133,8 @@ const IcanTradingChart = ({
   const hitRef = useRef([]); // { kind, price, order? } for every trading line currently drawn
   const tapRef = useRef({});
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [placeInternal, setPlaceInternal] = useState(false);
+  const placing = placement || placeInternal;
   const [tfId, setTfId] = useState('5m');
   const [showMA, setShowMA] = useState(true);
   const [showVolume, setShowVolume] = useState(true);
@@ -243,9 +247,13 @@ const IcanTradingChart = ({
         const dist = Math.abs(ly - y);
         if (dist <= best) { best = dist; hit = line; }
       }
-      if (hit) { tapRef.current.onLineSelect?.(hit); return; }
+      if (hit) { tapRef.current.endPlacement?.(); tapRef.current.onLineSelect?.(hit); return; }
+      if (!tapRef.current.placing) return;
       const price = candles.coordinateToPrice(y);
-      if (price != null && Number.isFinite(price)) tapRef.current.onPickPrice?.(Math.round(price * 100) / 100);
+      if (price != null && Number.isFinite(price)) {
+        tapRef.current.endPlacement?.();
+        tapRef.current.onPickPrice?.(Math.round(price * 100) / 100);
+      }
     });
 
     apiRef.current = { chart, candles, volume, ma20, ma50, rsi, resistance, support };
@@ -260,7 +268,7 @@ const IcanTradingChart = ({
     if (apiRef.current) applyPalette(apiRef.current, c);
   }, [c]);
 
-  tapRef.current = { onPickPrice, onLineSelect };
+  tapRef.current = { onPickPrice, onLineSelect, placing, endPlacement: () => setPlaceInternal(false) };
 
   // The visitor's own trading lines: prices they bought and sold at, their booked orders, and the order they are
   // drafting. Redrawn whenever any of those, or the chosen look, changes.
@@ -280,7 +288,8 @@ const IcanTradingChart = ({
         axisLabelVisible: true,
         title,
       }));
-      if (kind !== 'draft') hits.push({ kind, price, ...extra });
+      // `type` mirrors `kind`: the wallet's chart handlers were written against that name.
+      if (kind !== 'draft') hits.push({ kind, type: kind, price, ...extra });
     };
     buyMarkers.forEach((m) => add('buy', m.price, 'Buy'));
     sellMarkers.forEach((m) => add('sell', m.price, 'Sell'));
@@ -289,6 +298,8 @@ const IcanTradingChart = ({
       add('booking', parseFloat(o.target_price_ugx), `${o.order_type === 'buy' ? 'Buy' : 'Sell'} ${Number.isFinite(amount) ? amount : ''}`.trim(), { order: o });
     });
     if (draftPrice != null) add('draft', Number(draftPrice), 'New order');
+    // The live price line is tappable too (the wallet uses it for "trade now at the live price").
+    if (last) hits.push({ kind: 'live', type: 'live', price: last.close });
     hitRef.current = hits;
     extraRef.current = [
       ...orders.map((o) => ({ price: parseFloat(o.target_price_ugx), reach: 0.1 })),
@@ -301,7 +312,7 @@ const IcanTradingChart = ({
       extraRef.current = [];
       drawn.forEach((line) => { try { api.candles.removePriceLine(line); } catch { /* the chart was already torn down */ } });
     };
-  }, [orders, buyMarkers, sellMarkers, draftPrice, looks, c, full]);
+  }, [orders, buyMarkers, sellMarkers, draftPrice, looks, c, full, last?.close]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The live price line's look (colour, dashes, thickness).
   useEffect(() => {
@@ -451,6 +462,18 @@ const IcanTradingChart = ({
               Trend lines
             </button>
           </div>
+          {allowPlacement && (
+            <button
+              type="button"
+              aria-pressed={placeInternal}
+              onClick={() => setPlaceInternal((v) => !v)}
+              className="shrink-0 rounded-md border px-2.5 py-1 font-semibold"
+              style={placeInternal ? { background: c.tabOnBg, color: c.tabOnText, borderColor: c.tabOnBg } : chip(false)}
+              title="Tap the chart to book an order at that price"
+            >
+              🎯 <span className="hidden min-[430px]:inline">{placeInternal ? 'Tap the chart…' : 'Tap to book'}</span><span className="min-[430px]:hidden">Book</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={resetView}
@@ -481,9 +504,9 @@ const IcanTradingChart = ({
       )}
 
       <div className="relative min-h-0 flex-1">
-        <div ref={containerRef} className="absolute inset-0 z-[1]" style={placement ? { cursor: 'crosshair' } : undefined} />
+        <div ref={containerRef} className="absolute inset-0 z-[1]" style={placing ? { cursor: 'crosshair' } : undefined} />
 
-        {placement && (
+        {placing && (
           <div className="pointer-events-none absolute left-1/2 top-2 z-[5] -translate-x-1/2 rounded-full px-3 py-1 text-[11px] font-semibold shadow" style={{ background: c.tabOnBg, color: c.tabOnText }}>
             Tap the chart to set your price
           </div>
