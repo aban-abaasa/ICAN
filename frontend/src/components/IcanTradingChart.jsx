@@ -112,6 +112,8 @@ const IcanTradingChart = ({
   // Trading overlay (full variant): the visitor's own lines and how to react to taps on the chart.
   orders = NO_LINES, buyMarkers = NO_LINES, sellMarkers = NO_LINES, draftPrice = null, lineStyles = null,
   onLineStyleChange, onLineStylesReset, placement = false, onPickPrice, onLineSelect,
+  // On a page that scrolls (the dashboard) the wheel should scroll the page, not zoom the chart under the mouse.
+  wheelZoom = true,
 }) => {
   const looks = useMemo(() => sanitizeLineStyles(lineStyles), [lineStyles]);
   const narrow = useNarrow();
@@ -180,10 +182,10 @@ const IcanTradingChart = ({
         tickMarkFormatter: localTick,
       },
       localization: { timeFormatter: localStamp },
-      handleScale: { axisPressedMouseMove: true },
+      handleScale: { axisPressedMouseMove: true, mouseWheel: wheelZoom },
       // A vertical swipe on a phone scrolls the PAGE instead of being swallowed by the chart (the chart still
       // pans sideways and pinch-zooms), so the content below the chart stays reachable.
-      handleScroll: { vertTouchDrag: false },
+      handleScroll: { vertTouchDrag: false, mouseWheel: wheelZoom },
     });
 
     const candles = chart.addSeries(CandlestickSeries, {
@@ -252,7 +254,7 @@ const IcanTradingChart = ({
       apiRef.current = null;
       chart.remove();
     };
-  }, [full]);
+  }, [full, wheelZoom]);
 
   useEffect(() => {
     if (apiRef.current) applyPalette(apiRef.current, c);
@@ -491,7 +493,7 @@ const IcanTradingChart = ({
           <>
             {labels.res != null && (
               // Above its line, unless the line is up under the legend, where it would print over it: then just below.
-              <span className={`pointer-events-none absolute z-[2] text-[11px] font-semibold tracking-wide ${labels.res < 60 ? 'pt-1' : '-translate-y-full pb-1'}`} style={{ left: labels.x, top: labels.res, color: c.caption, textShadow: c.captionShadow }}>
+              <span className={`pointer-events-none absolute z-[2] text-[11px] font-semibold tracking-wide ${labels.res < 60 ? 'pt-1' : '-translate-y-full pb-1'}`} style={{ left: labels.x, top: labels.res < 60 ? Math.max(labels.res, narrow ? 28 : 52) : labels.res, color: c.caption, textShadow: c.captionShadow }}>
                 Resistance
               </span>
             )}

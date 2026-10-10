@@ -91,6 +91,8 @@ const ReadinessPanel = lazyPanel(() => import('./profile/ReadinessPanel'));
 const InsurerPartnerPanel = lazyPanel(() => import('./insurance/partner/InsurerPartnerPanel'));
 const SecurityPanel = lazyPanel(() => import('./profile/SecurityPanel'));
 const SettingsPanel = lazyPanel(() => import('./profile/SettingsPanel'));
+// The icaneracoin trading chart on the dashboard: it pulls in the charting library, so it loads after the rest of the page.
+const IcanPriceChartWidget = lazyPanel(() => import('./IcanPriceChartWidget'), { fallback: <div aria-hidden="true" style={{ minHeight: 480 }} /> });
 const EnhancedReportConfiguration = lazyPanel(() => import('./EnhancedReportConfiguration'), { fallback: null });
 
 // AI Spending Advice Modal
@@ -8534,6 +8536,9 @@ Data Freshness: ${reportData.metadata.dataFreshness}
             </div>
           </div>
         </div>
+
+        {/* The icaneracoin trading chart: live candlesticks, timeframes, RSI, Resistance / Support. Trading is one tap away. */}
+        <IcanPriceChartWidget />
 
         {/* Icon Command Bar: 7 Icons in Single Horizontal Row */}
         <div className="flex gap-3 items-center overflow-x-auto pb-2">
