@@ -3,6 +3,7 @@ import { CheckCircle2, Download, FileWarning, Loader, Moon, Printer, Sun } from 
 import { getPublicConsultationForm, submitPublicConsultationForm } from '../services/cmmsConsultationFormService';
 import { downloadPublicConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
 import { sectionDisplayLabel } from '../utils/consultationSubmissionUtils';
+import LoadingPage from './LoadingPage';
 
 // Same scoped-palette technique as PublicReportExportViewer.jsx (see that
 // file for the full reasoning): this page has no ICAN session and no app
@@ -239,12 +240,7 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
   };
 
   if (status === 'loading') {
-    return (
-      <div className="icanera-cf min-h-screen flex items-center justify-center" data-theme={theme}>
-        <style>{CF_STYLES}</style>
-        <Loader className="w-8 h-8 animate-spin" style={{ color: 'var(--cf-green)' }} />
-      </div>
-    );
+    return <LoadingPage tone={theme === 'dark' ? 'dark' : 'light'} label="Opening the form…" />;
   }
 
   if (status === 'invalid') {

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, ShieldCheck, XCircle } from 'lucide-react';
+import { ShieldCheck, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import AuthPage from './auth/AuthPage';
 import LiveBoardroom from './LiveBoardroom';
 import cmmsInterviewService from '../services/cmmsInterviewService';
+import LoadingPage from './LoadingPage';
 
 /**
  * Standalone page at /candidate-interview?scheduleId=<id> (see main.jsx).
@@ -65,7 +66,7 @@ const CandidateInterviewRoom = () => {
   }, [user, authLoading, scheduleId]);
 
   if (phase === 'loading' || phase === 'linking' || authLoading) {
-    return <main className="min-h-screen flex items-center justify-center bg-slate-950 text-white"><Loader2 className="w-8 h-8 animate-spin" /></main>;
+    return <LoadingPage tone="ice" label="Preparing your interview room…" />;
   }
 
   if (phase === 'auth') {

@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import IcanDiamond from './IcanDiamond';
+import { BlockchainBackdrop, useIsDarkTheme as useIsDark } from './BlockchainBackdrop';
+import BlockLedger from './BlockLedger';
 
 /**
  * Splash / loading screen -- classic edition with a rotating diamond.
@@ -10,34 +12,15 @@ import IcanDiamond from './IcanDiamond';
  *  - <ClassicLoadingScreen/> : the same artwork as an in-flow, full-screen
  *    loading state (App.jsx's "checking your session" screen).
  *
+ * Behind it all sits the blockchain lattice -- interlocking diamonds with
+ * chains of blocks lighting up and data packets running (BlockchainBackdrop),
+ * and in front a live hash chain of woven diamond blocks (BlockLedger).
+ *
  * Colours are inline on purpose: the global theme override sheet repaints
  * Tailwind gradient/slate classes, which is what washed the old splash out to
  * a white page in light themes. The look follows the active theme family --
  * ivory paper by day, warm ink and amber by night -- matching the landing page.
  */
-
-const DARK_THEMES = ['dark', 'purple', 'green', 'ocean', 'sienna'];
-
-// Read from <html data-theme> (set by ThemeContext) so this works even when
-// rendered outside the ThemeProvider.
-const useIsDark = () => {
-  const read = () => {
-    try {
-      const attr = document.documentElement.getAttribute('data-theme');
-      if (attr) return DARK_THEMES.includes(attr);
-      return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-    } catch {
-      return false;
-    }
-  };
-  const [isDark, setIsDark] = useState(read);
-  useEffect(() => {
-    const observer = new MutationObserver(() => setIsDark(read()));
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => observer.disconnect();
-  }, []);
-  return isDark;
-};
 
 const PALETTES = {
   light: {
@@ -47,8 +30,6 @@ const PALETTES = {
     accent: '#14532d',
     brass: '#8a6a1f',
     rule: 'rgba(31, 26, 18, 0.45)',
-    track: 'rgba(31, 26, 18, 0.12)',
-    dots: '#3b2f1e',
   },
   dark: {
     bg: '#0f0d0a',
@@ -57,8 +38,6 @@ const PALETTES = {
     accent: '#fcd34d',
     brass: '#fcd34d',
     rule: 'rgba(252, 211, 77, 0.5)',
-    track: 'rgba(252, 211, 77, 0.15)',
-    dots: '#fcd34d',
   },
 };
 
@@ -85,17 +64,14 @@ const SplashArt = () => {
       }}
     >
       <style>{`
-        .ican-splash-root::before {
-          content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.07;
-          background-image: radial-gradient(${c.dots} 0.6px, transparent 0.6px); background-size: 14px 14px;
-        }
-        @keyframes icanBar { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
         @keyframes icanFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
         .ican-splash-in { animation: icanFade .8s cubic-bezier(.22,1,.36,1) both; }
         @media (prefers-reduced-motion: reduce) {
-          .ican-splash-bar, .ican-splash-in { animation: none !important; }
+          .ican-splash-in { animation: none !important; }
         }
       `}</style>
+
+      <BlockchainBackdrop tone={isDark ? 'dark' : 'light'} />
 
       <div style={{ position: 'relative', zIndex: 1, width: 'min(92vw, 30rem)', textAlign: 'center', padding: '1.5rem' }}>
         {/* masthead rule */}
@@ -138,16 +114,9 @@ const SplashArt = () => {
           Business Management Platform
         </p>
 
-        {/* ruled progress track */}
-        <div
-          role="progressbar"
-          aria-label="Loading"
-          style={{ position: 'relative', overflow: 'hidden', height: 4, margin: '2rem auto 0', width: 'min(70%, 15rem)', background: c.track }}
-        >
-          <div
-            className="ican-splash-bar"
-            style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: '38%', background: c.accent, animation: 'icanBar 1.6s ease-in-out infinite' }}
-          />
+        {/* a real hash chain: each block commits to the one before it */}
+        <div style={{ margin: '1.75rem auto 0' }}>
+          <BlockLedger tone={isDark ? 'dark' : 'light'} />
         </div>
         <p style={{ margin: '0.9rem 0 0', fontSize: '0.9rem', fontStyle: 'italic', color: c.muted }}>
           Loading your financial universe…

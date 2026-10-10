@@ -12,6 +12,7 @@ import {
   materializePrivatePitchForInvestment,
 } from '../services/privatePitchInviteService';
 import ShareSigningFlow from './ShareSigningFlow';
+import LoadingPage from './LoadingPage';
 
 const DEAD_MESSAGES = {
   not_found: "This invitation link doesn't exist.",
@@ -194,11 +195,7 @@ const PrivatePitchInviteViewer = ({ token }) => {
   const goToApp = () => { window.history.replaceState({}, '', '/'); window.location.href = '/'; };
 
   if (checking) {
-    return (
-      <div className="pitchin-classic fixed inset-0 bg-[#0a0710] flex items-center justify-center">
-        <Loader className="w-8 h-8 text-amber-300 animate-spin" />
-      </div>
-    );
+    return <LoadingPage fixed tone="dark" bg="#0a0710" label="Checking your invitation…" />;
   }
 
   if (!content && probe?.status !== 'active') {

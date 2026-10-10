@@ -16,6 +16,7 @@ import {
   COIN_RECOMMENDATION, STATUS_LABELS, FREQUENCY_LABELS, getWalletCoins,
 } from '../services/installmentService';
 import { getPublicAppUrl } from '../utils/publicAppUrl';
+import LoadingPage from './LoadingPage';
 
 const DELIVERY_WINDOWS = [
   { hours: 1, label: 'Within 1 hour' }, { hours: 2, label: 'Within 2 hours' }, { hours: 4, label: 'Within 4 hours' },
@@ -88,7 +89,7 @@ const PublicInstallmentPlan = ({ code }) => {
   const after = async (message) => { if (message) setFlash(message); setNotice(''); await load(true); };
 
   if (authLoading || loading) {
-    return <div className="fixed inset-0 bg-slate-950 flex items-center justify-center"><Loader className="w-10 h-10 text-white animate-spin" /></div>;
+    return <LoadingPage fixed tone="ice" label="Loading your instalment plan…" />;
   }
 
   if (!user) {

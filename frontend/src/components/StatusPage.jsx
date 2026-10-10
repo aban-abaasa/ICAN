@@ -8,17 +8,14 @@ import { useAuth } from '../context/AuthContext';
 import { StatusFeed } from './StatusFeed';
 import { Plus, ArrowLeft } from 'lucide-react';
 import { StatusUploader } from './status/StatusUploader';
+import LoadingPage from './LoadingPage';
 
 export const StatusPage = ({ onGoBack }) => {
   const { user } = useAuth();
   const [showStatusUploader, setShowStatusUploader] = useState(false);
 
   if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <p className="text-white">Loading...</p>
-      </div>
-    );
+    return <LoadingPage tone="ice" label="Loading…" />;
   }
 
   return (

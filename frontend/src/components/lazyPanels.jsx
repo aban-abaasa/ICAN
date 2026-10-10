@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
 import { lazyWithRetry, prefetchWhenIdle } from '../lib/lazyWithRetry';
+import LoadingPage from './LoadingPage';
 
 // The two biggest screens in the product (CMMS ~465 KB, Wallet ~370 KB of
 // source) used to be bundled into the dashboard, so every phone paid for both
@@ -18,24 +19,7 @@ export const prefetchHeavyPanels = () => prefetchWhenIdle([importWallet]);
 
 // Shown inside the panel's own frame while its code downloads, so the rest of
 // the dashboard (header, bottom navigation) stays on screen and tappable.
-export const PanelFallback = () => (
-  <div
-    role="status"
-    aria-live="polite"
-    style={{
-      minHeight: '40vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '2rem',
-      color: '#8a6a1f',
-      fontSize: '0.9rem',
-      letterSpacing: '0.04em',
-    }}
-  >
-    Loading…
-  </div>
-);
+export const PanelFallback = () => <LoadingPage compact minHeight="60vh" label="Loading…" />;
 
 export const PanelSuspense = ({ children }) => (
   <Suspense fallback={<PanelFallback />}>{children}</Suspense>

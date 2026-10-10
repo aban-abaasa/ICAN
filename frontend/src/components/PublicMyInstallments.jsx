@@ -5,6 +5,7 @@ import { AuthPage } from './auth';
 import ContinueWithGoogle from './ContinueWithGoogle';
 import { getMyInstallmentPlans, getMyBusinessAccounts, formatMoney, STATUS_LABELS } from '../services/installmentService';
 import { getPublicAppUrl } from '../utils/publicAppUrl';
+import LoadingPage from './LoadingPage';
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 
@@ -28,7 +29,7 @@ const PublicMyInstallments = () => {
     return () => { cancelled = true; };
   }, [user]);
 
-  if (authLoading) return <div className="fixed inset-0 bg-slate-950 flex items-center justify-center"><Loader className="w-10 h-10 text-white animate-spin" /></div>;
+  if (authLoading) return <LoadingPage fixed tone="ice" label="Loading your instalments…" />;
 
   if (!user) {
     return (

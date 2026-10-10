@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { BadgeCheck, Loader2, ShieldAlert, ShieldX } from 'lucide-react';
+import { BadgeCheck, ShieldAlert, ShieldX } from 'lucide-react';
 import cmmsEmploymentDocumentsService from '../services/cmmsEmploymentDocumentsService';
+import LoadingPage from './LoadingPage';
 
 /**
  * Standalone public page at /verify-document?token=<verify_token> (see
@@ -26,11 +27,11 @@ const PublicDocumentVerify = () => {
 
   const documentTypeLabel = (type) => (type === 'employment_contract' ? 'Employment Contract' : 'Letter of Appointment');
 
+  if (state === 'loading') return <LoadingPage tone="ice" label="Verifying document seal…" />;
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 flex items-center justify-center px-4 py-10 text-white">
       <section className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/80 p-7 text-center shadow-2xl backdrop-blur">
-        {state === 'loading' && <Loader2 className="w-10 h-10 mx-auto animate-spin text-indigo-300" />}
-
         {state === 'valid' && (
           <>
             <BadgeCheck className="w-14 h-14 mx-auto mb-4 text-emerald-400" />

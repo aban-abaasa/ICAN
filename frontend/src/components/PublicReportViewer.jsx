@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Lock, Mail, ShieldCheck, Loader, FileWarning } from 'lucide-react';
+import LoadingPage from './LoadingPage';
 import {
   getReportShareAccess,
   verifyReportSharePassword,
@@ -173,12 +174,7 @@ const PublicReportViewer = ({ shareToken }) => {
   };
 
   if (status === 'loading') {
-    return (
-      <div className="icanera-rs min-h-screen flex items-center justify-center">
-        <style>{RS_STYLES}</style>
-        <Loader className="w-8 h-8 animate-spin" style={{ color: 'var(--rs-green)' }} />
-      </div>
-    );
+    return <LoadingPage label="Opening the report…" />;
   }
 
   if (status === 'invalid') {

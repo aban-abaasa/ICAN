@@ -15,6 +15,7 @@ import {
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { LIVE_OFFER_BLOCKED_MESSAGE } from './Pitchin';
 import ShareSigningFlow from './ShareSigningFlow';
+import LoadingPage from './LoadingPage';
 
 // Rendered instead of the normal authenticated app (see main.jsx) when the
 // URL is a shared pitch link (/pitchin/:pitchId) -- the whole point of a
@@ -409,11 +410,7 @@ const PublicPitchViewer = ({ pitchId, nextPitch = null, hasPrev = false, onNext,
   };
 
   if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black flex items-center justify-center">
-        <Loader className="w-10 h-10 text-white animate-spin" />
-      </div>
-    );
+    return <LoadingPage fixed tone="ice" bg="#000000" label="Loading the pitch…" />;
   }
 
   if (notFound) {
