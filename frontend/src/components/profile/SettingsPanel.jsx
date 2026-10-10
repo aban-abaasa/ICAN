@@ -3,9 +3,10 @@ import {
   AlertTriangle, Bell, BellRing, Check, Gem, Globe, Loader2, LogOut, Palette, Trash2, User, Target, ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { THEMES, useTheme } from '../../context/ThemeContext';
+import { THEMES, isDarkFamilyTheme, useTheme } from '../../context/ThemeContext';
+import { AmbientLayers } from '../AmbientBackdrop';
+import { AMBIENT_INTENSITIES, AMBIENT_STYLES, useAmbientPrefs } from '../../lib/ambientPrefs';
 import usePhoneAlerts from '../../hooks/usePhoneAlerts';
-import { setDiamondLevel, useDiamondLevel } from '../../lib/diamondBackground';
 import { useI18n } from '../../i18n/I18nProvider';
 import { getLanguage } from '../../i18n/languages';
 import { CountryService } from '../../services/countryService';
@@ -125,52 +126,82 @@ function NotificationsSection({ onOpenGrowth }) {
 function AppearanceSection() {
   const { theme, changeTheme } = useTheme();
   return (
-    <section className="gr-card gr-form" aria-label="Appearance">
-      <div className="gr-status"><Palette aria-hidden="true" /><div className="gr-status__body"><h3 className="gr-title gr-h">Appearance</h3><p className="gr-sub">Pick the look you like. It applies everywhere, on every page.</p></div></div>
-      <div className="gr-list" role="radiogroup" aria-label="Theme">
-        {Object.values(THEMES).map((t) => (
-          <button key={t.id} type="button" role="radio" aria-checked={theme === t.id} onClick={() => changeTheme(t.id)} className="gr-device"
-            style={{ textAlign: 'left', cursor: 'pointer', borderColor: theme === t.id ? 'var(--gr-gold-hi)' : undefined, background: theme === t.id ? 'var(--gr-tint)' : 'transparent' }}>
-            <span className="gr-device__icon" aria-hidden="true" style={{ fontSize: '1.2rem' }}>{t.icon}</span>
-            <span><span className="gr-device__t" style={{ display: 'block' }}>{t.name}</span><span className="gr-device__m">{t.description}</span></span>
-            {theme === t.id ? <span className="gr-chip gr-chip--ok"><Check aria-hidden="true" />On</span> : <span />}
-          </button>
-        ))}
-      </div>
-      <DiamondBackgroundOption />
-    </section>
+    <>
+      <section className="gr-card gr-form" aria-label="Appearance">
+        <div className="gr-status"><Palette aria-hidden="true" /><div className="gr-status__body"><h3 className="gr-title gr-h">Appearance</h3><p className="gr-sub">Pick the look you like. It applies everywhere, on every page.</p></div></div>
+        <div className="gr-list" role="radiogroup" aria-label="Theme">
+          {Object.values(THEMES).map((t) => (
+            <button key={t.id} type="button" role="radio" aria-checked={theme === t.id} onClick={() => changeTheme(t.id)} className="gr-device"
+              style={{ textAlign: 'left', cursor: 'pointer', borderColor: theme === t.id ? 'var(--gr-gold-hi)' : undefined, background: theme === t.id ? 'var(--gr-tint)' : 'transparent' }}>
+              <span className="gr-device__icon" aria-hidden="true" style={{ fontSize: '1.2rem' }}>{t.icon}</span>
+              <span><span className="gr-device__t" style={{ display: 'block' }}>{t.name}</span><span className="gr-device__m">{t.description}</span></span>
+              {theme === t.id ? <span className="gr-chip gr-chip--ok"><Check aria-hidden="true" />On</span> : <span />}
+            </button>
+          ))}
+        </div>
+      </section>
+      <BlockchainBackgroundSection />
+    </>
   );
 }
 
-// The blockchain-diamond watermark behind every page. Off by choice, or two strengths; applies on the spot.
-const DIAMOND_CHOICES = [
-  { id: 'off', title: 'Off', hint: 'A plain background, nothing behind the pages.' },
-  { id: 'subtle', title: 'Subtle', hint: 'A faint diamond and chain in the corner. Easy on the eyes.' },
-  { id: 'rich', title: 'Rich', hint: 'A stronger stone with its colours, moving transactions and a glint.' },
-];
+const STYLE_LABELS = {
+  lattice: ['Lattice', 'Calm, woven diamonds'],
+  chain: ['Chain', 'Blocks light up along linked chains'],
+};
+const INTENSITY_LABELS = { subtle: 'Subtle', balanced: 'Balanced', vivid: 'Vivid' };
 
-function DiamondBackgroundOption() {
-  const level = useDiamondLevel();
-  return (
-    <>
-      <div className="gr-status" style={{ marginTop: '1.25rem' }}>
-        <Gem aria-hidden="true" />
-        <div className="gr-status__body">
-          <h3 className="gr-title gr-h">Diamond background</h3>
-          <p className="gr-sub">A blockchain diamond behind every ICAN page, for a feeling of value. Turn it off any time.</p>
-        </div>
-      </div>
-      <div className="gr-list" role="radiogroup" aria-label="Diamond background">
-        {DIAMOND_CHOICES.map((c) => (
-          <button key={c.id} type="button" role="radio" aria-checked={level === c.id} onClick={() => setDiamondLevel(c.id)} className="gr-device"
-            style={{ textAlign: 'left', cursor: 'pointer', borderColor: level === c.id ? 'var(--gr-gold-hi)' : undefined, background: level === c.id ? 'var(--gr-tint)' : 'transparent' }}>
-            <span className="gr-device__icon" aria-hidden="true"><Gem /></span>
-            <span><span className="gr-device__t" style={{ display: 'block' }}>{c.title}</span><span className="gr-device__m">{c.hint}</span></span>
-            {level === c.id ? <span className="gr-chip gr-chip--ok"><Check aria-hidden="true" />On</span> : <span />}
-          </button>
+/**
+ * The ambient blockchain background: faint interlocking diamonds over every page. On/off, plus
+ * style, intensity and motion, with a live preview in the colours of the current theme. Saved on
+ * this device (like the theme).
+ */
+export function BlockchainBackgroundSection() {
+  const [prefs, update] = useAmbientPrefs();
+  const { actualTheme, colors } = useTheme();
+  const tone = isDarkFamilyTheme(actualTheme) ? 'dark' : 'light';
+  const off = !prefs.enabled;
+
+  const group = (label, items) => (
+    <div style={{ opacity: off ? 0.45 : 1 }}>
+      <p className="gr-row__d" style={{ margin: '0.9rem 0 0.4rem' }}>{label}</p>
+      <div className="gr-subnav" role="group" aria-label={label}>
+        {items.map(({ id, text, active, onPick }) => (
+          <button key={id} type="button" aria-pressed={active} disabled={off} onClick={onPick}>{text}</button>
         ))}
       </div>
-    </>
+    </div>
+  );
+
+  return (
+    <section className="gr-card gr-form" aria-label="Blockchain background">
+      <div className="gr-status"><Gem aria-hidden="true" /><div className="gr-status__body"><h3 className="gr-title gr-h">Blockchain background</h3><p className="gr-sub">A faint layer of interlocking diamonds, like linked blocks, over your pages. Turn it off any time.</p></div></div>
+
+      <button type="button" role="switch" aria-checked={prefs.enabled} onClick={() => update({ enabled: !prefs.enabled })} className="gr-device"
+        style={{ textAlign: 'left', cursor: 'pointer', borderColor: prefs.enabled ? 'var(--gr-gold-hi)' : undefined, background: prefs.enabled ? 'var(--gr-tint)' : 'transparent' }}>
+        <span className="gr-device__icon" aria-hidden="true" style={{ fontSize: '1.2rem' }}>💎</span>
+        <span><span className="gr-device__t" style={{ display: 'block' }}>Show the background</span><span className="gr-device__m">{prefs.enabled ? 'On, on every page you open' : 'Off, pages stay plain'}</span></span>
+        {prefs.enabled ? <span className="gr-chip gr-chip--ok"><Check aria-hidden="true" />On</span> : <span className="gr-chip">Off</span>}
+      </button>
+
+      <div style={{ position: 'relative', height: 128, marginTop: '0.9rem', borderRadius: 14, overflow: 'hidden', border: '1px solid var(--gr-line)', background: colors.bg, color: colors.text, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.04em', opacity: 0.8 }}>{off ? 'Background is off' : 'Preview'}</span>
+        {!off && <AmbientLayers contained tone={tone} style={prefs.style} intensity={prefs.intensity} motion={prefs.motion} />}
+      </div>
+
+      {group('Style', AMBIENT_STYLES.map((id) => ({
+        id, text: STYLE_LABELS[id][0], active: prefs.style === id, onPick: () => update({ style: id }),
+      })))}
+      <p className="gr-row__d" style={{ margin: '0.4rem 0 0', opacity: off ? 0.45 : 1 }}>{STYLE_LABELS[prefs.style][1]}</p>
+      {group('Strength', AMBIENT_INTENSITIES.map((id) => ({
+        id, text: INTENSITY_LABELS[id], active: prefs.intensity === id, onPick: () => update({ intensity: id }),
+      })))}
+      {group('Motion', [
+        { id: 'on', text: 'Animated', active: prefs.motion, onPick: () => update({ motion: true }) },
+        { id: 'off', text: 'Still', active: !prefs.motion, onPick: () => update({ motion: false }) },
+      ])}
+      <p className="gr-row__d" style={{ margin: '0.9rem 0 0' }}>Choose Still, or switch it off, to save battery and data. Saved on this device.</p>
+    </section>
   );
 }
 

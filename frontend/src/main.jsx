@@ -5,8 +5,8 @@ import './index.css';
 // The IcanEra diamond: one loading indicator for the whole app (see diamond.css).
 import './components/diamond.css';
 import { installDiamondStyles } from './components/diamondArt';
-import GlobalDiamondBackground from './components/GlobalDiamondBackground';
 import { ClassicLoadingScreen } from './components/SplashScreen';
+import AmbientBackdrop from './components/AmbientBackdrop';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { I18nProvider } from './i18n/I18nProvider';
@@ -192,9 +192,6 @@ class AppErrorBoundary extends React.Component {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AppErrorBoundary>
-      {/* The faint blockchain-diamond watermark behind every page (Settings > Appearance turns it off).
-          The public chart paints its own, richer diamond, so it is skipped there. */}
-      {!isPublicIcanChartPath && <GlobalDiamondBackground />}
       <Suspense fallback={<Loading />}>
         {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn />
           : isPublicShopPath ? <PublicShopPage />
@@ -243,7 +240,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                   : installmentPlanMatch ? <PublicInstallmentPlan code={installmentPlanMatch[1].toUpperCase()} />
                   : isMyInstallmentsPath ? <PublicMyInstallments />
                   : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />
-                  : <><App /><PhoneAlertsPrompt /></>}
+                  : <><App /><PhoneAlertsPrompt /><AmbientBackdrop /></>}
                 </I18nProvider>
               </AuthProvider>
             </ThemeProvider>
