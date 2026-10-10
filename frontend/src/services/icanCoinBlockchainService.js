@@ -5,6 +5,10 @@
  */
 
 import { supabase } from '../lib/supabase/client';
+import { CountryService } from './countryService';
+import { ratesFromRows } from '../utils/fxRates';
+
+const FX_REFRESH_MS = 5 * 60_000;
 
 export class IcanCoinBlockchainService {
   constructor() {
@@ -22,6 +26,30 @@ export class IcanCoinBlockchainService {
   }
 
   /**
+   * 💱 Make the currency conversions on screen agree with what the server will trade at.
+   * The built-in exchange rates in CountryService are fixed numbers that have drifted far from the platform's own
+   * table (ican_currency_rates, refreshed hourly), and the server's atomic buy / sell converts with that table. This
+   * loads it (public, read-only) and hands it to CountryService, at most once every 5 minutes. It never throws: if
+   * the table cannot be read the built-in rates stay, and the server still converts correctly.
+   */
+  async refreshFxRates() {
+    if (this._fxInFlight) return this._fxInFlight;
+    if (this._fxAt && Date.now() - this._fxAt < FX_REFRESH_MS) return undefined;
+    this._fxInFlight = (async () => {
+      try {
+        const { data, error } = await this.initSupabase().from('ican_currency_rates').select('currency_code, rate_to_ugx');
+        if (!error && Array.isArray(data)) {
+          CountryService.updateExchangeRates(ratesFromRows(data));
+          this._fxAt = Date.now();
+        }
+      } catch { /* keep the built-in rates */ } finally {
+        this._fxInFlight = null;
+      }
+    })();
+    return this._fxInFlight;
+  }
+
+  /**
    * 📊 Get current ICAN Coin market price (UGX)
    * Live — computed on read by the same USD-anchored fair-price engine
    * (ican_get_market_snapshot → ican_compute_fair_price) that powers
@@ -31,6 +59,7 @@ export class IcanCoinBlockchainService {
    * cached snapshot if the live engine RPC isn't reachable.
    */
   async getCurrentPrice() {
+    await this.refreshFxRates(); // every screen that quotes a price also gets the server's exchange rates
     try {
       const supabase = this.initSupabase();
 

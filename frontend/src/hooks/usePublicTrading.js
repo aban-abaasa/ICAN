@@ -9,6 +9,7 @@ import icanOrderService from '../services/icanOrderService';
 import icanCoinBlockchainService from '../services/icanCoinBlockchainService';
 import { CountryService } from '../services/countryService';
 import { friendlyTradeError, orderCrossed, validateBooking, validateSell, validateWalletBuy } from '../utils/tradeRules';
+import { makeRequestIdStore } from '../utils/tradeResult';
 
 // Everything the public /icaneracoin trade panel does for a signed-in visitor. It invents no money logic: coins are
 // bought through the Flutterwave top-up (the server verifies the charge and credits the wallet at the live price),
@@ -41,6 +42,8 @@ export const usePublicTrading = (livePriceUgx) => {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null); // { kind: 'ok' | 'err' | 'info', text }
   const backoff = useRef({}); // orderId -> do not retry before this time
+  // One id per buy / sell ACTION: a double tap or a retry after a lost answer reuses it, so the server trades once.
+  const requestIds = useRef(makeRequestIdStore('public')).current;
 
   const say = useCallback((kind, text) => setNotice({ kind, text }), []);
 
@@ -134,10 +137,13 @@ export const usePublicTrading = (livePriceUgx) => {
         let filled = 0;
         for (const order of due) {
           try {
-            const result = await icanOrderService.fillOrderNow(order, userId);
+            const result = await icanOrderService.fillOrderNow(order, userId, { enforceLimit: true }); // a resting order must not fill worse than its target
             if (result?.success) {
               filled += 1;
               setOrderErrors((prev) => { const next = { ...prev }; delete next[order.id]; return next; });
+            } else if (result?.code === 'price_moved') {
+              // Not a failure: the price slipped back past this order's target between the check and the fill, so the
+              // order is simply not due yet. Leave it open; the next poll looks again.
             } else {
               backoff.current[order.id] = Date.now() + RETRY_AFTER_FAILURE_MS;
               setOrderErrors((prev) => ({ ...prev, [order.id]: friendlyTradeError(result?.error) }));
@@ -192,8 +198,10 @@ export const usePublicTrading = (livePriceUgx) => {
     const check = validateWalletBuy(localAmount, cash?.balance);
     if (!check.ok) { say('err', check.error); return { success: false, error: check.error }; }
     try {
-      const result = await icanCoinService.buyIcanCoins(userId, check.amount, country, 'wallet_balance');
+      const result = await icanCoinService.buyIcanCoins(userId, check.amount, country, 'wallet_balance',
+        { requestId: requestIds.idFor(`buy|${check.amount}|${country}`), expectedPriceUgx: priceRef.current });
       if (!result?.success) { say('err', friendlyTradeError(result?.error || 'The purchase did not go through.')); return result; }
+      requestIds.clear();
       if (result.icanAmount > 0 && result.pricePerCoin > 0) {
         try {
           await icanCoinBlockchainService.recordBlockchainTransaction({
@@ -214,8 +222,10 @@ export const usePublicTrading = (livePriceUgx) => {
     const check = validateSell(amount, wallet?.ican);
     if (!check.ok) { say('err', check.error); return { success: false, error: check.error }; }
     try {
-      const result = await icanCoinService.sellIcanCoins(userId, check.amount, country);
+      const result = await icanCoinService.sellIcanCoins(userId, check.amount, country,
+        { requestId: requestIds.idFor(`sell|${check.amount}|${country}`), expectedPriceUgx: priceRef.current });
       if (!result?.success) { say('err', friendlyTradeError(result?.error || 'The sale did not go through.')); return result; }
+      requestIds.clear();
       say('ok', `Sold ${check.amount} ICAN at the live price.`);
       await Promise.all([refreshWallet(), refreshCash(country), refreshMarkers()]);
       return result;

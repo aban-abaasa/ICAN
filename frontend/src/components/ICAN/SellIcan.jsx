@@ -3,11 +3,12 @@
  * Convert ICAN Coins back to local currency at current market price
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import icanCoinService from '../../services/icanCoinService';
 import icanCoinBlockchainService from '../../services/icanCoinBlockchainService';
 import { CountryService } from '../../services/countryService';
+import { makeRequestIdStore } from '../../utils/tradeResult';
 import './IcanTrading.css';
 
 export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
@@ -16,6 +17,8 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
   const [icanAmount, setIcanAmount] = useState('');
   const [localAmount, setLocalAmount] = useState(0);
   const [marketPrice, setMarketPrice] = useState(5000);
+  // One id per sell ACTION: a double tap or a retry after a lost answer reuses it, so the server sells once.
+  const requestIds = useRef(makeRequestIdStore('sell')).current;
   const [country, setCountry] = useState(null);
   const [currency, setCurrency] = useState('UGX');
   const [currencySymbol, setCurrencySymbol] = useState('Sh');
@@ -131,10 +134,13 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
       const result = await icanCoinService.sellIcanCoins(
         resolvedUserId,
         parseFloat(icanAmount),
-        country
+        country,
+        { requestId: requestIds.idFor(`sell|${parseFloat(icanAmount)}|${country}`), expectedPriceUgx: marketPrice }
       );
 
+      if (result.priceUgx > 0) setMarketPrice(result.priceUgx); // the price moved: show the new one before they try again
       if (result.success) {
+        requestIds.clear();
         const gainLossMsg =
           gainLoss.type === 'gain'
             ? `📈 You gained ${currencySymbol}${gainLoss.value.toFixed(2)} (${gainLoss.percentage.toFixed(2)}%)`

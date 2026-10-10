@@ -8,6 +8,8 @@
 import { supabase } from '../lib/supabase/client';
 import { CountryService } from './countryService';
 import icanCoinBlockchainService from './icanCoinBlockchainService';
+import { newRequestId, mapTradeResult, tradeFailure, isTransientNetworkError } from '../utils/tradeResult';
+import { isMissingFunction } from '../utils/feedPolling';
 
 export class IcanCoinService {
   constructor() {
@@ -22,10 +24,58 @@ export class IcanCoinService {
   }
 
   /**
-   * 🪙 Buy ICAN Coins (convert local currency to ICAN with market price)
-   * Also deducts real money from user's wallet_accounts
+   * One buy or sell, executed by the database as a single atomic step (public.ican_trade_execute):
+   *  - the price and the currency conversion are the server's, and who is trading is the signed-in session;
+   *  - both wallets are locked, checked and updated together, so concurrent taps, tabs and retries cannot double-spend;
+   *  - `requestId` makes a retry harmless: the same id returns the original result and moves nothing.
+   * Returns the familiar { success, icanAmount, localAmount, pricePerCoin, newIcanBalance, newWalletBalance,
+   * transaction } shape, or null when the function is not installed yet (the caller then uses the older path).
+   * A dropped connection is retried with the SAME request id; a server answer is never retried.
+   * options: { requestId, expectedPriceUgx, maxSlippagePct }
    */
-  async buyIcanCoins(userId, amount, countryCode, paymentMethod = 'card') {
+  async _tradeViaServer({ side, amount, countryCode, paymentMethod, options = {} }) {
+    const supabase = this.initSupabase();
+    const requestId = options.requestId || newRequestId(side);
+    const args = {
+      p_side: side,
+      p_amount: amount,
+      p_currency: CountryService.getCurrencyCode(countryCode),
+      p_country: countryCode || null,
+      p_request_id: requestId,
+      p_expected_price_ugx: options.expectedPriceUgx ?? null,
+      p_max_slippage_pct: options.maxSlippagePct ?? 1,
+      p_payment_method: paymentMethod || 'wallet_balance',
+    };
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 300 * attempt * attempt));
+      const { data, error } = await supabase.rpc('ican_trade_execute', args);
+      if (!error) return mapTradeResult(data);
+      if (isMissingFunction(error)) return null;
+      if (!isTransientNetworkError(error)) return tradeFailure(null, error.message || 'Trade failed');
+      lastError = error;
+    }
+    return tradeFailure(null, `Could not reach the server (${lastError?.message || 'network error'}). Check your wallet before trying again: if the balance changed, the trade went through.`);
+  }
+
+  /**
+   * 🪙 Buy ICAN Coins (convert local currency to ICAN at the live price). `amount` is in the user's currency.
+   * Deducts real money from the user's wallet_accounts and credits the coins in one atomic server step.
+   */
+  async buyIcanCoins(userId, amount, countryCode, paymentMethod = 'card', options = {}) {
+    try {
+      const viaServer = await this._tradeViaServer({ side: 'buy', amount, countryCode, paymentMethod, options });
+      if (viaServer) return viaServer;
+    } catch (error) {
+      console.error('❌ Failed to buy ICAN Coins:', error);
+      return { success: false, error: error.message };
+    }
+    // The trade function is not installed in this database yet: the older browser-side path below.
+    console.warn('ican_trade_execute is not installed; using the older, non-atomic buy. Run 20261018110000_icaneracoin_atomic_trade.sql.');
+    return this._buyLegacy(userId, amount, countryCode, paymentMethod);
+  }
+
+  async _buyLegacy(userId, amount, countryCode, paymentMethod = 'card') {
     try {
       const supabase = this.initSupabase();
 
@@ -116,10 +166,22 @@ export class IcanCoinService {
   }
 
   /**
-   * 💰 Sell ICAN Coins (convert ICAN to local currency at current market price)
-   * Also credits real money to user's wallet_accounts
+   * 💰 Sell ICAN Coins (convert ICAN to local currency at the live price). `icanAmount` is in coins.
+   * Debits the coins and credits the user's wallet_accounts in one atomic server step.
    */
-  async sellIcanCoins(userId, icanAmount, countryCode) {
+  async sellIcanCoins(userId, icanAmount, countryCode, options = {}) {
+    try {
+      const viaServer = await this._tradeViaServer({ side: 'sell', amount: icanAmount, countryCode, paymentMethod: null, options });
+      if (viaServer) return viaServer;
+    } catch (error) {
+      console.error('❌ Failed to sell ICAN Coins:', error);
+      return { success: false, error: error.message };
+    }
+    console.warn('ican_trade_execute is not installed; using the older, non-atomic sell. Run 20261018110000_icaneracoin_atomic_trade.sql.');
+    return this._sellLegacy(userId, icanAmount, countryCode);
+  }
+
+  async _sellLegacy(userId, icanAmount, countryCode) {
     try {
       const supabase = this.initSupabase();
 

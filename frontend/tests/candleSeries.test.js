@@ -130,3 +130,14 @@ test('fillGaps handles empty input and caps a very long history', () => {
   assert.equal(huge.length, 1);
   assert.equal(huge[0].close, 7);
 });
+
+test('toSeries drops rows whose prices are zero or negative instead of letting them crush the scale', () => {
+  const s = toSeries([
+    row('2026-10-10T10:00:00Z', 5000, 5010, 4990, 5005),
+    row('2026-10-10T10:05:00Z', 0, 0, 0, 0),
+    row('2026-10-10T10:10:00Z', 5000, 5010, -1, 5005),
+    row('2026-10-10T10:15:00Z', 5005, 5020, 5000, 5015),
+  ]);
+  assert.equal(s.length, 2);
+  assert.deepEqual(s.map((c) => c.close), [5005, 5015]);
+});

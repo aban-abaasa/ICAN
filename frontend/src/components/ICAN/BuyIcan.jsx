@@ -3,11 +3,12 @@
  * Convert local currency to ICAN Coins at current market price
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import icanCoinService from '../../services/icanCoinService';
 import icanCoinBlockchainService from '../../services/icanCoinBlockchainService';
 import { CountryService } from '../../services/countryService';
+import { makeRequestIdStore } from '../../utils/tradeResult';
 import './IcanTrading.css';
 
 export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
@@ -26,6 +27,8 @@ export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
   const [paymentMethods, setPaymentMethods] = useState('card');
   const [priceHistory, setPriceHistory] = useState(null);
   const [percentageChange, setPercentageChange] = useState(0);
+  // One id per buy ACTION: a double tap or a retry after a lost answer reuses it, so the server buys once.
+  const requestIds = useRef(makeRequestIdStore('buy')).current;
 
   // Initialize user data and market price
   useEffect(() => {
@@ -113,10 +116,13 @@ export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
         resolvedUserId,
         parseFloat(localAmount),
         country,
-        paymentMethods
+        paymentMethods,
+        { requestId: requestIds.idFor(`buy|${parseFloat(localAmount)}|${country}`), expectedPriceUgx: marketPrice }
       );
 
+      if (result.priceUgx > 0) setMarketPrice(result.priceUgx); // the price moved: show the new one before they try again
       if (result.success) {
+        requestIds.clear();
         const newBalance = result.newIcanBalance || 0;
         const newWallet = result.newWalletBalance || 0;
         const icanAmt = result.icanAmount || parseFloat(icanAmount);

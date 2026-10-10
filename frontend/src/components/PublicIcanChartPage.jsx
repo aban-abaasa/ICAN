@@ -98,7 +98,7 @@ const scrollToId = (id) => {
 };
 
 const PublicIcanChartPage = () => {
-  const { candles, snapshot, analysis, loading, error, updatedAt, refresh } = usePublicIcanCandles(500);
+  const { candles, snapshot, analysis, loading, error, updatedAt, refresh, status } = usePublicIcanCandles(500);
   const [theme, setTheme] = useState(initialTheme);
   const k = SKIN[theme];
   const dark = theme === 'dark';
@@ -292,6 +292,7 @@ const PublicIcanChartPage = () => {
               placement={placement}
               onPickPrice={handlePickPrice}
               onLineSelect={handleLineSelect}
+              feedState={status}
             />
           )}
         </section>

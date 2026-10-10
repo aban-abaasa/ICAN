@@ -21,6 +21,7 @@ export const toSeries = (rows) => {
     const low = parseFloat(row.low_price ?? row.low);
     const close = parseFloat(row.close_price ?? row.close);
     if (![time, open, high, low, close].every(Number.isFinite)) continue;
+    if (open <= 0 || high <= 0 || low <= 0 || close <= 0) continue; // a price of zero or less is a bad row, not a crash to zero
     const volume = parseFloat(row.trading_volume ?? row.volume ?? 0) || 0;
     byTime.set(time, { time, open, high: Math.max(high, open, close), low: Math.min(low, open, close), close, volume });
   }
