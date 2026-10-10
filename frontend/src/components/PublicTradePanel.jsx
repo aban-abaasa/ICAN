@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CHART_PALETTES } from './chartPalettes';
 import { CountryService } from '../services/countryService';
 import { formatMoney, minTopUp } from '../services/topUpCurrency';
-import { coinsForMoney, distanceFromMarketPct, quickTopUpAmounts } from '../utils/tradeRules';
+import { coinsForMoney, distanceFromMarketPct, quickTopUpAmounts, validateWalletBuy } from '../utils/tradeRules';
 
 // The trade panel on the public /icaneracoin page. Signed out it offers "Continue with Google" (an IcanEra wallet
 // is created for the visitor on the spot). Signed in it shows their wallet and three actions:
@@ -27,10 +27,13 @@ const PublicTradePanel = ({ trading, theme = 'dark', priceUgx, tab, setTab, draf
   const c = CHART_PALETTES[theme] || CHART_PALETTES.dark;
   const {
     user, signedIn, signOut, continueWithGoogle, wallet, quote, quoteError, country, orders, orderErrors, busy, notice,
-    clearNotice, buyCoins, sellCoins, bookOrder, cancelOrder, fillOrderNow,
+    clearNotice, cash, buyCoins, buyWithWallet, sellCoins, bookOrder, cancelOrder, fillOrderNow,
   } = trading;
 
   const [buyAmount, setBuyAmount] = useState('');
+  // Where the money for a purchase comes from: the IcanEra wallet's cash (no checkout, no fee) or a fresh payment.
+  const [source, setSource] = useState('wallet');
+  const [sourceTouched, setSourceTouched] = useState(false);
   const [sellAmount, setSellAmount] = useState('');
   const [confirmSell, setConfirmSell] = useState(false);
 
@@ -40,6 +43,7 @@ const PublicTradePanel = ({ trading, theme = 'dark', priceUgx, tab, setTab, draf
   const field = { background: c.field, border: `1px solid ${c.fieldBorder}`, color: c.strong };
   const card = { background: c.card, border: `1px solid ${c.cardBorder}`, color: c.fg };
   const sub = { color: c.muted };
+  const noticeStyle = (kind) => (kind === 'err' ? { background: c.errBg, color: c.errText } : kind === 'info' ? { background: c.warnBg, color: c.warnText } : { background: c.okBg, color: c.okText });
 
   const currency = quote?.currency || 'UGX';
   const price = quote?.price || 0;
@@ -47,6 +51,14 @@ const PublicTradePanel = ({ trading, theme = 'dark', priceUgx, tab, setTab, draf
   const buyNumber = Number(buyAmount);
   const coinsOut = coinsForMoney(buyNumber, price);
   const buyTooSmall = buyNumber > 0 && buyNumber < min;
+  const cashBalance = cash ? cash.balance : 0;
+  const hasCash = !!cash && cash.balance > 0;
+  // Start on the wallet when it holds cash and on a fresh payment when it does not, until the visitor chooses.
+  useEffect(() => { if (!sourceTouched && cash !== undefined) setSource(hasCash ? 'wallet' : 'pay'); }, [cash, hasCash, sourceTouched]);
+  const walletBuyNumber = Number(buyAmount);
+  const walletCoinsOut = walletBuyNumber > 0 && priceUgx ? CountryService.localToIcan(walletBuyNumber, country, priceUgx) : 0;
+  const walletBuyCheck = validateWalletBuy(buyAmount, cash ? cash.balance : NaN);
+  const walletCurrency = cash?.currency || CountryService.getCurrencyCode(country);
   const walletValueUgx = wallet && priceUgx ? wallet.ican * priceUgx : null;
   const walletValueLocal = wallet && price ? wallet.ican * price : null;
 
@@ -60,7 +72,7 @@ const PublicTradePanel = ({ trading, theme = 'dark', priceUgx, tab, setTab, draf
 
   const submitBuy = async (e) => {
     e.preventDefault();
-    const result = await buyCoins(buyNumber);
+    const result = source === 'wallet' ? await buyWithWallet(buyNumber) : await buyCoins(buyNumber);
     if (result?.success) setBuyAmount('');
   };
 
@@ -155,43 +167,104 @@ const PublicTradePanel = ({ trading, theme = 'dark', priceUgx, tab, setTab, draf
       </div>
 
       {notice && (
-        <p className="rounded-md px-3 py-2 text-xs" role={notice.kind === 'err' ? 'alert' : 'status'} style={notice.kind === 'err' ? { background: c.errBg, color: c.errText } : { background: c.okBg, color: c.okText }}>
+        <p className="rounded-md px-3 py-2 text-xs" role={notice.kind === 'err' ? 'alert' : 'status'} style={noticeStyle(notice.kind)}>
           {notice.text}
         </p>
       )}
 
       {tab === 'buy' && (
         <form onSubmit={submitBuy} className="space-y-3 rounded-xl p-3" style={card}>
-          <label className="block text-xs font-semibold" style={sub} htmlFor="ptp-buy">Amount to pay ({currency})</label>
-          <input
-            id="ptp-buy" type="number" inputMode="decimal" min="0" step="any" value={buyAmount}
-            onChange={(e) => setBuyAmount(e.target.value)} placeholder={min ? `At least ${Math.ceil(min).toLocaleString()}` : 'Amount'}
-            disabled={busy || !price} className="w-full rounded-lg px-3 py-3 text-base tabular-nums" style={field}
-          />
-          <div className="flex flex-wrap gap-1.5">
-            {quickTopUpAmounts(min).map((a) => (
-              <button key={a} type="button" onClick={() => setBuyAmount(String(a))} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ border: `1px solid ${c.fieldBorder}`, color: c.fg }}>
-                {Number(a).toLocaleString()}
+          <div className="flex gap-1 rounded-lg p-1" role="radiogroup" aria-label="Pay with" style={{ background: c.tabsBg }}>
+            {[
+              ['wallet', 'My IcanEra wallet'],
+              ['pay', 'Card / Mobile Money'],
+            ].map(([id, label]) => (
+              <button
+                key={id} type="button" role="radio" aria-checked={source === id}
+                onClick={() => { setSource(id); setSourceTouched(true); clearNotice(); }}
+                className="min-h-[40px] flex-1 rounded-md px-2 text-xs font-semibold"
+                style={source === id ? { background: c.tabOnBg, color: c.tabOnText } : { color: c.soft }}
+              >
+                {label}
               </button>
             ))}
           </div>
-          {price > 0 && (
-            <p className="text-xs tabular-nums" style={sub}>
-              1 ICAN = {formatMoney(price, currency)}.
-              {coinsOut > 0 && <> You get <b style={{ color: c.strong }}>{fmtCoins(coinsOut)} ICAN</b>.</>}
-            </p>
+
+          {source === 'wallet' ? (
+            <>
+              <div className="flex items-baseline justify-between gap-2 rounded-lg px-3 py-2" style={{ background: c.field, border: `1px solid ${c.fieldBorder}` }}>
+                <span className="text-xs font-semibold" style={sub}>Wallet cash</span>
+                <span className="text-sm font-bold tabular-nums" style={{ color: c.strong }}>
+                  {cash === undefined ? '…' : formatMoney(cashBalance, walletCurrency)}
+                </span>
+              </div>
+              <label className="block text-xs font-semibold" style={sub} htmlFor="ptp-buy">Amount to spend ({walletCurrency})</label>
+              <div className="flex gap-2">
+                <input
+                  id="ptp-buy" type="number" inputMode="decimal" min="0" step="any" value={buyAmount}
+                  onChange={(e) => setBuyAmount(e.target.value)} placeholder="Amount"
+                  disabled={busy || !hasCash} className="min-w-0 flex-1 rounded-lg px-3 py-3 text-base tabular-nums" style={field}
+                />
+                <button type="button" disabled={busy || !hasCash} onClick={() => setBuyAmount(String(Math.floor(cashBalance * 100) / 100))} className="shrink-0 rounded-lg px-3 text-xs font-bold disabled:opacity-50" style={{ border: `1px solid ${c.fieldBorder}`, color: c.fg }}>Max</button>
+              </div>
+              {walletCoinsOut > 0 && (
+                <p className="text-xs tabular-nums" style={sub}>
+                  At {fmtUgx(priceUgx)} per coin you get <b style={{ color: c.strong }}>{fmtCoins(walletCoinsOut)} ICAN</b>.
+                </p>
+              )}
+              {cash !== undefined && !hasCash && (
+                <p className="rounded-md px-3 py-2 text-xs" style={{ background: c.warnBg, color: c.warnText }}>
+                  {cash === null ? 'No cash wallet yet.' : 'Your wallet has no cash.'} Add money in your{' '}
+                  <a href="/" className="font-semibold underline">IcanEra wallet</a>, or pay with card or Mobile Money.
+                </p>
+              )}
+              {buyAmount !== '' && walletBuyNumber > 0 && !walletBuyCheck.ok && hasCash && (
+                <p className="text-xs" style={{ color: c.errText }}>{walletBuyCheck.error}</p>
+              )}
+              <button
+                type="submit" disabled={busy || !hasCash || !walletBuyCheck.ok || !priceUgx}
+                className="min-h-[48px] w-full rounded-lg text-sm font-bold disabled:opacity-50" style={{ background: c.buy, color: c.buyText }}
+              >
+                {busy ? 'Buying…' : 'Buy with wallet cash'}
+              </button>
+              <p className="text-[11px] leading-5" style={sub}>
+                Paid from the money already in your IcanEra wallet: no checkout and no payment fee. Coins arrive straight away.
+              </p>
+            </>
+          ) : (
+            <>
+              <label className="block text-xs font-semibold" style={sub} htmlFor="ptp-buy">Amount to pay ({currency})</label>
+              <input
+                id="ptp-buy" type="number" inputMode="decimal" min="0" step="any" value={buyAmount}
+                onChange={(e) => setBuyAmount(e.target.value)} placeholder={min ? `At least ${Math.ceil(min).toLocaleString()}` : 'Amount'}
+                disabled={busy || !price} className="w-full rounded-lg px-3 py-3 text-base tabular-nums" style={field}
+              />
+              <div className="flex flex-wrap gap-1.5">
+                {quickTopUpAmounts(min).map((a) => (
+                  <button key={a} type="button" onClick={() => setBuyAmount(String(a))} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ border: `1px solid ${c.fieldBorder}`, color: c.fg }}>
+                    {Number(a).toLocaleString()}
+                  </button>
+                ))}
+              </div>
+              {price > 0 && (
+                <p className="text-xs tabular-nums" style={sub}>
+                  1 ICAN = {formatMoney(price, currency)}.
+                  {coinsOut > 0 && <> You get <b style={{ color: c.strong }}>{fmtCoins(coinsOut)} ICAN</b>.</>}
+                </p>
+              )}
+              {buyTooSmall && <p className="text-xs" style={{ color: c.errText }}>The smallest purchase is {formatMoney(min, currency)}.</p>}
+              {quoteError && !quote && <p className="text-xs" style={{ color: c.errText }}>{quoteError}</p>}
+              <button
+                type="submit" disabled={busy || !price || !(buyNumber >= min)}
+                className="min-h-[48px] w-full rounded-lg text-sm font-bold disabled:opacity-50" style={{ background: c.buy, color: c.buyText }}
+              >
+                {busy ? 'Opening checkout…' : 'Pay & buy coins'}
+              </button>
+              <p className="text-[11px] leading-5" style={sub}>
+                You pay on a secure checkout (Mobile Money, card or bank). Coins are added to your wallet once the payment is verified.
+              </p>
+            </>
           )}
-          {buyTooSmall && <p className="text-xs" style={{ color: c.errText }}>The smallest purchase is {formatMoney(min, currency)}.</p>}
-          {quoteError && !quote && <p className="text-xs" style={{ color: c.errText }}>{quoteError}</p>}
-          <button
-            type="submit" disabled={busy || !price || !(buyNumber >= min)}
-            className="min-h-[48px] w-full rounded-lg text-sm font-bold disabled:opacity-50" style={{ background: c.buy, color: c.buyText }}
-          >
-            {busy ? 'Opening checkout…' : 'Pay & buy coins'}
-          </button>
-          <p className="text-[11px] leading-5" style={sub}>
-            You pay on a secure checkout (Mobile Money, card or bank). Coins are added to your wallet once the payment is verified.
-          </p>
         </form>
       )}
 

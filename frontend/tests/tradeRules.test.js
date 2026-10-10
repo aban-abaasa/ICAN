@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { orderCrossed, distanceFromMarketPct, validateBooking, validateSell, coinsForMoney, quickTopUpAmounts, friendlyTradeError } from '../src/utils/tradeRules.js';
+import { orderCrossed, distanceFromMarketPct, validateBooking, validateSell, coinsForMoney, quickTopUpAmounts, friendlyTradeError, validateWalletBuy } from '../src/utils/tradeRules.js';
 import { sanitizeLineStyles, DEFAULT_LINE_STYLES } from '../src/utils/lineStyles.js';
 
 test('a buy order is due at or below its target, a sell at or above', () => {
@@ -68,4 +68,14 @@ test('friendlyTradeError explains a missing cash wallet in plain words', () => {
   assert.match(friendlyTradeError('Insufficient IcanEra balance. You have 1, need 2'), /enough coins/);
   assert.equal(friendlyTradeError('Some other thing'), 'Some other thing');
   assert.match(friendlyTradeError(''), /try again/);
+});
+
+test('validateWalletBuy only allows spending what the wallet holds', () => {
+  assert.deepEqual(validateWalletBuy('1500', 5000), { ok: true, amount: 1500 });
+  assert.deepEqual(validateWalletBuy(5000, 5000), { ok: true, amount: 5000 });
+  assert.match(validateWalletBuy(5001, 5000).error, /more than your wallet/);
+  assert.match(validateWalletBuy(0, 5000).error, /how much/);
+  assert.match(validateWalletBuy('', 5000).error, /how much/);
+  assert.match(validateWalletBuy(10, undefined).error, /could not be read/);
+  assert.match(validateWalletBuy(10, NaN).error, /could not be read/);
 });

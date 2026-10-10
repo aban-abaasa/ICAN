@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { toSeries, aggregateSeries, smaSeries, rsiSeries, trendChannel, channelValue, TIMEFRAMES } from '../src/utils/candleSeries.js';
+import { toSeries, aggregateSeries, smaSeries, rsiSeries, trendChannel, channelValue, fillGaps, TIMEFRAMES } from '../src/utils/candleSeries.js';
 
 const row = (iso, o, h, l, c, v = 0) => ({ open_time: iso, open_price: o, high_price: h, low_price: l, close_price: c, trading_volume: v });
 
@@ -91,4 +91,42 @@ test('a perfectly flat market still gets a visible channel', () => {
 test('trendChannel needs three candles and honours the lookback window', () => {
   assert.equal(trendChannel(barsFrom([1, 2]), 10), null);
   assert.equal(trendChannel(barsFrom(Array.from({ length: 50 }, (_, i) => 100 + i)), 20).start, 30);
+});
+
+const at = (iso, o, h, l, c, v = 1) => ({ time: Math.floor(Date.parse(iso) / 1000), open: o, high: h, low: l, close: c, volume: v });
+
+test('fillGaps turns every empty 5-minute window into a flat candle at the last close', () => {
+  const series = [at('2026-10-10T10:00:00Z', 5000, 5010, 4990, 5005), at('2026-10-10T10:20:00Z', 5005, 5030, 5000, 5020)];
+  const out = fillGaps(series, 300, series[1].time);
+  assert.equal(out.length, 5); // 10:00, 10:05, 10:10, 10:15, 10:20
+  for (const f of out.slice(1, 4)) {
+    assert.deepEqual([f.open, f.high, f.low, f.close, f.volume], [5005, 5005, 5005, 5005, 0]);
+  }
+  assert.deepEqual(out.map((c) => c.time - out[0].time), [0, 300, 600, 900, 1200]);
+  assert.equal(out[4].close, 5020);
+});
+
+test('fillGaps leaves a contiguous series alone and does not invent volume', () => {
+  const series = [at('2026-10-10T10:00:00Z', 1, 1, 1, 1), at('2026-10-10T10:05:00Z', 1, 2, 1, 2)];
+  assert.deepEqual(fillGaps(series, 300, series[1].time), series);
+});
+
+test('fillGaps runs on to the current window, but never past it', () => {
+  const series = [at('2026-10-10T10:00:00Z', 5000, 5000, 5000, 5000)];
+  const now = Math.floor(Date.parse('2026-10-10T10:17:30Z') / 1000);
+  const out = fillGaps(series, 300, now);
+  assert.equal(out.length, 4); // 10:00, 10:05, 10:10, 10:15
+  assert.equal(out[3].time, Math.floor(Date.parse('2026-10-10T10:15:00Z') / 1000));
+  assert.equal(fillGaps(series, 300, series[0].time).length, 1);
+});
+
+test('fillGaps handles empty input and caps a very long history', () => {
+  assert.deepEqual(fillGaps([]), []);
+  const series = [at('2026-10-10T10:00:00Z', 1, 1, 1, 1), at('2026-10-20T10:00:00Z', 2, 2, 2, 2)];
+  const out = fillGaps(series, 300, series[1].time, 100);
+  assert.ok(out.length <= 100);
+  assert.equal(out[out.length - 1].close, 2); // newest candle survives
+  const huge = fillGaps([at('2020-01-01T00:00:00Z', 7, 7, 7, 7)], 300, Math.floor(Date.parse('2026-10-10T10:00:00Z') / 1000), 50);
+  assert.equal(huge.length, 1);
+  assert.equal(huge[0].close, 7);
 });

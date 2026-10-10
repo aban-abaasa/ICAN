@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, ArrowRight, BarChart3, HelpCircle, LineChart as LineChartIcon, Moon, RefreshCw, Sun, X } from 'lucide-react';
 import IcanTradingChart from './IcanTradingChart';
 import IcanAnalysisPanel from './IcanAnalysisPanel';
@@ -115,6 +115,15 @@ const PublicIcanChartPage = () => {
   const priceUgx = snapshot?.price_ugx != null ? Number(snapshot.price_ugx) : latest?.close ?? null;
   const priceUsd = snapshot?.price_usd != null ? Number(snapshot.price_usd) : null;
   const trading = usePublicTrading(priceUgx);
+
+  // A new message (payment cancelled, order booked, ...) always appears at the top of the panel; bring that into
+  // view rather than leaving it scrolled out of sight behind the sheet's header.
+  const sheetScrollRef = useRef(null);
+  const asideRef = useRef(null);
+  useEffect(() => {
+    if (!trading.notice) return;
+    [sheetScrollRef.current, asideRef.current].forEach((el) => { if (el) el.scrollTo({ top: 0, behavior: 'smooth' }); });
+  }, [trading.notice]);
 
   const toggleTheme = () => {
     const next = dark ? 'light' : 'dark';
@@ -254,7 +263,7 @@ const PublicIcanChartPage = () => {
       <main className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* The chart owns the whole first screen: no card, no border, edge to edge. On a phone it leaves a strip of
             the page showing underneath, and a vertical swipe scrolls the page (see the chart's handleScroll). */}
-        <section id="chart" aria-label="icaneracoin candlestick chart" className="h-[74dvh] min-h-[440px] w-full lg:h-[calc(100dvh-3rem)]">
+        <section id="chart" aria-label="icaneracoin candlestick chart" className="h-[calc(100svh-6.5rem-env(safe-area-inset-bottom))] min-h-[420px] w-full lg:h-[calc(100dvh-3rem)]">
           {error ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
               <p className={k.body}>The live chart could not be loaded right now.</p>
@@ -280,7 +289,7 @@ const PublicIcanChartPage = () => {
         </section>
 
         {isDesktop && (
-          <aside aria-label="Trade icaneracoin" className="sticky top-12 h-[calc(100dvh-3rem)] overflow-y-auto border-l" style={{ background: c.sheet, borderColor: c.cardBorder }}>
+          <aside ref={asideRef} aria-label="Trade icaneracoin" className="sticky top-12 h-[calc(100dvh-3rem)] overflow-y-auto border-l" style={{ background: c.sheet, borderColor: c.cardBorder }}>
             {panel}
           </aside>
         )}
@@ -352,13 +361,13 @@ const PublicIcanChartPage = () => {
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Trade icaneracoin">
           <div className="absolute inset-0" style={{ background: c.scrim }} onClick={() => setSheetOpen(false)} aria-hidden="true" />
           <div className="absolute inset-x-0 bottom-0 flex max-h-[90dvh] flex-col rounded-t-2xl shadow-2xl" style={{ background: c.sheet, color: c.fg, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-            <div className="flex items-center justify-between px-4 pt-3">
-              <span className="mx-auto h-1.5 w-10 rounded-full" style={{ background: c.fieldBorder }} aria-hidden="true" />
-              <button type="button" onClick={() => setSheetOpen(false)} aria-label="Close" className="absolute right-3 top-2 rounded-md p-2" style={{ color: c.soft }}>
+            <div className="relative flex h-11 shrink-0 items-center justify-center">
+              <span className="h-1.5 w-10 rounded-full" style={{ background: c.fieldBorder }} aria-hidden="true" />
+              <button type="button" onClick={() => setSheetOpen(false)} aria-label="Close" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2" style={{ color: c.soft }}>
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="overflow-y-auto overscroll-contain">{panel}</div>
+            <div ref={sheetScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{panel}</div>
           </div>
         </div>
       )}

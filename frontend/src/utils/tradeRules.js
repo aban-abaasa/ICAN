@@ -62,9 +62,19 @@ export const quickTopUpAmounts = (minimum) => {
 export const friendlyTradeError = (message) => {
   const text = String(message || '');
   if (/No wallet found for currency/i.test(text)) {
-    return 'Your cash wallet is not set up yet. Open your IcanEra wallet once to create it (it takes a minute), then come back to sell or fill orders here.';
+    return 'Your cash wallet is not set up yet. Open your IcanEra wallet once to create it (it takes a minute), then come back to buy, sell or fill orders here.';
   }
   if (/Insufficient balance/i.test(text)) return 'Your cash wallet balance is too low for this order.';
   if (/Insufficient IcanEra balance/i.test(text)) return 'You do not have enough coins for this.';
   return text || 'Something went wrong. Please try again.';
+};
+
+// Buying with money already in the visitor's IcanEra wallet (no checkout, no gateway fee). `balance` is their cash
+// balance in their own currency. Returns { ok, amount } or { ok: false, error }.
+export const validateWalletBuy = (amount, balance) => {
+  const a = Number(amount);
+  if (!(a > 0)) return { ok: false, error: 'Enter how much to spend.' };
+  if (!Number.isFinite(balance)) return { ok: false, error: 'Your wallet balance could not be read yet. Please try again.' };
+  if (a > balance + 1e-9) return { ok: false, error: 'That is more than your wallet balance.' };
+  return { ok: true, amount: a };
 };
