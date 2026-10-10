@@ -10,6 +10,7 @@ import { ArrowRight, Loader, AlertCircle } from 'lucide-react';
 import paymentRequestService from '../services/paymentRequestService';
 import { walletTransactionService } from '../services/walletTransactionService';
 import { useAuth } from '../context/AuthContext';
+import LoadingPage from '../components/LoadingPage';
 
 const PaymentPage = () => {
   const { paymentCode } = useParams();
@@ -109,14 +110,7 @@ const PaymentPage = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
-        <div className="text-center">
-          <Loader className="w-12 h-12 animate-spin text-cyan-400 mx-auto mb-4" />
-          <p className="text-white font-medium">Loading payment request...</p>
-        </div>
-      </div>
-    );
+    return <LoadingPage tone="ice" label="Loading payment request…" />;
   }
 
   return (

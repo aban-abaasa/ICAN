@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { BadgeCheck, CheckCircle2, Lock, Loader2, Mail, MessageSquarePlus, ShieldX, Wallet } from 'lucide-react';
+import { BadgeCheck, CheckCircle2, Lock, Mail, MessageSquarePlus, ShieldX, Wallet } from 'lucide-react';
 import cmmsServiceProviderContractsService from '../services/cmmsServiceProviderContractsService';
 import { signIn, signUp } from '../services/authService';
 import { supabase } from '../lib/supabase/client';
+import LoadingPage from './LoadingPage';
 
 // Google sign-in redirects the whole page away and back, so the gate
 // credential the provider already typed in (and which accessMode/verify
@@ -174,11 +175,11 @@ const PublicServiceProviderContract = () => {
 
   const content = info?.content || {};
 
+  if (phase === 'loading') return <LoadingPage tone="ice" label="Opening your contract…" />;
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 flex items-center justify-center px-4 py-10 text-white">
       <section className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900/80 p-7 shadow-2xl backdrop-blur">
-        {phase === 'loading' && <Loader2 className="w-10 h-10 mx-auto animate-spin text-indigo-300" />}
-
         {phase === 'invalid' && (
           <div className="text-center">
             <ShieldX className="w-14 h-14 mx-auto mb-4 text-red-400" />

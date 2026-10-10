@@ -12,6 +12,7 @@ import WalletTopUpInline from './WalletTopUpInline';
 import useWalletReady from '../hooks/useWalletReady';
 import { getInstallmentShelf, formatMoney } from '../services/installmentService';
 import usePersistedCart, { markCartOpen, consumeCartOpen } from '../hooks/usePersistedCart';
+import LoadingPage from './LoadingPage';
 
 // Presets for the customer-chosen delivery deadline — mirrors the backend's
 // delivery.min_deadline_hours/delivery.max_deadline_hours bounds (1-48h by
@@ -268,11 +269,7 @@ const PublicDropshipStorefront = ({ businessProfileId }) => {
   };
 
   if (loading) {
-    return (
-      <div className="fixed inset-0 bg-slate-950 flex items-center justify-center">
-        <Loader className="w-10 h-10 text-white animate-spin" />
-      </div>
-    );
+    return <LoadingPage fixed tone="ice" label="Opening the store…" />;
   }
 
   if (notFound) {

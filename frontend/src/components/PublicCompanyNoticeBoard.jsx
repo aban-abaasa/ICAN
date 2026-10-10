@@ -30,6 +30,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePinPrompt } from './PinPromptDialog';
 import { AuthPage } from './auth';
 import BusinessChatWidget from './BusinessChatWidget';
+import LoadingPage from './LoadingPage';
 
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
 
@@ -1074,12 +1075,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   );
 
   if (loading) {
-    return (
-      <div className="icanera-nb min-h-screen flex items-center justify-center" data-theme={theme}>
-        <style>{NB_STYLES}</style>
-        <Loader className="w-8 h-8 nb-link animate-spin" />
-      </div>
-    );
+    return <LoadingPage tone={theme === 'dark' ? 'dark' : 'light'} label="Opening the notice board…" />;
   }
 
   if (notFound) {

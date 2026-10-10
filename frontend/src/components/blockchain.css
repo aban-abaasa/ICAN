@@ -1,0 +1,175 @@
+/* ==========================================================================
+   IcanEra blockchain loading backdrop.
+
+   BlockchainBackdrop.jsx draws a lattice of interlocking diamonds (each block
+   overlaps its neighbours like links in chain mail), with light sweeping
+   through the mesh, "blocks" lighting up one after another along linked
+   chains, data packets running round the block edges, and hashes drifting by.
+   LoadingPage.jsx adds the diamond, a chain-of-blocks progress and a ticker.
+
+   Colours arrive as CSS variables set inline by the component (--bc-*), never
+   as Tailwind classes: the app-wide theme override repaints those.
+   Everything moves on transform / opacity / dash offset only, and all of it
+   stops under prefers-reduced-motion.
+   ========================================================================== */
+
+.bc-backdrop {
+  position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+  background: var(--bc-bg);
+}
+.bc-backdrop__svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* keep the middle calm so the diamond and the words stay readable */
+.bc-backdrop__veil {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 52% 46% at 50% 50%, var(--bc-bg) 0%, var(--bc-bg-soft) 55%, transparent 100%),
+    radial-gradient(ellipse 120% 100% at 50% 50%, transparent 55%, var(--bc-bg) 100%);
+}
+
+/* ── the two interlocked lattices fade in and out in turn, forever ──────── */
+.bc-breathe { animation: bc-breathe 5s ease-in-out infinite; }
+.bc-breathe--b { animation-delay: -2.5s; }
+@keyframes bc-breathe {
+  0%, 100% { opacity: .15; }
+  50%      { opacity: 1; }
+}
+
+/* ── light running through the mesh ─────────────────────────────────────── */
+.bc-sweep { animation: bc-sweep 7s ease-in-out infinite; }
+@keyframes bc-sweep {
+  0%   { transform: translateX(-900px); }
+  100% { transform: translateX(2100px); }
+}
+
+/* ── packets running round a block's edge / along a chain ───────────────── */
+.bc-packet {
+  fill: none; stroke-linecap: round;
+  stroke-dasharray: 9 91; stroke-dashoffset: 0;
+  animation: bc-run 3.8s linear infinite;
+  animation-delay: calc(var(--d, 0) * 1s);
+}
+.bc-packet--long { stroke-dasharray: 5 95; animation-duration: 5.2s; }
+@keyframes bc-run { to { stroke-dashoffset: -100; } }
+
+/* ── a block being "mined": glows, then settles ─────────────────────────── */
+.bc-pulse {
+  transform-box: fill-box; transform-origin: center;
+  animation: bc-pulse 6s ease-in-out infinite;
+  animation-delay: calc(var(--d, 0) * 1s);
+  opacity: 0;
+}
+@keyframes bc-pulse {
+  0%, 100% { opacity: 0; transform: scale(.82); }
+  14%      { opacity: .95; transform: scale(1); }
+  36%      { opacity: .15; transform: scale(1.06); }
+  50%      { opacity: 0; transform: scale(1.1); }
+}
+
+/* ── blocks along a chain light up in sequence ──────────────────────────── */
+.bc-link { fill: none; stroke-linecap: round; opacity: .55; }
+.bc-node {
+  transform-box: fill-box; transform-origin: center;
+  animation: bc-node 5.2s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * .5s);
+}
+@keyframes bc-node {
+  0%, 62%, 100% { fill-opacity: .1; stroke-opacity: .55; transform: scale(1); }
+  10%           { fill-opacity: .95; stroke-opacity: 1; transform: scale(1.35); }
+  26%           { fill-opacity: .45; stroke-opacity: .9; transform: scale(1); }
+}
+
+/* ── hashes drifting through the lattice ────────────────────────────────── */
+.bc-hash {
+  position: absolute; white-space: nowrap; opacity: 0;
+  font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .06em; color: var(--bc-accent);
+  animation: bc-hash 9s ease-in-out infinite;
+  animation-delay: calc(var(--d, 0) * 1s);
+}
+@keyframes bc-hash {
+  0%   { opacity: 0; transform: translateY(8px); }
+  18%  { opacity: .5; }
+  70%  { opacity: .32; }
+  100% { opacity: 0; transform: translateY(-16px); }
+}
+@media (max-width: 640px) { .bc-hash:nth-of-type(n+7) { display: none; } }
+
+/* ==========================================================================
+   Chain-of-blocks progress (BlockChainProgress)
+   ========================================================================== */
+.bc-chain { display: inline-flex; align-items: center; justify-content: center; }
+.bc-chain__block { width: 22px; height: 22px; flex: none; overflow: visible; }
+.bc-chain__block path {
+  fill: var(--bc-accent); fill-opacity: .12;
+  stroke: var(--bc-accent); stroke-opacity: .5; stroke-width: 1.6; stroke-linejoin: round;
+}
+.bc-chain--auto .bc-chain__block path {
+  transform-box: fill-box; transform-origin: center;
+  animation: bc-chain-block 2.4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * .32s);
+}
+.bc-chain__block[data-lit="true"] path { fill-opacity: .9; stroke-opacity: 1; }
+@keyframes bc-chain-block {
+  0%, 60%, 100% { fill-opacity: .12; stroke-opacity: .5; transform: scale(1); }
+  14%           { fill-opacity: .95; stroke-opacity: 1; transform: scale(1.22); }
+  34%           { fill-opacity: .55; stroke-opacity: .9; transform: scale(1); }
+}
+.bc-chain__link {
+  width: 16px; height: 2px; flex: none; position: relative; overflow: hidden;
+  background: var(--bc-accent); opacity: .3;
+}
+.bc-chain--auto .bc-chain__link::after {
+  content: ''; position: absolute; inset: 0; width: 40%;
+  background: var(--bc-ink); opacity: .9;
+  animation: bc-chain-link 2.4s linear infinite;
+  animation-delay: calc(var(--i) * .32s);
+}
+@keyframes bc-chain-link {
+  0%, 55%, 100% { transform: translateX(-100%); }
+  18%           { transform: translateX(260%); }
+}
+.bc-chain__link[data-lit="true"] { opacity: .9; }
+
+/* ==========================================================================
+   Block ledger (BlockLedger.jsx): real hashed blocks as woven diamond links.
+   ========================================================================== */
+.bc-ledger-wrap { display: flex; flex-direction: column; align-items: center; }
+.bc-ledger { width: min(86vw, 400px); height: auto; display: block; overflow: hidden; }
+.bc-ledger__slot { transition: transform .65s cubic-bezier(.22, 1, .36, 1), opacity .65s ease; }
+.bc-ledger__slot.is-leaving { opacity: 0; }
+.bc-ledger__new {
+  transform-box: fill-box; transform-origin: center;
+  animation: bc-ledger-in .8s cubic-bezier(.22, 1, .36, 1) both;
+}
+@keyframes bc-ledger-in {
+  from { opacity: 0; transform: scale(.55); }
+  to   { opacity: 1; transform: none; }
+}
+.bc-ledger text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.bc-ledger__h { font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.bc-ledger__m { font-size: 9.5px; font-weight: 600; letter-spacing: .04em; }
+.bc-ledger__s { font-size: 7.5px; font-weight: 500; letter-spacing: .02em; }
+.bc-ledger__pin {
+  transform-box: fill-box; transform-origin: center;
+  animation: bc-pin 1.8s ease-in-out infinite;
+}
+@keyframes bc-pin {
+  0%, 100% { transform: scale(1); opacity: .9; }
+  50%      { transform: scale(1.7); opacity: .45; }
+}
+
+.bc-ticker {
+  font: 500 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .08em; color: var(--bc-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bc-ledger__slot { transition: none !important; }
+  .bc-ledger__new, .bc-ledger__pin { animation: none !important; }
+  .bc-breathe, .bc-sweep, .bc-packet, .bc-pulse, .bc-node, .bc-hash,
+  .bc-chain--auto .bc-chain__block path, .bc-chain--auto .bc-chain__link::after { animation: none !important; }
+  .bc-breathe { opacity: .6; }
+  .bc-pulse { opacity: .25; }
+  .bc-hash { opacity: .28; }
+}

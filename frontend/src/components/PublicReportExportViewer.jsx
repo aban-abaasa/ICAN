@@ -6,6 +6,7 @@ import {
   verifyReportExportShareEmail
 } from '../services/cmmsReportShareService';
 import { resolveMediaValues } from '../services/r2StorageService';
+import LoadingPage from './LoadingPage';
 
 // Same scoped-palette technique as PublicReportViewer.jsx (see that file
 // for the full reasoning): this page has no ICAN session and no app theme
@@ -303,12 +304,7 @@ const PublicReportExportViewer = ({ shareToken }) => {
   };
 
   if (status === 'loading') {
-    return (
-      <div className="icanera-rs min-h-screen flex items-center justify-center">
-        <style>{RS_STYLES}</style>
-        <Loader className="w-8 h-8 animate-spin" style={{ color: 'var(--rs-green)' }} />
-      </div>
-    );
+    return <LoadingPage label="Opening the report…" />;
   }
 
   if (status === 'invalid') {

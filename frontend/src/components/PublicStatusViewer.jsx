@@ -1,12 +1,13 @@
 import './pitchin-classic.css';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { X, Heart, Share2, Send, MessageCircle, AlertCircle, AlertTriangle, Loader, Check, Compass, Volume2, VolumeX } from 'lucide-react';
+import { X, Heart, Share2, Send, MessageCircle, AlertCircle, AlertTriangle, Check, Compass, Volume2, VolumeX } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
 import { getStatusById, incrementStatusView } from '../services/statusService';
 import { getStatusMessages, sendStatusMessage, subscribeToStatusMessages } from '../services/statusMessagesService';
 import StatusCaptionText from './status/StatusCaptionText';
 import { Linkify } from '../utils/linkify';
+import LoadingPage from './LoadingPage';
 
 const timeAgo = (timestamp) => {
   if (!timestamp) return 'Now';
@@ -240,11 +241,7 @@ const PublicStatusViewer = ({ statusId, feedStatuses = [], onPosition, onEnd, on
   };
 
   if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black flex items-center justify-center">
-        <Loader className="w-10 h-10 text-white animate-spin" />
-      </div>
-    );
+    return <LoadingPage fixed tone="ice" bg="#000000" label="Loading the update…" />;
   }
 
   if (notFound) {

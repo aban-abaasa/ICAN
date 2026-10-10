@@ -7,6 +7,7 @@ import {
   quoteCardWalletPayment, payCardWithWallet,
 } from '../services/digitalCardService';
 import { detectUgandaMobileNetwork } from '../services/icanWalletService';
+import LoadingPage from '../components/LoadingPage';
 
 // Only loaded when a scanner chooses a wallet option and needs to sign in.
 const AuthPageLazy = lazy(() => import('../components/auth').then((m) => ({ default: m.AuthPage })));
@@ -199,10 +200,11 @@ const CardPayPage = ({ token }) => {
 
   const input = 'w-full px-3 py-3 rounded-lg bg-slate-800 border border-slate-600 text-white placeholder-gray-500 focus:outline-none focus:border-blue-400';
 
+  if (info === undefined) return <LoadingPage tone="ice" label="Preparing your card payment…" />;
+
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-slate-800/70 border border-slate-700 rounded-2xl p-6 text-white">
-        {info === undefined && <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" /></div>}
         {info === null && (
           <div className="text-center py-6">
             <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
