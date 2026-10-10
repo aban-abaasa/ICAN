@@ -64,8 +64,10 @@ import {
 } from 'lucide-react';
 import SmartTransactionEntry from './SmartTransactionEntry';
 import PendingQrApprovals from './PendingQrApprovals';
-import ReceiptTally, { TruthBadge } from './ReceiptTally';
-import { getProofStatus, getProofLabel, getReceiptNumber } from '../utils/transactionReceipt';
+import { TruthBadge } from './ReceiptTally';
+import DashboardTransactionLedger from './DashboardTransactionLedger';
+import { businessNameOf } from '../utils/dashboardLedger';
+import { getProofLabel, getReceiptNumber } from '../utils/transactionReceipt';
 import {
   analyzeReceiptTruth, buildReceiptTruth, formatFlags, getEvidenceLabel, getTruthStatement, shortSeal,
 } from '../utils/receiptTruth';
@@ -1431,6 +1433,20 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   // '' means "all businesses combined" (previous behavior).
   const [reportBusinessId, setReportBusinessId] = useState('');
   const [reportBusinessProfiles, setReportBusinessProfiles] = useState([]);
+  // Exact business name for any transaction, so rows and receipts can say WHICH
+  // business a record belongs to when the user runs several. Merges every
+  // business list this screen loads, because the Record Transaction list
+  // (recordBusinessProfiles) is only filled once that modal has been opened.
+  const businessNameById = useMemo(() => {
+    const names = new Map();
+    [dashboardBusinessProfiles, reportBusinessProfiles, recordBusinessProfiles].forEach((list) => {
+      (list || []).forEach((p) => {
+        if (p?.id && p.business_name && !names.has(p.id)) names.set(p.id, p.business_name);
+      });
+    });
+    return names;
+  }, [dashboardBusinessProfiles, reportBusinessProfiles, recordBusinessProfiles]);
+  const getTxBusinessName = (tx) => businessNameOf(tx, businessNameById);
   const [reportFilteredMetrics, setReportFilteredMetrics] = useState(null);
   const [isLoadingReportMetrics, setIsLoadingReportMetrics] = useState(false);
   const [showDataCleanup, setShowDataCleanup] = useState(false);
@@ -1476,8 +1492,6 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
       return !Number.isNaN(d.getTime()) && d >= cutoff;
     });
   })();
-  const txPeriodIncome  = txPeriodFiltered.filter(t => t.transaction_type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
-  const txPeriodExpense = txPeriodFiltered.filter(t => t.transaction_type !== 'income').reduce((s, t) => s + (t.amount || 0), 0);
   // Receipt truth for the period list (grades, flags, seals). Sealing hashes every row, so it
   // is recomputed only when the records or the period change -- not on every render.
   const periodTruth = useMemo(() => analyzeReceiptTruth(txPeriodFiltered), [transactions, txPeriod]);
@@ -7474,222 +7488,27 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
 
       {/* ====== TRANSACTIONS SECTION - COLLAPSIBLE ====== */}
       <div className="px-4 py-4">
-        {/* Header row */}
-        <button
-          onClick={() => toggleSection('recentTransactions')}
-          className="w-full p-3 rounded-lg border flex items-center justify-between transition-all"
-          style={{
+        <DashboardTransactionLedger
+          transactions={txPeriodFiltered}
+          period={txPeriod}
+          onPeriodChange={setTxPeriod}
+          periodLabel={txPeriodLabels[txPeriod]}
+          expanded={Boolean(expandedSections.recentTransactions)}
+          onToggle={() => toggleSection('recentTransactions')}
+          headerStyle={{
             background: expandedSections.recentTransactions ? modePalette.progressCard : modePalette.sectionBg,
             borderColor: expandedSections.recentTransactions ? 'var(--color-primary)' : 'var(--color-border)'
           }}
-        >
-          <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
-            <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{txPeriodLabels[txPeriod]} Transactions</span>
-            {txPeriodFiltered.length > 0 && (
-              <span className="text-xs px-2 py-1 rounded" style={{ backgroundColor: 'var(--color-primaryLight)', color: 'var(--color-text)' }}>
-                {txPeriodFiltered.length}
-              </span>
-            )}
-          </div>
-          <ChevronDown className={`w-5 h-5 transition-transform ${expandedSections.recentTransactions ? 'rotate-180' : ''}`} style={{ color: 'var(--color-primary)' }} />
-        </button>
-
-        {/* Period tabs — always visible */}
-        <div className="flex gap-1.5 mt-2">
-          {[
-            { id: 'today', label: 'Today' },
-            { id: 'week',  label: 'Week'  },
-            { id: 'month', label: 'Month' },
-            { id: 'year',  label: 'Year'  },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setTxPeriod(tab.id)}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
-                txPeriod === tab.id
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'text-gray-400 hover:text-white border-transparent'
-              }`}
-              style={txPeriod !== tab.id ? { backgroundColor: 'var(--color-bgSecondary)' } : {}}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* In / Out summary strip — always visible */}
-        {txPeriodFiltered.length > 0 && (
-          <div className="flex gap-2 mt-2">
-            <div className="flex-1 rounded-lg px-3 py-1.5 text-center" style={{ backgroundColor: 'var(--color-bgSecondary)' }}>
-              <p className="text-xs text-green-400 font-semibold">+{formatCurrency(txPeriodIncome)}</p>
-              <p className="text-[10px] text-gray-500">In</p>
-            </div>
-            <div className="flex-1 rounded-lg px-3 py-1.5 text-center" style={{ backgroundColor: 'var(--color-bgSecondary)' }}>
-              <p className="text-xs text-red-400 font-semibold">-{formatCurrency(txPeriodExpense)}</p>
-              <p className="text-[10px] text-gray-500">Out</p>
-            </div>
-            <div className="flex-1 rounded-lg px-3 py-1.5 text-center" style={{ backgroundColor: 'var(--color-bgSecondary)' }}>
-              <p className={`text-xs font-semibold ${(txPeriodIncome - txPeriodExpense) >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
-                {(txPeriodIncome - txPeriodExpense) >= 0 ? '+' : ''}{formatCurrency(txPeriodIncome - txPeriodExpense)}
-              </p>
-              <p className="text-[10px] text-gray-500">Net</p>
-            </div>
-          </div>
-        )}
-
-        {/* Expanded Content */}
-        {expandedSections.recentTransactions && (
-          <div className="mt-3">
-            {txPeriodFiltered.length > 0 ? (() => {
-              // Business / Personal split for this period
-              const bizTx  = txPeriodFiltered.filter(t => (t.record_category || t.metadata?.record_category) === 'business');
-              const persTx = txPeriodFiltered.filter(t => (t.record_category || t.metadata?.record_category) !== 'business');
-              const bizAmt  = bizTx.reduce((s, t)  => s + Math.abs(t.amount || 0), 0);
-              const persAmt = persTx.reduce((s, t) => s + Math.abs(t.amount || 0), 0);
-
-              // Smart date label based on active period
-              const fmtTxDate = (raw) => {
-                const d = new Date(raw);
-                if (txPeriod === 'today') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                if (txPeriod === 'week')  return d.toLocaleDateString([], { weekday: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-              };
-
-              return (
-                <>
-                  {/* Business vs Personal split */}
-                  <div className="flex gap-2 mb-3">
-                    <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-blue-500/20 bg-blue-500/8">
-                      <span className="text-base">🏢</span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-blue-300">{bizTx.length} Business</p>
-                        <p className="text-[10px] text-blue-400/70 truncate">{formatCurrency(bizAmt)}</p>
-                      </div>
-                    </div>
-                    <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl border border-purple-500/20 bg-purple-500/8">
-                      <span className="text-base">👤</span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-purple-300">{persTx.length} Personal</p>
-                        <p className="text-[10px] text-purple-400/70 truncate">{formatCurrency(persAmt)}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <ReceiptTally
-                    truth={periodTruth}
-                    formatCurrency={formatCurrency}
-                    onlyMissing={showOnlyNoProof}
-                    onToggleMissing={() => setShowOnlyNoProof((v) => !v)}
-                  />
-
-                  {/* Transaction rows */}
-                  <div className="space-y-2 max-h-80 overflow-y-auto pr-0.5">
-                    {(showOnlyNoProof ? txPeriodFiltered.filter((t) => getProofStatus(t) === 'system') : txPeriodFiltered).slice(0, 30).map((transaction) => {
-                      const recCat    = transaction.record_category || transaction.metadata?.record_category || 'personal';
-                      const isBiz     = recCat === 'business';
-                      const isIncome  = transaction.transaction_type === 'income';
-                      const emoji     = transaction.metadata?.categoryEmoji || transaction.categoryEmoji || null;
-                      const catName   = transaction.metadata?.categoryName || transaction.metadata?.category || null;
-
-                      return (
-                        <div
-                          key={transaction.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setReceiptTransaction(transaction)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') setReceiptTransaction(transaction); }}
-                          className="flex items-center gap-3 p-3 rounded-xl border transition-all group cursor-pointer"
-                          style={{ backgroundColor: 'var(--color-bgSecondary)', borderColor: 'var(--color-border)' }}
-                        >
-                          {/* Category emoji / fallback icon */}
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-lg ${
-                            isIncome ? 'bg-green-500/15' : 'bg-red-500/15'
-                          }`}>
-                            {emoji
-                              ? <span>{emoji}</span>
-                              : isIncome
-                                ? <TrendingUp className="w-5 h-5 text-green-400" />
-                                : <TrendingDown className="w-5 h-5 text-red-400" />
-                            }
-                          </div>
-
-                          {/* Description + meta */}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>
-                              {transaction.description || 'Transaction'}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                                isBiz
-                                  ? 'bg-blue-500/20 text-blue-300'
-                                  : 'bg-purple-500/20 text-purple-300'
-                              }`}>
-                                {isBiz ? '🏢 Biz' : '👤 Me'}
-                              </span>
-                              {catName && (
-                                <span className="text-[10px] capitalize truncate max-w-20" style={{ color: 'var(--color-textSecondary)' }}>
-                                  {catName}
-                                </span>
-                              )}
-                              <TruthBadge row={periodTruthRows.get(transaction)} tx={transaction} />
-                              <span className="text-[10px] ml-auto" style={{ color: 'var(--color-textSecondary)' }}>
-                                {fmtTxDate(transaction.created_at)}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Amount + delete */}
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <p className={`text-sm font-bold ${isIncome ? 'text-green-400' : 'text-red-400'}`}>
-                              {isIncome ? '+' : '-'}{formatCurrency(Math.abs(transaction.amount || 0))}
-                            </p>
-                            {transaction.involves_two_accounts ? (
-                              <span
-                                className="p-1.5 text-amber-300/80"
-                                title={transaction.archived_at ? 'Archived — involves two accounts, never deleted' : 'Involves two accounts — can never be deleted'}
-                              >
-                                <Lock className="w-3.5 h-3.5" />
-                              </span>
-                            ) : (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleDeleteTransaction(transaction.id, transaction.description || 'Transaction'); }}
-                                className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {txPeriodFiltered.length > 30 && (
-                      <p className="text-center text-xs py-2" style={{ color: 'var(--color-textSecondary)' }}>
-                        +{txPeriodFiltered.length - 30} more — open Reports for full history
-                      </p>
-                    )}
-                  </div>
-                </>
-              );
-            })() : (
-              <div className="text-center py-8">
-                <Activity className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-                <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>
-                  No transactions for {txPeriodLabels[txPeriod].toLowerCase()} period
-                </p>
-                <button
-                  onClick={() => { setRecordTypeChoice(''); setShowRecordTypeModal(true); }}
-                  className="mt-3 px-4 py-2 rounded-lg text-sm font-medium transition"
-                  style={{ backgroundColor: 'var(--color-primary)', color: 'var(--color-text)' }}
-                >
-                  Record One
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+          formatCurrency={formatCurrency}
+          businessNames={businessNameById}
+          truth={periodTruth}
+          truthRows={periodTruthRows}
+          showOnlyNoProof={showOnlyNoProof}
+          onToggleNoProof={() => setShowOnlyNoProof((v) => !v)}
+          onOpenReceipt={setReceiptTransaction}
+          onDelete={(tx) => handleDeleteTransaction(tx.id, tx.description || 'Transaction')}
+          onRecord={() => { setRecordTypeChoice(''); setShowRecordTypeModal(true); }}
+        />
       </div>
 
       {/* ====== WALLET ACCOUNTS SECTION - COLLAPSIBLE ====== */}
@@ -8429,6 +8248,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                   const emoji    = transaction.metadata?.categoryEmoji || transaction.categoryEmoji || null;
                   const catName  = transaction.metadata?.categoryName || transaction.metadata?.category || null;
                   const chainHash = txChainHashes[transaction.id];
+                  const bizName  = isBiz ? getTxBusinessName(transaction) : null;
 
                   // Sold-item stats
                   const desc   = (transaction.description || '').trim();
@@ -8474,6 +8294,15 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                           {rankMedal && <span className="text-xs flex-shrink-0">{rankMedal}</span>}
                         </div>
                         <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                          {/* Exact business this record belongs to (matters when the user has several) */}
+                          {bizName && (
+                            <span
+                              className="text-[9px] font-bold px-1.5 py-0.5 rounded-full truncate max-w-[9rem] bg-blue-500/20 text-blue-300"
+                              title={bizName}
+                            >
+                              🏢 {bizName}
+                            </span>
+                          )}
                           {catName && (
                             <span className="text-[9px] capitalize" style={{ color: 'var(--color-textSecondary)' }}>
                               {catName}
@@ -10199,7 +10028,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {receiptTransaction && (
         <TransactionReceiptModal
           transaction={receiptTransaction}
-          businessName={recordBusinessProfiles.find((p) => p.id === (receiptTransaction.business_profile_id || receiptTransaction.metadata?.business_profile_id))?.business_name || null}
+          businessName={getTxBusinessName(receiptTransaction)}
           onClose={() => setReceiptTransaction(null)}
           onProofAttached={(updated) => {
             setReceiptTransaction(updated);

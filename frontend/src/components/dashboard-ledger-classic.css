@@ -1,0 +1,235 @@
+/* ── Classic transaction ledger (Dashboard) ──────────────────────────────────
+   A printed account statement: serif entries, small-caps labels, hairline and
+   double rules, a diamond divider and index-tab periods (same language as the
+   classic wallet-access card / account menu).
+
+   Every colour comes from the active theme (--color-primary, --color-border,
+   --color-text, ...) so the ledger follows dark, light, purple, green, ocean
+   and sienna instead of carrying its own palette. Only the money-in / money-out
+   hues are fixed, and they flip to darker shades on the light theme. */
+
+.dl {
+  --dl-line: color-mix(in srgb, var(--color-primary) 38%, var(--color-border));
+  --dl-hair: color-mix(in srgb, var(--color-border) 80%, transparent);
+  --dl-wash: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --dl-in: #4ade80;
+  --dl-out: #f87171;
+  --dl-serif: "Playfair Display", Georgia, "Iowan Old Style", "Times New Roman", serif;
+  font-family: inherit;
+}
+:root[data-theme="light"] .dl { --dl-in: #15803d; --dl-out: #b91c1c; }
+
+/* masthead — the collapsible header button */
+.dl-head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  padding: .8rem 1rem; text-align: left; cursor: pointer;
+  border: 1px solid var(--color-border); border-radius: 6px;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.dl-head:hover { box-shadow: 0 0 0 1px var(--dl-line); }
+.dl-head:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.dl-head-main { min-width: 0; }
+.dl-eyebrow { display: block; font-size: .62rem; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--color-primary); }
+.dl-title {
+  display: flex; align-items: center; gap: .55rem; margin-top: .1rem;
+  font-family: var(--dl-serif); font-style: italic; font-weight: 600; font-size: 1.1rem; line-height: 1.25; color: var(--color-text);
+}
+.dl-count {
+  font-family: var(--dl-serif); font-style: normal; font-size: .72rem; font-weight: 700; line-height: 1;
+  padding: .2rem .5rem; border: 1px solid var(--dl-line); border-radius: 999px; color: var(--color-primary);
+}
+.dl-chevron { flex: none; color: var(--color-primary); transition: transform .2s ease; }
+.dl-chevron.is-open { transform: rotate(180deg); }
+
+/* diamond rule */
+.dl-rule {
+  position: relative; height: 1px; margin: .85rem .5rem .6rem;
+  background: linear-gradient(90deg, transparent, var(--dl-line) 15%, var(--dl-line) 85%, transparent);
+}
+.dl-rule::after {
+  content: ''; position: absolute; left: 50%; top: -3px; width: 7px; height: 7px;
+  transform: translateX(-50%) rotate(45deg); background: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-bg);
+}
+
+/* index tabs */
+.dl-tabs { display: flex; border-bottom: 1px solid var(--dl-line); }
+.dl-tab {
+  position: relative; flex: 1; min-height: 2.5rem; padding: .5rem .25rem; background: transparent; border: 0; cursor: pointer;
+  font: inherit; font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--color-textSecondary); transition: color .2s ease, background .2s ease;
+}
+.dl-tab::after {
+  content: ''; position: absolute; left: 14%; right: 14%; bottom: -1px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+  transform: scaleX(0); transition: transform .3s cubic-bezier(.2, .8, .2, 1);
+}
+.dl-tab:hover { color: var(--color-text); background: var(--dl-wash); }
+.dl-tab[aria-selected="true"] { color: var(--color-text); background: linear-gradient(180deg, var(--dl-wash), transparent); }
+.dl-tab[aria-selected="true"]::after { transform: scaleX(1); }
+.dl-tab:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+
+/* statement strips: In / Out / Net and Business / Personal */
+.dl-strip {
+  display: grid; margin-top: .6rem; border: 1px solid var(--dl-line); border-radius: 4px;
+  background: color-mix(in srgb, var(--color-bgSecondary) 78%, transparent);
+}
+.dl-strip.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dl-strip.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dl-cell {
+  min-width: 0; padding: .55rem .3rem; text-align: center; cursor: pointer;
+  font: inherit; color: inherit; background: transparent; border: 0; border-radius: 0;
+  transition: background .15s ease;
+}
+.dl-cell + .dl-cell { border-left: 1px solid var(--dl-hair); }
+.dl-cell:hover { background: var(--dl-wash); }
+.dl-cell:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+/* a totals cell that is acting as the active filter */
+.dl-cell.is-on { background: linear-gradient(180deg, var(--dl-wash), transparent); box-shadow: inset 0 -2px 0 var(--color-primary); }
+
+/* account selector: All / Business / Personal */
+.dl-seg { display: flex; margin-top: .6rem; border: 1px solid var(--dl-line); border-radius: 4px; overflow: hidden; }
+.dl-seg-btn {
+  flex: 1; min-width: 0; padding: .5rem .25rem; cursor: pointer; background: transparent; border: 0;
+  font: inherit; font-size: .66rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--color-textSecondary); transition: color .15s ease, background .15s ease;
+}
+.dl-seg-btn + .dl-seg-btn { border-left: 1px solid var(--dl-hair); }
+.dl-seg-btn:hover { color: var(--color-text); background: var(--dl-wash); }
+.dl-seg-btn[aria-pressed="true"] { color: var(--color-text); background: var(--dl-wash); box-shadow: inset 0 -2px 0 var(--color-primary); }
+.dl-seg-btn:focus-visible, .dl-chip:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.dl-seg-n { margin-left: .35rem; font-family: var(--dl-serif); font-size: .72rem; letter-spacing: 0; font-variant-numeric: lining-nums; opacity: .75; }
+
+/* one chip per business, named exactly */
+.dl-chips { display: flex; gap: .4rem; margin-top: .5rem; padding-bottom: .15rem; overflow-x: auto; scrollbar-width: none; }
+.dl-chips::-webkit-scrollbar { display: none; }
+.dl-chip {
+  flex: none; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  padding: .35rem .65rem; border: 1px solid var(--dl-line); border-radius: 999px; background: transparent;
+  font: inherit; font-size: .72rem; font-weight: 600; color: var(--color-textSecondary);
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
+}
+.dl-chip:hover { color: var(--color-text); background: var(--dl-wash); }
+.dl-chip[aria-pressed="true"] { color: var(--color-text); background: var(--dl-wash); border-color: var(--color-primary); }
+
+/* "Showing 3 of 12 · Clear filters" */
+.dl-filterbar { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin: .6rem .1rem 0; font-size: .72rem; font-style: italic; color: var(--color-textSecondary); }
+.dl-filterbar button { cursor: pointer; background: transparent; border: 0; padding: .15rem 0; font: inherit; font-style: normal; font-weight: 700; letter-spacing: .06em; text-decoration: underline; text-underline-offset: 3px; color: var(--color-primary); }
+
+/* day header with that day's net */
+.dl-day {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: baseline; justify-content: space-between; gap: .75rem;
+  padding: .45rem .85rem .45rem 1rem; border-bottom: 1px solid var(--dl-line);
+  background: color-mix(in srgb, var(--color-bgSecondary) 92%, var(--color-primary));
+  font-size: .62rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--color-textSecondary);
+}
+.dl-day .is-in, .dl-day .is-out { font-family: var(--dl-serif); font-size: .8rem; letter-spacing: 0; font-variant-numeric: lining-nums tabular-nums; }
+.dl-day .is-in { color: var(--dl-in); }
+.dl-day .is-out { color: var(--dl-out); }
+.dl-label { display: block; font-size: .58rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--color-textSecondary); }
+.dl-figure {
+  display: block; margin-top: .15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--dl-serif); font-weight: 700; font-size: clamp(.68rem, 3.1vw, .9rem); letter-spacing: -.01em;
+  font-variant-numeric: lining-nums tabular-nums; color: var(--color-text);
+}
+.dl-figure.is-in { color: var(--dl-in); }
+.dl-figure.is-out { color: var(--dl-out); }
+.dl-sub { display: block; margin-top: .05rem; font-size: .66rem; font-style: italic; color: var(--color-textSecondary); }
+
+/* the ledger itself */
+.dl-ledger {
+  margin-top: .6rem; max-height: 22rem; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--dl-line); border-top: 3px double var(--dl-line); border-radius: 4px;
+  background: color-mix(in srgb, var(--color-bgSecondary) 78%, transparent);
+  scrollbar-width: thin;
+}
+.dl-entry {
+  position: relative; display: grid; align-items: center; gap: .3rem .7rem; padding: .7rem .85rem .7rem 1rem; cursor: pointer;
+  grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "medal desc amt" "medal meta meta";
+  border-bottom: 1px solid var(--dl-hair); transition: background .15s ease;
+}
+.dl-entry:last-child { border-bottom: 0; }
+/* left rule: green for money in, red for money out */
+.dl-entry::before { content: ''; position: absolute; left: 0; top: 20%; bottom: 20%; width: 3px; border-radius: 0 3px 3px 0; background: var(--dl-out); }
+.dl-entry.is-in::before { background: var(--dl-in); }
+.dl-entry:hover { background: var(--dl-wash); }
+.dl-entry:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+
+.dl-medal {
+  grid-area: medal; align-self: start;
+  display: inline-flex; align-items: center; justify-content: center; width: 2.4rem; height: 2.4rem; border-radius: 50%; font-size: 1.05rem;
+  color: var(--dl-out); border: 1px solid var(--dl-line);
+  background: color-mix(in srgb, var(--dl-out) 10%, transparent);
+  box-shadow: inset 0 0 0 3px var(--color-bgSecondary), inset 0 0 0 4px var(--dl-hair);
+}
+.dl-entry.is-in .dl-medal { color: var(--dl-in); background: color-mix(in srgb, var(--dl-in) 10%, transparent); }
+
+.dl-desc {
+  grid-area: desc; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--dl-serif); font-weight: 600; font-size: .95rem; line-height: 1.3; color: var(--color-text);
+}
+.dl-meta { grid-area: meta; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .4rem; }
+.dl-tag {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: .12rem .4rem; border: 1px solid var(--dl-line); border-radius: 2px;
+  font-size: .6rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; line-height: 1.2; color: var(--color-primary);
+}
+.dl-tag.is-biz { background: var(--dl-wash); font-size: .72rem; font-weight: 600; letter-spacing: .02em; text-transform: none; }
+.dl-tag.is-me { border-color: var(--dl-hair); color: var(--color-textSecondary); }
+.dl-cat { font-size: .68rem; font-style: italic; text-transform: capitalize; color: var(--color-textSecondary); }
+
+.dl-end { margin-left: auto; display: inline-flex; align-items: center; gap: .3rem; }
+.dl-amt {
+  grid-area: amt; display: block; font-family: var(--dl-serif); font-weight: 700; font-size: .98rem; white-space: nowrap;
+  font-variant-numeric: lining-nums tabular-nums; color: var(--dl-out);
+}
+.dl-entry.is-in .dl-amt { color: var(--dl-in); }
+.dl-when { font-size: .64rem; font-style: italic; color: var(--color-textSecondary); }
+/* Delete / lock. Compact on purpose: the app-wide 44px minimum on buttons would
+   otherwise add a full blank line to every entry. It shows on hover or keyboard
+   focus, and stays faintly visible on touch screens, which have no hover. */
+.dl-del, .dl-lock { display: inline-flex; align-items: center; justify-content: center; width: 1.45rem; height: 1.45rem; border-radius: 4px; }
+.dl-del {
+  min-width: 0; min-height: 0; padding: 0; border: 0; cursor: pointer; background: transparent; color: var(--dl-out);
+  opacity: 0; transition: opacity .15s ease, background .15s ease;
+}
+.dl-entry:hover .dl-del, .dl-del:focus-visible { opacity: 1; }
+.dl-del:hover { background: color-mix(in srgb, var(--dl-out) 14%, transparent); }
+.dl-del:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.dl-lock { color: var(--color-textSecondary); }
+@media (hover: none) { .dl-del { opacity: .55; } }
+
+.dl-foot { padding: .6rem; text-align: center; font-size: .72rem; font-style: italic; color: var(--color-textSecondary); border-top: 1px solid var(--dl-hair); }
+.dl-empty { padding: 1.6rem 1rem; text-align: center; }
+.dl-empty p { margin: .5rem 0 0; font-family: var(--dl-serif); font-style: italic; font-size: .9rem; color: var(--color-textSecondary); }
+.dl-btn {
+  margin-top: .8rem; padding: .5rem 1.1rem; cursor: pointer; border-radius: 3px;
+  font-size: .68rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--color-primary); background: transparent; border: 1px solid var(--color-primary);
+  transition: background .2s ease, color .2s ease;
+}
+.dl-btn:hover { background: var(--color-primary); color: var(--color-bg); }
+.dl-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+@media (max-width: 380px) {
+  .dl-medal { width: 2.1rem; height: 2.1rem; font-size: .95rem; }
+  .dl-entry { gap: .55rem; padding-left: .85rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dl-head, .dl-chevron, .dl-tab, .dl-tab::after, .dl-entry { transition: none; }
+}
+
+/* The receipt-truth widgets (ReceiptTally, TruthBadge) are written for dark
+   surfaces, so their light text washes out on the light theme. Darken them here,
+   inside the ledger only, rather than changing the shared components. */
+:root[data-theme="light"] .dl .text-emerald-300 { color: #047857; }
+:root[data-theme="light"] .dl .text-emerald-200 { color: #065f46; }
+:root[data-theme="light"] .dl .text-sky-200 { color: #075985; }
+:root[data-theme="light"] .dl .text-rose-200 { color: #9f1239; }
+:root[data-theme="light"] .dl .text-amber-200 { color: #92400e; }
+:root[data-theme="light"] .dl .text-slate-200 { color: #1e293b; }
+:root[data-theme="light"] .dl .text-slate-300 { color: #334155; }
+:root[data-theme="light"] .dl .text-slate-400 { color: #475569; }
+:root[data-theme="light"] .dl .text-slate-500 { color: #64748b; }
+:root[data-theme="light"] .dl .border-slate-600 { border-color: #94a3b8; }
+:root[data-theme="light"] .dl .bg-slate-700\/60 { background-color: #e2e8f0; }
