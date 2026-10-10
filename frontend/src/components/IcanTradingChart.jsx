@@ -10,6 +10,9 @@ import {
 } from 'lightweight-charts';
 import { TIMEFRAMES, toSeries, aggregateSeries, smaSeries, rsiSeries, trendChannel, channelValue } from '../utils/candleSeries';
 import DiamondChartBackdrop from './DiamondChartBackdrop';
+import { CHART_PALETTES as PALETTES } from './chartPalettes';
+import { LineStyleEditor } from './chartLineStyles';
+import { sanitizeLineStyles } from '../utils/lineStyles';
 
 // The icaneracoin trading chart: true OHLC candlesticks (body + wicks) on a TradingView-style canvas, with a
 // crosshair and OHLC read-out, volume histogram, 20/50 moving-average overlays, an RSI pane, timeframe
@@ -19,32 +22,9 @@ import DiamondChartBackdrop from './DiamondChartBackdrop';
 // `theme` is "dark" or "light". Colours are plain hex / inline styles on purpose: the app's ThemeContext repaints
 // stock Tailwind colour classes, which would wash the legend out on the landing page.
 
+const DASH = { solid: LineStyle.Solid, dashed: LineStyle.Dashed, dotted: LineStyle.Dotted, long: LineStyle.LargeDashed };
+const LINE_HIT_PX = 12; // how close a tap must be to a trading line to select it
 const LINE_EXTEND_BARS = 8; // the channel runs on past the last candle, like a hand-drawn trend line
-
-const PALETTES = {
-  dark: {
-    text: '#94a3b8', grid: 'rgba(148,163,184,0.06)', axis: 'rgba(71,85,105,0.55)',
-    crossLine: 'rgba(148,163,184,0.5)', crossLabel: '#334155',
-    up: '#22b24c', down: '#e5233b', upVol: 'rgba(34,178,76,0.35)', downVol: 'rgba(229,35,59,0.35)',
-    ma20: '#fbbf24', ma50: '#38bdf8', rsi: '#a78bfa', trend: 'rgba(226,232,240,0.85)',
-    base: '#020617', fg: '#cbd5e1', strong: '#f1f5f9', muted: '#64748b', soft: '#94a3b8',
-    pos: '#4ade80', neg: '#f87171', live: '#34d399', liveText: '#6ee7b7',
-    barBg: 'rgba(2,6,23,0.55)', barBorder: 'rgba(51,65,85,0.5)', tabsBg: '#0f172a', tabOnBg: '#fcd34d', tabOnText: '#020617',
-    chipOnBg: '#1e293b', chipOnBorder: '#475569', chipOnText: '#ffffff', chipOffBorder: '#1e293b', chipOffText: '#64748b',
-    caption: '#e2e8f0', captionShadow: '0 1px 3px #020617', veil: 'rgba(2,6,23,0.7)', spinTrack: '#334155', spinHead: '#fcd34d',
-  },
-  light: {
-    text: '#475569', grid: 'rgba(15,23,42,0.07)', axis: 'rgba(100,116,139,0.35)',
-    crossLine: 'rgba(71,85,105,0.55)', crossLabel: '#475569',
-    up: '#16a34a', down: '#dc2626', upVol: 'rgba(22,163,74,0.28)', downVol: 'rgba(220,38,38,0.28)',
-    ma20: '#d97706', ma50: '#0284c7', rsi: '#7c3aed', trend: 'rgba(51,65,85,0.85)',
-    base: '#f8fafc', fg: '#334155', strong: '#0f172a', muted: '#64748b', soft: '#475569',
-    pos: '#15803d', neg: '#b91c1c', live: '#10b981', liveText: '#047857',
-    barBg: 'rgba(255,255,255,0.7)', barBorder: 'rgba(148,163,184,0.45)', tabsBg: '#e2e8f0', tabOnBg: '#0f172a', tabOnText: '#ffffff',
-    chipOnBg: '#e2e8f0', chipOnBorder: '#94a3b8', chipOnText: '#0f172a', chipOffBorder: '#cbd5e1', chipOffText: '#64748b',
-    caption: '#1e293b', captionShadow: '0 1px 2px #ffffff', veil: 'rgba(248,250,252,0.75)', spinTrack: '#cbd5e1', spinHead: '#0f172a',
-  },
-};
 
 const localTick = (time, type) => {
   const d = new Date(time * 1000);
@@ -59,14 +39,23 @@ const fmtPrice = (n, digits = 2) => (Number.isFinite(n) ? n.toLocaleString(undef
 
 // A market with no movement would otherwise autoscale to a hairline of noise; keep at least a 0.4% span so a
 // quiet icaneracoin reads as a calm flat line in the middle of the pane instead of a jagged one.
-const withMinimumSpan = (original) => {
+// `extras` are the prices of the visitor's own lines (booked orders, the draft order): any within 25% of the
+// price are kept in view, so a booking you just placed is never off the edge of the chart.
+const withMinimumSpan = (original, extras = []) => {
   const res = original();
   if (!res || !res.priceRange) return res;
-  const { minValue, maxValue } = res.priceRange;
+  let { minValue, maxValue } = res.priceRange;
   const mid = (minValue + maxValue) / 2;
-  const minSpan = Math.abs(mid) * 0.004;
-  if (maxValue - minValue >= minSpan) return res;
-  return { ...res, priceRange: { minValue: mid - minSpan / 2, maxValue: mid + minSpan / 2 } };
+  for (const price of extras) {
+    if (Number.isFinite(price) && Math.abs(price - mid) <= Math.abs(mid) * 0.25) {
+      minValue = Math.min(minValue, price);
+      maxValue = Math.max(maxValue, price);
+    }
+  }
+  const centre = (minValue + maxValue) / 2;
+  const minSpan = Math.abs(centre) * 0.004;
+  if (maxValue - minValue >= minSpan) return { ...res, priceRange: { minValue, maxValue } };
+  return { ...res, priceRange: { minValue: centre - minSpan / 2, maxValue: centre + minSpan / 2 } };
 };
 
 const countdown = (seconds) => {
@@ -100,7 +89,14 @@ const applyPalette = (api, c) => {
   if (api.rsi) api.rsi.applyOptions({ color: c.rsi });
 };
 
-const IcanTradingChart = ({ rows, loading = false, variant = 'full', theme = 'dark' }) => {
+const NO_LINES = [];
+const IcanTradingChart = ({
+  rows, loading = false, variant = 'full', theme = 'dark',
+  // Trading overlay (full variant): the visitor's own lines and how to react to taps on the chart.
+  orders = NO_LINES, buyMarkers = NO_LINES, sellMarkers = NO_LINES, draftPrice = null, lineStyles = null,
+  onLineStyleChange, onLineStylesReset, placement = false, onPickPrice, onLineSelect,
+}) => {
+  const looks = useMemo(() => sanitizeLineStyles(lineStyles), [lineStyles]);
   const full = variant === 'full';
   const c = PALETTES[theme] || PALETTES.dark;
   const paletteRef = useRef(c);
@@ -111,6 +107,10 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full', theme = 'da
   const viewKeyRef = useRef('');
   const channelRef = useRef(null);
   const placeRef = useRef(() => {});
+  const extraRef = useRef([]); // prices of the visitor's lines, kept in view by autoscale
+  const hitRef = useRef([]); // { kind, price, order? } for every trading line currently drawn
+  const tapRef = useRef({});
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [tfId, setTfId] = useState('5m');
   const [showMA, setShowMA] = useState(true);
   const [showVolume, setShowVolume] = useState(true);
@@ -162,11 +162,14 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full', theme = 'da
       },
       localization: { timeFormatter: localStamp },
       handleScale: { axisPressedMouseMove: true },
+      // A vertical swipe on a phone scrolls the PAGE instead of being swallowed by the chart (the chart still
+      // pans sideways and pinch-zooms), so the content below the chart stays reachable.
+      handleScroll: { vertTouchDrag: false },
     });
 
     const candles = chart.addSeries(CandlestickSeries, {
       priceLineStyle: LineStyle.Dashed,
-      autoscaleInfoProvider: withMinimumSpan,
+      autoscaleInfoProvider: (original) => withMinimumSpan(original, extraRef.current),
     });
 
     const volume = chart.addSeries(HistogramSeries, {
@@ -207,6 +210,23 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full', theme = 'da
 
     chart.timeScale().subscribeVisibleLogicalRangeChange(() => placeRef.current());
 
+    // A tap either selects the trading line nearest to it, or -- in "place order" mode -- picks a price.
+    chart.subscribeClick((param) => {
+      if (!param.point || (param.paneIndex || 0) > 0) return;
+      const y = param.point.y;
+      let hit = null;
+      let best = LINE_HIT_PX;
+      for (const line of hitRef.current) {
+        const ly = candles.priceToCoordinate(line.price);
+        if (ly == null) continue;
+        const dist = Math.abs(ly - y);
+        if (dist <= best) { best = dist; hit = line; }
+      }
+      if (hit) { tapRef.current.onLineSelect?.(hit); return; }
+      const price = candles.coordinateToPrice(y);
+      if (price != null && Number.isFinite(price)) tapRef.current.onPickPrice?.(Math.round(price * 100) / 100);
+    });
+
     apiRef.current = { chart, candles, volume, ma20, ma50, rsi, resistance, support };
     applyPalette(apiRef.current, p);
     return () => {
@@ -218,6 +238,56 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full', theme = 'da
   useEffect(() => {
     if (apiRef.current) applyPalette(apiRef.current, c);
   }, [c]);
+
+  tapRef.current = { onPickPrice, onLineSelect };
+
+  // The visitor's own trading lines: prices they bought and sold at, their booked orders, and the order they are
+  // drafting. Redrawn whenever any of those, or the chosen look, changes.
+  useEffect(() => {
+    const api = apiRef.current;
+    if (!api || !full) return undefined;
+    const drawn = [];
+    const hits = [];
+    const add = (kind, price, title, extra = {}) => {
+      if (!Number.isFinite(price)) return;
+      const look = looks[kind === 'draft' ? 'booking' : kind];
+      drawn.push(api.candles.createPriceLine({
+        price,
+        color: kind === 'draft' ? c.strong : look.color,
+        lineWidth: kind === 'draft' ? 2 : look.width,
+        lineStyle: kind === 'draft' ? LineStyle.Dashed : DASH[look.style],
+        axisLabelVisible: true,
+        title,
+      }));
+      if (kind !== 'draft') hits.push({ kind, price, ...extra });
+    };
+    buyMarkers.forEach((m) => add('buy', m.price, 'Buy'));
+    sellMarkers.forEach((m) => add('sell', m.price, 'Sell'));
+    orders.forEach((o) => {
+      const amount = Number(o.ican_amount);
+      add('booking', parseFloat(o.target_price_ugx), `${o.order_type === 'buy' ? 'Buy' : 'Sell'} ${Number.isFinite(amount) ? amount : ''}`.trim(), { order: o });
+    });
+    if (draftPrice != null) add('draft', Number(draftPrice), 'New order');
+    hitRef.current = hits;
+    extraRef.current = [
+      ...orders.map((o) => parseFloat(o.target_price_ugx)),
+      ...buyMarkers.map((m) => m.price),
+      ...sellMarkers.map((m) => m.price),
+      draftPrice == null ? NaN : Number(draftPrice),
+    ];
+    return () => {
+      hitRef.current = [];
+      extraRef.current = [];
+      drawn.forEach((line) => { try { api.candles.removePriceLine(line); } catch { /* the chart was already torn down */ } });
+    };
+  }, [orders, buyMarkers, sellMarkers, draftPrice, looks, c, full]);
+
+  // The live price line's look (colour, dashes, thickness).
+  useEffect(() => {
+    const api = apiRef.current;
+    if (!api) return;
+    api.candles.applyOptions({ priceLineColor: looks.live.color, priceLineStyle: DASH[looks.live.style], priceLineWidth: looks.live.width });
+  }, [looks.live, c]);
 
   // Push data in. Re-frame the view only when the timeframe changes or the first candles arrive, so the 20-second
   // refresh never yanks the chart away from wherever the visitor has scrolled to.
@@ -302,6 +372,11 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full', theme = 'da
     return () => clearInterval(id);
   }, []);
 
+  const resetView = () => {
+    if (apiRef.current) apiRef.current.chart.timeScale().setVisibleLogicalRange({ from: Math.max(-2, bars.length - framedBars()), to: bars.length + LINE_EXTEND_BARS + 4 });
+    setToolsOpen(false);
+  };
+
   const shown = hover || last;
   const hoverIndex = hover ? bars.findIndex((b) => b.time === hover.time) : -1;
   const shownPrev = hover ? bars[hoverIndex - 1] : prev;
@@ -326,7 +401,7 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full', theme = 'da
       <DiamondChartBackdrop theme={theme} />
       {full && (
         <div
-          className="relative z-10 flex flex-nowrap items-center gap-x-3 overflow-x-auto whitespace-nowrap border-b px-3 py-2 text-xs backdrop-blur-sm"
+          className="relative z-10 flex flex-nowrap items-center gap-x-2 whitespace-nowrap border-b px-2 py-2 text-xs backdrop-blur-sm sm:gap-x-3 sm:px-3"
           style={{ background: c.barBg, borderColor: c.barBorder }}
         >
           <div className="flex shrink-0 items-center gap-0.5 rounded-md p-0.5" style={{ background: c.tabsBg }} role="tablist" aria-label="Timeframe">
@@ -344,7 +419,7 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full', theme = 'da
               </button>
             ))}
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
             <button type="button" aria-pressed={showMA} onClick={() => setShowMA((v) => !v)} className="rounded-md border px-2.5 py-1 font-semibold transition-colors" style={chip(showMA)}>
               <span style={{ color: c.ma20 }}>MA20</span> <span style={{ color: c.ma50 }}>MA50</span>
             </button>
@@ -357,25 +432,41 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full', theme = 'da
           </div>
           <button
             type="button"
-            onClick={() => apiRef.current && apiRef.current.chart.timeScale().setVisibleLogicalRange({ from: Math.max(-2, bars.length - framedBars()), to: bars.length + LINE_EXTEND_BARS + 4 })}
-            className="shrink-0 rounded-md border px-2.5 py-1 font-semibold"
+            onClick={resetView}
+            className="hidden shrink-0 rounded-md border px-2.5 py-1 font-semibold sm:block"
             style={{ borderColor: c.chipOffBorder, color: c.soft }}
           >
             Reset view
           </button>
-          <div className="ml-auto flex shrink-0 items-center gap-2 pl-2 text-[11px]" style={{ color: c.soft }}>
+          <button
+            type="button"
+            aria-expanded={toolsOpen}
+            aria-haspopup="dialog"
+            onClick={() => setToolsOpen((v) => !v)}
+            className="shrink-0 rounded-md border px-2.5 py-1 font-semibold"
+            style={chip(toolsOpen)}
+          >
+            ⚙ Tools
+          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1 text-[11px] sm:gap-2 sm:pl-2" style={{ color: c.soft }}>
             <span className="relative flex h-2 w-2" aria-hidden="true">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: c.live }} />
               <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: c.live }} />
             </span>
-            <span className="font-semibold uppercase tracking-wide" style={{ color: c.liveText }}>Live</span>
-            <span className="tabular-nums">candle closes in {countdown(secondsLeft)}</span>
+            <span className="hidden font-semibold uppercase tracking-wide sm:inline" style={{ color: c.liveText }}>Live</span>
+            <span className="tabular-nums"><span className="hidden sm:inline">candle closes in </span>{countdown(secondsLeft)}</span>
           </div>
         </div>
       )}
 
       <div className="relative min-h-0 flex-1">
-        <div ref={containerRef} className="absolute inset-0 z-[1]" />
+        <div ref={containerRef} className="absolute inset-0 z-[1]" style={placement ? { cursor: 'crosshair' } : undefined} />
+
+        {placement && (
+          <div className="pointer-events-none absolute left-1/2 top-2 z-[5] -translate-x-1/2 rounded-full px-3 py-1 text-[11px] font-semibold shadow" style={{ background: c.tabOnBg, color: c.tabOnText }}>
+            Tap the chart to set your price
+          </div>
+        )}
 
         {labels && showTrend && (
           <>
@@ -429,6 +520,32 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full', theme = 'da
           </div>
         )}
       </div>
+      {full && toolsOpen && (
+        <>
+          <div className="absolute inset-0 z-[19]" onClick={() => setToolsOpen(false)} aria-hidden="true" />
+          <div
+            role="dialog"
+            aria-label="Chart tools"
+            className="absolute right-2 top-[46px] z-20 max-h-[calc(100%-56px)] w-[min(23rem,calc(100%-1rem))] overflow-y-auto rounded-xl border p-3 shadow-xl"
+            style={{ background: c.card, borderColor: c.cardBorder, color: c.fg }}
+          >
+            <div className="mb-3 flex flex-wrap gap-1.5 sm:hidden">
+              <button type="button" aria-pressed={showMA} onClick={() => setShowMA((v) => !v)} className="rounded-md border px-2.5 py-1.5 text-xs font-semibold" style={chip(showMA)}>
+                <span style={{ color: c.ma20 }}>MA20</span> <span style={{ color: c.ma50 }}>MA50</span>
+              </button>
+              <button type="button" aria-pressed={showVolume} onClick={() => setShowVolume((v) => !v)} className="rounded-md border px-2.5 py-1.5 text-xs font-semibold" style={chip(showVolume)}>Volume</button>
+              <button type="button" aria-pressed={showTrend} onClick={() => setShowTrend((v) => !v)} className="rounded-md border px-2.5 py-1.5 text-xs font-semibold" style={chip(showTrend)}>Trend lines</button>
+              <button type="button" onClick={resetView} className="rounded-md border px-2.5 py-1.5 text-xs font-semibold" style={{ borderColor: c.chipOffBorder, color: c.soft }}>Reset view</button>
+            </div>
+            {onLineStyleChange && (
+              <>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide" style={{ color: c.muted }}>Trading lines</p>
+                <LineStyleEditor lineStyles={looks} onChange={onLineStyleChange} onReset={onLineStylesReset} c={c} />
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 };

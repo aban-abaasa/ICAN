@@ -5,6 +5,7 @@ import './index.css';
 // The IcanEra diamond: one loading indicator for the whole app (see diamond.css).
 import './components/diamond.css';
 import { installDiamondStyles } from './components/diamondArt';
+import GlobalDiamondBackground from './components/GlobalDiamondBackground';
 import { ClassicLoadingScreen } from './components/SplashScreen';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -62,8 +63,8 @@ const dropshipStoreMatch = window.location.pathname.match(/^\/store\/([^/]+)/);
 // outside both ThemeProvider and AuthProvider like the other standalone public pages.
 const isPublicShopPath = /^\/shop\/?$/.test(window.location.pathname);
 // The public icaneracoin price chart (/icaneracoin): live candlesticks + chart analysis for anyone, signed in
-// or not, and what Google lands on when someone searches "icaneracoin". Self-styled and needs no auth, so
-// like the shop it sits outside both ThemeProvider and AuthProvider.
+// or not, and what Google lands on when someone searches "icaneracoin". Self-styled, so it sits outside
+// ThemeProvider; it does get AuthProvider so a visitor can continue with Google and trade from the page.
 const isPublicIcanChartPath = /^\/icaneracoin\/?$/i.test(window.location.pathname);
 // An instalment plan (/plan/<code>) and the customer's list of them (/plans): the plan's code is a
 // handle, not a secret -- the page itself needs the customer (or the seller's team) to be signed in.
@@ -191,10 +192,18 @@ class AppErrorBoundary extends React.Component {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AppErrorBoundary>
+      {/* The faint blockchain-diamond watermark behind every page (Settings > Appearance turns it off).
+          The public chart paints its own, richer diamond, so it is skipped there. */}
+      {!isPublicIcanChartPath && <GlobalDiamondBackground />}
       <Suspense fallback={<Loading />}>
         {isAttendanceQrPath ? <PublicStaffAttendanceCheckIn />
           : isPublicShopPath ? <PublicShopPage />
-          : isPublicIcanChartPath ? <PublicIcanChartPage />
+          : isPublicIcanChartPath ? (
+            // AuthProvider only (never ThemeProvider): the visitor can continue with Google right on the chart page.
+            <AuthProvider>
+              <PublicIcanChartPage />
+            </AuthProvider>
+          )
           : isVisitorQrPath ? <PublicVisitorCheckIn />
           : isDocumentVerifyPath ? <PublicDocumentVerify />
           : isAgreementVerifyPath ? <PublicAgreementVerify />

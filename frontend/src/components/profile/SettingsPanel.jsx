@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
-  AlertTriangle, Bell, BellRing, Check, Globe, Loader2, LogOut, Palette, Trash2, User, Target, ShieldAlert,
+  AlertTriangle, Bell, BellRing, Check, Gem, Globe, Loader2, LogOut, Palette, Trash2, User, Target, ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { THEMES, useTheme } from '../../context/ThemeContext';
 import usePhoneAlerts from '../../hooks/usePhoneAlerts';
+import { setDiamondLevel, useDiamondLevel } from '../../lib/diamondBackground';
 import { useI18n } from '../../i18n/I18nProvider';
 import { getLanguage } from '../../i18n/languages';
 import { CountryService } from '../../services/countryService';
@@ -136,7 +137,40 @@ function AppearanceSection() {
           </button>
         ))}
       </div>
+      <DiamondBackgroundOption />
     </section>
+  );
+}
+
+// The blockchain-diamond watermark behind every page. Off by choice, or two strengths; applies on the spot.
+const DIAMOND_CHOICES = [
+  { id: 'off', title: 'Off', hint: 'A plain background, nothing behind the pages.' },
+  { id: 'subtle', title: 'Subtle', hint: 'A faint diamond and chain in the corner. Easy on the eyes.' },
+  { id: 'rich', title: 'Rich', hint: 'A stronger stone with its colours, moving transactions and a glint.' },
+];
+
+function DiamondBackgroundOption() {
+  const level = useDiamondLevel();
+  return (
+    <>
+      <div className="gr-status" style={{ marginTop: '1.25rem' }}>
+        <Gem aria-hidden="true" />
+        <div className="gr-status__body">
+          <h3 className="gr-title gr-h">Diamond background</h3>
+          <p className="gr-sub">A blockchain diamond behind every ICAN page, for a feeling of value. Turn it off any time.</p>
+        </div>
+      </div>
+      <div className="gr-list" role="radiogroup" aria-label="Diamond background">
+        {DIAMOND_CHOICES.map((c) => (
+          <button key={c.id} type="button" role="radio" aria-checked={level === c.id} onClick={() => setDiamondLevel(c.id)} className="gr-device"
+            style={{ textAlign: 'left', cursor: 'pointer', borderColor: level === c.id ? 'var(--gr-gold-hi)' : undefined, background: level === c.id ? 'var(--gr-tint)' : 'transparent' }}>
+            <span className="gr-device__icon" aria-hidden="true"><Gem /></span>
+            <span><span className="gr-device__t" style={{ display: 'block' }}>{c.title}</span><span className="gr-device__m">{c.hint}</span></span>
+            {level === c.id ? <span className="gr-chip gr-chip--ok"><Check aria-hidden="true" />On</span> : <span />}
+          </button>
+        ))}
+      </div>
+    </>
   );
 }
 

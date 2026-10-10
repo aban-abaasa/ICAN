@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTheme, THEMES } from '../context/ThemeContext';
-import { Check, ChevronDown, Palette } from 'lucide-react';
+import { Check, ChevronDown, Gem, Palette } from 'lucide-react';
+import { DIAMOND_LEVELS, setDiamondLevel, useDiamondLevel } from '../lib/diamondBackground';
 
 // Shown up front; every other theme folds under "More themes".
 const MAIN_THEME_IDS = ['system', 'light', 'dark'];
@@ -9,6 +10,8 @@ const ThemeSwitcher = () => {
   const { theme, changeTheme, actualTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const diamondLevel = useDiamondLevel();
+  const nextDiamondLevel = DIAMOND_LEVELS[(DIAMOND_LEVELS.indexOf(diamondLevel) + 1) % DIAMOND_LEVELS.length];
 
   const themeList = Object.values(THEMES);
   const mainThemes = themeList.filter((t) => MAIN_THEME_IDS.includes(t.id));
@@ -101,6 +104,19 @@ const ThemeSwitcher = () => {
               </div>
             )}
           </div>
+
+          {/* The blockchain-diamond watermark behind every page: tap to step Off > Subtle > Rich. */}
+          <div className="icn-tm-sep" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="icn-tm-item"
+            title={`Diamond background: ${diamondLevel}. Tap for ${nextDiamondLevel}.`}
+            onClick={() => setDiamondLevel(nextDiamondLevel)}
+          >
+            <span className="icn-tm-name inline-flex items-center gap-1.5"><Gem className="h-3.5 w-3.5" aria-hidden="true" />Diamond background</span>
+            <span style={{ fontSize: '.7rem', opacity: 0.75, textTransform: 'capitalize' }}>{diamondLevel}</span>
+          </button>
 
           {theme === 'system' && (
             <p className="icn-tm-foot">Following device: {actualTheme === 'dark' ? 'dark' : 'light'}</p>
