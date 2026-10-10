@@ -240,7 +240,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                   : installmentPlanMatch ? <PublicInstallmentPlan code={installmentPlanMatch[1].toUpperCase()} />
                   : isMyInstallmentsPath ? <PublicMyInstallments />
                   : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />
-                  : <><App /><PhoneAlertsPrompt /><AmbientBackdrop /></>}
+                  : <><App /><PhoneAlertsPrompt /></>}
+                {/* Not on a business's storefront or a person's portfolio: those keep their own look. */}
+                {!dropshipStoreMatch && !portfolioShareMatch && <AmbientBackdrop />}
                 </I18nProvider>
               </AuthProvider>
             </ThemeProvider>

@@ -1,5 +1,4 @@
 import React, { useId, useMemo } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { isDarkFamilyTheme, useOptionalTheme } from '../context/ThemeContext';
 import { useAmbientPrefs } from '../lib/ambientPrefs';
 import { CHAINS, MINED, VIEW, latticePattern, rhombus } from './BlockchainBackdrop';
@@ -7,7 +6,7 @@ import './blockchain.css';
 import './ambient.css';
 
 /**
- * The ambient "blockchain" background for the signed-in app.
+ * The ambient "blockchain" background for the app and the website.
  *
  * The loading pages' lattice of interlocking diamonds, turned down to a whisper
  * and laid over every page: two interlocked lattices that breathe in turn, and
@@ -94,13 +93,16 @@ export const AmbientLayers = ({ tone = 'dark', style = 'chain', intensity = 'bal
   );
 };
 
-/** Mounted once for the signed-in app: reads the user's setting and the active theme. */
+/**
+ * Mounted once for every page that uses the app theme (the website's landing and sign-in pages, pricing, share pages
+ * and the signed-in app): reads the visitor's setting and the active theme. Business-owned pages (notice boards,
+ * stores) keep their own look and do not get it.
+ */
 export default function AmbientBackdrop() {
-  const { user } = useAuth() || {};
   const { actualTheme } = useOptionalTheme();
   const [prefs] = useAmbientPrefs();
 
-  if (!user || !prefs.enabled) return null;
+  if (!prefs.enabled) return null;
   return (
     <AmbientLayers
       tone={isDarkFamilyTheme(actualTheme) ? 'dark' : 'light'}

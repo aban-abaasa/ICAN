@@ -1,5 +1,6 @@
 import React, { useId } from 'react';
 import { FACETS, FIRE_IDS, SILHOUETTE, VIEW_W, VIEW_H } from './diamondArt';
+import { useAmbientPrefs } from '../lib/ambientPrefs';
 
 // The backdrop behind the icaneracoin trading chart: the IcanEra diamond (same cut and facets as the app's
 // loader, see diamondArt.js) glowing behind the candles, with a blockchain of small diamond nodes joined by
@@ -49,6 +50,9 @@ const DiamondChartBackdrop = ({ theme = 'dark' }) => {
   const k = PALETTES[theme] || PALETTES.dark;
   const uid = useId().replace(/:/g, '');
   const id = (name) => `icbd-${name}-${uid}`;
+  // The blockchain-background switch (a gem icon in the page header, or Settings) also governs this backdrop.
+  const [prefs] = useAmbientPrefs();
+  if (!prefs.enabled) return null;
 
   return (
     <div className="icbd pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">

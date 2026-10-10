@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import { Check, ChevronDown, Palette } from 'lucide-react';
+import AmbientToggle from './AmbientToggle';
 
 // Shown up front; every other theme folds under "More themes".
 const MAIN_THEME_IDS = ['system', 'light', 'dark'];
@@ -57,7 +58,13 @@ const ThemeSwitcher = () => {
   };
 
   return (
-    <div className="relative">
+    <div className="relative inline-flex items-center">
+      {/* One tap turns the blockchain background on or off (fine-tuning lives in Settings > Appearance). */}
+      <AmbientToggle
+        className="inline-flex items-center px-1.5 sm:px-2 py-2 rounded-lg hover:bg-purple-500/20 transition-all duration-200"
+        iconClass="text-yellow-400"
+        offIconClass="text-gray-400"
+      />
       <button
         onClick={() => (isOpen ? close() : setIsOpen(true))}
         className="inline-flex items-center space-x-1.5 sm:space-x-2 px-1.5 sm:px-3 py-2 rounded-lg hover:bg-purple-500/20 transition-all duration-200 group"
