@@ -6,8 +6,9 @@ import { topUpIcanWallet } from '../services/walletTopUpService';
 import { getTopUpQuote } from '../services/topUpCurrency';
 import icanCoinService from '../services/icanCoinService';
 import icanOrderService from '../services/icanOrderService';
+import icanCoinBlockchainService from '../services/icanCoinBlockchainService';
 import { CountryService } from '../services/countryService';
-import { friendlyTradeError, orderCrossed, validateBooking, validateSell } from '../utils/tradeRules';
+import { friendlyTradeError, orderCrossed, validateBooking, validateSell, validateWalletBuy } from '../utils/tradeRules';
 
 // Everything the public /icaneracoin trade panel does for a signed-in visitor. It invents no money logic: coins are
 // bought through the Flutterwave top-up (the server verifies the charge and credits the wallet at the live price),
@@ -34,8 +35,11 @@ export const usePublicTrading = (livePriceUgx) => {
   const [buyMarkers, setBuyMarkers] = useState(NONE);
   const [sellMarkers, setSellMarkers] = useState(NONE);
   const [orderErrors, setOrderErrors] = useState({});
+  // The visitor's cash in their IcanEra wallet, in their own currency: undefined while loading, null when they have
+  // no cash wallet yet, else { currency, balance }. Buying from it needs no checkout and has no gateway fee.
+  const [cash, setCash] = useState(undefined);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState(null); // { kind: 'ok' | 'err', text }
+  const [notice, setNotice] = useState(null); // { kind: 'ok' | 'err' | 'info', text }
   const backoff = useRef({}); // orderId -> do not retry before this time
 
   const say = useCallback((kind, text) => setNotice({ kind, text }), []);
@@ -74,10 +78,26 @@ export const usePublicTrading = (livePriceUgx) => {
     setSellMarkers(pick('sale'));
   }, [userId]);
 
+  const refreshCash = useCallback(async (countryCode) => {
+    if (!userId) return;
+    const currency = CountryService.getCurrencyCode(countryCode);
+    const { data, error } = await supabase
+      .from('wallet_accounts')
+      .select('balance')
+      .eq('user_id', userId)
+      .eq('currency', currency)
+      .maybeSingle();
+    if (error) { setCash(null); return; }
+    setCash(data ? { currency, balance: parseFloat(data.balance) || 0 } : null);
+  }, [userId]);
+
+  // The cash balance is per currency, so it is read again whenever the visitor's country is known or changes.
+  useEffect(() => { if (userId) refreshCash(country); else setCash(undefined); }, [userId, country, refreshCash]);
+
   // Load everything once a visitor is signed in; forget it all when they sign out.
   useEffect(() => {
     if (!userId) {
-      setWallet(null); setQuote(null); setOrders(NONE); setBuyMarkers(NONE); setSellMarkers(NONE); setOrderErrors({}); setNotice(null);
+      setWallet(null); setCash(undefined); setQuote(null); setOrders(NONE); setBuyMarkers(NONE); setSellMarkers(NONE); setOrderErrors({}); setNotice(null);
       return undefined;
     }
     let cancelled = false;
@@ -97,6 +117,8 @@ export const usePublicTrading = (livePriceUgx) => {
   // execution as the wallet's own chart (there is no server-side matching engine). A failure is shown on that order
   // and retried in a few minutes instead of every poll.
   const ordersRef = useRef(orders);
+  const countryRef = useRef(country);
+  countryRef.current = country;
   ordersRef.current = orders;
   const priceRef = useRef(livePriceUgx);
   priceRef.current = livePriceUgx;
@@ -127,7 +149,7 @@ export const usePublicTrading = (livePriceUgx) => {
         }
         if (filled > 0) {
           say('ok', filled === 1 ? 'Your booked order was filled at the live price.' : `${filled} booked orders were filled at the live price.`);
-          await Promise.all([refreshOrders(), refreshWallet(), refreshMarkers()]);
+          await Promise.all([refreshOrders(), refreshWallet(), refreshCash(countryRef.current), refreshMarkers()]);
         }
       } finally {
         running = false;
@@ -136,7 +158,7 @@ export const usePublicTrading = (livePriceUgx) => {
     const timer = setInterval(tick, POLL_MS);
     tick();
     return () => clearInterval(timer);
-  }, [userId, say, refreshOrders, refreshWallet, refreshMarkers]);
+  }, [userId, say, refreshOrders, refreshWallet, refreshCash, refreshMarkers]);
 
   const run = async (fn) => {
     setNotice(null);
@@ -153,13 +175,37 @@ export const usePublicTrading = (livePriceUgx) => {
         customerName: fullName(user),
         customerPhone: user?.phone || user?.user_metadata?.phone || '',
       });
-      if (result.cancelled) { say('err', 'Payment cancelled. Nothing was charged.'); return result; }
+      if (result.cancelled) { say('info', 'Payment cancelled. Nothing was charged.'); return result; }
       if (!result.success) { say('err', result.error || 'The payment did not go through.'); return result; }
       say('ok', `Done. ${result.icanAmount.toFixed(4)} ICAN added to your wallet.`);
       await Promise.all([refreshWallet(), refreshMarkers()]);
       return result;
     } catch (e) {
       say('err', e.message || 'The payment did not go through.');
+      return { success: false, error: e.message };
+    }
+  });
+
+  // Buy with the money already in the IcanEra wallet: the same call, and the same bookkeeping, as the wallet's own
+  // Buy tab (icanCoinService.buyIcanCoins, then the non-blocking blockchain record).
+  const buyWithWallet = (localAmount) => run(async () => {
+    const check = validateWalletBuy(localAmount, cash?.balance);
+    if (!check.ok) { say('err', check.error); return { success: false, error: check.error }; }
+    try {
+      const result = await icanCoinService.buyIcanCoins(userId, check.amount, country, 'wallet_balance');
+      if (!result?.success) { say('err', friendlyTradeError(result?.error || 'The purchase did not go through.')); return result; }
+      if (result.icanAmount > 0 && result.pricePerCoin > 0) {
+        try {
+          await icanCoinBlockchainService.recordBlockchainTransaction({
+            userId, type: 'purchase', icanAmount: result.icanAmount, pricePerCoin: result.pricePerCoin, totalValueUGX: result.icanAmount * result.pricePerCoin,
+          });
+        } catch { /* recording is best-effort: the purchase itself already went through */ }
+      }
+      say('ok', `Bought ${Number(result.icanAmount).toFixed(4)} ICAN from your IcanEra wallet. No checkout fee.`);
+      await Promise.all([refreshWallet(), refreshCash(country), refreshMarkers()]);
+      return result;
+    } catch (e) {
+      say('err', friendlyTradeError(e.message || 'The purchase did not go through.'));
       return { success: false, error: e.message };
     }
   });
@@ -171,7 +217,7 @@ export const usePublicTrading = (livePriceUgx) => {
       const result = await icanCoinService.sellIcanCoins(userId, check.amount, country);
       if (!result?.success) { say('err', friendlyTradeError(result?.error || 'The sale did not go through.')); return result; }
       say('ok', `Sold ${check.amount} ICAN at the live price.`);
-      await Promise.all([refreshWallet(), refreshMarkers()]);
+      await Promise.all([refreshWallet(), refreshCash(country), refreshMarkers()]);
       return result;
     } catch (e) {
       say('err', friendlyTradeError(e.message || 'The sale did not go through.'));
@@ -207,7 +253,7 @@ export const usePublicTrading = (livePriceUgx) => {
       const result = await icanOrderService.fillOrderNow(order, userId);
       if (result?.success) {
         say('ok', 'Order filled at the live price.');
-        await Promise.all([refreshOrders(), refreshWallet(), refreshMarkers()]);
+        await Promise.all([refreshOrders(), refreshWallet(), refreshCash(country), refreshMarkers()]);
       } else {
         say('err', friendlyTradeError(result?.error || 'Could not fill the order.'));
       }
@@ -233,7 +279,7 @@ export const usePublicTrading = (livePriceUgx) => {
   return {
     user, signedIn: !!userId, signOut, continueWithGoogle,
     wallet, quote, quoteError, country, orders, buyMarkers, sellMarkers, orderErrors, busy, notice, clearNotice: () => setNotice(null),
-    buyCoins, sellCoins, bookOrder, cancelOrder, fillOrderNow, refreshWallet,
+    cash, buyCoins, buyWithWallet, sellCoins, bookOrder, cancelOrder, fillOrderNow, refreshWallet,
     currencyCode: CountryService.getCurrencyCode(country),
   };
 };
