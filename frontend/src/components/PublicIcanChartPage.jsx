@@ -235,15 +235,19 @@ const PublicIcanChartPage = () => {
             <img src="/icons/icon-192x192.png" alt="" width="26" height="26" className="rounded-md" />
             <span className="hidden sm:inline">IcanEra</span>
           </a>
-          <h1 className={`min-w-0 truncate text-sm font-bold sm:text-base ${k.title}`}>icaneracoin (ICAN) price chart</h1>
+          {/* The name never gets squeezed out by the price and icons; the longer wording only shows when there is room. */}
+          <h1 className="mr-2 flex min-w-0 items-baseline gap-1.5 font-bold">
+            <span className={`shrink-0 text-base sm:text-lg ${k.title}`}>icaneracoin</span>
+            <span className={`hidden truncate text-sm font-semibold md:inline ${k.soft}`}>(ICAN) price chart</span>
+          </h1>
           <nav aria-label="On this page" className="hidden items-center gap-1 text-sm font-semibold lg:flex">
             <button type="button" onClick={() => scrollToId('analysis')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Analysis</button>
             <button type="button" onClick={() => scrollToId('learn')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Learn</button>
           </nav>
-          <div className="ml-auto flex shrink-0 items-center gap-2 text-sm tabular-nums">
+          <div className="ml-auto flex shrink-0 items-center gap-1 text-sm tabular-nums sm:gap-2">
             {priceUgx != null && (
               <span className="flex items-baseline gap-1.5" aria-label="Current icaneracoin price">
-                <span className={`font-bold ${k.title}`}>UGX {fmtUgx(priceUgx)}</span>
+                <span className={`font-bold ${k.title}`}><span className="hidden sm:inline">UGX </span>{fmtUgx(priceUgx)}</span>
                 {changePct != null && (
                   <span className={`hidden text-xs font-semibold sm:inline ${changePct > 0 ? up : changePct < 0 ? down : k.soft}`}>
                     {changePct > 0 ? '+' : ''}{changePct.toFixed(2)}%
@@ -251,7 +255,7 @@ const PublicIcanChartPage = () => {
                 )}
               </span>
             )}
-            <button type="button" onClick={refresh} aria-label="Refresh chart" title={updatedAt ? `Updated ${updatedAt.toLocaleTimeString()}` : 'Refresh'} className={`rounded-md p-2 ${k.icon} ${k.hover}`}>
+            <button type="button" onClick={refresh} aria-label="Refresh chart" title={updatedAt ? `Updated ${updatedAt.toLocaleTimeString()}` : 'Refresh'} className={`hidden rounded-md p-2 min-[400px]:block ${k.icon} ${k.hover}`}>
               <RefreshCw className="h-4 w-4" />
             </button>
             {/* The same switch as the website's: also turns this chart's own diamond backdrop on or off. */}

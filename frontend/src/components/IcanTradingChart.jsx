@@ -39,15 +39,17 @@ const fmtPrice = (n, digits = 2) => (Number.isFinite(n) ? n.toLocaleString(undef
 
 // A market with no movement would otherwise autoscale to a hairline of noise; keep at least a 0.4% span so a
 // quiet icaneracoin reads as a calm flat line in the middle of the pane instead of a jagged one.
-// `extras` are the prices of the visitor's own lines (booked orders, the draft order): any within 25% of the
-// price are kept in view, so a booking you just placed is never off the edge of the chart.
+// `extras` are the visitor's own lines as { price, reach }: a line is kept in view when it is within `reach` (a
+// fraction of the price) of the market -- a booking or draft order you just placed always is; an old buy or sell
+// price only when it is close. A line far away (an old buy 9% below) must not stretch the scale until the candles
+// flatten into a hairline; it stays reachable by scrolling the price axis.
 const withMinimumSpan = (original, extras = []) => {
   const res = original();
   if (!res || !res.priceRange) return res;
   let { minValue, maxValue } = res.priceRange;
   const mid = (minValue + maxValue) / 2;
-  for (const price of extras) {
-    if (Number.isFinite(price) && Math.abs(price - mid) <= Math.abs(mid) * 0.25) {
+  for (const { price, reach } of extras) {
+    if (Number.isFinite(price) && Math.abs(price - mid) <= Math.abs(mid) * reach) {
       minValue = Math.min(minValue, price);
       maxValue = Math.max(maxValue, price);
     }
@@ -287,10 +289,10 @@ const IcanTradingChart = ({
     if (draftPrice != null) add('draft', Number(draftPrice), 'New order');
     hitRef.current = hits;
     extraRef.current = [
-      ...orders.map((o) => parseFloat(o.target_price_ugx)),
-      ...buyMarkers.map((m) => m.price),
-      ...sellMarkers.map((m) => m.price),
-      draftPrice == null ? NaN : Number(draftPrice),
+      ...orders.map((o) => ({ price: parseFloat(o.target_price_ugx), reach: 0.1 })),
+      { price: draftPrice == null ? NaN : Number(draftPrice), reach: 0.1 },
+      ...buyMarkers.map((m) => ({ price: m.price, reach: 0.03 })),
+      ...sellMarkers.map((m) => ({ price: m.price, reach: 0.03 })),
     ];
     return () => {
       hitRef.current = [];
@@ -471,7 +473,7 @@ const IcanTradingChart = ({
               <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: c.live }} />
             </span>
             <span className="hidden font-semibold uppercase tracking-wide sm:inline" style={{ color: c.liveText }}>Live</span>
-            <span className="tabular-nums"><span className="hidden sm:inline">candle closes in </span>{countdown(secondsLeft)}</span>
+            <span className="hidden tabular-nums min-[400px]:inline"><span className="hidden sm:inline">candle closes in </span>{countdown(secondsLeft)}</span>
           </div>
         </div>
       )}
@@ -488,7 +490,8 @@ const IcanTradingChart = ({
         {labels && showTrend && (
           <>
             {labels.res != null && (
-              <span className="pointer-events-none absolute z-[2] -translate-y-full pb-1 text-[11px] font-semibold tracking-wide" style={{ left: labels.x, top: labels.res, color: c.caption, textShadow: c.captionShadow }}>
+              // Above its line, unless the line is up under the legend, where it would print over it: then just below.
+              <span className={`pointer-events-none absolute z-[2] text-[11px] font-semibold tracking-wide ${labels.res < 60 ? 'pt-1' : '-translate-y-full pb-1'}`} style={{ left: labels.x, top: labels.res, color: c.caption, textShadow: c.captionShadow }}>
                 Resistance
               </span>
             )}
