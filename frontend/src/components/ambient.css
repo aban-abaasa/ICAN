@@ -1,7 +1,7 @@
 /* ==========================================================================
    Ambient blockchain background (AmbientBackdrop.jsx) -- Settings > Appearance.
 
-   A faint overlay of interlocking diamonds over every signed-in page.
+   A faint overlay of interlocking diamonds over the website and the app.
    --am-k scales it: subtle .55 / balanced 1 / vivid 1.7.
    The two lattices breathe in turn with an opacity-only animation (composited,
    so it costs no repaint); the chain layer reuses the .bc-* shapes from
@@ -42,3 +42,6 @@
   .am-lat { animation: none !important; }
 }
 .am-root[data-motion="off"] .bc-node { fill-opacity: .25; stroke-opacity: .6; }
+
+/* never printed (reports, receipts, contracts) */
+@media print { .am-root { display: none !important; } }

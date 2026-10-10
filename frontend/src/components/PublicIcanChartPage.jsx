@@ -3,6 +3,7 @@ import { ArrowLeftRight, ArrowRight, BarChart3, HelpCircle, LineChart as LineCha
 import IcanTradingChart from './IcanTradingChart';
 import IcanAnalysisPanel from './IcanAnalysisPanel';
 import PublicTradePanel from './PublicTradePanel';
+import AmbientToggle from './AmbientToggle';
 import { CHART_PALETTES } from './chartPalettes';
 import { useLineStyles } from './chartLineStyles';
 import usePublicTrading from '../hooks/usePublicTrading';
@@ -253,6 +254,8 @@ const PublicIcanChartPage = () => {
             <button type="button" onClick={refresh} aria-label="Refresh chart" title={updatedAt ? `Updated ${updatedAt.toLocaleTimeString()}` : 'Refresh'} className={`rounded-md p-2 ${k.icon} ${k.hover}`}>
               <RefreshCw className="h-4 w-4" />
             </button>
+            {/* The same switch as the website's: also turns this chart's own diamond backdrop on or off. */}
+            <AmbientToggle className={`rounded-md p-2 ${k.icon} ${k.hover}`} />
             <button type="button" onClick={toggleTheme} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Light mode' : 'Dark mode'} className={`rounded-md p-2 ${k.icon} ${k.hover}`}>
               {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
