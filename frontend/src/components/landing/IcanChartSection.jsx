@@ -31,15 +31,15 @@ const IcanChartLive = ({ isDarkTheme, onGetStarted }) => {
         )}
       </div>
 
-      <div className="mt-5 overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
+      <div className="mt-5 overflow-hidden">
         <div className="h-[340px] sm:h-[420px]">
           {error ? (
-            <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-400">
+            <div className="flex h-full items-center justify-center p-6 text-center text-sm" style={{ color: isDarkTheme ? '#94a3b8' : '#64748b' }}>
               The live chart could not be loaded right now.
             </div>
           ) : (
-            <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-slate-500">Loading chart…</div>}>
-              <IcanTradingChart rows={candles} loading={loading} variant="compact" />
+            <Suspense fallback={<div className="flex h-full items-center justify-center text-sm" style={{ color: isDarkTheme ? '#64748b' : '#94a3b8' }}>Loading chart…</div>}>
+              <IcanTradingChart rows={candles} loading={loading} variant="compact" theme={isDarkTheme ? 'dark' : 'light'} />
             </Suspense>
           )}
         </div>

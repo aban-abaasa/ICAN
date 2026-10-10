@@ -32,14 +32,28 @@ const HASHES = [
 ];
 const FIRE = { c1: '#ff8fd0', c3: '#7fdcff', c5: '#ffd978', c6: '#a98cff', p2: '#8cffcb', p4: '#ff8fd0' };
 
-const DiamondChartBackdrop = () => {
+const PALETTES = {
+  dark: {
+    bg: ['#10224a', '#07112b', '#020617'], halo: ['#7aa7ff', 0.26, '#4f6fe0'], link: '#7f9bd6', linkOp: 0.16,
+    pulse: '#9fd0ff', nodeFill: '#bcd2f5', nodeFillOp: 0.16, nodeStroke: '#cfe0fb', nodeStrokeOp: 0.4,
+    hash: '#8aa6dc', hashOp: 0.28, stoneOp: 0.11, stoneEdge: '#d4e2fb', fireMax: 0.15, shade: '#020617', shadeOp: 0.28,
+  },
+  light: {
+    bg: ['#ffffff', '#f1f5fd', '#e2eaf8'], halo: ['#6f8fe8', 0.22, '#7c9ae8'], link: '#5b6f98', linkOp: 0.22,
+    pulse: '#3b6fd8', nodeFill: '#7d93c4', nodeFillOp: 0.2, nodeStroke: '#5b6f98', nodeStrokeOp: 0.45,
+    hash: '#475569', hashOp: 0.3, stoneOp: 0.2, stoneEdge: '#5b6f98', fireMax: 0.2, shade: '#ffffff', shadeOp: 0.12,
+  },
+};
+
+const DiamondChartBackdrop = ({ theme = 'dark' }) => {
+  const k = PALETTES[theme] || PALETTES.dark;
   const uid = useId().replace(/:/g, '');
   const id = (name) => `icbd-${name}-${uid}`;
 
   return (
     <div className="icbd pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
       <style>{`
-        @keyframes icbd-fire { 0%,100% { opacity: .02 } 50% { opacity: .15 } }
+        @keyframes icbd-fire { 0%,100% { opacity: .02 } 50% { opacity: ${k.fireMax} } }
         @keyframes icbd-breathe { 0%,100% { opacity: .85 } 50% { opacity: 1 } }
         @keyframes icbd-drift { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-5px) } }
         .icbd-fire { opacity: .02; animation: icbd-fire 6s ease-in-out infinite both }
@@ -54,14 +68,14 @@ const DiamondChartBackdrop = () => {
       <svg viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice" className="h-full w-full">
         <defs>
           <radialGradient id={id('bg')} cx="50%" cy="46%" r="75%">
-            <stop offset="0" stopColor="#10224a" />
-            <stop offset="0.55" stopColor="#07112b" />
-            <stop offset="1" stopColor="#020617" />
+            <stop offset="0" stopColor={k.bg[0]} />
+            <stop offset="0.55" stopColor={k.bg[1]} />
+            <stop offset="1" stopColor={k.bg[2]} />
           </radialGradient>
           <radialGradient id={id('halo')} cx="50%" cy="50%" r="50%">
-            <stop offset="0" stopColor="#7aa7ff" stopOpacity="0.26" />
-            <stop offset="0.6" stopColor="#4f6fe0" stopOpacity="0.10" />
-            <stop offset="1" stopColor="#4f6fe0" stopOpacity="0" />
+            <stop offset="0" stopColor={k.halo[0]} stopOpacity={k.halo[1]} />
+            <stop offset="0.6" stopColor={k.halo[2]} stopOpacity="0.10" />
+            <stop offset="1" stopColor={k.halo[2]} stopOpacity="0" />
           </radialGradient>
           {FACETS.map((f) => (
             <linearGradient key={f.id} id={id(f.id)} x1="0.2" y1="0" x2="0.55" y2="1">
@@ -75,7 +89,7 @@ const DiamondChartBackdrop = () => {
         <rect width="1000" height="600" fill={`url(#${id('bg')})`} />
 
         {/* chain links between the nodes */}
-        <g stroke="#7f9bd6" strokeOpacity="0.16" strokeWidth="1" strokeDasharray="2 5">
+        <g stroke={k.link} strokeOpacity={k.linkOp} strokeWidth="1" strokeDasharray="2 5">
           {EDGES.map(([a, b]) => (
             <line key={`${a}-${b}`} x1={NODES[a][0]} y1={NODES[a][1]} x2={NODES[b][0]} y2={NODES[b][1]} />
           ))}
@@ -84,7 +98,7 @@ const DiamondChartBackdrop = () => {
         {/* transactions travelling the chain */}
         <g className="icbd-pulse">
           {PULSES.map(({ edge: [a, b], dur, delay }) => (
-            <circle key={`${a}-${b}`} r="2.4" fill="#9fd0ff" opacity="0.8">
+            <circle key={`${a}-${b}`} r="2.4" fill={k.pulse} opacity="0.8">
               <animateMotion
                 dur={`${dur}s`}
                 begin={`${delay}s`}
@@ -102,17 +116,17 @@ const DiamondChartBackdrop = () => {
               key={i}
               href={`#${id('mini')}`}
               transform={`translate(${x - 8} ${y - 7}) scale(${i % 3 === 0 ? 0.14 : 0.11})`}
-              fill="#bcd2f5"
-              fillOpacity="0.16"
-              stroke="#cfe0fb"
-              strokeOpacity="0.4"
+              fill={k.nodeFill}
+              fillOpacity={k.nodeFillOp}
+              stroke={k.nodeStroke}
+              strokeOpacity={k.nodeStrokeOp}
               strokeWidth="6"
             />
           ))}
         </g>
 
         {/* drifting hashes */}
-        <g fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11" fill="#8aa6dc" fillOpacity="0.28">
+        <g fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="11" fill={k.hash} fillOpacity={k.hashOp}>
           {HASHES.map(([x, y, text], i) => (
             <text key={text} x={x} y={y} className="icbd-hash" style={{ animationDelay: `${i * 1.1}s` }}>{text}</text>
           ))}
@@ -122,9 +136,9 @@ const DiamondChartBackdrop = () => {
         <g className="icbd-glow" transform="translate(500 300)">
           <circle r="330" fill={`url(#${id('halo')})`} />
           <g transform={`scale(4.5) translate(${-VIEW_W / 2} ${-VIEW_H / 2})`}>
-            <g opacity="0.11">
+            <g opacity={k.stoneOp}>
               {FACETS.map((f) => (
-                <polygon key={f.id} points={pts(f.pts)} fill={`url(#${id(f.id)})`} stroke="#d4e2fb" strokeOpacity="0.9" strokeWidth="0.35" strokeLinejoin="round" />
+                <polygon key={f.id} points={pts(f.pts)} fill={`url(#${id(f.id)})`} stroke={k.stoneEdge} strokeOpacity="0.9" strokeWidth="0.35" strokeLinejoin="round" />
               ))}
             </g>
             {FIRE_IDS.map((fid, i) => (
@@ -140,7 +154,7 @@ const DiamondChartBackdrop = () => {
         </g>
 
         {/* vignette keeps the axes and legend readable */}
-        <rect width="1000" height="600" fill="#020617" opacity="0.28" />
+        <rect width="1000" height="600" fill={k.shade} opacity={k.shadeOp} />
       </svg>
     </div>
   );

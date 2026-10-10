@@ -6,18 +6,18 @@ const fmt = (value, digits = 2) => {
   return Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: digits }) : '—';
 };
 
-const TONE = {
-  up: 'text-emerald-500',
-  down: 'text-red-500',
-  neutral: '',
-};
+// Positive / negative read-outs need a deeper green and red on a light card to stay readable.
+const toneClass = (tone, dark) => ({
+  up: dark ? 'text-[#10b981]' : 'text-[#15803d]',
+  down: dark ? 'text-[#ef4444]' : 'text-[#b91c1c]',
+}[tone] || '');
 
 // The numbers behind the candlestick chart, labelled in plain words. Presentational only: pass the result of
 // calculateIndicators(). `dark` picks the palette so it sits on both the dark public page and the landing page.
 const IcanAnalysisPanel = ({ analysis, dark = true, compact = false }) => {
   if (!analysis) {
     return (
-      <p className={`text-sm ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
+      <p className={`text-sm ${dark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>
         Chart analysis appears once there are at least two candles.
       </p>
     );
@@ -46,15 +46,15 @@ const IcanAnalysisPanel = ({ analysis, dark = true, compact = false }) => {
       {items.map((item) => (
         <div
           key={item.label}
-          className={`rounded-lg border px-3 py-2.5 ${dark ? 'border-slate-700/60 bg-slate-900/70' : 'border-slate-200 bg-white'}`}
+          className={`rounded-lg border px-3 py-2.5 ${dark ? 'border-[#334155]/60 bg-[#0f172a]/70' : 'border-[#e2e8f0] bg-[#ffffff]'}`}
         >
-          <dt className={`text-[11px] font-semibold uppercase tracking-wide ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{item.label}</dt>
+          <dt className={`text-[11px] font-semibold uppercase tracking-wide ${dark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>{item.label}</dt>
           <dd
-            className={`mt-0.5 text-sm font-bold tabular-nums ${item.color ? '' : TONE[item.tone] || (dark ? 'text-slate-100' : 'text-slate-900')}`}
+            className={`mt-0.5 text-sm font-bold tabular-nums ${item.color ? '' : toneClass(item.tone, dark) || (dark ? 'text-[#f1f5f9]' : 'text-[#0f172a]')}`}
             style={item.color ? { color: item.color } : undefined}
           >
             {item.value}
-            {item.hint && <span className={`ml-1.5 text-[11px] font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{item.hint}</span>}
+            {item.hint && <span className={`ml-1.5 text-[11px] font-semibold ${dark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>{item.hint}</span>}
           </dd>
         </div>
       ))}

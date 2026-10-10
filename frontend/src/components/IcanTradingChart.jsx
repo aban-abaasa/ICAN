@@ -14,17 +14,37 @@ import DiamondChartBackdrop from './DiamondChartBackdrop';
 // The icaneracoin trading chart: true OHLC candlesticks (body + wicks) on a TradingView-style canvas, with a
 // crosshair and OHLC read-out, volume histogram, 20/50 moving-average overlays, an RSI pane, timeframe
 // roll-ups (5m to 1D), a live candle countdown and a dashed Resistance / Support trend channel, all drawn over
-// the IcanEra blockchain-diamond backdrop (candles are slim green/red, like a broker's chart). Read-only -- it draws the public candle feed and never
-// places an order. `variant="compact"` is the landing-page version (candles, volume and a few controls).
+// the IcanEra blockchain-diamond backdrop (slim green/red candles, like a broker's chart). Read-only: it draws
+// the public candle feed and never places an order. `variant="compact"` is the landing-page version.
+// `theme` is "dark" or "light". Colours are plain hex / inline styles on purpose: the app's ThemeContext repaints
+// stock Tailwind colour classes, which would wash the legend out on the landing page.
 
-const UP = '#22b24c';
-const DOWN = '#e5233b';
-const TREND = 'rgba(226,232,240,0.85)';
 const LINE_EXTEND_BARS = 8; // the channel runs on past the last candle, like a hand-drawn trend line
-const MA20 = '#fbbf24';
-const MA50 = '#38bdf8';
-const GRID = 'rgba(148,163,184,0.06)';
-const AXIS = 'rgba(71,85,105,0.55)';
+
+const PALETTES = {
+  dark: {
+    text: '#94a3b8', grid: 'rgba(148,163,184,0.06)', axis: 'rgba(71,85,105,0.55)',
+    crossLine: 'rgba(148,163,184,0.5)', crossLabel: '#334155',
+    up: '#22b24c', down: '#e5233b', upVol: 'rgba(34,178,76,0.35)', downVol: 'rgba(229,35,59,0.35)',
+    ma20: '#fbbf24', ma50: '#38bdf8', rsi: '#a78bfa', trend: 'rgba(226,232,240,0.85)',
+    base: '#020617', fg: '#cbd5e1', strong: '#f1f5f9', muted: '#64748b', soft: '#94a3b8',
+    pos: '#4ade80', neg: '#f87171', live: '#34d399', liveText: '#6ee7b7',
+    barBg: 'rgba(2,6,23,0.55)', barBorder: 'rgba(51,65,85,0.5)', tabsBg: '#0f172a', tabOnBg: '#fcd34d', tabOnText: '#020617',
+    chipOnBg: '#1e293b', chipOnBorder: '#475569', chipOnText: '#ffffff', chipOffBorder: '#1e293b', chipOffText: '#64748b',
+    caption: '#e2e8f0', captionShadow: '0 1px 3px #020617', veil: 'rgba(2,6,23,0.7)', spinTrack: '#334155', spinHead: '#fcd34d',
+  },
+  light: {
+    text: '#475569', grid: 'rgba(15,23,42,0.07)', axis: 'rgba(100,116,139,0.35)',
+    crossLine: 'rgba(71,85,105,0.55)', crossLabel: '#475569',
+    up: '#16a34a', down: '#dc2626', upVol: 'rgba(22,163,74,0.28)', downVol: 'rgba(220,38,38,0.28)',
+    ma20: '#d97706', ma50: '#0284c7', rsi: '#7c3aed', trend: 'rgba(51,65,85,0.85)',
+    base: '#f8fafc', fg: '#334155', strong: '#0f172a', muted: '#64748b', soft: '#475569',
+    pos: '#15803d', neg: '#b91c1c', live: '#10b981', liveText: '#047857',
+    barBg: 'rgba(255,255,255,0.7)', barBorder: 'rgba(148,163,184,0.45)', tabsBg: '#e2e8f0', tabOnBg: '#0f172a', tabOnText: '#ffffff',
+    chipOnBg: '#e2e8f0', chipOnBorder: '#94a3b8', chipOnText: '#0f172a', chipOffBorder: '#cbd5e1', chipOffText: '#64748b',
+    caption: '#1e293b', captionShadow: '0 1px 2px #ffffff', veil: 'rgba(248,250,252,0.75)', spinTrack: '#cbd5e1', spinHead: '#0f172a',
+  },
+};
 
 const localTick = (time, type) => {
   const d = new Date(time * 1000);
@@ -58,15 +78,36 @@ const countdown = (seconds) => {
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
 };
 
-const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
+// Everything on the canvas that depends on the theme, applied at creation and again whenever the theme flips.
+const applyPalette = (api, c) => {
+  api.chart.applyOptions({
+    layout: { textColor: c.text, panes: { separatorColor: c.axis, separatorHoverColor: c.crossLabel } },
+    grid: { vertLines: { color: c.grid }, horzLines: { color: c.grid } },
+    crosshair: {
+      vertLine: { color: c.crossLine, labelBackgroundColor: c.crossLabel },
+      horzLine: { color: c.crossLine, labelBackgroundColor: c.crossLabel },
+    },
+    rightPriceScale: { borderColor: c.axis },
+    timeScale: { borderColor: c.axis },
+  });
+  api.candles.applyOptions({
+    upColor: c.up, downColor: c.down, borderUpColor: c.up, borderDownColor: c.down, wickUpColor: c.up, wickDownColor: c.down,
+  });
+  api.ma20.applyOptions({ color: c.ma20 });
+  api.ma50.applyOptions({ color: c.ma50 });
+  api.resistance.applyOptions({ color: c.trend });
+  api.support.applyOptions({ color: c.trend });
+  if (api.rsi) api.rsi.applyOptions({ color: c.rsi });
+};
+
+const IcanTradingChart = ({ rows, loading = false, variant = 'full', theme = 'dark' }) => {
   const full = variant === 'full';
-  // How many candles to frame: fewer on a phone so the bodies stay readable.
-  const framedBars = () => {
-    const narrow = (containerRef.current?.clientWidth || 1000) < 520;
-    return full ? (narrow ? 60 : 120) : (narrow ? 45 : 80);
-  };
+  const c = PALETTES[theme] || PALETTES.dark;
+  const paletteRef = useRef(c);
+  paletteRef.current = c;
+
   const containerRef = useRef(null);
-  const apiRef = useRef(null); // { chart, candles, volume, ma20, ma50, rsi }
+  const apiRef = useRef(null); // { chart, candles, volume, ma20, ma50, rsi, resistance, support }
   const viewKeyRef = useRef('');
   const channelRef = useRef(null);
   const placeRef = useRef(() => {});
@@ -78,6 +119,12 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
   const [hover, setHover] = useState(null);
   const [now, setNow] = useState(() => Date.now());
 
+  // How many candles to frame: fewer on a phone so the bodies stay readable.
+  const framedBars = () => {
+    const narrow = (containerRef.current?.clientWidth || 1000) < 520;
+    return full ? (narrow ? 60 : 120) : (narrow ? 45 : 80);
+  };
+
   const tf = TIMEFRAMES.find((t) => t.id === tfId) || TIMEFRAMES[0];
   const base = useMemo(() => toSeries(rows), [rows]);
   const bars = useMemo(() => aggregateSeries(base, tf.seconds), [base, tf.seconds]);
@@ -88,25 +135,26 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return undefined;
+    const p = paletteRef.current;
 
     const chart = createChart(el, {
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#94a3b8',
+        textColor: p.text,
         fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
         fontSize: 11,
-        panes: { separatorColor: AXIS, separatorHoverColor: '#334155', enableResize: true },
+        panes: { separatorColor: p.axis, separatorHoverColor: p.crossLabel, enableResize: true },
       },
-      grid: { vertLines: { color: GRID }, horzLines: { color: GRID } },
+      grid: { vertLines: { color: p.grid }, horzLines: { color: p.grid } },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: 'rgba(148,163,184,0.5)', style: LineStyle.Dashed, labelBackgroundColor: '#334155' },
-        horzLine: { color: 'rgba(148,163,184,0.5)', style: LineStyle.Dashed, labelBackgroundColor: '#334155' },
+        vertLine: { color: p.crossLine, style: LineStyle.Dashed, labelBackgroundColor: p.crossLabel },
+        horzLine: { color: p.crossLine, style: LineStyle.Dashed, labelBackgroundColor: p.crossLabel },
       },
-      rightPriceScale: { borderColor: AXIS, scaleMargins: { top: 0.1, bottom: 0.2 } },
+      rightPriceScale: { borderColor: p.axis, scaleMargins: { top: 0.1, bottom: 0.2 } },
       timeScale: {
-        borderColor: AXIS,
+        borderColor: p.axis,
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 6,
@@ -117,12 +165,6 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
     });
 
     const candles = chart.addSeries(CandlestickSeries, {
-      upColor: UP,
-      downColor: DOWN,
-      borderUpColor: UP,
-      borderDownColor: DOWN,
-      wickUpColor: UP,
-      wickDownColor: DOWN,
       priceLineStyle: LineStyle.Dashed,
       autoscaleInfoProvider: withMinimumSpan,
     });
@@ -136,9 +178,9 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
 
     const lineOpts = { lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
-    const ma20 = chart.addSeries(LineSeries, { ...lineOpts, color: MA20 });
-    const ma50 = chart.addSeries(LineSeries, { ...lineOpts, color: MA50 });
-    const trendOpts = { ...lineOpts, color: TREND, lineWidth: 1, lineStyle: LineStyle.LargeDashed };
+    const ma20 = chart.addSeries(LineSeries, lineOpts);
+    const ma50 = chart.addSeries(LineSeries, lineOpts);
+    const trendOpts = { ...lineOpts, lineStyle: LineStyle.LargeDashed };
     const resistance = chart.addSeries(LineSeries, trendOpts);
     const support = chart.addSeries(LineSeries, trendOpts);
 
@@ -146,31 +188,36 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
     if (full) {
       rsi = chart.addSeries(
         LineSeries,
-        { color: '#a78bfa', lineWidth: 1, priceLineVisible: false, lastValueVisible: true, priceFormat: { type: 'custom', formatter: (v) => v.toFixed(1), minMove: 0.1 } },
+        { lineWidth: 1, priceLineVisible: false, lastValueVisible: true, priceFormat: { type: 'custom', formatter: (v) => v.toFixed(1), minMove: 0.1 } },
         1,
       );
       rsi.createPriceLine({ price: 70, color: 'rgba(229,35,59,0.6)', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '' });
       rsi.createPriceLine({ price: 30, color: 'rgba(34,178,76,0.6)', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '' });
       rsi.priceScale().applyOptions({ scaleMargins: { top: 0.12, bottom: 0.12 } });
       const panes = chart.panes();
-      if (panes[1]) panes[1].setHeight(110);
+      if (panes[1]) panes[1].setHeight(Math.max(110, Math.round(el.clientHeight * 0.2)));
     }
 
     chart.subscribeCrosshairMove((param) => {
-      const c = param.seriesData && param.seriesData.get(candles);
-      if (!param.time || !c) { setHover(null); return; }
+      const candle = param.seriesData && param.seriesData.get(candles);
+      if (!param.time || !candle) { setHover(null); return; }
       const v = param.seriesData.get(volume);
-      setHover({ time: param.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: v ? v.value : 0 });
+      setHover({ time: param.time, open: candle.open, high: candle.high, low: candle.low, close: candle.close, volume: v ? v.value : 0 });
     });
 
     chart.timeScale().subscribeVisibleLogicalRangeChange(() => placeRef.current());
 
     apiRef.current = { chart, candles, volume, ma20, ma50, rsi, resistance, support };
+    applyPalette(apiRef.current, p);
     return () => {
       apiRef.current = null;
       chart.remove();
     };
   }, [full]);
+
+  useEffect(() => {
+    if (apiRef.current) applyPalette(apiRef.current, c);
+  }, [c]);
 
   // Push data in. Re-frame the view only when the timeframe changes or the first candles arrive, so the 20-second
   // refresh never yanks the chart away from wherever the visitor has scrolled to.
@@ -182,7 +229,7 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
     api.candles.applyOptions({ priceFormat: { type: 'price', precision: digits, minMove: Math.pow(10, -digits) } });
 
     api.candles.setData(bars.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })));
-    api.volume.setData(bars.map((b) => ({ time: b.time, value: b.volume, color: b.close >= b.open ? 'rgba(34,178,76,0.35)' : 'rgba(229,35,59,0.35)' })));
+    api.volume.setData(bars.map((b) => ({ time: b.time, value: b.volume, color: b.close >= b.open ? c.upVol : c.downVol })));
     api.ma20.setData(smaSeries(bars, 20));
     api.ma50.setData(smaSeries(bars, 50));
     if (api.rsi) api.rsi.setData(rsiSeries(bars, 14));
@@ -215,7 +262,8 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
       api.chart.timeScale().setVisibleLogicalRange({ from: Math.max(-2, bars.length - framedBars()), to: bars.length + LINE_EXTEND_BARS + 4 });
     }
     requestAnimationFrame(() => placeRef.current());
-  }, [bars, tfId, full, tf.seconds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bars, tfId, full, tf.seconds, c]);
 
   useEffect(() => {
     const api = apiRef.current;
@@ -248,7 +296,7 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
 
   useEffect(() => { placeRef.current(); }, [now, bars.length]);
 
-  // Candle countdown + LIVE heartbeat: only needs a once-a-second tick in the full version.
+  // Candle countdown + LIVE heartbeat: a once-a-second tick.
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
@@ -262,13 +310,26 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
   const digits = precisionFor(shown ? shown.close : 100);
   const secondsLeft = tf.seconds - (Math.floor(now / 1000) % tf.seconds);
   const up = shown ? shown.close >= shown.open : true;
+  const tone = (isUp) => ({ color: isUp ? c.pos : c.neg });
+
+  const chip = (on) => ({
+    borderColor: on ? c.chipOnBorder : c.chipOffBorder,
+    background: on ? c.chipOnBg : 'transparent',
+    color: on ? c.chipOnText : c.chipOffText,
+  });
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-[#020617] text-[#cbd5e1]" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}>
-      <DiamondChartBackdrop />
+    <div
+      className="relative flex h-full w-full flex-col overflow-hidden"
+      style={{ background: c.base, color: c.fg, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' }}
+    >
+      <DiamondChartBackdrop theme={theme} />
       {full && (
-        <div className="relative z-10 flex flex-nowrap items-center gap-x-3 overflow-x-auto whitespace-nowrap border-b border-[#334155]/50 bg-[#020617]/55 px-3 py-2 text-xs backdrop-blur-sm">
-          <div className="flex shrink-0 items-center gap-0.5 rounded-md bg-[#0f172a] p-0.5" role="tablist" aria-label="Timeframe">
+        <div
+          className="relative z-10 flex flex-nowrap items-center gap-x-3 overflow-x-auto whitespace-nowrap border-b px-3 py-2 text-xs backdrop-blur-sm"
+          style={{ background: c.barBg, borderColor: c.barBorder }}
+        >
+          <div className="flex shrink-0 items-center gap-0.5 rounded-md p-0.5" style={{ background: c.tabsBg }} role="tablist" aria-label="Timeframe">
             {TIMEFRAMES.map((t) => (
               <button
                 key={t.id}
@@ -276,36 +337,38 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
                 role="tab"
                 aria-selected={t.id === tfId}
                 onClick={() => setTfId(t.id)}
-                className={`rounded px-2.5 py-1 font-semibold transition-colors ${t.id === tfId ? 'bg-[#fcd34d] text-[#020617]' : 'text-[#94a3b8] hover:text-[#ffffff]'}`}
+                className="rounded px-2.5 py-1 font-semibold transition-colors"
+                style={t.id === tfId ? { background: c.tabOnBg, color: c.tabOnText } : { color: c.soft }}
               >
                 {t.label}
               </button>
             ))}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <button type="button" aria-pressed={showMA} onClick={() => setShowMA((v) => !v)} className={`rounded-md border px-2.5 py-1 font-semibold transition-colors ${showMA ? 'border-[#475569] bg-[#1e293b] text-[#ffffff]' : 'border-[#1e293b] text-[#64748b] hover:text-[#cbd5e1]'}`}>
-              <span style={{ color: MA20 }}>MA20</span> <span style={{ color: MA50 }}>MA50</span>
+            <button type="button" aria-pressed={showMA} onClick={() => setShowMA((v) => !v)} className="rounded-md border px-2.5 py-1 font-semibold transition-colors" style={chip(showMA)}>
+              <span style={{ color: c.ma20 }}>MA20</span> <span style={{ color: c.ma50 }}>MA50</span>
             </button>
-            <button type="button" aria-pressed={showVolume} onClick={() => setShowVolume((v) => !v)} className={`rounded-md border px-2.5 py-1 font-semibold transition-colors ${showVolume ? 'border-[#475569] bg-[#1e293b] text-[#ffffff]' : 'border-[#1e293b] text-[#64748b] hover:text-[#cbd5e1]'}`}>
+            <button type="button" aria-pressed={showVolume} onClick={() => setShowVolume((v) => !v)} className="rounded-md border px-2.5 py-1 font-semibold transition-colors" style={chip(showVolume)}>
               Volume
             </button>
-            <button type="button" aria-pressed={showTrend} onClick={() => setShowTrend((v) => !v)} className={`rounded-md border px-2.5 py-1 font-semibold transition-colors ${showTrend ? 'border-[#475569] bg-[#1e293b] text-[#ffffff]' : 'border-[#1e293b] text-[#64748b] hover:text-[#cbd5e1]'}`}>
+            <button type="button" aria-pressed={showTrend} onClick={() => setShowTrend((v) => !v)} className="rounded-md border px-2.5 py-1 font-semibold transition-colors" style={chip(showTrend)}>
               Trend lines
             </button>
           </div>
           <button
             type="button"
             onClick={() => apiRef.current && apiRef.current.chart.timeScale().setVisibleLogicalRange({ from: Math.max(-2, bars.length - framedBars()), to: bars.length + LINE_EXTEND_BARS + 4 })}
-            className="shrink-0 rounded-md border border-[#1e293b] px-2.5 py-1 font-semibold text-[#94a3b8] hover:text-[#ffffff]"
+            className="shrink-0 rounded-md border px-2.5 py-1 font-semibold"
+            style={{ borderColor: c.chipOffBorder, color: c.soft }}
           >
             Reset view
           </button>
-          <div className="ml-auto flex shrink-0 items-center gap-2 pl-2 text-[11px] text-[#94a3b8]">
+          <div className="ml-auto flex shrink-0 items-center gap-2 pl-2 text-[11px]" style={{ color: c.soft }}>
             <span className="relative flex h-2 w-2" aria-hidden="true">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#34d399] opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#34d399]" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: c.live }} />
+              <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: c.live }} />
             </span>
-            <span className="font-semibold uppercase tracking-wide text-[#6ee7b7]">Live</span>
+            <span className="font-semibold uppercase tracking-wide" style={{ color: c.liveText }}>Live</span>
             <span className="tabular-nums">candle closes in {countdown(secondsLeft)}</span>
           </div>
         </div>
@@ -317,12 +380,12 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
         {labels && showTrend && (
           <>
             {labels.res != null && (
-              <span className="pointer-events-none absolute z-[2] -translate-y-full pb-1 text-[11px] font-semibold tracking-wide text-[#e2e8f0] [text-shadow:0_1px_3px_#020617]" style={{ left: labels.x, top: labels.res }}>
+              <span className="pointer-events-none absolute z-[2] -translate-y-full pb-1 text-[11px] font-semibold tracking-wide" style={{ left: labels.x, top: labels.res, color: c.caption, textShadow: c.captionShadow }}>
                 Resistance
               </span>
             )}
             {labels.sup != null && (
-              <span className="pointer-events-none absolute z-[2] pt-1 text-[11px] font-semibold tracking-wide text-[#e2e8f0] [text-shadow:0_1px_3px_#020617]" style={{ left: labels.x, top: labels.sup }}>
+              <span className="pointer-events-none absolute z-[2] pt-1 text-[11px] font-semibold tracking-wide" style={{ left: labels.x, top: labels.sup, color: c.caption, textShadow: c.captionShadow }}>
                 Support
               </span>
             )}
@@ -332,35 +395,35 @@ const IcanTradingChart = ({ rows, loading = false, variant = 'full' }) => {
         {shown && (
           <div className="pointer-events-none absolute left-2 top-1.5 z-[3] max-w-[calc(100%-5rem)] text-[11px] leading-5 tabular-nums">
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0">
-              <span className="font-bold text-[#f1f5f9]">ICAN / UGX</span>
-              <span className="text-[#64748b]">{tf.label}</span>
-              <span>O <b className={up ? 'text-[#4ade80]' : 'text-[#f87171]'}>{fmtPrice(shown.open, digits)}</b></span>
-              <span>H <b className={up ? 'text-[#4ade80]' : 'text-[#f87171]'}>{fmtPrice(shown.high, digits)}</b></span>
-              <span>L <b className={up ? 'text-[#4ade80]' : 'text-[#f87171]'}>{fmtPrice(shown.low, digits)}</b></span>
-              <span>C <b className={up ? 'text-[#4ade80]' : 'text-[#f87171]'}>{fmtPrice(shown.close, digits)}</b></span>
-              {change != null && <b className={change >= 0 ? 'text-[#4ade80]' : 'text-[#f87171]'}>{change >= 0 ? '+' : ''}{change.toFixed(2)}%</b>}
+              <span className="font-bold" style={{ color: c.strong }}>ICAN / UGX</span>
+              <span style={{ color: c.muted }}>{tf.label}</span>
+              <span>O <b style={tone(up)}>{fmtPrice(shown.open, digits)}</b></span>
+              <span>H <b style={tone(up)}>{fmtPrice(shown.high, digits)}</b></span>
+              <span>L <b style={tone(up)}>{fmtPrice(shown.low, digits)}</b></span>
+              <span>C <b style={tone(up)}>{fmtPrice(shown.close, digits)}</b></span>
+              {change != null && <b style={tone(change >= 0)}>{change >= 0 ? '+' : ''}{change.toFixed(2)}%</b>}
             </div>
             {full && showMA && (
-              <div className="flex gap-3 text-[#64748b]">
-                <span style={{ color: MA20 }}>MA 20</span>
-                <span style={{ color: MA50 }}>MA 50</span>
-                <span className="text-[#a78bfa]">RSI 14 ↓</span>
+              <div className="flex gap-3" style={{ color: c.muted }}>
+                <span style={{ color: c.ma20 }}>MA 20</span>
+                <span style={{ color: c.ma50 }}>MA 50</span>
+                <span style={{ color: c.rsi }}>RSI 14 ↓</span>
               </div>
             )}
           </div>
         )}
 
         {(loading || bars.length === 0) && (
-          <div className="absolute inset-0 z-[4] flex flex-col items-center justify-center gap-2 bg-[#020617]/70 text-center">
+          <div className="absolute inset-0 z-[4] flex flex-col items-center justify-center gap-2 text-center" style={{ background: c.veil }}>
             {loading ? (
               <>
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#334155] border-t-amber-300" />
-                <p className="text-sm text-[#94a3b8]">Connecting to the market feed…</p>
+                <div className="h-8 w-8 animate-spin rounded-full border-2" style={{ borderColor: c.spinTrack, borderTopColor: c.spinHead }} />
+                <p className="text-sm" style={{ color: c.soft }}>Connecting to the market feed…</p>
               </>
             ) : (
               <>
-                <p className="text-sm font-semibold text-[#cbd5e1]">No trading activity yet</p>
-                <p className="max-w-xs text-xs text-[#64748b]">Candles appear as soon as icaneracoin moves — nothing here is simulated.</p>
+                <p className="text-sm font-semibold" style={{ color: c.fg }}>No trading activity yet</p>
+                <p className="max-w-xs text-xs" style={{ color: c.muted }}>Candles appear as soon as icaneracoin moves — nothing here is simulated.</p>
               </>
             )}
           </div>
