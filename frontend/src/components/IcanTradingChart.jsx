@@ -8,7 +8,7 @@ import {
   CrosshairMode,
   LineStyle,
 } from 'lightweight-charts';
-import { TIMEFRAMES, toSeries, aggregateSeries, smaSeries, rsiSeries, trendChannel, channelValue } from '../utils/candleSeries';
+import { TIMEFRAMES, toSeries, fillGaps, aggregateSeries, smaSeries, rsiSeries, trendChannel, channelValue } from '../utils/candleSeries';
 import DiamondChartBackdrop from './DiamondChartBackdrop';
 import { CHART_PALETTES as PALETTES } from './chartPalettes';
 import { LineStyleEditor } from './chartLineStyles';
@@ -90,6 +90,21 @@ const applyPalette = (api, c) => {
 };
 
 const NO_LINES = [];
+
+// True on a phone-width screen: the legend condenses there so it never covers the first candles.
+const useNarrow = () => {
+  const query = '(max-width: 639px)';
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(query).matches);
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const mq = window.matchMedia(query);
+    const onChange = () => setNarrow(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return narrow;
+};
 const IcanTradingChart = ({
   rows, loading = false, variant = 'full', theme = 'dark',
   // Trading overlay (full variant): the visitor's own lines and how to react to taps on the chart.
@@ -97,6 +112,7 @@ const IcanTradingChart = ({
   onLineStyleChange, onLineStylesReset, placement = false, onPickPrice, onLineSelect,
 }) => {
   const looks = useMemo(() => sanitizeLineStyles(lineStyles), [lineStyles]);
+  const narrow = useNarrow();
   const full = variant === 'full';
   const c = PALETTES[theme] || PALETTES.dark;
   const paletteRef = useRef(c);
@@ -122,11 +138,12 @@ const IcanTradingChart = ({
   // How many candles to frame: fewer on a phone so the bodies stay readable.
   const framedBars = () => {
     const narrow = (containerRef.current?.clientWidth || 1000) < 520;
-    return full ? (narrow ? 60 : 120) : (narrow ? 45 : 80);
+    return full ? (narrow ? 48 : 120) : (narrow ? 40 : 80);
   };
 
   const tf = TIMEFRAMES.find((t) => t.id === tfId) || TIMEFRAMES[0];
-  const base = useMemo(() => toSeries(rows), [rows]);
+  // A steady 5-minute grid: quiet windows (the feed only stores candles where the price ticked) become flat candles.
+  const base = useMemo(() => fillGaps(toSeries(rows)), [rows]);
   const bars = useMemo(() => aggregateSeries(base, tf.seconds), [base, tf.seconds]);
   const last = bars.length ? bars[bars.length - 1] : null;
   const prev = bars.length > 1 ? bars[bars.length - 2] : null;
@@ -485,16 +502,26 @@ const IcanTradingChart = ({
 
         {shown && (
           <div className="pointer-events-none absolute left-2 top-1.5 z-[3] max-w-[calc(100%-5rem)] text-[11px] leading-5 tabular-nums">
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0">
-              <span className="font-bold" style={{ color: c.strong }}>ICAN / UGX</span>
-              <span style={{ color: c.muted }}>{tf.label}</span>
-              <span>O <b style={tone(up)}>{fmtPrice(shown.open, digits)}</b></span>
-              <span>H <b style={tone(up)}>{fmtPrice(shown.high, digits)}</b></span>
-              <span>L <b style={tone(up)}>{fmtPrice(shown.low, digits)}</b></span>
-              <span>C <b style={tone(up)}>{fmtPrice(shown.close, digits)}</b></span>
-              {change != null && <b style={tone(change >= 0)}>{change >= 0 ? '+' : ''}{change.toFixed(2)}%</b>}
-            </div>
-            {full && showMA && (
+            {narrow && !hover ? (
+              // Phone: just the symbol and the close, so the first candles stay clear. Touch a candle for the full OHLC.
+              <div className="flex flex-wrap items-center gap-x-2">
+                <span className="font-bold" style={{ color: c.strong }}>ICAN / UGX</span>
+                <span style={{ color: c.muted }}>{tf.label}</span>
+                <b style={tone(up)}>{fmtPrice(shown.close, digits)}</b>
+                {change != null && <b style={tone(change >= 0)}>{change >= 0 ? '+' : ''}{change.toFixed(2)}%</b>}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0">
+                <span className="font-bold" style={{ color: c.strong }}>ICAN / UGX</span>
+                <span style={{ color: c.muted }}>{tf.label}</span>
+                <span>O <b style={tone(up)}>{fmtPrice(shown.open, digits)}</b></span>
+                <span>H <b style={tone(up)}>{fmtPrice(shown.high, digits)}</b></span>
+                <span>L <b style={tone(up)}>{fmtPrice(shown.low, digits)}</b></span>
+                <span>C <b style={tone(up)}>{fmtPrice(shown.close, digits)}</b></span>
+                {change != null && <b style={tone(change >= 0)}>{change >= 0 ? '+' : ''}{change.toFixed(2)}%</b>}
+              </div>
+            )}
+            {full && showMA && !narrow && (
               <div className="flex gap-3" style={{ color: c.muted }}>
                 <span style={{ color: c.ma20 }}>MA 20</span>
                 <span style={{ color: c.ma50 }}>MA 50</span>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase/client';
 import { calculateIndicators } from '../utils/candleIndicators';
-import { toSeries, trendChannel, channelValue } from '../utils/candleSeries';
+import { toSeries, fillGaps, trendChannel, channelValue } from '../utils/candleSeries';
 
 const REFRESH_MS = 20_000;
 
@@ -71,9 +71,10 @@ export const usePublicIcanCandles = (limit = 200) => {
   // cards and the lines on the chart always quote the same prices.
   const analysis = useMemo(() => {
     if (!candles.length) return null;
-    const base = calculateIndicators(candles);
+    // The same steady 5-minute series the chart draws (quiet windows as flat candles), so the cards and the chart agree.
+    const series = fillGaps(toSeries(candles));
+    const base = calculateIndicators(series);
     if (!base) return base;
-    const series = toSeries(candles);
     const channel = trendChannel(series, 120);
     if (!channel) return base;
     return {

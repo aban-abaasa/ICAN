@@ -119,3 +119,29 @@ export const trendChannel = (series, lookback = 120, minHalfWidthPct = 0.002) =>
 
 export const channelValue = (channel, index, side) =>
   channel.intercept + channel.slope * index + (side === 'upper' ? channel.upperOffset : channel.lowerOffset);
+
+// The stored candles only exist for 5-minute windows in which something ticked the price, so a quiet market leaves
+// holes -- hours long -- that a chart would squash into single bar slots. This restores a steady time grid the way an
+// exchange draws a thin market: every empty window becomes a flat candle at the last known price (open = high = low
+// = close = the previous close, no volume), and the series runs on to the current window. Windows older than
+// `maxBuckets` are dropped so a very long gap cannot balloon the chart. `series` is ascending and aligned to `step`.
+export const fillGaps = (series, step = 300, untilSec = Math.floor(Date.now() / 1000), maxBuckets = 4000) => {
+  if (!series.length) return [];
+  const flat = (time, price) => ({ time, open: price, high: price, low: price, close: price, volume: 0 });
+  let out = [];
+  let prev = null;
+  for (const c of series) {
+    if (prev) {
+      const missing = Math.floor((c.time - prev.time) / step) - 1;
+      if (missing > maxBuckets) out = []; // a gap this long: start again after it rather than draw it all
+      else for (let t = prev.time + step; t < c.time; t += step) out.push(flat(t, prev.close));
+    }
+    out.push(c);
+    prev = c;
+  }
+  const lastBucket = Math.floor(untilSec / step) * step;
+  const trailing = Math.floor((lastBucket - prev.time) / step);
+  if (trailing > maxBuckets) out = [flat(lastBucket, prev.close)];
+  else for (let t = prev.time + step; t <= lastBucket; t += step) out.push(flat(t, prev.close));
+  return out.length > maxBuckets ? out.slice(out.length - maxBuckets) : out;
+};

@@ -263,7 +263,7 @@ const PublicIcanChartPage = () => {
       <main className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* The chart owns the whole first screen: no card, no border, edge to edge. On a phone it leaves a strip of
             the page showing underneath, and a vertical swipe scrolls the page (see the chart's handleScroll). */}
-        <section id="chart" aria-label="icaneracoin candlestick chart" className="h-[74dvh] min-h-[440px] w-full lg:h-[calc(100dvh-3rem)]">
+        <section id="chart" aria-label="icaneracoin candlestick chart" className="h-[calc(100svh-6.5rem-env(safe-area-inset-bottom))] min-h-[420px] w-full lg:h-[calc(100dvh-3rem)]">
           {error ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
               <p className={k.body}>The live chart could not be loaded right now.</p>
