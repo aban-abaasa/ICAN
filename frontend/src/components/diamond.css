@@ -77,7 +77,7 @@
   animation: ican-gem-twinkle 2.4s ease-in-out infinite;
 }
 .ican-gem__spark--b { fill: #dccbff; animation-delay: 1s; }
-.ican-gem__spark--c { fill: #ffe9a6; animation-delay: 1.7s; }
+.ican-gem__spark--c { fill: #c9d6ff; animation-delay: 1.7s; }
 .ican-gem__shadow {
   position: absolute; left: 20%; right: 20%; bottom: 0; height: 5%; border-radius: 50%; pointer-events: none;
   background: var(--gem-shadow); filter: blur(calc(var(--gem-s, 56px) * .03));
