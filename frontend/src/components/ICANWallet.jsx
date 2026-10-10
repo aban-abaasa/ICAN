@@ -66,6 +66,7 @@ import DigitalCardPanel from './DigitalCardPanel';
 import SellIcan from './ICAN/SellIcan';
 import icanOrderService from '../services/icanOrderService';
 import icanCoinService from '../services/icanCoinService';
+import { makeRequestIdStore } from '../utils/tradeResult';
 import icanCoinBlockchainService from '../services/icanCoinBlockchainService';
 import ReceiveMoneyModal from './ReceiveMoneyModal';
 import PayMoneyModal from './PayMoneyModal';
@@ -110,6 +111,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // component". Stash the previous tab and report it from a useEffect instead,
   // which runs after commit.
   const pendingTabChangeRef = useRef(null);
+  // One id per instant-trade ACTION: a double tap or a retry after a lost answer reuses it, so the server trades once.
+  const instantRequestIds = useRef(makeRequestIdStore('instant')).current;
   const setActiveTab = (newTab) => {
     _setActiveTab(prev => { pendingTabChangeRef.current = prev; return newTab; });
   };
@@ -780,12 +783,16 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       if (instantSide === 'buy') {
         const priceData = await icanCoinBlockchainService.getCurrentPrice();
         const localAmount = CountryService.icanToLocal(amt, userCountry || 'UG', priceData.priceUGX);
-        result = await icanCoinService.buyIcanCoins(currentUserId, localAmount, userCountry || 'UG', 'instant_chart');
+        result = await icanCoinService.buyIcanCoins(currentUserId, localAmount, userCountry || 'UG', 'instant_chart',
+          { requestId: instantRequestIds.idFor(`buy|${amt}|${userCountry || 'UG'}`), expectedPriceUgx: priceData.priceUGX });
       } else {
-        result = await icanCoinService.sellIcanCoins(currentUserId, amt, userCountry || 'UG');
+        const priceData = await icanCoinBlockchainService.getCurrentPrice();
+        result = await icanCoinService.sellIcanCoins(currentUserId, amt, userCountry || 'UG',
+          { requestId: instantRequestIds.idFor(`sell|${amt}|${userCountry || 'UG'}`), expectedPriceUgx: priceData.priceUGX });
       }
 
       if (result?.success) {
+        instantRequestIds.clear();
         if (instantSide === 'buy') handleInstantBuySuccess(result);
         else handleInstantSellSuccess(result);
         setInstantDraftOpen(false);

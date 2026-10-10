@@ -72,7 +72,16 @@ export const icanOrderService = {
    * filled. Shared by the auto-fill check and by a user manually choosing
    * "Fill Now" on a booked order from the chart.
    */
-  async _executeOrderFill(order, userId, priceUGX) {
+  async _executeOrderFill(order, userId, priceUGX, { enforceLimit = false } = {}) {
+    // Exactly once: the request id belongs to the ORDER, so two tabs, a retry after a lost answer or a second poll can
+    // never fill it twice (the server returns the first result for a repeated id).
+    // A resting limit order must also never fill at a price worse than its target: with enforceLimit the server
+    // refuses if the price has moved against the target since it was checked, and the order simply stays open.
+    const options = {
+      requestId: `order-fill-${order.id}`,
+      expectedPriceUgx: enforceLimit ? parseFloat(order.target_price_ugx) : priceUGX,
+      maxSlippagePct: enforceLimit ? 0 : 1,
+    };
     let result;
     if (order.order_type === 'buy') {
       const localAmount = CountryService.icanToLocal(
@@ -80,9 +89,9 @@ export const icanOrderService = {
         order.country_code,
         priceUGX
       );
-      result = await icanCoinService.buyIcanCoins(userId, localAmount, order.country_code, 'booked_order');
+      result = await icanCoinService.buyIcanCoins(userId, localAmount, order.country_code, 'booked_order', options);
     } else {
-      result = await icanCoinService.sellIcanCoins(userId, parseFloat(order.ican_amount), order.country_code);
+      result = await icanCoinService.sellIcanCoins(userId, parseFloat(order.ican_amount), order.country_code, options);
     }
 
     if (result?.success) {
@@ -131,7 +140,7 @@ export const icanOrderService = {
       if (!shouldFill) continue;
 
       try {
-        const result = await this._executeOrderFill(order, userId, priceUGX);
+        const result = await this._executeOrderFill(order, userId, priceUGX, { enforceLimit: true });
         if (result?.success) filled.push(order);
       } catch (err) {
         console.error(`Failed to auto-fill booked ${order.order_type} order ${order.id}:`, err);
@@ -147,11 +156,11 @@ export const icanOrderService = {
    * order's target yet — the equivalent of turning a resting limit order
    * into an immediate market order.
    */
-  async fillOrderNow(order, userId) {
+  async fillOrderNow(order, userId, { enforceLimit = false } = {}) {
     const priceData = await icanCoinBlockchainService.getCurrentPrice();
     const priceUGX = priceData.priceUGX;
     if (!priceUGX || priceUGX <= 0) throw new Error('Could not read the live price');
-    return this._executeOrderFill(order, userId, priceUGX);
+    return this._executeOrderFill(order, userId, priceUGX, { enforceLimit });
   },
 };
 

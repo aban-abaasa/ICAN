@@ -116,6 +116,9 @@ const IcanTradingChart = ({
   wheelZoom = true,
   // Shows a "tap to book" switch in the toolbar (the wallet's chart). A page that drives placement itself passes `placement`.
   allowPlacement = false,
+  // How fresh the feed behind `rows` is: 'live' | 'connecting' | 'delayed' | 'offline' (usePublicIcanCandles reports it).
+  // The badge tells the truth: a chart that stopped hearing from the server says so instead of looking live.
+  feedState = 'live',
 }) => {
   const looks = useMemo(() => sanitizeLineStyles(lineStyles), [lineStyles]);
   const narrow = useNarrow();
@@ -419,6 +422,10 @@ const IcanTradingChart = ({
   const up = shown ? shown.close >= shown.open : true;
   const tone = (isUp) => ({ color: isUp ? c.pos : c.neg });
 
+  // Amber / red are plain hex like the rest of the legend, so the theme cannot wash a warning out.
+  const feedDot = feedState === 'delayed' ? '#d99a00' : feedState === 'offline' ? '#e5233b' : feedState === 'connecting' ? c.muted : c.live;
+  const feedLabel = { live: 'Live', connecting: 'Connecting', delayed: 'Delayed', offline: 'Offline · last data' }[feedState] || 'Live';
+
   const chip = (on) => ({
     borderColor: on ? c.chipOnBorder : c.chipOffBorder,
     background: on ? c.chipOnBg : 'transparent',
@@ -492,13 +499,15 @@ const IcanTradingChart = ({
           >
             ⚙ Tools
           </button>
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1 text-[11px] sm:gap-2 sm:pl-2" style={{ color: c.soft }}>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1 text-[11px] sm:gap-2 sm:pl-2" style={{ color: c.soft }} role="status" aria-live="polite">
             <span className="relative flex h-2 w-2" aria-hidden="true">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: c.live }} />
-              <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: c.live }} />
+              {feedState === 'live' && <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: c.live }} />}
+              <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: feedDot }} />
             </span>
-            <span className="hidden font-semibold uppercase tracking-wide sm:inline" style={{ color: c.liveText }}>Live</span>
-            <span className="hidden tabular-nums min-[400px]:inline"><span className="hidden sm:inline">candle closes in </span>{countdown(secondsLeft)}</span>
+            <span className={`${feedState === 'live' ? 'hidden sm:inline' : 'inline'} font-semibold uppercase tracking-wide`} style={{ color: feedState === 'live' ? c.liveText : feedDot }}>{feedLabel}</span>
+            {feedState === 'live' && (
+              <span className="hidden tabular-nums min-[400px]:inline"><span className="hidden sm:inline">candle closes in </span>{countdown(secondsLeft)}</span>
+            )}
           </div>
         </div>
       )}
@@ -556,6 +565,13 @@ const IcanTradingChart = ({
                 <span style={{ color: c.rsi }}>RSI 14 ↓</span>
               </div>
             )}
+          </div>
+        )}
+
+        {!full && (feedState === 'delayed' || feedState === 'offline') && (
+          // The compact chart has no toolbar, so a stale feed gets its own small badge.
+          <div className="pointer-events-none absolute right-2 top-1.5 z-[3] rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" role="status" style={{ background: c.veil, color: feedDot, border: `1px solid ${feedDot}` }}>
+            {feedLabel}
           </div>
         )}
 

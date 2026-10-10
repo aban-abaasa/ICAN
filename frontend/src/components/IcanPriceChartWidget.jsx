@@ -16,7 +16,7 @@ import { describeCandleWindow, summarizeAnalysis } from '../utils/candleIndicato
 // places or fills an order. On the page the wheel scrolls the page instead of zooming the chart, so the dashboard
 // never gets stuck under the mouse; in the full-screen view the wheel zooms, like any chart.
 const IcanPriceChartWidget = () => {
-  const { candles, snapshot, analysis, loading, error, refresh } = usePublicIcanCandles(300);
+  const { candles, snapshot, analysis, loading, error, refresh, status } = usePublicIcanCandles(300);
   const { actualTheme } = useOptionalTheme();
   const theme = isDarkFamilyTheme(actualTheme) ? 'dark' : 'light';
   const c = CHART_PALETTES[theme];
@@ -90,7 +90,7 @@ const IcanPriceChartWidget = () => {
           {/* Straight on the page: no card, no border, no rounded corners. */}
           <div className="h-[380px] w-full md:h-[440px]">
             {fullScreen ? null : error ? failed : (
-              <IcanTradingChart rows={candles} loading={loading} theme={theme} wheelZoom={false} />
+              <IcanTradingChart rows={candles} loading={loading} theme={theme} wheelZoom={false} feedState={status} />
             )}
           </div>
           <p className="mt-2 px-1 text-xs leading-5" style={{ color: 'var(--color-textSecondary)' }}>{summary}</p>
@@ -121,7 +121,7 @@ const IcanPriceChartWidget = () => {
             </button>
           </div>
           <div className="min-h-0 flex-1">
-            {error ? failed : <IcanTradingChart rows={candles} loading={loading} theme={theme} />}
+            {error ? failed : <IcanTradingChart rows={candles} loading={loading} theme={theme} feedState={status} />}
           </div>
         </div>,
         document.body,

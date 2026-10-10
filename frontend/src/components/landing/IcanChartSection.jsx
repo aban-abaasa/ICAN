@@ -11,7 +11,7 @@ import { describeCandleWindow, summarizeAnalysis } from '../../utils/candleIndic
 const IcanTradingChart = lazyWithRetry(() => import('../IcanTradingChart'));
 
 const IcanChartLive = ({ isDarkTheme, onGetStarted }) => {
-  const { candles, snapshot, analysis, loading, error } = usePublicIcanCandles(120);
+  const { candles, snapshot, analysis, loading, error, status } = usePublicIcanCandles(120);
   const latest = candles.length ? candles[candles.length - 1] : null;
   const priceUgx = snapshot?.price_ugx != null ? Number(snapshot.price_ugx) : latest?.close ?? null;
   const changePct = analysis ? Number(analysis.momentum) : null;
@@ -39,7 +39,7 @@ const IcanChartLive = ({ isDarkTheme, onGetStarted }) => {
             </div>
           ) : (
             <Suspense fallback={<div className="flex h-full items-center justify-center text-sm" style={{ color: isDarkTheme ? '#64748b' : '#94a3b8' }}>Loading chart…</div>}>
-              <IcanTradingChart rows={candles} loading={loading} variant="compact" theme={isDarkTheme ? 'dark' : 'light'} />
+              <IcanTradingChart rows={candles} loading={loading} variant="compact" theme={isDarkTheme ? 'dark' : 'light'} feedState={status} />
             </Suspense>
           )}
         </div>
