@@ -31,6 +31,7 @@ import { usePinPrompt } from './PinPromptDialog';
 import { AuthPage } from './auth';
 import BusinessChatWidget from './BusinessChatWidget';
 import LoadingPage from './LoadingPage';
+import '../styles/navGlow.css';
 
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
 
@@ -1705,12 +1706,16 @@ const ThemeToggleButton = ({ theme, onToggle, className = '' }) => (
 // evenly without its own scroll in the overwhelming majority of cases; the
 // rare business with every optional section enabled still scrolls cleanly
 // via the same fade-masked overflow the top strip uses.
+//
+// The bar has no chrome of its own: every section is an independent
+// transparent tile whose edge carries a colour line, orbiting on the active one
+// (see styles/navGlow.css, themed here through ng-bar-nb).
 const BottomNav = ({ tabs, section, onNavigate, navRef }) => (
   <nav
     ref={navRef}
     aria-label="Sections"
-    className="nb-tab-nav sm:hidden fixed bottom-0 inset-x-0 z-30 nb-header border-t nb-border backdrop-blur flex overflow-x-auto"
-    style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    className="nb-tab-nav ng-bar ng-bar-nb sm:hidden fixed bottom-0 inset-x-0 z-30 flex gap-1.5 overflow-x-auto px-2 pt-1.5"
+    style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.375rem)' }}
   >
     {tabs.map((tab) => (
       <TabLink
@@ -1718,7 +1723,7 @@ const BottomNav = ({ tabs, section, onNavigate, navRef }) => (
         tab={tab}
         active={section === tab.id}
         onNavigate={onNavigate}
-        className={`flex-1 min-w-[64px] flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold whitespace-nowrap transition-colors ${section === tab.id ? 'nb-tab-active' : 'nb-tab'}`}
+        className={`ng-tab ${section === tab.id ? 'ng-on' : ''} flex-1 min-w-[64px] flex flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-semibold whitespace-nowrap`}
       >
         <tab.icon className="w-5 h-5" />
         <span className="truncate max-w-[68px]">{tab.mobileLabel || tab.label}</span>

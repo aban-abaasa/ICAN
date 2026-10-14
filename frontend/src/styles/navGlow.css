@@ -1,0 +1,152 @@
+/* Bottom navigation made of independent, transparent tiles, each with a living
+   colour line around its edge.
+
+   Used by the app's main bottom bar (MobileView) and the public business
+   website's bottom bar (PublicCompanyNoticeBoard).
+
+   - The bar has no chrome at all: no shared fill, border or blur. It only lays
+     the tabs out. Every tab is its own glass tile -- its own faint tint and
+     backdrop blur, its own edge line, its own glow -- so nothing is shared
+     between icons: pressing, hovering or animating one never touches another.
+   - Each tile keeps the business website's layout: icon over a small
+     semibold label.
+   - An idle tile carries a faint, static gradient hairline. The active tile
+     gets a bright multi-colour comet orbiting its edge (a conic gradient whose
+     angle is animated through a registered custom property) and a soft glow.
+   - Colours come from variables, so each host re-themes it: the app inherits
+     the active ICAN theme's --color-*, the business site maps --nb-*.
+   - prefers-reduced-motion parks the comet as a still arc; browsers without
+     @property support simply show the still ring.
+
+   Layout (fixed, flex, gap, sm:hidden, z-index) stays in the host's Tailwind
+   classes so breakpoints can never lose a cascade fight with this file. */
+
+@property --ng-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes ng-orbit {
+  to { --ng-angle: 360deg; }
+}
+
+/* ── The bar: palette + layout host only ──────────────────────────────── */
+.ng-bar {
+  --ng-surface: var(--color-bg, #ffffff);
+  --ng-text: var(--color-textSecondary, #64748b);
+  --ng-active: var(--color-primary, #166534);
+  --ng-c1: var(--color-primary, #166534);
+  --ng-c2: var(--color-accent, var(--color-secondary, #14b8a6));
+  --ng-c3: var(--color-secondary, #f59e0b);
+  background: none;
+  border: 0;
+  /* Gaps between tiles stay tappable on the page beneath. */
+  pointer-events: none;
+}
+
+/* The public business site: map its own palette. Brighter fixed teal/gold so
+   the comet reads on both the light and the dark site theme. Its bar can
+   scroll sideways when a business has many sections, so it keeps touch. */
+.ng-bar-nb {
+  --ng-surface: var(--nb-surface);
+  --ng-text: var(--nb-text-muted);
+  --ng-active: var(--nb-green);
+  --ng-c1: var(--nb-green);
+  --ng-c2: #14b8a6;
+  --ng-c3: #f59e0b;
+  pointer-events: auto;
+}
+/* The site's tab strips fade out at the right edge (nb-tab-nav) to hint at
+   sideways scrolling. On independent tiles that would wash out the last tile
+   even when nothing overflows; a tile cut off by the screen edge is already
+   the scroll cue. Three classes so it beats the site's injected <style>. */
+.ng-bar.ng-bar-nb.nb-tab-nav {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* ── One tile (a whole, independent tab) ──────────────────────────────── */
+.ng-tab {
+  position: relative;
+  pointer-events: auto;
+  border-radius: 1rem;
+  color: var(--ng-text);
+  background: transparent;
+  background: color-mix(in srgb, var(--ng-surface) 10%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+  transition: color 0.25s ease, transform 0.18s ease, background-color 0.3s ease, box-shadow 0.3s ease;
+  -webkit-tap-highlight-color: transparent;
+  /* A soft halo of the page colour keeps the label legible over busy content. */
+  text-shadow: 0 0 6px color-mix(in srgb, var(--ng-surface) 85%, transparent), 0 1px 2px color-mix(in srgb, var(--ng-surface) 85%, transparent);
+}
+.ng-tab:hover { color: color-mix(in srgb, var(--ng-active) 70%, var(--ng-text)); }
+.ng-tab:active { transform: scale(0.94); }
+.ng-tab svg { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ng-surface) 85%, transparent)); }
+
+.ng-tab.ng-on,
+.ng-tab.ng-on:hover { color: var(--ng-active); }
+/* The active tile washes a little more of the page colour into its glass so
+   its label keeps contrast over any backdrop, then glows in the accent. */
+.ng-tab.ng-on {
+  background-color: color-mix(in srgb, var(--ng-surface) 34%, transparent);
+  box-shadow:
+    0 0 16px -4px color-mix(in srgb, var(--ng-c2) 55%, transparent),
+    inset 0 0 14px -6px color-mix(in srgb, var(--ng-c2) 45%, transparent);
+}
+
+/* A call-to-action tile (e.g. "Trade"): keeps its emphasis through a brighter
+   idle edge line and an accent label, instead of a solid fill. */
+.ng-tab.ng-hero { color: var(--ng-active); }
+.ng-tab.ng-hero::before { opacity: 0.65; }
+
+/* ── The edge line ────────────────────────────────────────────────────── */
+.ng-tab::before,
+.ng-tab::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;                 /* line thickness */
+  border-radius: inherit;
+  pointer-events: none;
+  /* Keep only the 1.5px rim: full box minus the content box. */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* Idle: a faint full-circle gradient hairline. */
+.ng-tab::before {
+  background: conic-gradient(from 0deg, var(--ng-c1), var(--ng-c2), var(--ng-c3), var(--ng-c1));
+  opacity: 0.22;
+  transition: opacity 0.3s ease;
+}
+
+/* Active: a comet with a fading tail and a bright head, orbiting the rim. */
+.ng-tab::after {
+  background: conic-gradient(
+    from var(--ng-angle),
+    transparent 0deg 190deg,
+    var(--ng-c1) 250deg,
+    var(--ng-c2) 312deg,
+    var(--ng-c3) 350deg,
+    transparent 360deg
+  );
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.ng-tab.ng-on::before { opacity: 0.5; }
+.ng-tab.ng-on::after {
+  opacity: 1;
+  animation: ng-orbit 2.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ng-tab.ng-on::after {
+    animation: none;
+    --ng-angle: 215deg;
+  }
+  .ng-tab { transition: none; }
+}

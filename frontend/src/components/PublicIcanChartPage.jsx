@@ -8,7 +8,9 @@ import { CHART_PALETTES } from './chartPalettes';
 import { useLineStyles } from './chartLineStyles';
 import usePublicTrading from '../hooks/usePublicTrading';
 import usePublicIcanCandles from '../hooks/usePublicIcanCandles';
+import useScrollSpy from '../hooks/useScrollSpy';
 import { describeCandleWindow, summarizeAnalysis } from '../utils/candleIndicators';
+import '../styles/navGlow.css';
 
 // /icaneracoin -- the public icaneracoin price chart. Anyone (and any search engine) can open it with no
 // account: the live candlestick chart, the chart analysis, and a plain-language explanation of what they show.
@@ -97,6 +99,15 @@ const scrollToId = (id) => {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
+// Page sections in order, for the phone bottom bar's active tile.
+const NAV_SECTIONS = ['chart', 'analysis', 'learn'];
+// Edge-line colours of the bottom bar's tiles (see styles/navGlow.css): the
+// dark page's gold accent / the light page's deep emerald, with companions.
+const NAV_COLOURS = {
+  dark: { '--ng-active': '#fcd34d', '--ng-c1': '#fcd34d', '--ng-c2': '#34d399', '--ng-c3': '#38bdf8' },
+  light: { '--ng-active': '#047857', '--ng-c1': '#10b981', '--ng-c2': '#f59e0b', '--ng-c3': '#0ea5e9' },
+};
+
 const PublicIcanChartPage = () => {
   const { candles, snapshot, analysis, loading, error, updatedAt, refresh, status } = usePublicIcanCandles(500);
   const [theme, setTheme] = useState(initialTheme);
@@ -104,6 +115,7 @@ const PublicIcanChartPage = () => {
   const dark = theme === 'dark';
   const c = CHART_PALETTES[theme];
   const isDesktop = useIsDesktop();
+  const navSection = useScrollSpy(NAV_SECTIONS, { enabled: !isDesktop });
 
   // Trading state lives here so the chart (lines, taps) and the panel stay in step.
   const { lineStyles, updateLineStyle, resetLineStyles } = useLineStyles();
@@ -215,18 +227,23 @@ const PublicIcanChartPage = () => {
     />
   );
 
-  const navBtn = (label, Icon, onClick, { primary = false, active = false } = {}) => (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className="flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold"
-      style={primary ? { background: c.tabOnBg, color: c.tabOnText } : { color: active ? c.strong : c.soft }}
-    >
-      <Icon className="h-5 w-5" aria-hidden="true" />
-      {label}
-    </button>
-  );
+  // One independent glass tile of the phone bottom bar. While the Trade sheet is open
+  // only Trade is lit; otherwise the tile for the section being read is.
+  const navBtn = (id, label, Icon, onClick, { hero = false } = {}) => {
+    const on = sheetOpen ? id === 'trade' : id === navSection;
+    return (
+      <button
+        key={id}
+        type="button"
+        onClick={onClick}
+        aria-current={on ? 'page' : undefined}
+        className={`ng-tab ${on ? 'ng-on' : ''} ${hero ? 'ng-hero' : ''} flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold`}
+      >
+        <Icon className="h-5 w-5" aria-hidden="true" />
+        {label}
+      </button>
+    );
+  };
 
   return (
     <div className={`min-h-screen font-sans ${k.page}`}>
@@ -271,7 +288,7 @@ const PublicIcanChartPage = () => {
       <main className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* The chart owns the whole first screen: no card, no border, edge to edge. On a phone it leaves a strip of
             the page showing underneath, and a vertical swipe scrolls the page (see the chart's handleScroll). */}
-        <section id="chart" aria-label="icaneracoin candlestick chart" className="h-[calc(100svh-6.5rem-env(safe-area-inset-bottom))] min-h-[420px] w-full lg:h-[calc(100dvh-3rem)]">
+        <section id="chart" aria-label="icaneracoin candlestick chart" className="h-[calc(100svh-7rem-env(safe-area-inset-bottom))] min-h-[420px] w-full lg:h-[calc(100dvh-3rem)]">
           {error ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
               <p className={k.body}>The live chart could not be loaded right now.</p>
@@ -358,11 +375,15 @@ const PublicIcanChartPage = () => {
 
       {/* Phone navigation: always within thumb reach, never hidden behind the chart. */}
       {!isDesktop && (
-        <nav aria-label="Page sections" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t backdrop-blur" style={{ background: c.card, borderColor: c.cardBorder, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          {navBtn('Chart', LineChartIcon, () => window.scrollTo({ top: 0, behavior: 'smooth' }))}
-          {navBtn('Trade', ArrowLeftRight, () => setSheetOpen(true), { primary: true, active: sheetOpen })}
-          {navBtn('Analysis', BarChart3, () => scrollToId('analysis'))}
-          {navBtn('Learn', HelpCircle, () => scrollToId('learn'))}
+        <nav
+          aria-label="Page sections"
+          className="ng-bar fixed inset-x-0 bottom-0 z-40 flex items-stretch gap-1.5 px-2 pt-1.5"
+          style={{ ...NAV_COLOURS[theme], '--ng-surface': c.base, '--ng-text': c.soft, paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.375rem)' }}
+        >
+          {navBtn('chart', 'Chart', LineChartIcon, () => window.scrollTo({ top: 0, behavior: 'smooth' }))}
+          {navBtn('trade', 'Trade', ArrowLeftRight, () => setSheetOpen(true), { hero: true })}
+          {navBtn('analysis', 'Analysis', BarChart3, () => scrollToId('analysis'))}
+          {navBtn('learn', 'Learn', HelpCircle, () => scrollToId('learn'))}
         </nav>
       )}
 
