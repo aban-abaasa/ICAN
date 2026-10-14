@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getDataTerms, getDataConsentStatus, acceptDataTerms } from '../services/sectorMarketService';
 
 // The data clause of the Terms & Conditions: businesses agree that anonymous, combined sales totals may be used to
@@ -88,20 +89,34 @@ export function SectorDataTermsGate({ profiles }) {
   }, [pending, terms]);
 
   if (!pending || !terms) return null;
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="sector-terms-title">
-      <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-xl">
-        <h2 id="sector-terms-title" className="text-lg font-bold text-white">{terms.title}</h2>
-        <p className="mt-1 text-xs text-slate-400">For {pending.name}</p>
-        <p className="mt-3 text-sm leading-relaxed text-slate-200">{terms.body}</p>
-        <p className="mt-3 text-xs text-slate-400">Until you agree, {pending.name} is simply left out of these totals. Nothing else about your account changes.</p>
-        {error && <p className="mt-3 text-sm text-red-400" role="alert">{error}</p>}
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <button type="button" onClick={later} disabled={busy} className="rounded-lg border border-slate-600 py-2 text-sm text-slate-300 hover:text-white">Not now</button>
-          <button type="button" onClick={accept} disabled={busy} className="rounded-lg bg-emerald-600 py-2 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-50">{busy ? 'Saving…' : 'I agree'}</button>
+  // Rendered on <body> so the app's bottom navigation (its own stacking context) can never sit on top of the buttons.
+  // The card is capped to the visible viewport (dvh follows the phone's address bar); only the text scrolls, so
+  // "Not now" / "I agree" stay on screen on small and short phones, and clear of the gesture bar.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[300] flex items-end justify-center bg-black/70 sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sector-terms-title"
+    >
+      <div className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-700 bg-slate-900 shadow-xl sm:max-h-[85dvh] sm:rounded-2xl">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-2 pt-4 sm:px-5 sm:pt-5">
+          <h2 id="sector-terms-title" className="text-base font-bold leading-snug text-white sm:text-lg">{terms.title}</h2>
+          <p className="mt-1 break-words text-xs text-slate-400">For {pending.name}</p>
+          <p className="mt-3 text-[13px] leading-relaxed text-slate-200 sm:text-sm">{terms.body}</p>
+          <p className="mt-3 text-xs leading-relaxed text-slate-400">Until you agree, {pending.name} is simply left out of these totals. Nothing else about your account changes.</p>
+          {error && <p className="mt-3 text-sm text-red-400" role="alert">{error}</p>}
+        </div>
+        <div
+          className="grid grid-cols-2 gap-2 border-t border-slate-700 bg-slate-900 px-4 pt-3 sm:px-5"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+        >
+          <button type="button" onClick={later} disabled={busy} className="min-h-[44px] rounded-lg border border-slate-600 text-sm text-slate-300 hover:text-white">Not now</button>
+          <button type="button" onClick={accept} disabled={busy} className="min-h-[44px] rounded-lg bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-50">{busy ? 'Saving…' : 'I agree'}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
