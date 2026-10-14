@@ -237,7 +237,7 @@ const PublicIcanChartPage = () => {
         type="button"
         onClick={onClick}
         aria-current={on ? 'page' : undefined}
-        className={`ng-tab ${on ? 'ng-on' : ''} ${hero ? 'ng-hero' : ''} flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold`}
+        className={`ng-tab ${on ? 'ng-on' : ''} ${hero ? 'ng-hero' : ''} flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold`}
       >
         <Icon className="h-5 w-5" aria-hidden="true" />
         {label}
@@ -288,7 +288,7 @@ const PublicIcanChartPage = () => {
       <main className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* The chart owns the whole first screen: no card, no border, edge to edge. On a phone it leaves a strip of
             the page showing underneath, and a vertical swipe scrolls the page (see the chart's handleScroll). */}
-        <section id="chart" aria-label="icaneracoin candlestick chart" className="h-[calc(100svh-7rem-env(safe-area-inset-bottom))] min-h-[420px] w-full lg:h-[calc(100dvh-3rem)]">
+        <section id="chart" aria-label="icaneracoin candlestick chart" className="h-[calc(100svh-7.25rem-env(safe-area-inset-bottom))] min-h-[420px] w-full lg:h-[calc(100dvh-3rem)]">
           {error ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
               <p className={k.body}>The live chart could not be loaded right now.</p>
@@ -377,8 +377,8 @@ const PublicIcanChartPage = () => {
       {!isDesktop && (
         <nav
           aria-label="Page sections"
-          className="ng-bar fixed inset-x-0 bottom-0 z-40 flex items-stretch gap-1.5 px-2 pt-1.5"
-          style={{ ...NAV_COLOURS[theme], '--ng-surface': c.base, '--ng-text': c.soft, paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.375rem)' }}
+          className="ng-bar fixed inset-x-0 bottom-0 z-40 flex"
+          style={{ ...NAV_COLOURS[theme], '--ng-surface': c.base, '--ng-text': c.soft }}
         >
           {navBtn('chart', 'Chart', LineChartIcon, () => window.scrollTo({ top: 0, behavior: 'smooth' }))}
           {navBtn('trade', 'Trade', ArrowLeftRight, () => setSheetOpen(true), { hero: true })}

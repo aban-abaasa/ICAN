@@ -213,27 +213,28 @@ const PublicShopPage = () => {
         </section>
       </main>
 
-      {/* Phone navigation: independent transparent tiles, each with its own colour line along its
-          edge (orbiting on the active one). Hidden from sm up, where the header carries the page. */}
+      {/* Phone navigation: truly transparent -- each tile is only its icon, label and its own colour
+          line along the edge (orbiting on the active one). Hidden from sm up, where the header
+          carries the page. */}
       <nav
         aria-label="Shop sections"
-        className="ng-bar fixed inset-x-0 bottom-0 z-40 flex items-stretch gap-1.5 px-2 pt-1.5 sm:hidden"
-        style={{ ...NAV_COLOURS[theme], '--ng-surface': C.page, paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.375rem)' }}
+        className="ng-bar fixed inset-x-0 bottom-0 z-40 flex sm:hidden"
+        style={{ ...NAV_COLOURS[theme], '--ng-surface': C.page }}
       >
         {[
           { id: 'shop-top', label: 'Shop', icon: ShoppingBag, onClick: () => window.scrollTo({ top: 0, behavior: 'smooth' }) },
           { id: 'search', label: 'Search', icon: Search, onClick: goToSearch },
         ].map(({ id, label, icon: Icon, onClick }) => (
-          <button key={id} type="button" onClick={onClick} aria-current={navActive === id ? 'page' : undefined} className={`ng-tab ${navActive === id ? 'ng-on' : ''} flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold`}>
+          <button key={id} type="button" onClick={onClick} aria-current={navActive === id ? 'page' : undefined} className={`ng-tab ${navActive === id ? 'ng-on' : ''} flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold`}>
             <Icon className="h-5 w-5" aria-hidden="true" />
             {label}
           </button>
         ))}
-        <a href="/icaneracoin" className="ng-tab flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold">
+        <a href="/icaneracoin" className="ng-tab flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold">
           <Coins className="h-5 w-5" aria-hidden="true" />
           ICAN
         </a>
-        <button type="button" onClick={() => goToSection('sell')} aria-current={navActive === 'sell' ? 'page' : undefined} className={`ng-tab ${navActive === 'sell' ? 'ng-on' : ''} flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold`}>
+        <button type="button" onClick={() => goToSection('sell')} aria-current={navActive === 'sell' ? 'page' : undefined} className={`ng-tab ${navActive === 'sell' ? 'ng-on' : ''} flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold`}>
           <Store className="h-5 w-5" aria-hidden="true" />
           Sell
         </button>
