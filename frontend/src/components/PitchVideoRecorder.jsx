@@ -1,38 +1,31 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Mic, Square, Play, Upload, X, RotateCcw, Pin, Maximize, Minimize, Smartphone, Scissors, CheckCircle, SwitchCamera, Sparkles, ArrowLeft, Rocket, MoreVertical } from 'lucide-react';
-import { uploadVideo, getSupabase } from '../services/pitchingService';
+import { X, Rocket } from 'lucide-react';
+import { getSupabase } from '../services/pitchingService';
+import PitchCameraStage from './PitchCameraStage';
 import { VideoClipper } from './status/SimpleVideoClipper';
 import BusinessProfileDocuments from './BusinessProfileDocuments';
 import PitchDetailsForm from './PitchDetailsForm';
 import BusinessProfileSelector from './BusinessProfileSelector';
 import DiamondLoader from './DiamondLoader';
-import { drawIcanEraWatermark, applyWatermarkToVideoBlob } from '../utils/videoWatermark';
+import { applyWatermarkToVideoBlob } from '../utils/videoWatermark';
+import { createBlobTask } from '../utils/videoFormat';
 
-const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', onPitchCreated, onClose, hideControls = false, onVideoRecorded, currentBusinessProfile, businessProfiles = [], onSelectProfile, onShowProfileSelector }) => {
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const animationFrameRef = useRef(null);
-  const streamRef = useRef(null);
+const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', onPitchCreated, onClose, hideControls = false, onVideoRecorded, currentBusinessProfile, businessProfiles = [], onSelectProfile, onShowProfileSelector, backgroundUpload = false }) => {
   const fullscreenRef = useRef(null);
-  const videoRefs = useRef({});
-  const recordedChunksRef = useRef([]);
   const documentsRef = useRef(null);
-  
-  const [isRecording, setIsRecording] = useState(false);
+  const previewUrlRef = useRef(null);
+  const videoTaskRef = useRef(null);   // background "stamp the IcanEra mark" job for a picked file
+  const handedOffRef = useRef(false);  // the clip + task now belong to the uploader, so don't cancel them on close
+
   const [recordedChunks, setRecordedChunks] = useState([]);
   const [videoBlob, setVideoBlob] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [videoMeta, setVideoMeta] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [isFormExpanded, setIsFormExpanded] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [facingMode, setFacingMode] = useState(cameraMode === 'back' ? 'environment' : 'user'); // 'user' for front, 'environment' for back
-  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
   const [showVideoClipper, setShowVideoClipper] = useState(false);
-  const [showTrimDialog, setShowTrimDialog] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState(currentBusinessProfile);
@@ -41,9 +34,6 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   const [completedDocumentsData, setCompletedDocumentsData] = useState(null); // Store completed document data
   const [showPitchDetailsForm, setShowPitchDetailsForm] = useState(false); // Control PitchDetailsForm visibility
   const [workflowStatus, setWorkflowStatus] = useState(''); // Show workflow status messages
-  const [showMoreMenu, setShowMoreMenu] = useState(false); // Secondary controls dropdown (⋮)
-  const [isWatermarking, setIsWatermarking] = useState(false); // Re-encoding an uploaded file with the IcanEra mark
-  const [watermarkProgress, setWatermarkProgress] = useState(0);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -58,386 +48,73 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
     members: []
   });
 
-  // Update facing mode when camera mode prop changes
-  useEffect(() => {
-    const newFacingMode = cameraMode === 'back' ? 'environment' : 'user';
-    if (newFacingMode !== facingMode) {
-      setFacingMode(newFacingMode);
-      // Stop current stream if recording
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
-      setIsRecording(false);
-    }
-  }, [cameraMode]);
-
   // Sync selected profile with prop
   useEffect(() => {
     setSelectedProfile(currentBusinessProfile);
   }, [currentBusinessProfile]);
 
-  // Recording timer effect
-  useEffect(() => {
-    let interval;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setRecordingTime(t => t + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording]);
+  // Release the preview URL, and any unfinished background work, when the recorder goes away.
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    if (!handedOffRef.current) videoTaskRef.current?.abort();
+  }, []);
 
-  const startRecording = async () => {
-    try {
-      console.log(`📹 Starting recording - Camera mode: ${facingMode === 'user' ? 'Front' : 'Back'}`);
-      
-      // Reset chunks at start of recording
-      recordedChunksRef.current = [];
-      setRecordedChunks([]);
-      
-      // Check for available cameras
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(device => device.kind === 'videoinput');
-      console.log(`Found ${videoDevices.length} camera(s)`);
-      setHasMultipleCameras(videoDevices.length > 1);
-      
-      // Determine which camera to use based on facingMode
-      const constraints = {
-        video: {
-          facingMode: facingMode,
-          aspectRatio: { ideal: 9/16 },
-          width: { ideal: 1080 },
-          height: { ideal: 1920 }
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      };
-      
-      console.log('Requesting camera with constraints:', constraints);
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-      console.log('✅ Camera stream obtained');
-      console.log('Video tracks:', stream.getVideoTracks().map(t => ({
-        label: t.label,
-        facingMode: t.getSettings().facingMode
-      })));
-
-      streamRef.current = stream;
-
-      // Set up canvas rendering
-      if (canvasRef.current && videoRef.current) {
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        
-        // Set initial canvas dimensions (9:16 portrait)
-        canvas.width = 1080;
-        canvas.height = 1920;
-        console.log('Canvas initialized: 1080x1920');
-        
-        videoRef.current.srcObject = stream;
-        
-        // Play the video to display on canvas
-        videoRef.current.play().catch(err => {
-          console.error('❌ Play error:', err);
-        });
-        
-        // Set up MediaRecorder to capture canvas stream
-        try {
-          const canvasStream = canvasRef.current.captureStream(30); // 30 FPS
-          const audioTracks = stream.getAudioTracks();
-          
-          // Add audio tracks to canvas stream if available
-          if (audioTracks.length > 0) {
-            audioTracks.forEach(track => {
-              canvasStream.addTrack(track);
-            });
-          }
-          
-          // Create MediaRecorder
-          const mimeType = 'video/webm;codecs=vp9,opus';
-          const options = {
-            mimeType: mimeType,
-            videoBitsPerSecond: 2500000 // 2.5 Mbps
-          };
-          
-          mediaRecorderRef.current = new MediaRecorder(canvasStream, options);
-          
-          // Handle data chunks
-          mediaRecorderRef.current.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              recordedChunksRef.current.push(event.data);
-              console.log('📦 Data chunk received:', event.data.size);
-            }
-          };
-          
-          // Handle recording stop
-          mediaRecorderRef.current.onstop = () => {
-            console.log('⏹️ Recording stopped');
-            const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            setPreviewUrl(url);
-            setVideoBlob(blob);
-            setRecordedChunks(recordedChunksRef.current);
-            
-            // Notify parent
-            if (onVideoRecorded) {
-              onVideoRecorded(blob);
-            }
-          };
-          
-          mediaRecorderRef.current.onerror = (event) => {
-            console.error('❌ MediaRecorder error:', event.error);
-          };
-          
-          console.log('✅ MediaRecorder set up successfully');
-        } catch (err) {
-          console.error('❌ MediaRecorder setup failed:', err);
-        }
-        
-        // Draw video frames to canvas
-        const drawFrame = () => {
-          // Clear canvas
-          ctx.fillStyle = '#000';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          
-          try {
-            if (videoRef.current && videoRef.current.readyState >= 2) {
-              const videoWidth = videoRef.current.videoWidth;
-              const videoHeight = videoRef.current.videoHeight;
-              
-              if (videoWidth && videoHeight) {
-                // Update canvas to match video dimensions
-                if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
-                  canvas.width = videoWidth;
-                  canvas.height = videoHeight;
-                }
-                
-                // Draw video frame
-                ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-                // Burn the IcanEra mark into this frame so it's baked into
-                // the recording MediaRecorder is capturing from this canvas.
-                drawIcanEraWatermark(ctx, canvas.width, canvas.height);
-              }
-            }
-          } catch (e) {
-            // Handle drawImage errors silently
-          }
-          animationFrameRef.current = requestAnimationFrame(drawFrame);
-        };
-        
-        videoRef.current.onplay = () => {
-          console.log('✅ Video play event - starting frame drawing');
-          drawFrame();
-          // Start recording after stream is ready
-          setTimeout(() => {
-            if (mediaRecorderRef.current) {
-              mediaRecorderRef.current.start();
-              setIsRecording(true);
-              setRecordingTime(0);
-              console.log('🔴 Recording started');
-            }
-          }, 100);
-        };
-        
-        videoRef.current.onerror = (error) => {
-          console.error('❌ Video error:', error);
-        };
-      }
-    } catch (error) {
-      console.error('❌ Error starting recording:', error);
-      if (error.name === 'NotAllowedError') {
-        alert('Camera access denied. Please allow camera permissions.');
-      } else if (error.name === 'NotFoundError') {
-        alert(`${facingMode === 'user' ? 'Front' : 'Back'} camera not found.`);
-      }
+  // A clip is ready (just recorded, or picked from the phone).
+  const handleVideoReady = ({ blob, durationSec, source, needsWatermark, task, width, height }) => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const url = URL.createObjectURL(blob);
+    previewUrlRef.current = url;
+    videoTaskRef.current = task || null;
+    setVideoBlob(blob);
+    setRecordedChunks([blob]);
+    setPreviewUrl(url);
+    setVideoMeta({ durationSec, source, needsWatermark: !!needsWatermark, size: blob.size, type: blob.type, width, height });
+    if (task && !backgroundUpload) {
+      // Callers that publish by themselves expect the finished (stamped) video, so hand it over once it's ready.
+      task.promise.then((finalBlob) => { if (videoTaskRef.current === task) onVideoRecorded?.(finalBlob); });
+    } else if (onVideoRecorded) {
+      onVideoRecorded(blob);
     }
   };
 
-  const stopRecording = () => {
-    console.log('⏹️ Stop recording requested');
-    
-    if (isRecording) {
-      setIsRecording(false);
-      
-      // Stop MediaRecorder
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      
-      // Stop stream tracks
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => {
-          track.stop();
-          console.log('Stopped track:', track.kind);
-        });
-        streamRef.current = null;
-      }
-      
-      // Stop animation frame
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      
-      setRecordingTime(0);
-    }
-  };
-
-  const toggleCamera = async () => {
-    if (!hasMultipleCameras) {
-      console.warn('Only one camera available');
-      return;
-    }
-    
-    try {
-      // Stop current stream and recording
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => {
-          track.stop();
-          console.log('Stopped track:', track.kind);
-        });
-        streamRef.current = null;
-      }
-      
-      if (isRecording) {
-        setIsRecording(false);
-        if (mediaRecorderRef.current) {
-          mediaRecorderRef.current.stop();
-        }
-      }
-      
-      // Switch camera mode
-      const newFacingMode = facingMode === 'user' ? 'environment' : 'user';
-      console.log(`Switching camera: ${facingMode} → ${newFacingMode}`);
-      setFacingMode(newFacingMode);
-      
-      // Wait for state update then request new stream
-      setTimeout(async () => {
-        try {
-          console.log('Requesting new stream with facing mode:', newFacingMode);
-          await startRecording();
-          console.log('✅ Camera switched successfully');
-        } catch (error) {
-          console.error('❌ Error getting camera stream:', error);
-          setFacingMode(facingMode); // Revert on error
-        }
-      }, 300);
-    } catch (error) {
-      console.error('❌ Camera toggle error:', error);
-    }
-  };
-
-  const toggleFullscreen = () => {
-    const elem = fullscreenRef.current;
-    if (!document.fullscreenElement) {
-      elem?.requestFullscreen().catch(err => {
-        console.warn('Fullscreen request failed:', err);
-      });
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    }
-  };
-
-  const handleUploadVideo = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Validate file size - maximum 100MB
-      const maxUploadMB = 100;
-      const fileSizeMB = file.size / 1024 / 1024;
-
-      if (fileSizeMB > maxUploadMB) {
-        console.error(`❌ Video is ${fileSizeMB.toFixed(2)}MB, exceeds maximum ${maxUploadMB}MB`);
-        alert(`❌ Video Too Large!\n\nYour video is ${fileSizeMB.toFixed(2)}MB but the maximum allowed is ${maxUploadMB}MB.\n\nPlease:\n1. Compress your video using tools like:\n   - HandBrake (free)\n   - ffmpeg (command line)\n   - Online compressors\n2. Reduce resolution or frame rate\n3. Try again with a smaller file\n\n💡 Tip: A 5-minute pitch video typically needs 50-80MB for good quality, or 20-50MB if heavily compressed`);
-        return;
-      }
-
-      // Warn if over 80MB (5-minute videos typically range from 50-80MB)
-      if (fileSizeMB > 80) {
-        console.warn(`⚠️ Notice: Video is ${fileSizeMB.toFixed(2)}MB. Upload may take a few minutes depending on connection speed.`);
-      }
-
-      // Show real preview immediately for uploaded videos (skip trim dialog)
-      if (file.type.startsWith('video')) {
-        // A file picked from the device never passed through the recorder's
-        // canvas, so it has no IcanEra mark yet — burn it in now via an
-        // offline re-encode before it ever becomes the working videoBlob.
-        setIsWatermarking(true);
-        setWatermarkProgress(0);
-        let watermarkedFile = file;
-        try {
-          watermarkedFile = await applyWatermarkToVideoBlob(file, {
-            onProgress: (fraction) => setWatermarkProgress(fraction * 100),
-          });
-        } catch (err) {
-          console.warn('⚠️ Watermarking failed, uploading original video:', err?.message);
-        } finally {
-          setIsWatermarking(false);
-        }
-
-        const url = URL.createObjectURL(watermarkedFile);
-        setPreviewUrl(url);
-        setVideoBlob(watermarkedFile);
-        setRecordedChunks([watermarkedFile]);
-
-        // Notify parent of video blob so it persists
-        if (onVideoRecorded) {
-          onVideoRecorded(watermarkedFile);
-        }
-        return;
-      }
-
-      // For non-videos, just set directly
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-      setVideoBlob(file);
-      setRecordedChunks([file]);
-
-      // Notify parent of video blob (not URL) so it persists
-      if (onVideoRecorded) {
-        onVideoRecorded(file);
-      }
-    }
-  };
-  
-  const handleSkipTrim = () => {
-    // User chose to skip trimming - use video as is
-    setShowTrimDialog(false);
-    if (videoBlob) {
-      const url = URL.createObjectURL(videoBlob);
-      setPreviewUrl(url);
-      setRecordedChunks([videoBlob]);
-      
-      if (onVideoRecorded) {
-        onVideoRecorded(videoBlob);
-      }
-    }
-  };
-  
-  const handleOpenTrimmer = () => {
-    // User chose to trim the video
-    setShowTrimDialog(false);
-    setShowVideoClipper(true);
+  const handleRetake = () => {
+    videoTaskRef.current?.abort();
+    videoTaskRef.current = null;
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    setPreviewUrl(null);
+    setVideoBlob(null);
+    setRecordedChunks([]);
+    setVideoMeta(null);
   };
 
   const handleVideoClip = (clipData) => {
-    // User clipped the video, now use the clipped blob
+    // The trimmed copy replaces the clip. A picked file still needs its IcanEra mark, so stamp the trimmed copy too.
     setShowVideoClipper(false);
-    setVideoBlob(clipData.blob);
-    
-    // Create preview URL for clipped video
-    const url = URL.createObjectURL(clipData.blob);
-    setPreviewUrl(url);
-    setRecordedChunks([clipData.blob]);
-    
-    // Notify parent
-    if (onVideoRecorded) {
-      onVideoRecorded(clipData.blob);
+    videoTaskRef.current?.abort();
+    const needsWatermark = !!videoMeta?.needsWatermark;
+    const task = needsWatermark
+      ? createBlobTask(({ signal, onProgress }) => applyWatermarkToVideoBlob(clipData.blob, { onProgress, signal }), { timeoutMs: 120000 })
+      : null;
+    handleVideoReady({
+      blob: clipData.blob,
+      durationSec: clipData.duration || null,
+      source: videoMeta?.source,
+      needsWatermark,
+      task,
+    });
+  };
+
+  const handleNext = () => {
+    // If no profile selected, show the profile selector first
+    if (!selectedProfile) {
+      setShowProfileModal(true);
+      return;
     }
+    // Profile is selected, open documents form
+    setWorkflowPhase('documents');
+    setIsFormExpanded(true);
+    setWorkflowStatus('📋 Complete all documents to publish');
   };
 
   const handleAddMember = (memberName) => {
@@ -663,33 +340,42 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         videoBlob: videoBlob ? `${videoBlob.size} bytes` : 'missing'
       });
 
+      // Callers that publish by themselves get the finished (stamped) video; the background uploader
+      // takes the clip together with its still-running stamping job instead, and waits for it itself.
+      const task = videoTaskRef.current;
+      let finalBlob = videoBlob;
+      if (task && !backgroundUpload) {
+        setWorkflowStatus('🎞️ Finishing your video…');
+        finalBlob = (await task.promise) || videoBlob;
+      }
+
       const pitchData = {
         ...submitFormData,
-        videoBlob: videoBlob,
+        videoBlob: finalBlob,
+        videoTask: backgroundUpload ? task : null,
         category: submitFormData.category,
         timestamp: 'just now'
       };
 
-      console.log('📤 Calling onPitchCreated...');
       if (!onPitchCreated) {
         throw new Error('onPitchCreated callback is not defined');
       }
-      
-      await onPitchCreated(pitchData);
-      
-      console.log('✅ Pitch created successfully');
-      setWorkflowStatus('✅ Pitch uploaded successfully! 🎉');
-      setSubmitSuccess(true);
-      
-      // Clear status after 4 seconds
-      setTimeout(() => {
+
+      const accepted = await onPitchCreated(pitchData);
+      if (backgroundUpload && accepted !== true) {
+        // The parent showed its own message (e.g. documents not saved yet) and didn't take the video: stay open.
         setWorkflowStatus('');
-      }, 4000);
-      
-      // Show success message for 3 seconds then close
-      setTimeout(() => {
-        setSubmitSuccess(false);
-        // Reset form
+        return;
+      }
+
+      handedOffRef.current = true;
+      setSubmitSuccess(true);
+      setWorkflowStatus(backgroundUpload ? '' : '✅ Pitch uploaded successfully! 🎉');
+
+      if (onClose) {
+        // Closes at once: with backgroundUpload the video keeps uploading, and progress shows in the tray.
+        onClose();
+      } else {
         setFormData({
           title: '',
           description: '',
@@ -704,11 +390,8 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
         });
         setVideoBlob(null);
         setPreviewUrl(null);
-        // Close the recorder
-        if (onClose) {
-          onClose();
-        }
-      }, 3000);
+        setSubmitSuccess(false);
+      }
     } catch (error) {
       console.error('❌ Error submitting pitch:', error);
       setSubmitError(error.message || 'Failed to create pitch. Please try again.');
@@ -718,7 +401,7 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
   };
 
   return (
-    <div className="w-full h-screen px-0 relative flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="w-full h-[100dvh] px-0 relative flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Enhanced Header Section - COMMENTED OUT */}
       {/* 
       <div className="hidden md:block bg-gradient-to-r from-purple-900/80 via-pink-900/60 to-purple-900/80 backdrop-blur-sm border-b border-purple-500/20 px-8 py-8 space-y-6">
@@ -776,286 +459,29 @@ const PitchVideoRecorder = ({ cameraMode = 'front', recordingMethod = 'record', 
 
       {/* Mobile Header - Removed for full screen */}
 
-      <div className="bg-black rounded-none p-0 border-0 h-screen flex flex-col overflow-hidden flex-1">
+      <div className="bg-black rounded-none p-0 border-0 min-h-0 flex flex-col overflow-hidden flex-1">
 
-        {/* Full-Screen Video Container */}
+        {/* Camera, recording and preview */}
         <div ref={fullscreenRef} className="relative w-full h-full bg-black overflow-hidden flex-1">
-          
-          {/* Watermarking Overlay - re-encoding an uploaded file with the IcanEra mark */}
-          {isWatermarking && (
-            <div className="absolute inset-0 z-[70] bg-black/85 backdrop-blur-sm flex items-center justify-center">
-              <DiamondLoader size={72} label="Stamping your video with IcanEra…" progress={watermarkProgress} />
-            </div>
-          )}
-
           {/* Workflow Status Indicator */}
           {workflowStatus && (
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-green-600/90 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-lg animate-pulse">
-              <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            <div className="absolute top-[4.5rem] left-1/2 transform -translate-x-1/2 z-50 max-w-[92%] bg-green-600/90 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
+              <div className="w-2 h-2 bg-white rounded-full animate-pulse flex-shrink-0"></div>
               <span className="text-sm font-medium">{workflowStatus}</span>
             </div>
           )}
-          
-          {/* Main Video Display */}
-          <div style={{
-            backgroundColor: '#000',
-            position: 'relative',
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'auto',
-            padding: '0'
-          }}>
-            {!previewUrl ? (
-              <>
-                {/* Hidden video element for stream capture */}
-                <video
-                  ref={videoRef}
-                  style={{
-                    display: 'none'
-                  }}
-                  autoPlay
-                  playsInline
-                  muted
-                />
-                {/* Canvas for displaying video stream - Normal view without zoom */}
-                <canvas
-                  ref={canvasRef}
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '100%',
-                    width: 'auto',
-                    height: 'auto',
-                    display: 'block',
-                    backgroundColor: '#000',
-                    objectFit: 'contain'
-                  }}
-                />
 
-                {/* Fallback - Clickable Camera Button to Start Recording */}
-                <button
-                  onClick={startRecording}
-                  className="absolute inset-0 flex flex-col items-center justify-center text-white z-10 hover:bg-black/20 transition-all active:bg-black/40 rounded-lg"
-                  title="Click to start recording"
-                >
-                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg">
-                    <Camera className="w-7 h-7 sm:w-10 sm:h-10 text-slate-400" />
-                  </div>
-                </button>
-              </>
-            ) : (
-              <>
-                {/* Preview Video - Normal view without zoom, wide display */}
-                <div className="absolute inset-0">
-                  <video
-                    ref={el => { if (el) videoRefs.current['preview'] = el; }}
-                    key={previewUrl}
-                    src={previewUrl}
-                    playsInline
-                    className="w-full h-full object-contain"
-                    style={{
-                      backgroundColor: '#000',
-                      display: 'block',
-                      maxWidth: '100%',
-                      maxHeight: '100%'
-                    }}
-                    onLoadedMetadata={(e) => {
-                      console.log('✅ Preview video loaded:', e.target.videoWidth, 'x', e.target.videoHeight);
-                    }}
-                    onError={(e) => {
-                      console.error('❌ Preview video error:', e);
-                    }}
-                  />
-                </div>
-
-                {/* Preview Info Indicator */}
-                <div className="absolute top-3 left-3 sm:top-4 sm:left-4 bg-black/60 backdrop-blur-md px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-full border border-white/30 z-40">
-                  <p className="text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2">
-                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full animate-pulse"></span>
-                    Preview
-                  </p>
-                </div>
-              </>
-            )}
-
-            {/* Stop Recording Button - Center of Video (Works in all views: portrait, wide, fullscreen) */}
-            {isRecording && (
-            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40 flex items-center justify-center">
-              {/* Subtle background glow for fullscreen visibility */}
-              <div className="absolute w-20 h-20 rounded-full bg-red-500/20 blur-xl"></div>
-
-              {/* Stop Button */}
-              <button
-                onClick={stopRecording}
-                className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-red-500 border-2 border-red-400 hover:bg-red-600 flex items-center justify-center transition-all shadow-lg hover:scale-105 active:scale-95"
-                title="Stop recording"
-              >
-                <Square className="w-5 h-5 sm:w-7 sm:h-7 text-white fill-white" />
-              </button>
-            </div>
-            )}
-
-            {/* Recording Timer */}
-            {isRecording && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/20 border border-red-500/50 backdrop-blur-md">
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                <span className="text-white font-semibold text-xs whitespace-nowrap">
-                  {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
-                </span>
-              </div>
-            )}
-
-            {/* Unified Control Bar — Back, a "⋯" menu for secondary actions, and the
-                primary Next CTA. Everything used to live scattered across corners at
-                different heights, which is what let controls (including "Next")
-                overlap or land outside the visible viewport on some screen sizes. */}
-            {!isRecording && (
-              <div className="absolute bottom-3 sm:bottom-5 left-0 right-0 z-40 px-3 flex justify-center">
-                <div className="relative flex items-center gap-1.5 sm:gap-2 bg-black/50 backdrop-blur-md border border-white/15 rounded-full px-2 py-1.5 sm:px-2.5 sm:py-2 shadow-xl">
-                  {onClose && (
-                    <button
-                      onClick={onClose}
-                      title="Back"
-                      className="flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95"
-                    >
-                      <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                  )}
-
-                  {!previewUrl && (
-                    <label
-                      title="Upload Video"
-                      className="flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95"
-                    >
-                      <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
-                      <input
-                        type="file"
-                        accept="video/*"
-                        onChange={handleUploadVideo}
-                        className="hidden"
-                      />
-                    </label>
-                  )}
-
-                  <button
-                    onClick={() => setShowMoreMenu(prev => !prev)}
-                    title="More options"
-                    className={`flex-shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${
-                      showMoreMenu ? 'bg-white/25 text-white' : 'bg-white/10 hover:bg-white/20 text-white'
-                    }`}
-                  >
-                    <MoreVertical className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </button>
-
-                  {previewUrl && (
-                    <button
-                      onClick={() => {
-                        console.log('📝 Next clicked - Checking business profile...');
-
-                        // If no profile selected, show profile selector first
-                        if (!selectedProfile) {
-                          console.log('⚠️ No business profile selected - showing selector');
-                          setShowProfileModal(true);
-                          return;
-                        }
-
-                        // Profile is selected, open documents form
-                        console.log('✅ Opening documents form with profile:', selectedProfile.name);
-                        setWorkflowPhase('documents');
-                        setIsFormExpanded(true);
-                        setWorkflowStatus('📋 Complete all documents to publish');
-                      }}
-                      title="Proceed to document upload"
-                      className="flex-shrink-0 h-9 sm:h-11 px-4 sm:px-5 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-2 shadow-xl"
-                    >
-                      <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                      <span>Next</span>
-                    </button>
-                  )}
-
-                  {/* Secondary actions dropdown */}
-                  {showMoreMenu && (
-                    <>
-                      {/* Click-outside-to-close backdrop */}
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setShowMoreMenu(false)}
-                      />
-                      <div className="absolute bottom-full left-0 mb-2 z-50 min-w-[190px] bg-slate-900/95 backdrop-blur-md border border-white/15 rounded-xl shadow-2xl overflow-hidden py-1">
-                        {!previewUrl && (
-                          <button
-                            onClick={() => { toggleCamera(); setShowMoreMenu(false); }}
-                            disabled={!hasMultipleCameras}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                              hasMultipleCameras ? 'text-white hover:bg-white/10' : 'text-white/30 cursor-not-allowed'
-                            }`}
-                          >
-                            <SwitchCamera className="w-4 h-4 flex-shrink-0" />
-                            <span>Switch to {facingMode === 'user' ? 'Back' : 'Front'} Camera</span>
-                          </button>
-                        )}
-
-                        {previewUrl && (
-                          <>
-                            <button
-                              onClick={() => {
-                                const video = videoRefs.current['preview'];
-                                if (video) {
-                                  if (video.paused) video.play();
-                                  else video.pause();
-                                }
-                                setShowMoreMenu(false);
-                              }}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
-                            >
-                              <Play className="w-4 h-4 flex-shrink-0" />
-                              <span>Play / Pause</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                const video = videoRefs.current['preview'];
-                                if (video) video.muted = !video.muted;
-                                setShowMoreMenu(false);
-                              }}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
-                            >
-                              <span className="w-4 text-center flex-shrink-0">🔊</span>
-                              <span>Toggle Sound</span>
-                            </button>
-                            <button
-                              onClick={() => { setPreviewUrl(null); setShowMoreMenu(false); }}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
-                            >
-                              <RotateCcw className="w-4 h-4 flex-shrink-0" />
-                              <span>Retake</span>
-                            </button>
-                            <button
-                              onClick={() => { setShowVideoClipper(true); setShowMoreMenu(false); }}
-                              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
-                            >
-                              <Scissors className="w-4 h-4 flex-shrink-0" />
-                              <span>Trim / Edit</span>
-                            </button>
-                          </>
-                        )}
-
-                        <button
-                          onClick={() => { toggleFullscreen(); setShowMoreMenu(false); }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors"
-                        >
-                          {isFullscreen ? <Minimize className="w-4 h-4 flex-shrink-0" /> : <Maximize className="w-4 h-4 flex-shrink-0" />}
-                          <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          </div>
+          <PitchCameraStage
+            cameraMode={cameraMode}
+            previewUrl={previewUrl}
+            videoMeta={videoMeta}
+            onClose={onClose}
+            onVideoReady={handleVideoReady}
+            onRetake={handleRetake}
+            onTrim={() => setShowVideoClipper(true)}
+            onNext={handleNext}
+          />
+        </div>
 
         {/* Pitch Details Modal Popup */}
         {isFormExpanded && (

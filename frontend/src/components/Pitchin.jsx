@@ -1,9 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search, ShoppingBag, Download, Gem, Eye } from 'lucide-react';
 import './pitchin-classic.css';
 import DiamondLoader from './DiamondLoader';
 import PitchVideoRecorder from './PitchVideoRecorder';
+import PitchUploadTray from './PitchUploadTray';
+import { enqueuePitchUpload, takeFinishedPitchUploads, subscribePitchUploads, getPitchUploads } from '../services/pitchUploadStore';
 import SmartContractGenerator from './SmartContractGenerator';
 import PrivatePitchInviteModal from './PrivatePitchInviteModal';
 import ShareSigningFlow from './ShareSigningFlow';
@@ -27,10 +29,7 @@ import {
   checkBusinessProfileEditPermission,
   likePitch,
   sharePitch,
-  createPitch,
-  updatePitch,
   deletePitch,
-  uploadVideo,
   deleteBusinessProfile as deleteProfileService,
   createNotification,
   incrementPitchView,
@@ -731,6 +730,30 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
     if (desktopActivePitchId) recordPitchView(desktopActivePitchId);
   }, [desktopActivePitchId]);
 
+  // A pitch finished publishing in the background (possibly while the creator was elsewhere): refresh the feed
+  // and open the agreement setup, as used to happen straight after creating a pitch.
+  const pitchUploads = useSyncExternalStore(subscribePitchUploads, getPitchUploads, getPitchUploads);
+  useEffect(() => {
+    const finished = takeFinishedPitchUploads();
+    if (finished.length === 0) return;
+    (async () => {
+      const allPitches = await getAllPitches();
+      setPitches(allPitches);
+      setFilteredPitches(allPitches);
+      hydratePitchesWithLiveMetrics(allPitches)
+        .then(setPitches)
+        .catch(err => console.warn('Could not hydrate live pitch metrics:', err));
+      const newest = finished[finished.length - 1];
+      setSelectedForContract({
+        ...newest,
+        id: newest?.id,
+        title: newest?.title,
+        pitch_type: newest?.pitch_type,
+        description: newest?.description
+      });
+    })();
+  }, [pitchUploads]);
+
   const handleCreatePitch = async (pitchData) => {
     try {
       if (!currentUser) {
@@ -829,18 +852,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
         return match ? parseFloat(match[0]) : 0;
       };
 
-      let videoUrl = null;
-
-      // Upload video if provided
-      if (pitchData.videoBlob) {
-        console.log('Uploading video:', pitchData.videoBlob.size, 'bytes');
-        try {
-          // We need to create pitch first to get the ID for the upload path
-          // So we'll upload video after creating pitch
-        } catch (error) {
-          console.error('Error preparing video upload:', error);
-          // Continue without video
-        }
+      if (!pitchData.videoBlob) {
+        throw new Error('Please record or choose a video for your pitch first.');
       }
 
       // Map form fields to database schema
@@ -853,7 +866,6 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
         target_funding: parseAmount(pitchData.goal),
         raised_amount: parseAmount(pitchData.raised),
         equity_offering: parsePercent(pitchData.equity),
-        video_url: videoUrl,
         has_ip: pitchData.hasIP || false,
         status: 'published',
         likes_count: 0,
@@ -862,85 +874,17 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
         views_count: 0
       };
 
-      console.log('Creating pitch with mapped data:', newPitch);
-
-      // Save pitch to database
-      const result = await createPitch(newPitch);
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create pitch');
-      }
-
-      // Get the newly created pitch
-      const newPitchData = result.data;
-      console.log('Pitch created successfully:', newPitchData);
-
-      // Upload video after pitch creation if provided
-      if (pitchData.videoBlob && newPitchData?.id) {
-        console.log('📤 Uploading video for pitch:', newPitchData.id);
-        console.log('   Video blob size:', pitchData.videoBlob.size, 'bytes');
-        console.log('   Video blob type:', pitchData.videoBlob.type);
-        try {
-          const uploadResult = await uploadVideo(pitchData.videoBlob, newPitchData.id);
-          console.log('📤 Upload result:', JSON.stringify(uploadResult, null, 2));
-          
-          if (uploadResult.success && uploadResult.url) {
-            console.log('✅ Video uploaded successfully:', uploadResult.url);
-            // Update pitch with video URL
-            const updateResult = await updatePitch(newPitchData.id, { video_url: uploadResult.url });
-            console.log('📝 Pitch update result:', JSON.stringify(updateResult, null, 2));
-            
-            if (!updateResult.success) {
-              console.error('❌ Failed to update pitch with video URL:', updateResult.error);
-              alert('Warning: Video uploaded but failed to link to pitch. Please try refreshing.');
-            } else {
-              console.log('✅ Pitch successfully updated with video URL');
-            }
-          } else {
-            // Upload failed - show error and delete the pitch
-            console.error('❌ Video upload failed:', uploadResult.error);
-            console.error('   Deleting pitch because video is required');
-            // Delete the pitch since it has no video
-            await deletePitch(newPitchData.id);
-            setShowRecorder(false);
-            alert(`❌ Video upload failed: ${uploadResult.error}\n\nThe pitch has been deleted. Please try again after fixing the video upload issue.`);
-            return;
-          }
-        } catch (error) {
-          console.error('❌ Unexpected error uploading video:', error);
-          console.error('   Deleting pitch because video upload failed');
-          // Delete the pitch since video upload failed
-          await deletePitch(newPitchData.id);
-          setShowRecorder(false);
-          alert(`❌ Video upload failed: ${error.message}\n\nThe pitch has been deleted. Please try again.`);
-          return;
-        }
-      } else if (pitchData.videoBlob && !newPitchData?.id) {
-        console.error('❌ Pitch created but no ID returned - cannot upload video');
-        alert('❌ Error creating pitch - please try again');
-        return;
-      } else {
-        console.log('⚠️ No video blob provided - pitch created without video');
-      }
-
-      // Reload pitches
-      const allPitches = await getAllPitches();
-      setPitches(allPitches);
-      setFilteredPitches(allPitches);
-      hydratePitchesWithLiveMetrics(allPitches)
-        .then(setPitches)
-        .catch(err => console.warn('Could not hydrate live pitch metrics:', err));
-      setShowRecorder(false);
-
-      // Automatically open SmartContractGenerator for the creator to set up agreement
-      // Wait a moment for state to update, then open the contract generator
-      setTimeout(() => {
-        setSelectedForContract(newPitchData || {
-          id: newPitchData?.id,
-          title: newPitchData?.title,
-          pitch_type: newPitchData?.pitch_type,
-          description: newPitchData?.description
-        });
-      }, 500);
+      // Publish in the background: the video uploads (with progress in the tray) and the pitch is created once it
+      // is safely stored. This returns straight away, so the recorder closes and the creator can keep browsing;
+      // the upload carries on even if they leave this screen. When it finishes, the effect below refreshes the
+      // feed and opens the agreement setup that used to open right after creating the pitch.
+      enqueuePitchUpload({
+        title: newPitch.title,
+        blob: pitchData.videoBlob,
+        task: pitchData.videoTask || null,
+        fields: newPitch,
+      });
+      return true; // accepted: the recorder may close. (Any early return above means "not accepted", so it stays open.)
     } catch (error) {
       console.error('Error creating pitch:', error);
       alert('Failed to create pitch: ' + error.message);
@@ -1942,8 +1886,9 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
         // ancestor above would otherwise clip the recorder's bottom control bar
         // (Back/Upload/⋮/Next) — which is exactly what was hiding the upload icon.
         createPortal(
-          <div className="pitchin-classic fixed inset-0 z-[9999] w-screen h-screen bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 overflow-hidden">
+          <div className="pitchin-classic fixed inset-0 z-[9999] bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 overflow-hidden">
             <PitchVideoRecorder
+              backgroundUpload
               onPitchCreated={handleCreatePitch}
               onClose={() => {
                 setShowRecorder(false);
@@ -2636,6 +2581,9 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
 
       {/* Existing businesses are asked once to agree to the sector-statistics clause of the Terms & Conditions */}
       <SectorDataTermsGate profiles={businessProfiles} />
+
+      {/* Background pitch uploads: progress, retry, cancel. Keeps running if this screen is left. */}
+      <PitchUploadTray />
 
       {/* Business Profile Form Modal */}
       {showBusinessForm && (

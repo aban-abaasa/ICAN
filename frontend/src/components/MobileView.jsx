@@ -154,6 +154,7 @@ import { CountryService } from '../services/countryService';
 import { DiamondSpinner } from './IcanDiamond';
 import NavGlowDefs from './NavGlowDefs';
 import '../styles/navGlow.css';
+import PitchUploadTray from './PitchUploadTray'; // small and always needed (upload progress), so not lazy
 import {
   getPendingSharedContent,
   getSharedFiles,
@@ -7646,6 +7647,9 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
           />
         </div>
       )}
+
+      {/* Background pitch uploads keep their progress card when the Pitchin tab is left (Pitchin shows its own while open) */}
+      {!showPitchinPanel && <PitchUploadTray onOpenPitchin={() => navigateTo('pitchin')} />}
 
       {/* Trust Panel - Full Web Trust System UI */}
       {showTrustPanel && (
