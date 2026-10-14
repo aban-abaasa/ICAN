@@ -1,136 +1,32 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { supabase } from '../lib/supabase/client';
+import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getBalance } from '../services/icanWalletService';
-import { tradeSector, getMyHoldings, getMyFills } from '../services/sectorMarketService';
-import { useSectorMarkets } from '../hooks/useSectorMarkets';
-import { makeRequestIdStore } from '../utils/tradeResult';
+import { useSectorBoard, useSectorTicket } from '../hooks/useSectorTicket';
 import {
-  ICEC, quoteBuy, quoteSell, validateBuy, validateSell, sectorState, friendlySectorError,
-  formatLevel, formatPct, formatPrice, changeTone, holdingResult, trim, floor8,
+  ICEC, formatLevel, formatPct, formatPrice, changeTone, holdingResult, trim, sectorState,
 } from '../utils/sectorTradeRules';
 import SectorIndexChart from './SectorIndexChart';
 
 // Sector Markets: ten sector index coins, bought and sold with icaneracoin (or any wallet the user holds). Each index
 // follows the anonymous revenue totals of businesses in that sector on IcanEra. Nothing here invents money logic: the
 // price, the fee and every check are the database's (public.ican_sector_trade); this screen previews, asks and reports.
+// The trade flow itself lives in hooks/useSectorTicket.js, shared with the public /icaneracoin page.
 
 const TONE_TEXT = { up: 'text-emerald-400', down: 'text-red-400', flat: 'text-slate-400' };
 const STATE_DOT = { live: 'bg-emerald-400', warming: 'bg-amber-400', paused: 'bg-slate-500' };
 const STATUS_TEXT = { connecting: 'Connecting…', live: 'Live', delayed: 'Delayed', offline: 'Offline' };
 const STATUS_DOT = { connecting: 'bg-slate-500', live: 'bg-emerald-400', delayed: 'bg-amber-400', offline: 'bg-red-500' };
 
-const useMoneyWallet = (userId) => {
-  const [wallet, setWallet] = useState(null); // { currency, balance, price } -- price = ICEC cost in that currency
-  const load = useCallback(async () => {
-    if (!userId) { setWallet(null); return; }
-    try {
-      const { data: info } = await supabase.rpc('get_my_ican_trading_info');
-      const currency = info?.currency ? String(info.currency).toUpperCase() : null;
-      const price = Number(info?.price_per_ican);
-      if (!currency || currency === ICEC || !(price > 0)) { setWallet(null); return; }
-      const { data } = await supabase.from('wallet_accounts').select('balance').eq('user_id', userId).eq('currency', currency).maybeSingle();
-      setWallet(data ? { currency, balance: parseFloat(data.balance) || 0, price } : null);
-    } catch {
-      setWallet(null);
-    }
-  }, [userId]);
-  useEffect(() => { load(); }, [load]);
-  return [wallet, load];
-};
-
 export default function SectorMarketsPanel() {
   const { user } = useAuth();
   const userId = user?.id || null;
 
-  const [selected, setSelected] = useState(null);
-  const { available, sectors, candles, status, tradingEnabled, feeBps, maxTradeIcec, loading, error, refresh } = useSectorMarkets(selected);
-
-  const [mode, setMode] = useState('buy');
-  const [amount, setAmount] = useState('');
-  const [payWith, setPayWith] = useState(ICEC);
-  const [reviewing, setReviewing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState(null); // { kind: 'ok' | 'err', text }
-
-  const [icec, setIcec] = useState(null);
-  const [holdings, setHoldings] = useState([]);
-  const [fills, setFills] = useState([]);
-  const [money, reloadMoney] = useMoneyWallet(userId);
-  const requestIds = useRef(makeRequestIdStore('sector')).current;
-
-  // first load: open the first live sector, or the first one
-  useEffect(() => {
-    if (selected || !sectors.length) return;
-    setSelected((sectors.find((s) => s.status === 'live') || sectors[0]).ticker);
-  }, [sectors, selected]);
-
-  const refreshMine = useCallback(async () => {
-    if (!userId) { setIcec(null); setHoldings([]); setFills([]); return; }
-    try { const b = await getBalance(userId); setIcec(Number(b.ican) || 0); } catch { /* keep the last balance */ }
-    try { setHoldings((await getMyHoldings()).holdings); } catch { /* keep the last list */ }
-    try { setFills((await getMyFills(10)).fills); } catch { /* keep the last list */ }
-    reloadMoney();
-  }, [userId, reloadMoney]);
-
-  useEffect(() => {
-    refreshMine();
-    if (!userId) return undefined;
-    const t = setInterval(() => { if (document.visibilityState !== 'hidden') refreshMine(); }, 30_000);
-    return () => clearInterval(t);
-  }, [userId, refreshMine]);
-
-  // changing what is being traded cancels a half-made review; picking another sector or side clears the last message
-  // (typing a new amount clears it too, in the input handler: it must NOT clear here, or the success message that
-  // follows emptying the box after a trade would vanish at once)
-  useEffect(() => { setReviewing(false); }, [selected, mode, payWith, amount]);
-  useEffect(() => { setNotice(null); }, [selected, mode]);
-  useEffect(() => { if (payWith !== ICEC && !money) setPayWith(ICEC); }, [money, payWith]);
-
-  const sel = useMemo(() => sectors.find((s) => s.ticker === selected) || null, [sectors, selected]);
-  const state = sectorState(sel, tradingEnabled);
-  const price = sel?.price_icec != null ? Number(sel.price_icec) : null;
-  const held = Number(holdings.find((h) => h.sector === selected)?.units) || 0;
-  const num = Number(amount);
-
-  // what the entered amount is worth in ICEC (a money wallet is converted at the coin's price in that currency)
-  const inMoney = payWith !== ICEC && money;
-  const payIcec = mode === 'buy' ? (inMoney ? floor8(num / money.price) : num) : null;
-  const balance = mode === 'buy' ? (inMoney ? money.balance : icec) : held;
-  const buyQuote = mode === 'buy' ? quoteBuy({ amount: payIcec, price, feeBps }) : null;
-  const sellQuote = mode === 'sell' ? quoteSell({ units: num, price, feeBps }) : null;
-  const problem = !amount ? null
-    : mode === 'buy'
-      ? validateBuy({ amount: num, balance: Number.isFinite(balance) ? balance : undefined, payIcec, price, feeBps, maxTrade: maxTradeIcec })
-      : validateSell({ units: num, held, price, feeBps, maxTrade: maxTradeIcec });
-  const ready = !!userId && state.canTrade && price > 0 && num > 0 && !problem;
-  const feePct = feeBps / 100;
-  const proceedsIn = inMoney ? money.currency : ICEC;
-
-  const submit = async () => {
-    if (!ready || busy) return;
-    setBusy(true);
-    setNotice(null);
-    const requestId = requestIds.idFor(`${mode}|${selected}|${amount}|${payWith}`);
-    const res = await tradeSector({ sector: selected, side: mode, amount: num, currency: payWith, requestId, expectedPrice: price, maxSlippagePct: 1 });
-    setBusy(false);
-    setReviewing(false);
-    if (res.success) {
-      requestIds.clear();
-      setAmount('');
-      setNotice({
-        kind: 'ok',
-        text: res.side === 'buy'
-          ? `Bought ${trim(res.units, 8)} ${res.sector} at ${formatPrice(res.priceIcec)} ICEC.`
-          : `Sold ${trim(res.units, 8)} ${res.sector} for ${trim(res.payAmount ?? res.netIcec, 8)} ${res.payAmount != null ? payWith : 'ICEC'}.`,
-      });
-      refreshMine();
-      refresh();
-    } else {
-      if (res.code === 'price_moved') refresh();
-      setNotice({ kind: 'err', text: friendlySectorError(res) });
-    }
-  };
+  const board = useSectorBoard();
+  const { selected, setSelected, available, sectors, candles, status, tradingEnabled, feeBps, loading, error } = board;
+  const t = useSectorTicket(board, userId);
+  const {
+    mode, setMode, amount, setAmount, setAmountRaw, payWith, setPayWith, reviewing, setReviewing, busy, notice, icec, holdings, fills,
+    money, sel, state, price, held, num, inMoney, payIcec, buyQuote, sellQuote, problem, ready, feePct, proceedsIn, submit, startSell,
+  } = t;
 
   if (!available) return null;
 
@@ -238,11 +134,11 @@ export default function SectorMarketsPanel() {
                   {mode === 'buy' ? `Amount to spend (${inMoney ? money.currency : 'ICEC'})` : `Units to sell (you hold ${trim(held, 8)})`}
                   <div className="mt-1 flex gap-2">
                     <input type="text" inputMode="decimal" autoComplete="off" value={amount}
-                      onChange={(e) => { setNotice(null); setAmount(e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')); }}
+                      onChange={(e) => setAmount(e.target.value)}
                       placeholder="0"
                       className="flex-1 min-w-0 rounded-lg bg-slate-950 border border-slate-700 px-3 py-2 text-base text-white" />
                     {mode === 'sell' && held > 0 && (
-                      <button type="button" onClick={() => setAmount(String(held))} className="px-3 rounded-lg border border-slate-700 text-xs text-slate-300 hover:text-white">Max</button>
+                      <button type="button" onClick={() => setAmountRaw(String(held))} className="px-3 rounded-lg border border-slate-700 text-xs text-slate-300 hover:text-white">Max</button>
                     )}
                   </div>
                 </label>
@@ -306,7 +202,7 @@ export default function SectorMarketsPanel() {
                     <td className="text-right px-2">{trim(h.units, 8)}</td>
                     <td className="text-right px-2">{trim(h.value_icec, 6)}</td>
                     <td className={`text-right px-2 ${TONE_TEXT[r.tone]}`}>{r.pnl == null ? '—' : `${r.pnl > 0 ? '+' : ''}${trim(r.pnl, 6)}`}{r.pct != null ? ` (${formatPct(r.pct)})` : ''}</td>
-                    <td className="text-right px-3"><button type="button" onClick={() => { setSelected(h.sector); setMode('sell'); setAmount(''); }} className="text-xs text-amber-300 hover:text-amber-200">Sell</button></td>
+                    <td className="text-right px-3"><button type="button" onClick={() => startSell(h.sector)} className="text-xs text-amber-300 hover:text-amber-200">Sell</button></td>
                   </tr>
                 );
               })}

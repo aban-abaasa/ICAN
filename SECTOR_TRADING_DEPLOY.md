@@ -16,6 +16,12 @@ File 3 also schedules a 5-second fold with `pg_cron` (needs pg_cron 1.5+; skippe
 
 Optional: `VITE_SECTOR_PUSH=true` at build time makes open screens refresh within about a second instead of at the next 4-second poll. Off by default because it holds one Realtime connection per open screen.
 
+## Where it appears
+
+- **Wallet → Trade → Sector Markets** (signed in).
+- **The public icaneracoin page, `/icaneracoin`** (no account needed to watch): a *Sector Markets* section under the chart analysis shows the ten sector coins, each one's level and 24-hour change, the selected sector's candles, and a buy/sell ticket. A signed-out visitor sees *Continue with Google* in the ticket (the same sign-in as the coin trade panel; they return to the section with that sector open); once signed in they trade the same way as in the wallet. While trading is OFF the section is read-only and says trading opens soon.
+- Both screens use one implementation of the trade flow (`hooks/useSectorTicket.js`), so a rule fixed in one is fixed in the other. The public section reads only the public aggregate feed (`ican_get_sector_feed`: levels, status, candles; no business or customer data), polls only while it is on screen, and hides itself until the SQL is installed.
+
 ## Before you turn trading on
 
 Nothing below is code. Trading must stay OFF until all of it is true.

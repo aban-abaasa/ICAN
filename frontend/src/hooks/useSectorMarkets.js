@@ -12,6 +12,8 @@ import { PUSH_THROTTLE_MS, pollDelay, feedStatus } from '../utils/feedPolling';
 // Changing the selected sector asks for everything again, because the candles belong to the sector.
 // `available` is false when the database functions have not been installed yet (the screen then hides itself).
 // `status` is 'connecting' | 'live' | 'delayed' | 'offline'.
+// `enabled: false` (a section scrolled out of view on a public page) loads once, so the caller learns whether the feature
+// exists, then stops asking until it is enabled again.
 
 // Optional push: the database pings "something changed" (a version number, never levels) so the screen can refresh within
 // about a second. OFF by default, like the icaneracoin chart's: every open screen would hold a Realtime connection.
@@ -40,7 +42,7 @@ const subscribePush = (listener) => {
   };
 };
 
-export const useSectorMarkets = (selected = null) => {
+export const useSectorMarkets = (selected = null, { enabled = true } = {}) => {
   const [available, setAvailable] = useState(true);
   const [sectors, setSectors] = useState([]);
   const [candles, setCandles] = useState([]);
@@ -50,8 +52,9 @@ export const useSectorMarkets = (selected = null) => {
   const [updatedAt, setUpdatedAt] = useState(null);
   const [status, setStatus] = useState('connecting');
 
-  const run = useRef({ version: null, sector: undefined, failures: 0, inFlight: false, timer: null, lastOkAt: null, lastPushAt: 0, alive: false, selected, kick: null });
+  const run = useRef({ version: null, sector: undefined, failures: 0, inFlight: false, timer: null, lastOkAt: null, lastPushAt: 0, alive: false, selected, kick: null, enabled });
   run.current.selected = selected;
+  run.current.enabled = enabled;
 
   const poll = useCallback(async () => {
     const r = run.current;
@@ -93,19 +96,19 @@ export const useSectorMarkets = (selected = null) => {
       if (!r.alive) return;
       if (hidden()) { r.timer = null; return; } // paused: the visibility handler restarts it
       await poll();
-      if (r.alive && !hidden()) schedule(pollDelay({ failures: r.failures }));
+      if (r.alive && !hidden() && r.enabled) schedule(pollDelay({ failures: r.failures }));
     };
     const soon = (delay = 0) => { if (r.alive && !hidden()) schedule(delay); };
 
     r.kick = () => soon(0); // lets the effect below ask for an immediate poll WITHOUT breaking the loop
     soon(0);
-    const onVisible = () => { if (!hidden()) soon(0); else clearTimeout(r.timer); };
-    const onOnline = () => soon(0);
+    const onVisible = () => { if (!hidden()) { if (r.enabled) soon(0); } else clearTimeout(r.timer); };
+    const onOnline = () => { if (r.enabled) soon(0); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onOnline);
     const unsubscribePush = subscribePush(() => {
       const now = Date.now();
-      if (hidden() || now - r.lastPushAt < PUSH_THROTTLE_MS) return;
+      if (hidden() || !r.enabled || now - r.lastPushAt < PUSH_THROTTLE_MS) return;
       r.lastPushAt = now;
       soon(0);
     });
@@ -121,6 +124,12 @@ export const useSectorMarkets = (selected = null) => {
       window.removeEventListener('online', onOnline);
     };
   }, [poll]);
+
+  // turned back on (scrolled into view): catch up now and keep polling
+  useEffect(() => {
+    const r = run.current;
+    if (enabled && r.alive) r.kick?.();
+  }, [enabled]);
 
   // a different sector was picked: fetch its candles now, not at the next poll (through the loop, so it keeps running)
   useEffect(() => {
