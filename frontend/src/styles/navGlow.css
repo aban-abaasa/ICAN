@@ -1,25 +1,33 @@
-/* Bottom navigation made of independent, transparent tiles, each with a living
-   colour line around its edge.
+/* Bottom navigation made of independent, truly transparent tiles, each with a
+   living colour line around its edge, in a spaced row that scrolls sideways.
 
-   Used by the app's main bottom bar (MobileView) and the public business
-   website's bottom bar (PublicCompanyNoticeBoard).
+   Used by the app's main bottom bar (MobileView), the public business
+   website's bar (PublicCompanyNoticeBoard) and the /shop and /icaneracoin
+   pages' bars.
 
-   - The bar has no chrome at all: no shared fill, border or blur. It only lays
-     the tabs out. Every tab is its own glass tile -- its own faint tint and
-     backdrop blur, its own edge line, its own glow -- so nothing is shared
-     between icons: pressing, hovering or animating one never touches another.
-   - Each tile keeps the business website's layout: icon over a small
-     semibold label.
+   - Nothing is painted behind an icon: no bar fill, no tile fill, no blur, no
+     inner wash. A tile is only its edge line, its icon and its label, so the
+     page shows straight through. (The active tile's glow is an outer shadow,
+     which the browser never paints inside the tile's own box.) Labels keep a
+     soft halo of the page colour so they stay legible over busy content.
+   - Tiles are spaced apart and the row scrolls sideways, snapping to centre, so
+     every icon keeps comfortable room however many sections there are. When all
+     of them fit they simply spread out and centre. Where the browser supports
+     scroll-driven animations, tiles near the screen edge shrink and dim as they
+     scroll away -- a "dock" hint that more icons are off-screen.
+   - Each tile keeps the business website's layout: icon over a small semibold
+     label, and nothing is shared between tiles.
    - An idle tile carries a faint, static gradient hairline. The active tile
      gets a bright multi-colour comet orbiting its edge (a conic gradient whose
      angle is animated through a registered custom property) and a soft glow.
    - Colours come from variables, so each host re-themes it: the app inherits
      the active ICAN theme's --color-*, the business site maps --nb-*.
-   - prefers-reduced-motion parks the comet as a still arc; browsers without
-     @property support simply show the still ring.
+   - prefers-reduced-motion parks the comet as a still arc and drops the dock
+     effect; browsers without @property support simply show the still ring.
 
-   Layout (fixed, flex, gap, sm:hidden, z-index) stays in the host's Tailwind
-   classes so breakpoints can never lose a cascade fight with this file. */
+   Display and breakpoint (flex, sm:hidden), position and z-index stay in the
+   host's Tailwind classes so they can never lose a cascade fight with this
+   file; spacing, padding and scrolling live here. */
 
 @property --ng-angle {
   syntax: '<angle>';
@@ -31,7 +39,15 @@
   to { --ng-angle: 360deg; }
 }
 
-/* ── The bar: palette + layout host only ──────────────────────────────── */
+/* Tiles at the edge of the row shrink and dim as they scroll out of view. */
+@keyframes ng-dock {
+  0%   { scale: 0.78; opacity: 0.3; }
+  14%  { scale: 1;    opacity: 1; }
+  86%  { scale: 1;    opacity: 1; }
+  100% { scale: 0.78; opacity: 0.3; }
+}
+
+/* ── The bar: palette + the spaced, scrolling row ─────────────────────── */
 .ng-bar {
   --ng-surface: var(--color-bg, #ffffff);
   --ng-text: var(--color-textSecondary, #64748b);
@@ -41,13 +57,24 @@
   --ng-c3: var(--color-secondary, #f59e0b);
   background: none;
   border: 0;
-  /* Gaps between tiles stay tappable on the page beneath. */
-  pointer-events: none;
+  gap: 0.75rem;
+  /* Room above and below for the active tile's glow (the row clips overflow). */
+  padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 0.75rem;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
+.ng-bar::-webkit-scrollbar { display: none; }
+/* Centre the tiles when they all fit, yet let the row scroll from its very
+   start when they don't (justify-content: center would clip the left side). */
+.ng-bar > :first-child { margin-left: auto; }
+.ng-bar > :last-child { margin-right: auto; }
 
 /* The public business site: map its own palette. Brighter fixed teal/gold so
-   the comet reads on both the light and the dark site theme. Its bar can
-   scroll sideways when a business has many sections, so it keeps touch. */
+   the comet reads on both the light and the dark site theme. */
 .ng-bar-nb {
   --ng-surface: var(--nb-surface);
   --ng-text: var(--nb-text-muted);
@@ -55,51 +82,63 @@
   --ng-c1: var(--nb-green);
   --ng-c2: #14b8a6;
   --ng-c3: #f59e0b;
-  pointer-events: auto;
 }
 /* The site's tab strips fade out at the right edge (nb-tab-nav) to hint at
-   sideways scrolling. On independent tiles that would wash out the last tile
-   even when nothing overflows; a tile cut off by the screen edge is already
-   the scroll cue. Three classes so it beats the site's injected <style>. */
+   sideways scrolling; the dock effect does that job here, and a flat fade
+   would wash out the last tile even when nothing overflows. Three classes so
+   it beats the site's injected <style>. */
 .ng-bar.ng-bar-nb.nb-tab-nav {
   -webkit-mask-image: none;
   mask-image: none;
 }
 
-/* ── One tile (a whole, independent tab) ──────────────────────────────── */
+/* ── One tile (a whole, independent tab): no background at all ────────── */
 .ng-tab {
   position: relative;
-  pointer-events: auto;
+  flex: 1 0 4.5rem;
+  max-width: 6.5rem;
+  scroll-snap-align: center;
   border-radius: 1rem;
   color: var(--ng-text);
-  background: transparent;
-  background: color-mix(in srgb, var(--ng-surface) 10%, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(1.5);
-  backdrop-filter: blur(14px) saturate(1.5);
-  transition: color 0.25s ease, transform 0.18s ease, background-color 0.3s ease, box-shadow 0.3s ease;
+  background: none;
+  transition: color 0.25s ease, transform 0.18s ease, box-shadow 0.3s ease;
   -webkit-tap-highlight-color: transparent;
   /* A soft halo of the page colour keeps the label legible over busy content. */
-  text-shadow: 0 0 6px color-mix(in srgb, var(--ng-surface) 85%, transparent), 0 1px 2px color-mix(in srgb, var(--ng-surface) 85%, transparent);
+  text-shadow:
+    0 0 8px color-mix(in srgb, var(--ng-surface) 90%, transparent),
+    0 0 3px color-mix(in srgb, var(--ng-surface) 90%, transparent),
+    0 1px 2px color-mix(in srgb, var(--ng-surface) 90%, transparent);
 }
 .ng-tab:hover { color: color-mix(in srgb, var(--ng-active) 70%, var(--ng-text)); }
 .ng-tab:active { transform: scale(0.94); }
-.ng-tab svg { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ng-surface) 85%, transparent)); }
+.ng-tab:focus-visible { outline: 2px solid var(--ng-active); outline-offset: 1px; }
+.ng-tab svg {
+  filter:
+    drop-shadow(0 0 4px color-mix(in srgb, var(--ng-surface) 90%, transparent))
+    drop-shadow(0 0 1px color-mix(in srgb, var(--ng-surface) 90%, transparent));
+}
 
 .ng-tab.ng-on,
 .ng-tab.ng-on:hover { color: var(--ng-active); }
-/* The active tile washes a little more of the page colour into its glass so
-   its label keeps contrast over any backdrop, then glows in the accent. */
+/* An outer glow only: a box-shadow is never painted inside its own box, so the
+   tile's interior stays fully transparent. */
 .ng-tab.ng-on {
-  background-color: color-mix(in srgb, var(--ng-surface) 34%, transparent);
-  box-shadow:
-    0 0 16px -4px color-mix(in srgb, var(--ng-c2) 55%, transparent),
-    inset 0 0 14px -6px color-mix(in srgb, var(--ng-c2) 45%, transparent);
+  box-shadow: 0 0 12px -4px color-mix(in srgb, var(--ng-c2) 65%, transparent);
 }
 
 /* A call-to-action tile (e.g. "Trade"): keeps its emphasis through a brighter
    idle edge line and an accent label, instead of a solid fill. */
 .ng-tab.ng-hero { color: var(--ng-active); }
 .ng-tab.ng-hero::before { opacity: 0.65; }
+
+/* Dock effect: only where scroll-driven animations exist. `scale` (not
+   `transform`) so the press feedback above still composes with it. */
+@supports (animation-timeline: view()) {
+  .ng-tab {
+    animation: ng-dock linear both;
+    animation-timeline: view(inline);
+  }
+}
 
 /* ── The edge line ────────────────────────────────────────────────────── */
 .ng-tab::before,
@@ -148,5 +187,5 @@
     animation: none;
     --ng-angle: 215deg;
   }
-  .ng-tab { transition: none; }
+  .ng-tab { transition: none; animation: none; }
 }

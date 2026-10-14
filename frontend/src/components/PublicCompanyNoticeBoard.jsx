@@ -1707,15 +1707,15 @@ const ThemeToggleButton = ({ theme, onToggle, className = '' }) => (
 // rare business with every optional section enabled still scrolls cleanly
 // via the same fade-masked overflow the top strip uses.
 //
-// The bar has no chrome of its own: every section is an independent
-// transparent tile whose edge carries a colour line, orbiting on the active one
-// (see styles/navGlow.css, themed here through ng-bar-nb).
+// Truly transparent: no bar fill and no tile fill -- every section is just its
+// own icon, label and edge line (orbiting on the active one), spaced apart in a
+// row that scrolls sideways (see styles/navGlow.css, themed here through
+// ng-bar-nb).
 const BottomNav = ({ tabs, section, onNavigate, navRef }) => (
   <nav
     ref={navRef}
     aria-label="Sections"
-    className="nb-tab-nav ng-bar ng-bar-nb sm:hidden fixed bottom-0 inset-x-0 z-30 flex gap-1.5 overflow-x-auto px-2 pt-1.5"
-    style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.375rem)' }}
+    className="nb-tab-nav ng-bar ng-bar-nb sm:hidden fixed bottom-0 inset-x-0 z-30 flex"
   >
     {tabs.map((tab) => (
       <TabLink
@@ -1723,7 +1723,7 @@ const BottomNav = ({ tabs, section, onNavigate, navRef }) => (
         tab={tab}
         active={section === tab.id}
         onNavigate={onNavigate}
-        className={`ng-tab ${section === tab.id ? 'ng-on' : ''} flex-1 min-w-[64px] flex flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-semibold whitespace-nowrap`}
+        className={`ng-tab ${section === tab.id ? 'ng-on' : ''} flex flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-semibold whitespace-nowrap`}
       >
         <tab.icon className="w-5 h-5" />
         <span className="truncate max-w-[68px]">{tab.mobileLabel || tab.label}</span>

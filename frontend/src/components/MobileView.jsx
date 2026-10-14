@@ -902,6 +902,13 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   }, []);
   const [currentBalance, setCurrentBalance] = useState('156,002');
   const [activeBottomTab, setActiveBottomTab] = useState('home');
+  // The bottom bar scrolls sideways (see styles/navGlow.css): keep the active tile in view, centred.
+  const bottomNavRef = useRef(null);
+  useEffect(() => {
+    bottomNavRef.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [activeBottomTab]);
   const [showTransactionEntry, setShowTransactionEntry] = useState(false);
   const [txPeriod, setTxPeriod] = useState('today'); // 'today' | 'week' | 'month' | 'year'
   const [expPeriod, setExpPeriod] = useState('today'); // period filter for the full transactions panel
@@ -7585,43 +7592,41 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ====== COMMENTED OUT - ALL SECTIONS BELOW REMOVED FOR CLEANUP ====== */}
 
       {/* ====== FIXED BOTTOM NAVIGATION - ALWAYS ON TOP ====== */}
-      {/* No bar chrome: every tab is its own independent transparent tile whose
-          edge carries a colour line (orbiting on the active one) -- see
-          styles/navGlow.css. */}
+      {/* Truly transparent: no bar fill, no tile fill -- only each icon's own edge
+          line (orbiting on the active one), spaced apart in a row that scrolls
+          sideways. See styles/navGlow.css. */}
       {!isWebDashboard && (
       <nav
+        ref={bottomNavRef}
         aria-label="Primary"
-        className="ng-bar fixed bottom-0 left-0 right-0 z-50"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className="ng-bar fixed bottom-0 left-0 right-0 z-50 flex"
       >
-        <div className="flex items-stretch gap-1.5 px-2 py-1.5">
-          {[
-            { id: 'home',   label: 'Home',   icon: Home,      go: 'dashboard' },
-            { id: 'pitchin',label: 'Pitchin',icon: Briefcase, go: 'pitchin'   },
-            { id: 'wallet', label: 'Wallet', icon: Wallet,    go: 'wallet'    },
-            { id: 'trust',  label: 'Trust',  icon: Lock,      go: 'trust'     },
-            { id: 'cmms',   label: 'CMMS',   icon: Settings,  go: 'cmms'      },
-            { id: 'tithe',  label: 'Tithe',  icon: Heart,     go: 'tithe'     },
-          ].map(({ id, label, icon: Icon, go }) => {
-            const isActive = activeBottomTab === id;
-            return (
-              <button
-                key={id}
-                onClick={() => navigateTo(go)}
-                aria-current={isActive ? 'page' : undefined}
-                className={`ng-tab ${isActive ? 'ng-on' : ''} flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 py-1.5 px-1`}
+        {[
+          { id: 'home',   label: 'Home',   icon: Home,      go: 'dashboard' },
+          { id: 'pitchin',label: 'Pitchin',icon: Briefcase, go: 'pitchin'   },
+          { id: 'wallet', label: 'Wallet', icon: Wallet,    go: 'wallet'    },
+          { id: 'trust',  label: 'Trust',  icon: Lock,      go: 'trust'     },
+          { id: 'cmms',   label: 'CMMS',   icon: Settings,  go: 'cmms'      },
+          { id: 'tithe',  label: 'Tithe',  icon: Heart,     go: 'tithe'     },
+        ].map(({ id, label, icon: Icon, go }) => {
+          const isActive = activeBottomTab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => navigateTo(go)}
+              aria-current={isActive ? 'page' : undefined}
+              className={`ng-tab ${isActive ? 'ng-on' : ''} flex flex-col items-center justify-center gap-0.5 py-1.5 px-1`}
+            >
+              <Icon className="w-5 h-5" strokeWidth={isActive ? 2.25 : 1.75} />
+              <span
+                className="text-[11px] tracking-wide"
+                style={{ fontWeight: isActive ? 600 : 500 }}
               >
-                <Icon className="w-5 h-5" strokeWidth={isActive ? 2.25 : 1.75} />
-                <span
-                  className="text-[11px] tracking-wide"
-                  style={{ fontWeight: isActive ? 600 : 500 }}
-                >
-                  {label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                {label}
+              </span>
+            </button>
+          );
+        })}
       </nav>
       )}
 
