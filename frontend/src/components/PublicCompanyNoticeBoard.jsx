@@ -31,6 +31,7 @@ import { usePinPrompt } from './PinPromptDialog';
 import { AuthPage } from './auth';
 import BusinessChatWidget from './BusinessChatWidget';
 import LoadingPage from './LoadingPage';
+import NavGlowDefs from './NavGlowDefs';
 import '../styles/navGlow.css';
 
 const formatUGX = (amount) => `UGX ${Number(amount || 0).toLocaleString('en-UG', { maximumFractionDigits: 0 })}`;
@@ -1707,9 +1708,9 @@ const ThemeToggleButton = ({ theme, onToggle, className = '' }) => (
 // rare business with every optional section enabled still scrolls cleanly
 // via the same fade-masked overflow the top strip uses.
 //
-// Truly transparent: no bar fill and no tile fill -- every section is just its
-// own icon, label and edge line (orbiting on the active one), spaced apart in a
-// row that scrolls sideways (see styles/navGlow.css, themed here through
+// Bare icons, like TikTok's: nothing painted behind or around them. The current
+// section's icon is drawn in colours that travel along its own shape; the row is
+// spaced apart and scrolls sideways (see styles/navGlow.css, themed here through
 // ng-bar-nb).
 const BottomNav = ({ tabs, section, onNavigate, navRef }) => (
   <nav
@@ -1717,6 +1718,7 @@ const BottomNav = ({ tabs, section, onNavigate, navRef }) => (
     aria-label="Sections"
     className="nb-tab-nav ng-bar ng-bar-nb sm:hidden fixed bottom-0 inset-x-0 z-30 flex"
   >
+    <NavGlowDefs />
     {tabs.map((tab) => (
       <TabLink
         key={tab.id}

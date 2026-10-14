@@ -5,6 +5,7 @@ import ShopTiles from './shop/ShopTiles';
 import ProductOffersSheet from './shop/ProductOffersSheet';
 import { useIcanCoinPrice } from './shop/useIcanCoinPrice';
 import useScrollSpy from '../hooks/useScrollSpy';
+import NavGlowDefs from './NavGlowDefs';
 import '../styles/navGlow.css';
 
 const PAGE_SIZE = 30;
@@ -213,14 +214,15 @@ const PublicShopPage = () => {
         </section>
       </main>
 
-      {/* Phone navigation: truly transparent -- each tile is only its icon, label and its own colour
-          line along the edge (orbiting on the active one). Hidden from sm up, where the header
-          carries the page. */}
+      {/* Phone navigation: bare icons, like TikTok's, with nothing painted behind or around them. The
+          current one is drawn in colours that travel along its own shape. Hidden from sm up, where
+          the header carries the page. */}
       <nav
         aria-label="Shop sections"
         className="ng-bar fixed inset-x-0 bottom-0 z-40 flex sm:hidden"
         style={{ ...NAV_COLOURS[theme], '--ng-surface': C.page }}
       >
+        <NavGlowDefs />
         {[
           { id: 'shop-top', label: 'Shop', icon: ShoppingBag, onClick: () => window.scrollTo({ top: 0, behavior: 'smooth' }) },
           { id: 'search', label: 'Search', icon: Search, onClick: goToSearch },

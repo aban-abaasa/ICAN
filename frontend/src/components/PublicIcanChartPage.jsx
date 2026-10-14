@@ -11,6 +11,7 @@ import usePublicTrading from '../hooks/usePublicTrading';
 import usePublicIcanCandles from '../hooks/usePublicIcanCandles';
 import useScrollSpy from '../hooks/useScrollSpy';
 import { describeCandleWindow, summarizeAnalysis } from '../utils/candleIndicators';
+import NavGlowDefs from './NavGlowDefs';
 import '../styles/navGlow.css';
 
 // /icaneracoin -- the public icaneracoin price chart. Anyone (and any search engine) can open it with no
@@ -107,7 +108,7 @@ const scrollToId = (id) => {
 // Page sections in order, for the phone bottom bar's active tile.
 // ('sectors' is skipped by the scroll-spy while that section is not on the page)
 const NAV_SECTIONS = ['chart', 'analysis', 'sectors', 'learn'];
-// Edge-line colours of the bottom bar's tiles (see styles/navGlow.css): the
+// Colours that travel along the active icon of the bottom bar (see styles/navGlow.css): the
 // dark page's gold accent / the light page's deep emerald, with companions.
 const NAV_COLOURS = {
   dark: { '--ng-active': '#fcd34d', '--ng-c1': '#fcd34d', '--ng-c2': '#34d399', '--ng-c3': '#38bdf8' },
@@ -395,6 +396,7 @@ const PublicIcanChartPage = () => {
           className="ng-bar fixed inset-x-0 bottom-0 z-40 flex"
           style={{ ...NAV_COLOURS[theme], '--ng-surface': c.base, '--ng-text': c.soft }}
         >
+          <NavGlowDefs />
           {navBtn('chart', 'Chart', LineChartIcon, () => window.scrollTo({ top: 0, behavior: 'smooth' }))}
           {navBtn('trade', 'Trade', ArrowLeftRight, () => setSheetOpen(true), { hero: true })}
           {navBtn('analysis', 'Analysis', BarChart3, () => scrollToId('analysis'))}

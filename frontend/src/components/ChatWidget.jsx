@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, X, Send, Headphones, Globe, ThumbsUp, Briefcase, Shield, ArrowLeft, Radio, Expand, Minimize, GripVertical, Mic, Square, Trash2, Loader2, Phone, Video, Image as ImageIcon } from 'lucide-react';
+import { MessageCircle, X, Send, Headphones, Globe, ThumbsUp, Briefcase, Shield, ArrowLeft, Radio, Expand, Minimize, Mic, Square, Trash2, Loader2, Phone, Video, Image as ImageIcon } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { syncManager } from '../lib/syncManager';
@@ -48,6 +48,10 @@ import {
 } from '../services/landingMessagesService';
 import cmmsMessagingService from '../services/cmmsMessagingService';
 import { getUserTrustGroups, getGroupMembersDetailed, getGroupMessages, sendGroupMessage } from '../services/trustService';
+import NavGlowDefs from './NavGlowDefs';
+
+// The colours that travel along the floating chat button's own outline (see NavGlowDefs).
+const CHAT_RAINBOW = ['#f43f5e', '#f59e0b', '#facc15', '#22c55e', '#06b6d4', '#6366f1', '#d946ef'];
 
 const dedupe = (list, item) => (list.some((m) => m.id === item.id) ? list : [...list, item]);
 const oldestFirst = (messages = []) => [...messages].sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
@@ -1907,22 +1911,18 @@ const ChatWidget = ({ hasBottomNav = false }) => {
         title="Chat with us"
       >
         <style>{`
-          @keyframes ican-chat-ring-spin { to { transform: rotate(360deg); } }
-          @keyframes ican-chat-ring-hue { to { filter: hue-rotate(360deg); } }
-          .ican-chat-ring {
-            background: conic-gradient(from 0deg, #f43f5e, #f59e0b, #facc15, #22c55e, #06b6d4, #6366f1, #d946ef, #f43f5e);
-            -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
-            mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
-            animation: ican-chat-ring-spin 3s linear infinite, ican-chat-ring-hue 6s linear infinite;
+          /* No ring and no badge: the chat bubble itself carries a rainbow that travels along its real outline
+             (the gradient is the NavGlowDefs below). The plain colour after url() is the fallback. */
+          .ican-fab > svg.ican-chat-icon {
+            stroke: url(#ican-chat-line) #b8892b;
+            stroke-width: 2.25;
           }
-          @media (prefers-reduced-motion: reduce) { .ican-chat-ring { animation: none; } }
           .ican-fab { background: transparent !important; border: 0 !important; box-shadow: none !important; color: #b8892b !important; }
           .ican-fab > svg { filter: drop-shadow(0 0 2px #fff) drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
 
         `}</style>
-        <span aria-hidden="true" className="ican-chat-ring pointer-events-none absolute -inset-[4px] rounded-full" />
-        {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
-        <GripVertical className="pointer-events-none absolute -right-1 -bottom-1 h-3.5 w-3.5 rounded-full bg-slate-900/50 p-0.5 text-white/80" />
+        <NavGlowDefs id="ican-chat-line" colors={CHAT_RAINBOW} />
+        {open ? <X className="h-7 w-7 ican-chat-icon" /> : <MessageCircle className="h-7 w-7 ican-chat-icon" />}
         {!open && supportUnread && (
           <span className="absolute -top-1 -right-1 h-4 w-4 animate-pulse rounded-full border-2 border-white bg-red-500" />
         )}
