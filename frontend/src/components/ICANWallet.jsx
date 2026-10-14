@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  Link2,
   Wallet,
   Send,
   ArrowDownLeft,
@@ -58,6 +59,7 @@ import DropshipResellerDashboard from './DropshipResellerDashboard';
 import DropshipBrowse from './DropshipBrowse';
 import DropshipResellersList from './DropshipResellersList';
 import SectorMarketsPanel from './SectorMarketsPanel';
+import OnChainPanel from './OnChainPanel';
 import AgentDashboard from './AgentDashboard';
 import UnifiedApprovalModal from './UnifiedApprovalModal';
 import IcanTradingChart from './IcanTradingChart';
@@ -386,7 +388,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const walletRootRef = useRef(null);
 
   const VALID_WALLET_TABS = ['overview', 'trade', 'transactions', 'deposit', 'withdraw', 'agent', 'cards', 'shop', 'resellers', 'business', 'trust', 'settings'];
-  const VALID_TRADE_TABS = ['wallet', 'chart', 'buy', 'sell', 'book', 'history', 'sectors'];
+  const VALID_TRADE_TABS = ['wallet', 'chart', 'buy', 'sell', 'book', 'history', 'sectors', 'onchain'];
   // Trade is now a regular header tab rather than a floating modal.
   const showTradeModal = activeTab === 'trade';
 
@@ -7491,6 +7493,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 { id: 'book', label: 'Book Order', Icon: Bookmark },
                 { id: 'history', label: 'History', Icon: History },
                 { id: 'sectors', label: 'Sector Markets', Icon: BarChart3 },
+                { id: 'onchain', label: 'On-chain', Icon: Link2 },
                 { id: 'dropship', label: 'Dropship', Icon: ShoppingBag }
               ].map(({ id, label, Icon }) => {
                 const on = activeTradeTab === id;
@@ -7997,6 +8000,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
               {/* Dropship Tab — resell any store's products at your own price */}
               {/* Sector Markets: ten sector index coins traded with icaneracoin (hides itself until the database part is installed) */}
               {activeTradeTab === 'sectors' && <SectorMarketsPanel />}
+
+              {/* On-chain: icaneracoin in its two blockchain forms, ICEC-S (stable) and ICEC-C (community). Hides itself until the database part is installed. */}
+              {activeTradeTab === 'onchain' && <OnChainPanel />}
 
               {activeTradeTab === 'dropship' && (
                 <div className="space-y-4">
