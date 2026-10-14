@@ -1,0 +1,42 @@
+# Runs the on-chain relayer and the exchange-rate feed on a schedule, so nobody has to remember to.
+# GitHub's scheduler runs at most every 5 minutes; that is plenty for a bridge on a test network.
+#
+# Needs two repository secrets (Settings > Secrets and variables > Actions):
+#   CHAIN_SYNC_BASE_URL   the public address of the deployed site, e.g. https://app.example.com  (no trailing slash)
+#   CHAIN_CRON_SECRET     the same value as the CHAIN_CRON_SECRET (or CRON_SECRET) set on the host
+# Until both exist the job does nothing and succeeds, so the repository stays green.
+name: chain-sync
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: chain-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BASE_URL: ${{ secrets.CHAIN_SYNC_BASE_URL }}
+      SECRET: ${{ secrets.CHAIN_CRON_SECRET }}
+    steps:
+      - name: Run the relayer and the exchange-rate feed
+        run: |
+          if [ -z "$BASE_URL" ] || [ -z "$SECRET" ]; then
+            echo "CHAIN_SYNC_BASE_URL / CHAIN_CRON_SECRET are not set: nothing to do."
+            exit 0
+          fi
+          BASE_URL="${BASE_URL%/}"
+          status=0
+          for job in chain-sync fx-oracle; do
+            echo "::group::$job"
+            # The endpoint answers 200 even when a run found problems and says what happened in the body; only transport or auth failures fail the job.
+            curl --fail-with-body --silent --show-error --max-time 60 -H "x-automation-secret: $SECRET" "$BASE_URL/api/$job" || status=1
+            echo
+            echo "::endgroup::"
+          done
+          exit $status

@@ -115,7 +115,7 @@ const world = (over = {}) => {
     events: [], items: [], processed: {}, paused: false, mintable: UNITS(1000), balance: ethers.parseEther('1'), operator: OPERATOR.address,
     stableVault: null, dbChainId: undefined, dbToken: null, dbReserve: null, dbSymbol: null, checkedAt: null,
     vaultToken: '0x' + 'd1'.repeat(20), vaultReserve: '0x' + 'd2'.repeat(20), reserveSymbol: 'USDC', vaultError: null, vaultCode: '0x6080',
-    icecSymbol: 'ICEC-C', icecDecimals: 8, adopt: null,
+    icecSymbol: 'ICEC-C', icecDecimals: 8, adopt: null, autoStart: () => ({ started: false, reason: 'not_requested' }),
     supply: 0n, receipts: {}, markResult: () => ({ success: true }), recordMint: () => ({ success: true, duplicate: false }),
     recordBurn: () => ({ success: true, duplicate: false, credited: true }), supplyOk: true, broadcastError: null, queryTo: [],
     ...over,
@@ -150,6 +150,7 @@ const world = (over = {}) => {
         case 'ican_chain_operator_requeue': return { success: true };
         case 'ican_chain_operator_check_supply': return { success: true, ok: st.supplyOk };
         case 'ican_chain_operator_halt': return null;
+        case 'ican_chain_operator_auto_start': return st.autoStart(args);
         default: throw new Error(`unexpected database call ${name}`);
       }
     },
@@ -254,6 +255,35 @@ test('a fresh install: the chain id is adopted from the RPC endpoint, once, and 
   const again = await w.run();
   assert.equal(w.calls.filter((c) => c[0] === 'ican_chain_operator_adopt_chain').length, 1, 'the second run finds the chain set and adopts nothing');
   assert.equal(again.adoptedChain, undefined);
+});
+
+test('a Turn ON waiting for the chain starts the bridge on the first run that has verified the chain and the contract', async () => {
+  const w = world({ dbChainId: null, autoStart: () => ({ started: true }) });
+  const s = await w.run();
+  assert.equal(s.autoStarted, true);
+  const names = w.names();
+  assert.ok(names.indexOf('ican_chain_operator_adopt_chain') < names.indexOf('ican_chain_operator_auto_start'), 'the chain is adopted first');
+  assert.equal(names.filter((n) => n === 'ican_chain_operator_auto_start').length, 1);
+});
+
+test('nothing is started when the contract is not ICEC-C, the key is not the operator, or the run halted', async () => {
+  const wrong = world({ icecSymbol: 'SOMETHING', autoStart: () => ({ started: true }) });
+  assert.equal((await wrong.run()).autoStarted, undefined);
+  assert.ok(!wrong.names().includes('ican_chain_operator_auto_start'));
+  const notOperator = world({ operator: '0x' + '99'.repeat(20), autoStart: () => ({ started: true }) });
+  assert.equal((await notOperator.run()).autoStarted, undefined);
+  assert.ok(!notOperator.names().includes('ican_chain_operator_auto_start'));
+  const mismatch = world({ chainId: 1, cfg: { chainId: 31337 }, autoStart: () => ({ started: true }) });
+  assert.equal((await mismatch.run()).halted, true);
+  assert.ok(!mismatch.names().includes('ican_chain_operator_auto_start'));
+});
+
+test('a failing auto-start check never stops the run', async () => {
+  const w = world({ autoStart: () => { throw new Error('database down'); } });
+  const s = await w.run();
+  assert.equal(s.halted, false);
+  assert.ok(s.skipped.some((x) => /Turn ON request/.test(x)));
+  assert.ok(w.names().includes('ican_chain_operator_cursor'), 'it went on to read events');
 });
 
 test('CHAIN_ID is only a guard: an unreachable endpoint ends the run before a lease; a different chain halts it', async () => {

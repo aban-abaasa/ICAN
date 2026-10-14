@@ -235,6 +235,15 @@ export async function runSync({ db, provider, signer, cfg, holder, log = () => {
     const canMint = (await contract.operator()).toLowerCase() === signer.address.toLowerCase();
     if (!canMint) summary.errors.push('the signing key is not the contract\'s operator: reading the chain, but not minting');
 
+    // ---- 0c. an administrator pressed Turn ON before all of this was true: start the bridge now that it is. Only after the chain,
+    // the contract and our operator role have been verified above; the database adds its own checks (a request is waiting, no open anomaly).
+    if (canMint) {
+      try {
+        const started = await db.rpc('ican_chain_operator_auto_start', {});
+        if (started?.started) { summary.autoStarted = true; log('auto_started', { chainId, address }); }
+      } catch (e) { summary.skipped.push(`could not check for a waiting Turn ON request: ${e?.message || e}`); }
+    }
+
     // ---- 1. events, at confirmation depth, in chain order
     const head = await provider.getBlockNumber();
     const safe = head - confirmations;
