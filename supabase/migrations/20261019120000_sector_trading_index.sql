@@ -376,6 +376,7 @@ BEGIN
     'version',         v_version,
     'trading_enabled', s.trading_enabled,
     'fee_bps',         s.fee_bps,
+    'max_trade_icec',  s.max_trade_icec,
     'sectors',         v_sectors,
     'candles_for',     v_tick,
     'candles',         v_candles

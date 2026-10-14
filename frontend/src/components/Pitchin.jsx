@@ -10,6 +10,7 @@ import ShareSigningFlow from './ShareSigningFlow';
 import InvestmentProgressView from './InvestmentProgressView';
 import MyInvestmentsList from './MyInvestmentsList';
 import BusinessProfileForm from './BusinessProfileForm';
+import { SectorDataTermsGate } from './SectorDataTerms';
 import BusinessProfileSelector from './BusinessProfileSelector';
 import BusinessCategorySelector from './BusinessCategorySelector';
 import BusinessProfileCard from './BusinessProfileCard';
@@ -2632,6 +2633,9 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
           onClose={() => setSelectedForProgress(null)}
         />
       )}
+
+      {/* Existing businesses are asked once to agree to the sector-statistics clause of the Terms & Conditions */}
+      <SectorDataTermsGate profiles={businessProfiles} />
 
       {/* Business Profile Form Modal */}
       {showBusinessForm && (
