@@ -63,6 +63,7 @@ DROP FUNCTION IF EXISTS public.ican_chain_operator_retry_unclaimed(INT);
 DROP FUNCTION IF EXISTS public.ican_chain_operator_check_supply(BIGINT, BIGINT, TEXT);
 DROP FUNCTION IF EXISTS public.ican_chain_operator_halt(TEXT);
 DROP FUNCTION IF EXISTS public.ican_chain_operator_link(UUID, TEXT);
+DROP FUNCTION IF EXISTS public.ican_chain_operator_get_challenge(UUID);
 DROP FUNCTION IF EXISTS public.ican_chain_operator_fx_observe(TEXT, NUMERIC, TEXT, TIMESTAMPTZ);
 -- administrators
 DROP FUNCTION IF EXISTS public.ican_chain_dev_overview(TEXT);

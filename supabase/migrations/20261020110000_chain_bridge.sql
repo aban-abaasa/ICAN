@@ -688,6 +688,20 @@ BEGIN
   PERFORM icanera_chain.raise_anomaly('operator_halt', jsonb_build_object('reason', left(COALESCE(p_reason, ''), 300)), TRUE);
 END; $$;
 
+-- What the relayer needs to check a link signature: whose challenge it is, for which address, and the exact text that was signed.
+CREATE OR REPLACE FUNCTION public.ican_chain_operator_get_challenge(p_challenge_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = icanera_chain, public AS $$
+DECLARE ch icanera_chain.link_challenges;
+BEGIN
+  PERFORM icanera_chain.require_operator();
+  SELECT * INTO ch FROM icanera_chain.link_challenges WHERE id = p_challenge_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('found', false); END IF;
+  RETURN jsonb_build_object('found', true, 'user_id', ch.user_id, 'chain_id', ch.chain_id, 'address', ch.address,
+                            'message', ch.message, 'expires_at', ch.expires_at, 'used', ch.used_at IS NOT NULL,
+                            'expired', ch.expires_at < now());
+END; $$;
+
 -- Step 2 of linking a wallet. The relayer has checked that the signature over the challenge's message was made by the
 -- challenge's address; the database records the link and burns the challenge so it cannot be replayed.
 CREATE OR REPLACE FUNCTION public.ican_chain_operator_link(p_challenge_id UUID, p_signature TEXT)
@@ -744,7 +758,7 @@ BEGIN
     'ican_chain_operator_record_mint(BIGINT, TEXT, TEXT, INT, BIGINT, TEXT, TEXT)',
     'ican_chain_operator_record_burn(BIGINT, TEXT, INT, BIGINT, TEXT, TEXT, TEXT)',
     'ican_chain_operator_retry_unclaimed(INT)', 'ican_chain_operator_check_supply(BIGINT, BIGINT, TEXT)',
-    'ican_chain_operator_halt(TEXT)', 'ican_chain_operator_link(UUID, TEXT)']
+    'ican_chain_operator_halt(TEXT)', 'ican_chain_operator_link(UUID, TEXT)', 'ican_chain_operator_get_challenge(UUID)']
   LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM PUBLIC, anon, authenticated', f);
     EXECUTE format('GRANT EXECUTE ON FUNCTION public.%s TO service_role', f);

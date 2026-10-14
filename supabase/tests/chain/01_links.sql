@@ -60,7 +60,7 @@ BEGIN
                             'ican_chain_operator_next_mints(int,int)', 'ican_chain_operator_mark_submitted(uuid,text)', 'ican_chain_operator_requeue(uuid,text)',
                             'ican_chain_operator_record_mint(bigint,text,text,int,bigint,text,text)', 'ican_chain_operator_record_burn(bigint,text,int,bigint,text,text,text)',
                             'ican_chain_operator_retry_unclaimed(int)', 'ican_chain_operator_check_supply(bigint,bigint,text)', 'ican_chain_operator_halt(text)',
-                            'ican_chain_operator_link(uuid,text)', 'ican_chain_operator_fx_observe(text,numeric,text,timestamptz)'] LOOP
+                            'ican_chain_operator_link(uuid,text)', 'ican_chain_operator_get_challenge(uuid)', 'ican_chain_operator_fx_observe(text,numeric,text,timestamptz)'] LOOP
     PERFORM t.check('1.3 ' || f || ': the relayer (service role) only',
       has_function_privilege('service_role', 'public.' || f, 'EXECUTE')
       AND NOT has_function_privilege('authenticated', 'public.' || f, 'EXECUTE') AND NOT has_function_privilege('anon', 'public.' || f, 'EXECUTE'));
@@ -222,6 +222,17 @@ BEGIN
   r := public.ican_chain_operator_link('00000000-0000-0000-0000-00000000e002', t.sig());
   PERFORM t.reset();
   PERFORM t.check('4.7 a challenge made for another chain is refused', r ->> 'code' = 'wrong_chain', r::TEXT);
+
+  -- what the relayer reads to check a signature
+  PERFORM t.as_service();
+  r := public.ican_chain_operator_get_challenge(ch);
+  PERFORM t.reset();
+  PERFORM t.check('4.7b the relayer can read a challenge: whose it is, the address, the exact text, and that it is used up',
+    (r ->> 'found')::BOOLEAN AND r ->> 'user_id' = t.u(3)::TEXT AND r ->> 'address' = t.a(3) AND r ->> 'message' = c ->> 'message' AND (r ->> 'used')::BOOLEAN AND NOT (r ->> 'expired')::BOOLEAN, r::TEXT);
+  PERFORM t.as_service();
+  r := public.ican_chain_operator_get_challenge(gen_random_uuid());
+  PERFORM t.reset();
+  PERFORM t.check('4.7c an unknown challenge reads as not found', NOT (r ->> 'found')::BOOLEAN, r::TEXT);
 
   -- one account per address
   PERFORM t.as_user(t.u(5));
