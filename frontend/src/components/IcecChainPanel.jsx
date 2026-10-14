@@ -34,7 +34,7 @@ export default function IcecChainPanel({ cfg }) {
   const [reviewing, setReviewing] = useState(false);
   const alive = useRef(true);
   const requestIds = useRef(makeRequestIdStore('bridge')).current;
-  useEffect(() => () => { alive.current = false; }, []);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   const configured = !!(cfg?.chain_id && cfg?.icec_community_address);
   const net = networkStatus({ walletChainId: wallet.chainId, expectedChainId: cfg?.chain_id });

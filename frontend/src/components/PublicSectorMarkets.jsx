@@ -20,7 +20,7 @@ const RETURN_PARAM = 'sectors';
 
 const STATUS_TEXT = { connecting: 'Connecting…', live: 'Prices live', delayed: 'Prices delayed', offline: 'Offline' };
 
-const useInView = (ref, margin = '300px') => {
+export const useInView = (ref, margin = '300px') => {
   const [inView, setInView] = useState(typeof IntersectionObserver === 'undefined');
   useEffect(() => {
     const el = ref.current;

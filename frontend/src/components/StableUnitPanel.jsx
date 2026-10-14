@@ -24,7 +24,7 @@ export default function StableUnitPanel({ cfg }) {
   const [mode, setMode] = useState('deposit');
   const [tx, setTx] = useState(null);                // { label, hash, state: 'waiting' | 'confirming' | 'done' | 'failed', message }
   const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; }, []);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   const net = networkStatus({ walletChainId: wallet.chainId, expectedChainId: cfg?.chain_id });
   const deployed = !!cfg?.stable_vault_address;          // the token and the reserve coin are read from the vault, never typed in
