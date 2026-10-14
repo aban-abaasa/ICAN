@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Loader, ShoppingBag, Truck, ArrowRight, Moon, Sun } from 'lucide-react';
+import { Search, Loader, ShoppingBag, Truck, ArrowRight, Moon, Sun, Coins, Store } from 'lucide-react';
 import { getDropshipBrowseProducts } from '../services/dropshipService';
 import ShopTiles from './shop/ShopTiles';
 import ProductOffersSheet from './shop/ProductOffersSheet';
 import { useIcanCoinPrice } from './shop/useIcanCoinPrice';
+import useScrollSpy from '../hooks/useScrollSpy';
+import '../styles/navGlow.css';
 
 const PAGE_SIZE = 30;
 const FILTERS = [
@@ -18,6 +20,13 @@ const PALETTES = {
   classic: { page: '#faf6ec', ink: '#1f2937', muted: '#8a7a55', line: '#e6dcc3', gold: '#b8862e', panel: '#fffdf8', skeleton: '#f1ead8', up: '#15803d', down: '#b91c1c' },
   dark: { page: '#0b1120', ink: '#e2e8f0', muted: '#94a3b8', line: '#1e293b', gold: '#d9a441', panel: '#0f172a', skeleton: '#1e293b', up: '#34d399', down: '#f87171' },
 };
+// Phone bottom bar (see styles/navGlow.css): label/active colours and the three
+// edge-line colours of each tile, per theme. Gold first, like the page itself.
+const NAV_COLOURS = {
+  classic: { '--ng-text': '#6b5b38', '--ng-active': '#8a6414', '--ng-c1': '#d9a441', '--ng-c2': '#14b8a6', '--ng-c3': '#8b5cf6' },
+  dark: { '--ng-text': '#94a3b8', '--ng-active': '#f0c060', '--ng-c1': '#d9a441', '--ng-c2': '#34d399', '--ng-c3': '#a78bfa' },
+};
+const NAV_SECTIONS = ['shop-top', 'sell'];
 const THEME_KEY = 'icanera-shop-theme';
 
 // Saved choice first, then the visitor's device setting.
@@ -54,7 +63,18 @@ const PublicShopPage = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [searching, setSearching] = useState(false);
   const coin = useIcanCoinPrice();
+  const navSection = useScrollSpy(NAV_SECTIONS);
+  const navActive = searching ? 'search' : navSection;
+
+  const goToSearch = () => {
+    const input = document.getElementById('shop-search');
+    if (!input) return;
+    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    input.focus({ preventScroll: true });
+  };
+  const goToSection = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   useEffect(() => {
     document.title = 'Shop — Products from Resellers Worldwide | IcanEra';
@@ -110,8 +130,8 @@ const PublicShopPage = () => {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 pb-16">
-        <section className="pt-8 pb-5 md:pt-12 md:pb-7 text-center">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 pb-28 sm:pb-16">
+        <section id="shop-top" className="pt-8 pb-5 md:pt-12 md:pb-7 text-center">
           <h1 className="text-3xl md:text-5xl font-bold tracking-tight" style={{ fontFamily: SERIF }}>The IcanEra Shop</h1>
           <div className="mx-auto mt-3 h-px w-16" style={{ backgroundColor: C.gold }} />
           <p className="mt-3 text-sm md:text-base max-w-xl mx-auto" style={{ color: C.muted }}>
@@ -134,6 +154,9 @@ const PublicShopPage = () => {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search products or brands"
               aria-label="Search products"
+              id="shop-search"
+              onFocus={() => setSearching(true)}
+              onBlur={() => setSearching(false)}
               className="w-full rounded-md pl-10 pr-4 py-2.5 text-sm focus:outline-none"
               style={{ backgroundColor: C.panel, border: `1px solid ${C.line}`, color: C.ink }}
             />
@@ -181,7 +204,7 @@ const PublicShopPage = () => {
           </div>
         )}
 
-        <section className="mt-14 rounded-lg p-6 md:p-8 text-center" style={{ backgroundColor: C.panel, border: `1px solid ${C.line}` }}>
+        <section id="sell" className="mt-14 scroll-mt-20 rounded-lg p-6 md:p-8 text-center" style={{ backgroundColor: C.panel, border: `1px solid ${C.line}` }}>
           <h2 className="text-lg md:text-2xl font-bold" style={{ fontFamily: SERIF }}>Have something to sell?</h2>
           <p className="mt-1 text-sm" style={{ color: C.muted }}>Resell any store's products at your own price on IcanEra — free to start.</p>
           <a href="/" className="mt-4 inline-flex items-center gap-2 rounded px-5 py-2 text-sm font-semibold hover:opacity-90 transition" style={{ backgroundColor: C.gold, color: '#ffffff' }}>
@@ -189,6 +212,32 @@ const PublicShopPage = () => {
           </a>
         </section>
       </main>
+
+      {/* Phone navigation: independent transparent tiles, each with its own colour line along its
+          edge (orbiting on the active one). Hidden from sm up, where the header carries the page. */}
+      <nav
+        aria-label="Shop sections"
+        className="ng-bar fixed inset-x-0 bottom-0 z-40 flex items-stretch gap-1.5 px-2 pt-1.5 sm:hidden"
+        style={{ ...NAV_COLOURS[theme], '--ng-surface': C.page, paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.375rem)' }}
+      >
+        {[
+          { id: 'shop-top', label: 'Shop', icon: ShoppingBag, onClick: () => window.scrollTo({ top: 0, behavior: 'smooth' }) },
+          { id: 'search', label: 'Search', icon: Search, onClick: goToSearch },
+        ].map(({ id, label, icon: Icon, onClick }) => (
+          <button key={id} type="button" onClick={onClick} aria-current={navActive === id ? 'page' : undefined} className={`ng-tab ${navActive === id ? 'ng-on' : ''} flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold`}>
+            <Icon className="h-5 w-5" aria-hidden="true" />
+            {label}
+          </button>
+        ))}
+        <a href="/icaneracoin" className="ng-tab flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold">
+          <Coins className="h-5 w-5" aria-hidden="true" />
+          ICAN
+        </a>
+        <button type="button" onClick={() => goToSection('sell')} aria-current={navActive === 'sell' ? 'page' : undefined} className={`ng-tab ${navActive === 'sell' ? 'ng-on' : ''} flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-semibold`}>
+          <Store className="h-5 w-5" aria-hidden="true" />
+          Sell
+        </button>
+      </nav>
 
       {selected && <ProductOffersSheet product={selected} tone={theme} onClose={() => setSelected(null)} />}
     </div>

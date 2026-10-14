@@ -152,6 +152,7 @@ import { getUserTrustGroups } from '../services/trustService';
 import { getAllAccessibleBusinessProfiles, getContributorNames } from '../services/pitchingService';
 import { CountryService } from '../services/countryService';
 import { DiamondSpinner } from './IcanDiamond';
+import '../styles/navGlow.css';
 import {
   getPendingSharedContent,
   getSharedFiles,
@@ -7584,20 +7585,16 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ====== COMMENTED OUT - ALL SECTIONS BELOW REMOVED FOR CLEANUP ====== */}
 
       {/* ====== FIXED BOTTOM NAVIGATION - ALWAYS ON TOP ====== */}
+      {/* No bar chrome: every tab is its own independent transparent tile whose
+          edge carries a colour line (orbiting on the active one) -- see
+          styles/navGlow.css. */}
       {!isWebDashboard && (
-      <div
-        className="fixed bottom-0 left-0 right-0 z-50 transition-all"
-        style={{
-          background: 'var(--color-bgSecondary)',
-          borderTop: '1px solid var(--color-border)',
-          boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
-          paddingBottom: 'env(safe-area-inset-bottom)'
-        }}
+      <nav
+        aria-label="Primary"
+        className="ng-bar fixed bottom-0 left-0 right-0 z-50"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <div className={isWebDashboard
-          ? 'flex items-center justify-between py-3 px-4 sm:px-6 max-w-3xl mx-auto mb-4 rounded-2xl'
-          : 'flex items-center justify-between px-1 py-1.5'
-        } style={isWebDashboard ? { border: '1px solid var(--color-border)', background: 'var(--color-bgSecondary)' } : undefined}>
+        <div className="flex items-stretch gap-1.5 px-2 py-1.5">
           {[
             { id: 'home',   label: 'Home',   icon: Home,      go: 'dashboard' },
             { id: 'pitchin',label: 'Pitchin',icon: Briefcase, go: 'pitchin'   },
@@ -7611,27 +7608,13 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               <button
                 key={id}
                 onClick={() => navigateTo(go)}
-                className="flex-1 flex flex-col items-center gap-1 py-1.5 px-1 transition-colors relative"
+                aria-current={isActive ? 'page' : undefined}
+                className={`ng-tab ${isActive ? 'ng-on' : ''} flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 py-1.5 px-1`}
               >
-                <span
-                  className="absolute top-0 h-0.5 rounded-full transition-all"
-                  style={{
-                    width: isActive ? '20px' : '0px',
-                    background: 'var(--color-primary)'
-                  }}
-                />
-                <Icon
-                  className="w-5 h-5"
-                  strokeWidth={isActive ? 2.25 : 1.75}
-                  style={{ color: isActive ? 'var(--color-primary)' : 'var(--color-textSecondary)', opacity: isActive ? 1 : 0.75 }}
-                />
+                <Icon className="w-5 h-5" strokeWidth={isActive ? 2.25 : 1.75} />
                 <span
                   className="text-[11px] tracking-wide"
-                  style={{
-                    color: isActive ? 'var(--color-primary)' : 'var(--color-textSecondary)',
-                    fontWeight: isActive ? 600 : 500,
-                    opacity: isActive ? 1 : 0.75
-                  }}
+                  style={{ fontWeight: isActive ? 600 : 500 }}
                 >
                   {label}
                 </span>
@@ -7639,7 +7622,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             );
           })}
         </div>
-      </div>
+      </nav>
       )}
 
       {/* Pitchin Panel - Full Screen Video */}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Loader, Truck, Store } from 'lucide-react';
 import { getDropshipProductOffers } from '../../services/dropshipService';
 import { SHOP_TONES } from './ShopTiles';
@@ -13,6 +14,11 @@ const SHEET = {
 // Bottom sheet on phones, centred card on larger screens: the big product
 // picture, then every reseller's offer (cheapest first) with a Buy button
 // that hands off to that reseller's public storefront for cart + checkout.
+//
+// Rendered through a portal to <body>: inside the in-app Wallet panel (itself a
+// fixed z-30 layer) this sheet's z-[100] only counts within that layer, so the
+// app's z-50 bottom nav painted over the sheet's bottom edge -- the Buy button
+// sat directly on the right-most nav icon (Tithe) and a tap on Buy opened Tithe.
 const ProductOffersSheet = ({ product, onClose, tone = 'dark' }) => {
   const c = SHEET[tone] || SHEET.dark;
   const tiles = SHOP_TONES[tone] || SHOP_TONES.dark;
@@ -36,7 +42,9 @@ const ProductOffersSheet = ({ product, onClose, tone = 'dark' }) => {
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow; };
   }, [onClose]);
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center backdrop-blur-sm" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }} onClick={onClose} role="dialog" aria-modal="true" aria-label={product.name}>
       <div className="relative w-full sm:max-w-md max-h-[88vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-2xl" style={{ backgroundColor: c.panel, border: `1px solid ${c.border}` }} onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute right-3 top-3 z-10 p-1.5 rounded-full" style={{ backgroundColor: c.closeBg, color: c.closeText }} aria-label="Close">
@@ -59,7 +67,7 @@ const ProductOffersSheet = ({ product, onClose, tone = 'dark' }) => {
           </p>
         </div>
 
-        <div className="px-2 pb-3 pt-1">
+        <div className="px-2 pt-1" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
           <p className="px-2 pb-1 text-[10px] uppercase tracking-wider font-semibold" style={{ color: c.muted }}>Available from</p>
           {offers === null ? (
             <div className="flex justify-center py-6"><Loader className="w-5 h-5 animate-spin" style={{ color: c.muted }} /></div>
@@ -91,7 +99,8 @@ const ProductOffersSheet = ({ product, onClose, tone = 'dark' }) => {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
