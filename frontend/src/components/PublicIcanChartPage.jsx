@@ -24,34 +24,94 @@ import '../styles/navGlow.css';
 const PAGE_TITLE = 'icaneracoin (ICAN) Price Chart — Live Candlestick Chart & Analysis | IcanEra';
 const PAGE_DESCRIPTION = 'Live icaneracoin (ICAN) price chart: real-time candlesticks, trend, RSI, moving averages, support and resistance, built from real IcanEra transactions.';
 
-const FAQ = [
+// Everything the page used to explain in running text now lives here, one tab per topic, so the sections above stay
+// short. All panels stay in the DOM (inactive ones are just hidden) so the text still reads for crawlers.
+const LEARN_TABS = [
   {
-    q: 'What is icaneracoin?',
-    a: 'icaneracoin (ICAN) is the coin behind IcanEra, a blockchain application for sending money across the globe and running business and personal finances. You can buy, sell and transfer it from your IcanEra wallet.',
+    id: 'chart',
+    label: 'Chart',
+    items: [
+      {
+        q: 'What is icaneracoin?',
+        a: 'icaneracoin (ICAN) is the coin behind IcanEra, a blockchain application for sending money across the globe and running business and personal finances. You can buy, sell and transfer it from your IcanEra wallet.',
+      },
+      {
+        q: 'How do I use the chart?',
+        a: 'Drag to move through time, pinch or scroll to zoom, and tap or hover over a candle to see its open, high, low and close. Switch the timeframe above the chart.',
+      },
+      {
+        q: 'How do I read the candlesticks?',
+        a: 'Each candle covers the timeframe you pick (five minutes by default). Its body runs from the opening to the closing price (green if the price rose, red if it fell) and its wick shows the highest and lowest price reached. Hover over any candle to read its exact numbers.',
+      },
+      {
+        q: 'Where does the icaneracoin chart data come from?',
+        a: 'Every candle is built from real IcanEra activity — wallet transfers, business wallet payments, trust group and SACCO contributions. Nothing is simulated. A quiet period simply shows a flat candle at the current price.',
+      },
+    ],
   },
   {
-    q: 'Where does the icaneracoin chart data come from?',
-    a: 'Every candle is built from real IcanEra activity — wallet transfers, business wallet payments, trust group and SACCO contributions. Nothing is simulated. A quiet period simply shows a flat candle at the current price.',
+    id: 'analysis',
+    label: 'Indicators',
+    items: [
+      {
+        q: 'What do RSI, moving averages, support and resistance mean?',
+        a: 'RSI compares recent gains with recent losses: above 70 is usually called overbought, below 30 oversold. A moving average (MA) is the average closing price over the last 20 or 50 candles. Support and resistance are price levels the chart has recently struggled to fall below or rise above.',
+      },
+      {
+        q: 'Are the indicators financial advice?',
+        a: 'No. Indicators are calculated from the candles on the chart and are for information only. They show what the price has done, not what it will do. The analysis appears once there are at least two candles.',
+      },
+    ],
   },
   {
-    q: 'How do I read the candlesticks?',
-    a: 'Each candle covers the timeframe you pick (five minutes by default). Its body runs from the opening to the closing price (green if the price rose, red if it fell) and its wick shows the highest and lowest price reached. Hover over any candle to read its exact numbers.',
+    id: 'sectors',
+    label: 'Sector coins',
+    items: [
+      {
+        q: 'What are Sector Markets?',
+        a: 'Sector Markets are ten coins that each follow the combined sales of businesses in one sector on IcanEra, such as farms, transport, retail, health or education. Buy a sector you think will grow, sell when you want out. You buy and sell them with icaneracoin.',
+      },
+      {
+        q: 'Is business data kept private?',
+        a: 'Yes. The figures are anonymous totals: no business or customer is ever named, and a sector only opens once enough businesses take part that none can be picked out.',
+      },
+      {
+        q: 'What are the risks and fees?',
+        a: 'Prices can fall as well as rise, and you can lose what you put in. You trade against the IcanEra market vault, and a small fee applies to each buy and sell (shown before you confirm). If the price moves more than 1% against you between review and trade, the trade is cancelled. Nothing here is financial advice.',
+      },
+    ],
   },
   {
-    q: 'What are Sector Markets?',
-    a: 'Sector Markets are ten coins that each follow the combined sales of businesses in one sector on IcanEra, such as agriculture, transport or retail. The figures are anonymous totals: no business or customer is ever named, and a sector only opens once enough businesses take part that none can be picked out. You buy and sell them with icaneracoin. Their prices can fall as well as rise.',
+    id: 'tokens',
+    label: 'Stable coins',
+    items: [
+      {
+        q: 'What are ICEC-S and ICEC-C?',
+        a: 'They are icaneracoin as tokens on a blockchain, held in your own crypto wallet. ICEC-S is the stable form: a US-dollar token, each one backed by one US-dollar stablecoin in a public vault and swappable back at any time, so it keeps its dollar value. ICEC-C is the community form: a receipt for icaneracoin you move out of your IcanEra wallet, worth what the coin is worth, which rises and falls as the community uses it. ICEC-C cannot be sent to anyone else or sold on an exchange. IcanEra never holds your keys and cannot move your tokens. Prices can fall as well as rise.',
+      },
+      {
+        q: 'Do stable coins protect against inflation?',
+        a: 'Partly. ICEC-S keeps its US-dollar value, so when the shilling weakens against the dollar it is worth more shillings, and it is worth fewer if the shilling strengthens. It does not follow inflation by itself, the dollar loses value too, and nobody can promise it will beat inflation. It also depends on the stablecoin behind it and on your own wallet.',
+      },
+      {
+        q: 'How is the reserve proven?',
+        a: 'The vault holds the dollar stablecoins and its balance is read straight from the blockchain, next to the number of ICEC-S issued. The vault refuses any deposit or redemption that would leave it with less than it has issued. Contract addresses are listed so you can check them on the block explorer.',
+      },
+      {
+        q: 'How do I get them?',
+        a: "Sign in, open the wallet's On-chain tab and connect your crypto wallet to get ICEC-S or move icaneracoin onto the chain. Token prices can move and contracts can have bugs; the stable form also depends on the stablecoin behind it. This is not financial advice.",
+      },
+    ],
   },
   {
-    q: 'What are ICEC-S and ICEC-C?',
-    a: 'They are icaneracoin as tokens on a blockchain, held in your own crypto wallet. ICEC-S is the stable form: a US-dollar token, each one backed by one US-dollar stablecoin in a public vault and swappable back at any time, so it keeps its dollar value. ICEC-C is the community form: a receipt for icaneracoin you move out of your IcanEra wallet, worth what the coin is worth, which rises and falls as the community uses it. ICEC-C cannot be sent to anyone else or sold on an exchange. IcanEra never holds your keys and cannot move your tokens. Prices can fall as well as rise.',
-  },
-  {
-    q: 'Do stable coins protect against inflation?',
-    a: 'Partly. ICEC-S keeps its US-dollar value, so when the shilling weakens against the dollar it is worth more shillings. It does not follow inflation by itself, the dollar loses value too, and nobody can promise it will beat inflation. It also depends on the stablecoin behind it and on your own wallet.',
-  },
-  {
-    q: 'What do RSI, moving averages, support and resistance mean?',
-    a: 'RSI compares recent gains with recent losses: above 70 is usually called overbought, below 30 oversold. A moving average (MA) is the average closing price over the last 20 or 50 candles. Support and resistance are price levels the chart has recently struggled to fall below or rise above.',
+    id: 'trade',
+    label: 'Trading',
+    items: [
+      {
+        q: 'How do I trade icaneracoin?',
+        a: 'Continue with Google to get your IcanEra wallet, top up with Mobile Money, card or bank, buy coins, and book buy or sell orders at the price you choose straight from the chart, or trade the ten business-sector coins. You can manage your business and personal finances in the same place.',
+      },
+    ],
   },
 ];
 
@@ -139,6 +199,7 @@ const PublicIcanChartPage = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [placement, setPlacement] = useState(false);
   const [draft, setDraft] = useState({ side: 'buy', amount: '', price: '' });
+  const [learnTab, setLearnTab] = useState('chart');
 
   const latest = candles.length ? candles[candles.length - 1] : null;
   const priceUgx = snapshot?.price_ugx != null ? Number(snapshot.price_ugx) : latest?.close ?? null;
@@ -215,6 +276,12 @@ const PublicIcanChartPage = () => {
       setDraft((d) => ({ ...d, side: line.kind, price: String(Math.round(line.price * 100) / 100) }));
     }
     setSheetOpen(true);
+  }, []);
+
+  // The "?" next to a section opens the matching Learn tab and scrolls to it.
+  const openLearn = useCallback((tab) => {
+    setLearnTab(tab);
+    requestAnimationFrame(() => scrollToId('learn'));
   }, []);
 
   const draftPrice = tradeTab === 'book' && Number(draft.price) > 0 ? Number(draft.price) : null;
@@ -303,7 +370,7 @@ const PublicIcanChartPage = () => {
         </div>
       </header>
 
-      <main>
+      <main className="pb-20 lg:pb-0">
         {/* The chart and the docked trade panel share ONE row of their own. They used to be the first row of a grid that
             also held everything below, and a sticky panel in a grid stays pinned for the whole grid, not its row, so on a
             desktop it floated over the right-hand side of the analysis, the FAQ and the sector coins. */}
@@ -344,59 +411,95 @@ const PublicIcanChartPage = () => {
         </div>
 
         <div>
-          <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
-            <p className={`text-xs ${k.soft}`}>
-              Drag to move through time, pinch or scroll to zoom, tap or hover for each candle&apos;s open, high, low and close. Switch timeframe above the chart.
-              {priceUsd != null && <> Current price ≈ USD {priceUsd.toLocaleString(undefined, { maximumFractionDigits: 6 })}.</>}
-            </p>
-
-            <section id="analysis" aria-labelledby="chart-analysis-heading" className="mt-8 scroll-mt-16">
-              <h2 id="chart-analysis-heading" className={`text-2xl font-bold ${k.title}`}>icaneracoin chart analysis</h2>
-              <p className={`mt-2 max-w-3xl text-sm leading-6 ${k.body}`}>{summary}</p>
-              <div className="mt-4">
-                <IcanAnalysisPanel analysis={analysis} dark={dark} />
+          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+            <section id="analysis" aria-labelledby="chart-analysis-heading" className="scroll-mt-16">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className={`text-xs font-bold uppercase tracking-[0.16em] ${k.kicker}`}>Analysis</p>
+                  <h2 id="chart-analysis-heading" className={`mt-1 text-xl font-bold sm:text-2xl ${k.title}`}>Chart analysis</h2>
+                </div>
+                <button type="button" onClick={() => openLearn('analysis')} aria-label="How to read the indicators" title="How to read the indicators" className={`-m-2 rounded-md p-2 ${k.icon} ${k.hover}`}>
+                  <HelpCircle className="h-4 w-4" />
+                </button>
               </div>
-              <p className={`mt-3 text-xs ${k.soft}`}>
-                Indicators are calculated from the candles above and are for information only — they are not financial advice.
-              </p>
+              {priceUgx != null && (
+                <p className={`mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sm tabular-nums ${k.soft}`}>
+                  <span className={`text-lg font-bold ${k.title}`}>UGX {fmtUgx(priceUgx)}</span>
+                  {priceUsd != null && <span>≈ USD {priceUsd.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>}
+                  {changePct != null && <span className={`font-semibold ${changePct > 0 ? up : changePct < 0 ? down : ''}`}>{changePct > 0 ? '+' : ''}{changePct.toFixed(2)}%</span>}
+                </p>
+              )}
+              <div className="mt-3">
+                <IcanAnalysisPanel analysis={analysis} dark={dark} primaryCount={4} />
+              </div>
+              <p className={`mt-2 text-[11px] ${k.soft}`}>For information only, not financial advice.</p>
             </section>
 
-            <PublicSectorMarkets theme={theme} skin={k} trading={trading} />
+            <PublicSectorMarkets theme={theme} skin={k} trading={trading} onLearn={() => openLearn('sectors')} />
 
-            <PublicOnChainTokens theme={theme} skin={k} priceUgx={priceUgx} />
+            <PublicOnChainTokens theme={theme} skin={k} priceUgx={priceUgx} onLearn={() => openLearn('tokens')} />
 
-            <section className={`mt-12 rounded-2xl border p-6 sm:p-8 ${k.card}`}>
-              <h2 className={`text-2xl font-bold ${k.title}`}>Trade icaneracoin on IcanEra</h2>
-              <p className={`mt-2 max-w-2xl text-sm leading-6 ${k.body}`}>
-                Continue with Google to get your IcanEra wallet, top up with Mobile Money, card or bank, buy coins, and book buy or sell orders
-                at the price you choose straight from this chart, or trade the ten business-sector coins above. Manage your business and personal finances in the same place.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button type="button" onClick={() => { setTradeTab('buy'); setSheetOpen(true); if (isDesktop) scrollToId('chart'); }} className={`inline-flex items-center gap-2 rounded-md px-5 py-3 text-sm font-bold ${k.cta}`}>
+            <section className={`mt-10 flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between ${k.card}`}>
+              <h2 className={`text-lg font-bold sm:text-xl ${k.title}`}>Ready to trade icaneracoin?</h2>
+              <div className="flex flex-wrap gap-3">
+                <button type="button" onClick={() => { setTradeTab('buy'); setSheetOpen(true); if (isDesktop) scrollToId('chart'); }} className={`inline-flex min-h-[44px] items-center gap-2 rounded-md px-5 py-2.5 text-sm font-bold ${k.cta}`}>
                   Start trading <ArrowRight className="h-4 w-4" />
                 </button>
-                <a href="/" className={`inline-flex items-center gap-2 rounded-md border px-5 py-3 text-sm font-semibold ${k.ghost}`}>
+                <a href="/" className={`inline-flex min-h-[44px] items-center gap-2 rounded-md border px-5 py-2.5 text-sm font-semibold ${k.ghost}`}>
                   Explore IcanEra
                 </a>
               </div>
             </section>
 
-            <section id="learn" aria-labelledby="faq-heading" className="mt-12 scroll-mt-16">
-              <h2 id="faq-heading" className={`text-2xl font-bold ${k.title}`}>About the icaneracoin chart</h2>
-              <div className={`mt-4 divide-y rounded-xl border ${k.rule}`}>
-                {FAQ.map((item) => (
-                  <details key={item.q} className="group px-4 py-3 sm:px-5">
-                    <summary className={`cursor-pointer list-none text-base font-semibold marker:hidden ${k.faqQ}`}>{item.q}</summary>
-                    <p className={`mt-2 text-sm leading-6 ${k.body}`}>{item.a}</p>
-                  </details>
-                ))}
+            <section id="learn" aria-labelledby="learn-heading" className="mt-10 scroll-mt-16">
+              <p className={`text-xs font-bold uppercase tracking-[0.16em] ${k.kicker}`}>Learn</p>
+              <h2 id="learn-heading" className={`mt-1 text-xl font-bold sm:text-2xl ${k.title}`}>About icaneracoin</h2>
+              <div role="tablist" aria-label="Learn topics" className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" style={{ scrollbarWidth: 'none' }}>
+                {LEARN_TABS.map((t) => {
+                  const on = t.id === learnTab;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="tab"
+                      id={`learn-tab-${t.id}`}
+                      aria-selected={on}
+                      aria-controls={`learn-panel-${t.id}`}
+                      onClick={() => setLearnTab(t.id)}
+                      className={`min-h-[40px] shrink-0 rounded-full border px-4 text-sm font-semibold ${on ? k.cta : `${k.ghost}`}`}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
               </div>
+              {LEARN_TABS.map((t) => (
+                <div key={t.id} role="tabpanel" id={`learn-panel-${t.id}`} aria-labelledby={`learn-tab-${t.id}`} hidden={t.id !== learnTab} className="mt-3">
+                  {t.id === 'analysis' && analysis && summary && (
+                    <p className={`mb-3 rounded-xl border p-4 text-sm leading-6 ${k.card} ${k.body}`}>
+                      <span className={`mb-1 block text-xs font-bold uppercase tracking-wide ${k.kicker}`}>Right now</span>
+                      {summary}
+                    </p>
+                  )}
+                  <div className={`divide-y rounded-xl border ${k.rule}`}>
+                    {t.items.map((item) => (
+                      <details key={item.q} className="group px-4 sm:px-5">
+                        <summary className={`flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 py-3 text-base font-semibold marker:hidden ${k.faqQ}`}>
+                          {item.q}
+                          <span aria-hidden="true" className={`shrink-0 text-sm transition-transform group-open:rotate-180 ${k.soft}`}>▾</span>
+                        </summary>
+                        <p className={`pb-4 text-sm leading-6 ${k.body}`}>{item.a}</p>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </section>
           </div>
         </div>
       </main>
 
-      <footer className={`border-t px-4 pb-24 pt-6 text-center text-xs lg:pb-6 ${k.footBorder}`}>
+      <footer className={`border-t px-4 pb-28 pt-6 text-center text-xs lg:pb-6 ${k.footBorder}`}>
         © IcanEra · <a href="/" className={`underline ${k.footLink}`}>Home</a> · <a href="/pricing" className={`underline ${k.footLink}`}>Pricing</a>
       </footer>
 
@@ -405,7 +508,7 @@ const PublicIcanChartPage = () => {
         <nav
           aria-label="Page sections"
           className="ng-bar fixed inset-x-0 bottom-0 z-40 flex"
-          style={{ ...NAV_COLOURS[theme], '--ng-surface': c.base, '--ng-text': c.soft }}
+          style={{ ...NAV_COLOURS[theme], '--ng-surface': c.base, '--ng-text': c.soft, background: `${c.base}f2`, borderTop: `1px solid ${c.cardBorder}`, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
         >
           <NavGlowDefs />
           {navBtn('chart', 'Chart', LineChartIcon, () => window.scrollTo({ top: 0, behavior: 'smooth' }))}

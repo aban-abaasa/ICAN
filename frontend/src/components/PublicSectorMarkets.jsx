@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { HelpCircle } from 'lucide-react';
 import { CHART_PALETTES } from './chartPalettes';
 import SectorIndexChart from './SectorIndexChart';
 import { GoogleMark } from './PublicTradePanel';
@@ -34,7 +35,7 @@ export const useInView = (ref, margin = '300px') => {
   return inView;
 };
 
-const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability }) => {
+const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability, onLearn }) => {
   const c = CHART_PALETTES[theme] || CHART_PALETTES.dark;
   const rootRef = useRef(null);
   const inView = useInView(rootRef);
@@ -68,9 +69,8 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability 
   if (!available || (!loading && !error && !sectors.length)) {
     return (
       <div ref={rootRef}>
-        <PublicSectionNotice id="sectors" theme={theme} skin={k} kicker="Sector Markets" title="Trade business data: ten sector coins" loading={loading}>
-          Ten coins that each follow the combined, anonymous sales of the businesses in one sector on IcanEra: farms, transport, retail, health, education and more.
-          You buy and sell them with icaneracoin. A sector only opens once enough businesses take part that none can be picked out.
+        <PublicSectionNotice id="sectors" theme={theme} skin={k} kicker="Business data" title="Sector coins" loading={loading} onLearn={onLearn}>
+          Ten coins that follow business sales, sector by sector.
         </PublicSectionNotice>
       </div>
     );
@@ -82,35 +82,36 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability 
   const tone = { up: c.pos, down: c.neg, flat: c.soft };
   const dot = { live: c.live, warming: c.book, paused: c.muted };
   const noticeStyle = (kind) => (kind === 'err' ? { background: c.errBg, color: c.errText } : { background: c.okBg, color: c.okText });
-  const feeText = feeBps ? ` A ${trim(feePct, 2)}% fee applies to each buy and sell.` : '';
-
+  
   const signIn = () => trading?.continueWithGoogle?.({ returnParam: RETURN_PARAM, returnValue: selected || '1' });
 
   return (
-    <section id="sectors" ref={rootRef} aria-labelledby="sectors-heading" className="mt-12 scroll-mt-16" data-testid="public-sectors">
+    <section id="sectors" ref={rootRef} aria-labelledby="sectors-heading" className="mt-10 scroll-mt-16" data-testid="public-sectors">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className={`text-xs font-bold uppercase tracking-[0.16em] ${k.kicker}`}>Sector Markets</p>
-          <h2 id="sectors-heading" className={`mt-1 text-2xl font-bold ${k.title}`}>Trade business data: ten sector coins</h2>
+          <p className={`text-xs font-bold uppercase tracking-[0.16em] ${k.kicker}`}>Business data</p>
+          <h2 id="sectors-heading" className={`mt-1 text-xl font-bold sm:text-2xl ${k.title}`}>Sector coins</h2>
         </div>
-        <span className="inline-flex items-center gap-2 text-xs" style={sub} aria-live="polite">
-          <span className="h-2 w-2 rounded-full" style={{ background: status === 'live' ? c.live : status === 'delayed' ? c.book : status === 'offline' ? c.neg : c.muted }} />
-          {STATUS_TEXT[status]}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-2 text-xs" style={sub} aria-live="polite">
+            <span className="h-2 w-2 rounded-full" style={{ background: status === 'live' ? c.live : status === 'delayed' ? c.book : status === 'offline' ? c.neg : c.muted }} />
+            {STATUS_TEXT[status]}
+          </span>
+          {onLearn && (
+            <button type="button" onClick={onLearn} aria-label="How sector coins work" title="How sector coins work" className="-m-2 rounded-md p-2" style={{ color: c.soft }}>
+              <HelpCircle className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
-      <p className={`mt-2 max-w-3xl text-sm leading-6 ${k.body}`}>
-        Each coin follows the combined sales of the businesses in one sector on IcanEra: farms, transport, retail, health, education and more.
-        Buy a sector you think will grow, sell when you want out. Prices come from anonymous totals; no business or customer is ever named,
-        and a sector only opens once enough businesses take part that none can be picked out.
-      </p>
-      <p className="mt-3 max-w-3xl rounded-lg p-3 text-xs leading-5" style={{ background: c.warnBg, border: `1px solid ${c.warnBorder}`, color: c.warnText }}>
-        Prices can fall as well as rise, and you can lose what you put in. You trade against the IcanEra market vault.{feeText} Nothing here is financial advice.
+      <p className="mt-1 text-xs" style={sub}>
+        Prices can fall as well as rise.{feeBps ? ` ${trim(feePct, 2)}% fee per trade.` : ''}
       </p>
 
       {error && <p className="mt-3 text-sm" style={{ color: c.errText }} role="alert">Could not load the markets. Retrying…</p>}
       {loading && !sectors.length && <p className="mt-3 text-sm" style={sub}>Loading markets…</p>}
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" data-testid="sector-cards">
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" data-testid="sector-cards">
         {sectors.map((s) => {
           const st = sectorState(s, tradingEnabled);
           const active = s.ticker === selected;
@@ -143,16 +144,15 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability 
             <div className="mb-1 flex items-baseline justify-between">
               <div>
                 <span className={`font-mono font-bold ${k.kicker}`}>{sel.ticker}</span>
-                <span className="ml-2 text-sm" style={sub}>{sel.name}</span>
+                <span className="ml-2 text-sm" style={sub} title={sel.description || undefined}>{sel.name}</span>
               </div>
               <div className="text-right">
                 <div className="text-lg font-semibold tabular-nums" style={{ color: c.strong }}>{formatLevel(sel.level)}</div>
                 <div className="text-xs" style={sub}>{price != null ? `${formatPrice(price)} ICEC per unit` : 'not priced yet'}</div>
               </div>
             </div>
-            {sel.description && <p className="mb-2 text-xs" style={sub}>{sel.description}</p>}
-            {state.kind === 'warming'
-              ? <p className="py-10 text-center text-sm" style={sub}>{state.label}. A sector opens once enough businesses are contributing that no single one can be identified.</p>
+                        {state.kind === 'warming'
+              ? <p className="py-10 text-center text-sm" style={sub}>{state.label}. Opens once enough businesses take part.</p>
               : <SectorIndexChart candles={candles} ticker={sel.ticker} theme={theme} />}
           </div>
 
@@ -177,8 +177,8 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability 
               <div className="space-y-3">
                 <p className="text-sm" style={{ color: c.fg }}>
                   {tradingEnabled
-                    ? <>Continue with Google to trade <b style={{ color: c.strong }}>{sel.ticker}</b>. Your IcanEra wallet is created for you and you pay with icaneracoin.</>
-                    : 'Trading in sector coins opens soon. You can follow the indices here in the meantime.'}
+                    ? <>Sign in to trade <b style={{ color: c.strong }}>{sel.ticker}</b>.</>
+                    : 'Trading opens soon. You can follow the prices meanwhile.'}
                 </p>
                 <button
                   type="button"
@@ -236,11 +236,11 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability 
                       <div className="flex justify-between"><dt style={sub}>You get about</dt><dd className="font-semibold" style={{ color: c.strong }}>{trim(sellQuote.net, 8)} ICEC{inMoney ? ` (paid in ${proceedsIn})` : ''}</dd></div>
                       <div className="flex justify-between"><dt style={sub}>Fee ({trim(feePct, 2)}%)</dt><dd>{trim(sellQuote.fee, 8)} ICEC</dd></div>
                     </>)}
-                    <p className="pt-1 text-[11px]" style={sub}>The final amount uses the price at the moment of the trade. If it moves more than 1% against you, the trade is cancelled.</p>
+                    <p className="pt-1 text-[11px]" style={sub}>Final amount uses the price at trade time; cancelled if it moves over 1% against you.</p>
                   </dl>
                 )}
                 {problem && <p className="text-sm" style={{ color: c.warnText }} role="alert">{problem}</p>}
-                {!state.canTrade && <p className="text-sm" style={sub}>{state.kind === 'warming' ? 'This sector has not opened yet.' : 'Trading in this sector is paused right now.'}</p>}
+                {!state.canTrade && <p className="text-sm" style={sub}>{state.kind === 'warming' ? 'Not open yet.' : 'Trading paused for now.'}</p>}
 
                 {reviewing ? (
                   <div className="space-y-2">

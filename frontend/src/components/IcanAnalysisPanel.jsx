@@ -14,11 +14,11 @@ const toneClass = (tone, dark) => ({
 
 // The numbers behind the candlestick chart, labelled in plain words. Presentational only: pass the result of
 // calculateIndicators(). `dark` picks the palette so it sits on both the dark public page and the landing page.
-const IcanAnalysisPanel = ({ analysis, dark = true, compact = false }) => {
+const IcanAnalysisPanel = ({ analysis, dark = true, compact = false, primaryCount = null }) => {
   if (!analysis) {
     return (
       <p className={`text-sm ${dark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>
-        Chart analysis appears once there are at least two candles.
+        Needs at least 2 candles.
       </p>
     );
   }
@@ -41,25 +41,40 @@ const IcanAnalysisPanel = ({ analysis, dark = true, compact = false }) => {
     { label: 'Period low', value: `UGX ${fmt(analysis.lowPrice)}` },
   ].slice(0, compact ? 5 : 9);
 
-  return (
-    <dl className={`grid gap-2 ${compact ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-3'}`}>
-      {items.map((item) => (
-        <div
-          key={item.label}
-          className={`rounded-lg border px-3 py-2.5 ${dark ? 'border-[#334155]/60 bg-[#0f172a]/70' : 'border-[#e2e8f0] bg-[#ffffff]'}`}
-        >
-          <dt className={`text-[11px] font-semibold uppercase tracking-wide ${dark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>{item.label}</dt>
-          <dd
-            className={`mt-0.5 text-sm font-bold tabular-nums ${item.color ? '' : toneClass(item.tone, dark) || (dark ? 'text-[#f1f5f9]' : 'text-[#0f172a]')}`}
-            style={item.color ? { color: item.color } : undefined}
-          >
-            {item.value}
-            {item.hint && <span className={`ml-1.5 text-[11px] font-semibold ${dark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>{item.hint}</span>}
-          </dd>
-        </div>
-      ))}
-    </dl>
+  const tile = (item) => (
+    <div
+      key={item.label}
+      className={`rounded-lg border px-3 py-2.5 ${dark ? 'border-[#334155]/60 bg-[#0f172a]/70' : 'border-[#e2e8f0] bg-[#ffffff]'}`}
+    >
+      <dt className={`text-[11px] font-semibold uppercase tracking-wide ${dark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>{item.label}</dt>
+      <dd
+        className={`mt-0.5 text-sm font-bold tabular-nums ${item.color ? '' : toneClass(item.tone, dark) || (dark ? 'text-[#f1f5f9]' : 'text-[#0f172a]')}`}
+        style={item.color ? { color: item.color } : undefined}
+      >
+        {item.value}
+        {item.hint && <span className={`ml-1.5 text-[11px] font-semibold ${dark ? 'text-[#94a3b8]' : 'text-[#64748b]'}`}>{item.hint}</span>}
+      </dd>
+    </div>
   );
+  const grid = compact ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-3';
+
+  // With primaryCount the first few read-outs stay visible and the rest fold away behind "More indicators".
+  if (primaryCount != null && primaryCount < items.length) {
+    return (
+      <div>
+        <dl className={`grid gap-2 ${grid}`}>{items.slice(0, primaryCount).map(tile)}</dl>
+        <details className="group mt-2">
+          <summary className={`inline-flex min-h-[40px] cursor-pointer list-none items-center gap-1 text-xs font-semibold marker:hidden ${dark ? 'text-[#fcd34d]' : 'text-[#065f46]'}`}>
+            <span className="group-open:hidden">More indicators ▾</span>
+            <span className="hidden group-open:inline">Fewer indicators ▴</span>
+          </summary>
+          <dl className={`mt-1 grid gap-2 ${grid}`}>{items.slice(primaryCount).map(tile)}</dl>
+        </details>
+      </div>
+    );
+  }
+
+  return <dl className={`grid gap-2 ${grid}`}>{items.map(tile)}</dl>;
 };
 
 export default IcanAnalysisPanel;
