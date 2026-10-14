@@ -859,7 +859,7 @@ BEGIN
   IF NOT p_force AND v_picked = 0 AND st.last_bucket IS NOT DISTINCT FROM v_bucket
      AND NOT EXISTS (SELECT 1 FROM icanera_trading.sector_catalog k WHERE k.enabled
                       AND NOT EXISTS (SELECT 1 FROM icanera_trading.sector_index_cache x WHERE x.ticker = k.ticker)) THEN
-    UPDATE icanera_trading.sector_index_cache SET computed_at = clock_timestamp();
+    UPDATE icanera_trading.sector_index_cache SET computed_at = clock_timestamp() WHERE ticker IS NOT NULL;
     UPDATE icanera_trading.fold_state SET folded_at = clock_timestamp() WHERE id;
     RETURN TRUE;
   END IF;

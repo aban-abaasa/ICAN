@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { devChain } from '../services/chainService';
+import { extractAddress } from '../utils/chainMath';
 
 /**
  * On-chain tab of the ICAN dev panel: the bridge switch, where the contracts are, the limits, the queue, anomalies, the
@@ -28,10 +29,13 @@ const SETTING_FIELDS = [
   ['fx_max_jump_pct', 'Exchange-rate jump limit (%)', 'A bigger jump is held back until three observations agree'],
   ['fx_stale_s', 'Exchange rate is stale after (seconds)', ''],
 ];
-const CONTRACT_FIELDS = [
-  ['chain_id', 'Chain id'], ['icec_community_address', 'ICEC-C contract'], ['stable_vault_address', 'ICEC-S vault'],
-  ['stable_token_address', 'ICEC-S token'], ['reserve_token_address', 'Reserve stablecoin'],
-];
+// The only two things the chain cannot tell us. Everything else about the contracts is detected: the chain id from the network the
+// relayer is on, and the ICEC-S token, the reserve coin and its symbol from the vault.
+const CONTRACT_FIELDS = [['icec_community_address', 'ICEC-C contract'], ['stable_vault_address', 'ICEC-S vault']];
+const ago = (iso) => {
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  return s < 90 ? `${s} s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`;
+};
 
 export default function ICANChainDevTab({ devToken }) {
   const [ov, setOv] = useState(null);
@@ -55,7 +59,7 @@ export default function ICANChainDevTab({ devToken }) {
       if (res.missing) { setMissing(true); return; }
       setOv(res.data);
       setForm((f) => (Object.keys(f).length ? f : Object.fromEntries(SETTING_FIELDS.map(([k]) => [k, String(res.data.settings[k] ?? '')]))));
-      setContracts((c) => (Object.keys(c).length ? c : Object.fromEntries(CONTRACT_FIELDS.map(([k]) => [k, String(res.data.settings[k] ?? '')]))));
+      setContracts((c) => (Object.keys(c).length ? c : { ...Object.fromEntries(CONTRACT_FIELDS.map(([k]) => [k, String(res.data.settings[k] ?? '')])), chain_id: '' }));
       const f = await devChain.fxOverview(devToken).catch(() => null);
       if (f && !f.missing) setFx(f.data);
     } catch (e) { setError(e.message || 'Could not load.'); } finally { setLoading(false); }
@@ -77,7 +81,13 @@ export default function ICANChainDevTab({ devToken }) {
   const changedContracts = useMemo(() => {
     if (!ov) return {};
     const out = {};
-    for (const [k] of CONTRACT_FIELDS) { const v = String(contracts[k] ?? '').trim(); if (v && v !== String(ov.settings[k] ?? '')) out[k] = k === 'chain_id' ? Number(v) : v; }
+    for (const [k] of CONTRACT_FIELDS) {
+      const raw = String(contracts[k] ?? '').trim();
+      const v = extractAddress(raw) || raw;                 // pasted links, quotes, capitals and a missing 0x are all fine; anything else goes to the database to explain
+      if (v && v !== String(ov.settings[k] ?? '')) out[k] = v;
+    }
+    const chain = String(contracts.chain_id ?? '').trim();
+    if (chain && chain !== String(ov.settings.chain_id ?? '')) out.chain_id = chain;
     return out;
   }, [contracts, ov]);
 
@@ -149,14 +159,28 @@ export default function ICANChainDevTab({ devToken }) {
 
       <div className="rounded-xl border p-4 space-y-3" style={card}>
         <p className="font-semibold" style={txt}>Contracts</p>
+        <p className="text-[11px]" style={muted}>Paste the two contract addresses (a link from the block explorer works too). Everything else is read from the chain.</p>
         <div className="grid gap-3 sm:grid-cols-2">
           {CONTRACT_FIELDS.map(([k, label]) => (
             <label key={k} className="block text-xs" style={muted}>{label}
-              <input value={contracts[k] ?? ''} onChange={(e) => setContracts((c) => ({ ...c, [k]: e.target.value }))} placeholder={k === 'chain_id' ? '11155111' : '0x…'} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono" style={field} />
+              <input value={contracts[k] ?? ''} onChange={(e) => setContracts((c) => ({ ...c, [k]: e.target.value }))} placeholder="0x…" className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono" style={field} />
             </label>
           ))}
         </div>
-        <p className="text-[11px]" style={muted}>The chain and the ICEC-C contract cannot be changed once withdrawals exist: moving the bridge to another contract is a migration, not a setting.</p>
+        <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-2" style={muted} data-testid="detected-contracts">
+          <dt>Chain</dt><dd className="font-mono" style={txt}>{s.chain_id ? `${s.chain_id}${s.chain_name ? ` · ${s.chain_name}` : ''}` : 'detected on the relayer\'s first run'}</dd>
+          <dt>ICEC-S token</dt><dd className="font-mono break-all" style={txt}>{s.stable_token_address || (s.stable_vault_address ? 'read from the vault on the next run' : '—')}</dd>
+          <dt>Reserve coin</dt><dd className="font-mono break-all" style={txt}>{s.reserve_token_address ? `${s.reserve_token_symbol || ''} ${s.reserve_token_address}`.trim() : (s.stable_vault_address ? 'read from the vault on the next run' : '—')}</dd>
+          <dt>Last checked against the chain</dt><dd style={txt}>{s.contracts_checked_at ? ago(s.contracts_checked_at) : '—'}</dd>
+        </dl>
+        {s.contracts_note && <p className="text-[11px]" style={muted}>{s.contracts_note}</p>}
+        <details className="text-[11px]" style={muted}>
+          <summary className="cursor-pointer">Set the chain id by hand (normally not needed)</summary>
+          <label className="block mt-2">Chain id, for example 11155111
+            <input value={contracts.chain_id ?? ''} onChange={(e) => setContracts((c) => ({ ...c, chain_id: e.target.value }))} placeholder={s.chain_id ? String(s.chain_id) : 'detected automatically'} className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono" style={field} />
+          </label>
+        </details>
+        <p className="text-[11px]" style={muted}>The chain and the ICEC-C contract cannot be changed once withdrawals exist: moving the bridge to another contract is a migration, not a setting. A new vault replaces the token and reserve at once.</p>
         <button type="button" disabled={busy || !Object.keys(changedContracts).length} onClick={() => act(() => devChain.setContracts(devToken, changedContracts), 'Contracts saved.')} className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 disabled:opacity-40">Save</button>
       </div>
 

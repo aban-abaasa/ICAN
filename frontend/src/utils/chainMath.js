@@ -153,3 +153,18 @@ export const rateFreshness = (fx) => {
   const t = age < 90 ? `${Math.max(0, Math.round(age))} s ago` : age < 5400 ? `${Math.round(age / 60)} min ago` : `${Math.round(age / 3600)} h ago`;
   return { text: `Rate updated ${t}`, warn: !!fx.stale };
 };
+
+/** The one wallet-style address inside pasted text: "0xAbC…", " 0xabc… ", '"0xabc…"', an explorer link to it, or the 40 digits with
+ *  no 0x. Lower-cased. null when there is none, more than one DIFFERENT one (it will not guess), or when the only candidate is
+ *  part of something longer (a 64-digit transaction hash is not an address). Mirrors icanera_chain.extract_address in the database. */
+export const extractAddress = (text) => {
+  const t = String(text ?? '');
+  const found = new Set();
+  for (const m of t.matchAll(/(?<![0-9a-zA-Z])0[xX]([0-9a-fA-F]{40})(?![0-9a-zA-Z])/g)) found.add(m[1].toLowerCase());
+  if (found.size === 1) return `0x${[...found][0]}`;
+  if (found.size === 0) {
+    const bare = /^([0-9a-fA-F]{40})$/.exec(t.replace(/^[\s"'`<>()[\]]+|[\s"'`<>()[\]]+$/g, ''));
+    if (bare) return `0x${bare[1].toLowerCase()}`;
+  }
+  return null;
+};

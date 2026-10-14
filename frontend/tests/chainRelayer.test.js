@@ -63,7 +63,7 @@ test('block ranges cover [from, to] exactly, with no gap and no overlap', () => 
 test('configuration names what is missing without echoing any value', () => {
   const r = loadConfig({ SUPABASE_URL: 'https://x.supabase.co', CHAIN_RPC_URL: 'https://rpc.example' });
   assert.equal(r.ok, false);
-  assert.deepEqual(r.missing.sort(), ['BRIDGE_OPERATOR_KEY', 'CHAIN_CRON_SECRET', 'CHAIN_ID', 'SUPABASE_SERVICE_ROLE_KEY']);
+  assert.deepEqual(r.missing.sort(), ['BRIDGE_OPERATOR_KEY', 'CHAIN_CRON_SECRET', 'SUPABASE_SERVICE_ROLE_KEY'], 'CHAIN_ID is not required: the chain is read from the RPC endpoint');
   assert.ok(!JSON.stringify(r).includes('rpc.example'));
 });
 
@@ -73,6 +73,10 @@ test('configuration rejects a short secret and a non-numeric chain id, and accep
   assert.equal(loadConfig({ ...base, CHAIN_ID: 'sepolia' }).ok, false);
   const ok = loadConfig(base);
   assert.equal(ok.ok, true);
+  const { CHAIN_ID: _omit, ...noChain } = base;
+  const auto = loadConfig(noChain);
+  assert.equal(auto.ok, true, 'a complete environment without CHAIN_ID is fine');
+  assert.equal(auto.cfg.chainId, '');
   assert.equal(ok.cfg.secret, SECRET);
   assert.equal(ok.cfg.maxMintsPerRun, 10);
   assert.equal(loadConfig({ ...base, CHAIN_CRON_SECRET: 'a-different-long-secret-456' }).cfg.secret, 'a-different-long-secret-456');
@@ -109,6 +113,9 @@ const world = (over = {}) => {
   const st = {
     head: 1000, chainId: 31337, code: '0x6080', confirmations: 12, cursor: 0, bridgeConfigured: true, leaseOk: true,
     events: [], items: [], processed: {}, paused: false, mintable: UNITS(1000), balance: ethers.parseEther('1'), operator: OPERATOR.address,
+    stableVault: null, dbChainId: undefined, dbToken: null, dbReserve: null, dbSymbol: null, checkedAt: null,
+    vaultToken: '0x' + 'd1'.repeat(20), vaultReserve: '0x' + 'd2'.repeat(20), reserveSymbol: 'USDC', vaultError: null, vaultCode: '0x6080',
+    icecSymbol: 'ICEC-C', icecDecimals: 8, adopt: null,
     supply: 0n, receipts: {}, markResult: () => ({ success: true }), recordMint: () => ({ success: true, duplicate: false }),
     recordBurn: () => ({ success: true, duplicate: false, credited: true }), supplyOk: true, broadcastError: null, queryTo: [],
     ...over,
@@ -119,7 +126,21 @@ const world = (over = {}) => {
       switch (name) {
         case 'ican_chain_operator_lease': return st.leaseOk;
         case 'ican_chain_operator_release': return null;
-        case 'ican_chain_public_config': return st.bridgeConfigured ? { chain_id: st.chainId, icec_community_address: CONTRACT, confirmations: st.confirmations } : { chain_id: null };
+        case 'ican_chain_public_config': {
+          if (!st.bridgeConfigured) return { chain_id: null };
+          return {
+            chain_id: st.dbChainId === undefined ? st.chainId : st.dbChainId, icec_community_address: CONTRACT, confirmations: st.confirmations,
+            stable_vault_address: st.stableVault, stable_token_address: st.dbToken, reserve_token_address: st.dbReserve, reserve_token_symbol: st.dbSymbol, contracts_checked_at: st.checkedAt,
+          };
+        }
+        case 'ican_chain_operator_adopt_chain': {
+          const r = st.adopt ? st.adopt(args) : { success: true, adopted: true };
+          if (r.adopted) st.dbChainId = args.p_chain_id;
+          return r;
+        }
+        case 'ican_chain_operator_sync_contracts':
+          st.dbToken = args.p_stable_token; st.dbReserve = args.p_reserve_token; st.dbSymbol = args.p_reserve_symbol; st.checkedAt = new Date().toISOString();
+          return { success: true, changed: true };
         case 'ican_chain_operator_cursor': if (args.p_set_block != null) st.cursor = Math.max(st.cursor, args.p_set_block); return st.cursor;
         case 'ican_chain_operator_record_mint': return st.recordMint(args);
         case 'ican_chain_operator_record_burn': return st.recordBurn(args);
@@ -135,13 +156,18 @@ const world = (over = {}) => {
   };
   const provider = {
     async getNetwork() { return { chainId: BigInt(st.chainId) }; },
-    async getCode() { return st.code; },
+    async getCode(a) { return String(a).toLowerCase() === String(st.stableVault).toLowerCase() ? st.vaultCode : st.code; },
     async getBlockNumber() { return st.head; },
     async getBalance() { return st.balance; },
     async getTransactionReceipt(h) { return st.receipts[h] ?? null; },
     async broadcastTransaction(raw) { calls.push(['BROADCAST', raw]); if (st.broadcastError) throw new Error(st.broadcastError); return {}; },
   };
-  const makeContract = () => ({
+  const makeContract = (address, runner, kind) => {
+    if (kind === 'vault') return { async token() { if (st.vaultError) throw new Error(st.vaultError); return st.vaultToken; }, async reserve() { return st.vaultReserve; } };
+    if (kind === 'erc20') return { async symbol() { if (st.reserveSymbol instanceof Error) throw st.reserveSymbol; return st.reserveSymbol; } };
+    return {
+    async symbol() { return st.icecSymbol; },
+    async decimals() { return st.icecDecimals; },
     filters: { Minted: () => 'Minted', BurnedForCredit: () => 'Burned' },
     async operator() { return st.operator; },
     async queryFilter(kind, a, b) { st.queryTo.push([kind, a, b]); return st.events.filter((e) => e.fragment.name === (kind === 'Minted' ? 'Minted' : 'BurnedForCredit') && e.blockNumber >= a && e.blockNumber <= b); },
@@ -153,8 +179,9 @@ const world = (over = {}) => {
       const iface = new ethers.Interface(['function mint(address to, uint256 amount, bytes32 withdrawalId)']);
       return { to: CONTRACT, data: iface.encodeFunctionData('mint', [to, amount, ref]), nonce: calls.length, gasLimit: 100000n, maxFeePerGas: 10n ** 9n, maxPriorityFeePerGas: 10n ** 8n, chainId: BigInt(st.chainId), type: 2, value: 0n };
     } },
-  });
-  const cfg = { chainId: 31337, startBlock: 0, maxMintsPerRun: 10, maxBlocksPerRun: 5000, minGasWei: 10n ** 15n, leaseSeconds: 240 };
+    };
+  };
+  const cfg = { chainId: 31337, startBlock: 0, maxMintsPerRun: 10, maxBlocksPerRun: 5000, minGasWei: 10n ** 15n, leaseSeconds: 240, ...(over.cfg || {}) };
   const run = () => runSync({ db, provider, signer: OPERATOR, cfg, holder: 'test', makeContract });
   const names = () => calls.map((c) => c[0]);
   return { st, calls, run, names };
@@ -213,6 +240,90 @@ test('a mismatch between the environment, the endpoint and the database halts th
   s = await noCode.run();
   assert.equal(s.halted, true);
   assert.ok(s.errors.some((e) => /no contract at/.test(e)));
+});
+
+test('a fresh install: the chain id is adopted from the RPC endpoint, once, and the run carries on', async () => {
+  const w = world({ dbChainId: null, cfg: { chainId: undefined } });
+  const s = await w.run();
+  const adopt = w.calls.filter((c) => c[0] === 'ican_chain_operator_adopt_chain');
+  assert.equal(adopt.length, 1);
+  assert.deepEqual(adopt[0][1], { p_chain_id: 31337 });
+  assert.equal(s.adoptedChain, 31337);
+  assert.equal(s.halted, false);
+  assert.ok(w.names().includes('ican_chain_operator_cursor'), 'it went on to read events');
+  const again = await w.run();
+  assert.equal(w.calls.filter((c) => c[0] === 'ican_chain_operator_adopt_chain').length, 1, 'the second run finds the chain set and adopts nothing');
+  assert.equal(again.adoptedChain, undefined);
+});
+
+test('CHAIN_ID is only a guard: an unreachable endpoint ends the run before a lease; a different chain halts it', async () => {
+  const s0 = await runSync({ db: { rpc: async () => { throw new Error('unreachable'); } }, provider: { async getNetwork() { throw new Error('connect ECONNREFUSED'); } }, signer: OPERATOR, cfg: {}, holder: 't' });
+  assert.ok(s0.errors.some((e) => /could not reach the RPC endpoint/.test(e)));
+  assert.equal(s0.leased, false);
+  const guard = world({ cfg: { chainId: 1 } });                 // the environment says chain 1, the endpoint and the database say 31337
+  const s = await guard.run();
+  assert.equal(s.halted, true);
+  assert.ok(s.errors.some((e) => /expected 1 \(CHAIN_ID\)/.test(e)));
+});
+
+test('a database already set to another chain than the endpoint is never overwritten: the bridge halts', async () => {
+  const w = world({ dbChainId: null, adopt: () => ({ success: false, adopted: false, code: 'chain_mismatch', chain_id: 11155111 }) });
+  const s = await w.run();
+  assert.equal(s.halted, true);
+  assert.ok(s.errors.some((e) => /set to chain 11155111/.test(e)));
+  assert.ok(!w.names().includes('ican_chain_operator_cursor'));
+  const other = world({ dbChainId: 11155111 });
+  const s2 = await other.run();
+  assert.equal(s2.halted, true);
+  assert.ok(s2.errors.some((e) => /database's chain is 11155111/.test(e)));
+});
+
+test('a contract that is not ICEC-C (a typo that landed on another contract) halts the bridge before anything is read', async () => {
+  for (const over of [{ icecSymbol: 'USDC' }, { icecDecimals: 6 }]) {
+    const w = world(over);
+    const s = await w.run();
+    assert.equal(s.halted, true, JSON.stringify(over));
+    assert.ok(s.errors.some((e) => /not ICEC-C/.test(e)));
+    assert.ok(!w.names().includes('ican_chain_operator_cursor'));
+  }
+});
+
+test('the vault\'s token, reserve coin and symbol are read from the vault and saved only when they differ (or are an hour old)', async () => {
+  const VAULT = '0x' + 'e1'.repeat(20);
+  const w = world({ stableVault: VAULT });
+  const s = await w.run();
+  const sync = w.calls.filter((c) => c[0] === 'ican_chain_operator_sync_contracts');
+  assert.equal(sync.length, 1);
+  assert.deepEqual(sync[0][1], { p_vault: VAULT, p_stable_token: w.st.vaultToken, p_reserve_token: w.st.vaultReserve, p_reserve_symbol: 'USDC' });
+  assert.deepEqual(s.vaultFacts, { token: w.st.vaultToken, reserve: w.st.vaultReserve, symbol: 'USDC' });
+  await w.run();
+  assert.equal(w.calls.filter((c) => c[0] === 'ican_chain_operator_sync_contracts').length, 1, 'nothing changed and it was just checked: not written again');
+  w.st.vaultReserve = '0x' + 'f3'.repeat(20);
+  await w.run();
+  assert.equal(w.calls.filter((c) => c[0] === 'ican_chain_operator_sync_contracts').length, 2, 'the chain says something new: the database follows');
+  w.st.checkedAt = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+  await w.run();
+  assert.equal(w.calls.filter((c) => c[0] === 'ican_chain_operator_sync_contracts').length, 3, 'an old check is renewed even when nothing changed');
+  const none = world();
+  await none.run();
+  assert.ok(!none.names().includes('ican_chain_operator_sync_contracts'), 'no vault configured: nothing to read');
+});
+
+test('an unreadable vault is reported but never stops the bridge, and an unreadable symbol does not stop the addresses being kept right', async () => {
+  const VAULT = '0x' + 'e1'.repeat(20);
+  const bad = world({ stableVault: VAULT, vaultError: 'execution reverted' });
+  const s = await bad.run();
+  assert.equal(s.halted, false);
+  assert.ok(s.errors.some((e) => /could not read the ICEC-S vault/.test(e)));
+  assert.ok(bad.names().includes('ican_chain_operator_cursor'), 'the ICEC-C bridge went on');
+  const empty = world({ stableVault: VAULT, vaultCode: '0x' });
+  const s2 = await empty.run();
+  assert.equal(s2.halted, false);
+  assert.ok(s2.errors.some((e) => /no ICEC-S vault at/.test(e)));
+  const nosym = world({ stableVault: VAULT, reserveSymbol: new Error('no symbol()') });
+  await nosym.run();
+  const call = nosym.calls.find((c) => c[0] === 'ican_chain_operator_sync_contracts');
+  assert.equal(call[1].p_reserve_symbol, 'USD-STABLE');
 });
 
 test('events are only believed at confirmation depth, and are reported in chain order', async () => {

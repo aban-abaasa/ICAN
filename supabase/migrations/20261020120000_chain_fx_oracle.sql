@@ -106,7 +106,7 @@ BEGIN
      OR p_rate >= 1e15 OR p_source IS NULL OR char_length(p_source) NOT BETWEEN 2 AND 60 OR p_observed_at IS NULL THEN
     RAISE EXCEPTION 'bad observation' USING ERRCODE = '22023';
   END IF;
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE;
   PERFORM pg_advisory_xact_lock(hashtextextended('ican_fx:' || v_pair, 0));
 
   SELECT * INTO v_last FROM icanera_chain.fx_observations WHERE pair = v_pair AND accepted ORDER BY observed_at DESC LIMIT 1;
@@ -154,7 +154,7 @@ DECLARE
   v_twap NUMERIC;
   v_age  NUMERIC;
 BEGIN
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE;
   SELECT * INTO o FROM icanera_chain.fx_observations WHERE pair = v_pair AND accepted ORDER BY observed_at DESC LIMIT 1;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('available', false, 'pair', v_pair);

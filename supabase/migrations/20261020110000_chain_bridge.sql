@@ -113,7 +113,7 @@ CREATE OR REPLACE FUNCTION icanera_chain.raise_anomaly(p_kind TEXT, p_details JS
 RETURNS VOID LANGUAGE plpgsql AS $$
 BEGIN
   INSERT INTO icanera_chain.anomalies (kind, details) VALUES (p_kind, COALESCE(p_details, '{}'::JSONB));
-  IF p_halt THEN UPDATE icanera_chain.chain_settings SET bridge_enabled = FALSE WHERE id; END IF;
+  IF p_halt THEN UPDATE icanera_chain.chain_settings SET bridge_enabled = FALSE WHERE id = TRUE; END IF;
 END; $$;
 
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA icanera_chain FROM PUBLIC, anon, authenticated;
@@ -142,7 +142,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = icanera_chain, public AS 
     'max_withdrawal_icec',       s.max_withdrawal_icec,
     'max_daily_withdrawal_icec', s.max_daily_withdrawal_icec,
     'fx_stale_s',                s.fx_stale_s)
-  FROM icanera_chain.chain_settings s WHERE s.id
+  FROM icanera_chain.chain_settings s WHERE s.id = TRUE
 $$;
 REVOKE ALL ON FUNCTION public.ican_chain_public_config() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.ican_chain_public_config() TO anon, authenticated;
@@ -172,7 +172,7 @@ BEGIN
   IF v_addr IS NULL THEN
     RETURN jsonb_build_object('success', false, 'code', 'invalid_address', 'error', 'That is not a valid wallet address.');
   END IF;
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE;
   IF s.chain_id IS NULL OR s.icec_community_address IS NULL THEN
     RETURN jsonb_build_object('success', false, 'code', 'not_configured', 'error', 'On-chain features are not set up yet.');
   END IF;
@@ -284,7 +284,7 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'code', 'invalid_request_id', 'error', 'Missing or invalid request id.');
   END IF;
 
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE;
   IF s.chain_id IS NULL OR s.icec_community_address IS NULL THEN
     RETURN jsonb_build_object('success', false, 'code', 'not_configured', 'error', 'On-chain features are not set up yet.');
   END IF;
@@ -474,7 +474,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = icanera_chain, public AS $$
 DECLARE s icanera_chain.chain_settings;
 BEGIN
   PERFORM icanera_chain.require_operator();
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE;
   IF NOT s.bridge_enabled OR s.chain_id IS NULL THEN RETURN '[]'::JSONB; END IF;
   RETURN COALESCE((
     SELECT jsonb_agg(jsonb_build_object('id', w.id, 'ref', w.ref, 'to', w.to_address, 'amount_units', w.amount_units::TEXT,
@@ -503,7 +503,7 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'code', 'not_found'); END IF;
   IF w.status = 'cancelled' THEN RETURN jsonb_build_object('success', false, 'code', 'cancelled'); END IF;
   IF w.status = 'minted'    THEN RETURN jsonb_build_object('success', false, 'code', 'already_minted'); END IF;
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE;
   IF NOT s.bridge_enabled THEN RETURN jsonb_build_object('success', false, 'code', 'halted'); END IF;
   UPDATE icanera_chain.bridge_withdrawals
      SET status = 'submitted', tx_hash = v_hash, submitted_at = now(), attempts = attempts + 1
@@ -550,7 +550,7 @@ BEGIN
   END IF;
   v_u := p_amount_units::NUMERIC;
   v_det := jsonb_build_object('ref', v_ref, 'tx_hash', v_tx, 'log_index', p_log_index, 'block', p_block, 'to', v_to, 'amount_units', p_amount_units);
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE;
   IF s.chain_id IS DISTINCT FROM p_chain_id THEN
     PERFORM icanera_chain.raise_anomaly('wrong_chain', v_det || jsonb_build_object('chain_id', p_chain_id), TRUE);
     RETURN jsonb_build_object('success', false, 'code', 'wrong_chain');
@@ -604,7 +604,7 @@ BEGIN
      OR p_amount_units !~ '^[1-9][0-9]{0,26}$' THEN
     RAISE EXCEPTION 'bad burn event' USING ERRCODE = '22023';
   END IF;
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE;
   IF s.chain_id IS DISTINCT FROM p_chain_id THEN
     PERFORM icanera_chain.raise_anomaly('wrong_chain', jsonb_build_object('tx_hash', v_tx, 'chain_id', p_chain_id), TRUE);
     RETURN jsonb_build_object('success', false, 'code', 'wrong_chain');
@@ -663,7 +663,7 @@ BEGIN
   IF p_block IS NULL OR p_block < 0 OR p_supply_units !~ '^[0-9]{1,30}$' THEN
     RAISE EXCEPTION 'bad supply report' USING ERRCODE = '22023';
   END IF;
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE;
   IF s.chain_id IS DISTINCT FROM p_chain_id THEN
     PERFORM icanera_chain.raise_anomaly('wrong_chain', jsonb_build_object('chain_id', p_chain_id), TRUE);
     RETURN jsonb_build_object('success', false, 'code', 'wrong_chain');
@@ -723,7 +723,7 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'code', 'unknown_challenge'); END IF;
   IF ch.used_at IS NOT NULL THEN RETURN jsonb_build_object('success', false, 'code', 'challenge_used'); END IF;
   IF ch.expires_at < now() THEN RETURN jsonb_build_object('success', false, 'code', 'challenge_expired'); END IF;
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE;
   IF s.chain_id IS DISTINCT FROM ch.chain_id THEN RETURN jsonb_build_object('success', false, 'code', 'wrong_chain'); END IF;
 
   PERFORM pg_advisory_xact_lock(hashtextextended('ican_chain_link:' || ch.user_id::TEXT, 0));
@@ -808,9 +808,9 @@ BEGIN
       RAISE EXCEPTION 'unknown setting: %', k USING ERRCODE = '22023';
     END IF;
   END LOOP;
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id FOR UPDATE;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE FOR UPDATE;
   IF COALESCE((c ->> 'bridge_enabled')::BOOLEAN, FALSE) AND (s.chain_id IS NULL OR s.icec_community_address IS NULL) THEN
-    RAISE EXCEPTION 'set the chain id and the ICEC-C contract address before turning the bridge on' USING ERRCODE = '22023';
+    RAISE EXCEPTION 'save the ICEC-C contract address first, and wait for the relayer''s next run to detect the chain (a minute or two), before turning the bridge on' USING ERRCODE = '22023';
   END IF;
   UPDATE icanera_chain.chain_settings SET
     bridge_enabled            = COALESCE((c ->> 'bridge_enabled')::BOOLEAN, bridge_enabled),
@@ -828,7 +828,7 @@ BEGIN
     reserve_token_symbol      = COALESCE(c ->> 'reserve_token_symbol', reserve_token_symbol),
     chain_name                = COALESCE(c ->> 'chain_name', chain_name),
     explorer_url              = COALESCE(c ->> 'explorer_url', explorer_url)
-  WHERE id;
+  WHERE id = TRUE;
   RETURN jsonb_build_object('success', true, 'settings', (SELECT to_jsonb(x) FROM icanera_chain.chain_settings x WHERE x.id));
 END; $$;
 
@@ -854,7 +854,7 @@ BEGIN
       RAISE EXCEPTION '% is not a valid 0x address', k USING ERRCODE = '22023';
     END IF;
   END LOOP;
-  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id FOR UPDATE;
+  SELECT * INTO s FROM icanera_chain.chain_settings WHERE id = TRUE FOR UPDATE;
   v_chain := COALESCE((c ->> 'chain_id')::BIGINT, s.chain_id);
   v_icec  := COALESCE(icanera_chain.norm_address(c ->> 'icec_community_address'), s.icec_community_address);
   IF EXISTS (SELECT 1 FROM icanera_chain.bridge_withdrawals)
@@ -868,7 +868,7 @@ BEGIN
     stable_token_address   = COALESCE(icanera_chain.norm_address(c ->> 'stable_token_address'),  stable_token_address),
     stable_vault_address   = COALESCE(icanera_chain.norm_address(c ->> 'stable_vault_address'),  stable_vault_address),
     reserve_token_address  = COALESCE(icanera_chain.norm_address(c ->> 'reserve_token_address'), reserve_token_address)
-  WHERE id;
+  WHERE id = TRUE;
   RETURN jsonb_build_object('success', true, 'config', public.ican_chain_public_config());
 END; $$;
 

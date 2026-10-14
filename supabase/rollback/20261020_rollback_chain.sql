@@ -13,7 +13,7 @@
 --   Removing the functions removes the way a burn on the chain becomes ledger credit. Anyone still holding ICEC-C
 --   on-chain would be stuck with a receipt the platform can no longer honour through the API.
 --   The gentle way to stop is the PAUSE: set bridge_enabled to FALSE (the dev panel, or
---       UPDATE icanera_chain.chain_settings SET bridge_enabled = FALSE;
+--       UPDATE icanera_chain.chain_settings SET bridge_enabled = FALSE WHERE bridge_enabled;
 --   ). That stops new withdrawals while burn-backs are still credited. Wait until the locked total reaches zero
 --   (SELECT icanera_chain.locked_total();), then run this. If you run it earlier, the locked ICEC stays recorded in the
 --   ledger and can be paid out by hand from it.
@@ -25,7 +25,7 @@
 DO $$
 BEGIN
   IF to_regclass('icanera_chain.chain_settings') IS NOT NULL THEN
-    UPDATE icanera_chain.chain_settings SET bridge_enabled = FALSE;
+    UPDATE icanera_chain.chain_settings SET bridge_enabled = FALSE WHERE bridge_enabled;
   END IF;
 END $$;
 
@@ -64,6 +64,8 @@ DROP FUNCTION IF EXISTS public.ican_chain_operator_check_supply(BIGINT, BIGINT, 
 DROP FUNCTION IF EXISTS public.ican_chain_operator_halt(TEXT);
 DROP FUNCTION IF EXISTS public.ican_chain_operator_link(UUID, TEXT);
 DROP FUNCTION IF EXISTS public.ican_chain_operator_get_challenge(UUID);
+DROP FUNCTION IF EXISTS public.ican_chain_operator_sync_contracts(TEXT, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.ican_chain_operator_adopt_chain(BIGINT);
 DROP FUNCTION IF EXISTS public.ican_chain_operator_fx_observe(TEXT, NUMERIC, TEXT, TIMESTAMPTZ);
 -- administrators
 DROP FUNCTION IF EXISTS public.ican_chain_dev_overview(TEXT);

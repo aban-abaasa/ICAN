@@ -4,7 +4,10 @@
  *
  * WHAT IT DOES, in the order of each run (runSync):
  *   1. takes a lease in the database, so two overlapping runs never sign with the same key at once;
- *   2. checks it is talking to the chain and the ICEC-C contract the database expects (anything else halts the bridge);
+ *   2. checks it is talking to the chain and the ICEC-C contract the database expects (anything else halts the bridge). The
+ *      chain id is read from the RPC endpoint: if the database has none yet it is adopted from there, once, and CHAIN_ID
+ *      (optional) is only a guard. The ICEC-S vault's token and reserve coin are read from the vault itself and written back
+ *      to the database whenever they differ, so they always match the chain (a failure there never stops the bridge);
  *   3. reads every Minted and BurnedForCredit event that is at least `confirmations` blocks deep, in chain order, and
  *      reports each to the database exactly as it happened (the database decides what it believes: a mint it did not ask
  *      for, or one that differs, halts the bridge; a burn is credited only to the account that owns the burning address);
@@ -34,7 +37,18 @@ export const ICEC_C_ABI = [
   'function mintableToday() view returns (uint256)',
   'function operator() view returns (address)',
   'function totalSupply() view returns (uint256)',
+  'function symbol() view returns (string)',
+  'function decimals() view returns (uint8)',
 ];
+
+// What the ICEC-S vault says about itself: its token (created in its constructor) and the reserve coin it holds.
+export const VAULT_ABI = ['function token() view returns (address)', 'function reserve() view returns (address)'];
+export const ERC20_SYMBOL_ABI = ['function symbol() view returns (string)'];
+
+export const ICEC_C_SYMBOL = 'ICEC-C';
+export const ICEC_C_DECIMALS = 8;
+// The detected facts are re-confirmed in the database at least this often, even when nothing changed (it shows "checked N min ago").
+const RECHECK_CONTRACTS_S = 3600;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Small pure helpers
@@ -102,7 +116,7 @@ export const loadConfig = (env = process.env) => {
     supabaseUrl: pick('SUPABASE_URL', 'VITE_SUPABASE_URL'),
     serviceKey: pick('SUPABASE_SERVICE_ROLE_KEY'),
     rpcUrl: pick('CHAIN_RPC_URL'),
-    chainId: pick('CHAIN_ID'),
+    chainId: pick('CHAIN_ID'),                        // optional: the chain is read from the RPC endpoint; if set, it must agree
     operatorKey: pick('BRIDGE_OPERATOR_KEY'),
     secret: pick('CHAIN_CRON_SECRET', 'CRON_SECRET'),
     startBlock: Number(pick('CHAIN_START_BLOCK') || 0),
@@ -111,10 +125,10 @@ export const loadConfig = (env = process.env) => {
     minGasWei: BigInt(pick('CHAIN_MIN_OPERATOR_BALANCE_WEI') || '1000000000000000'), // 0.001 of the native coin
     leaseSeconds: 240,
   };
-  const required = { SUPABASE_URL: cfg.supabaseUrl, SUPABASE_SERVICE_ROLE_KEY: cfg.serviceKey, CHAIN_RPC_URL: cfg.rpcUrl, CHAIN_ID: cfg.chainId, BRIDGE_OPERATOR_KEY: cfg.operatorKey, CHAIN_CRON_SECRET: cfg.secret };
+  const required = { SUPABASE_URL: cfg.supabaseUrl, SUPABASE_SERVICE_ROLE_KEY: cfg.serviceKey, CHAIN_RPC_URL: cfg.rpcUrl, BRIDGE_OPERATOR_KEY: cfg.operatorKey, CHAIN_CRON_SECRET: cfg.secret };
   const missing = Object.keys(required).filter((k) => !required[k]);
   if (missing.length) return { ok: false, missing };
-  if (!/^\d+$/.test(cfg.chainId)) return { ok: false, missing: [], error: 'CHAIN_ID must be a number' };
+  if (cfg.chainId && !/^\d+$/.test(cfg.chainId)) return { ok: false, missing: [], error: 'CHAIN_ID must be a number (or leave it out: it is read from the RPC endpoint)' };
   if (cfg.secret.length < 16) return { ok: false, missing: [], error: 'CHAIN_CRON_SECRET must be at least 16 characters' };
   return { ok: true, cfg };
 };
@@ -134,15 +148,27 @@ const HALTING_CODES = new Set(['unknown_ref', 'mismatch', 'second_mint', 'mint_a
  *   cfg       { chainId, startBlock, maxMintsPerRun, maxBlocksPerRun, minGasWei, leaseSeconds }
  *   holder    string                                    a name for this run, for the lease
  *   log       (event, details) => void
- *   makeContract  optional (address, signer) => contract, for tests; by default an ethers Contract for the ICEC-C ABI
+ *   makeContract  optional (address, runner, kind) => contract, for tests; kind is 'icec' (default), 'vault' or 'erc20'
  * }
+ * cfg.chainId is optional: when set it is only a guard (the RPC endpoint must be on that chain).
  */
-export async function runSync({ db, provider, signer, cfg, holder, log = () => {}, makeContract = null }) {
+export async function runSync({ db, provider, signer, cfg, holder, log = () => {}, makeContract: makeContractHook = null }) {
   const summary = {
     leased: false, halted: false, scanned: null, mintsRecorded: 0, burnsRecorded: 0, burnsCredited: 0, burnsParked: 0,
     sent: [], requeued: 0, skipped: [], supply: null, errors: [],
   };
-  const chainId = Number(cfg.chainId);
+  const makeContract = (address, runner, kind = 'icec') => (makeContractHook
+    ? makeContractHook(address, runner, kind)
+    : new ethers.Contract(address, kind === 'vault' ? VAULT_ABI : kind === 'erc20' ? ERC20_SYMBOL_ABI : ICEC_C_ABI, runner));
+  const envChain = cfg.chainId === undefined || cfg.chainId === null || cfg.chainId === '' ? null : Number(cfg.chainId);
+
+  // The chain is whatever the RPC endpoint says it is. (Everything below is named after it, so a wrong endpoint can never
+  // share a cursor or a lease with the right one.)
+  let chainId;
+  try { chainId = Number((await provider.getNetwork()).chainId); } catch (e) {
+    summary.errors.push(`could not reach the RPC endpoint: ${e?.shortMessage || e?.message || e}`);
+    return summary;
+  }
   const leaseName = `chain-sync:${chainId}`;
   const cursorName = `chain-events:${chainId}`;
 
@@ -157,17 +183,54 @@ export async function runSync({ db, provider, signer, cfg, holder, log = () => {
     try { await db.rpc('ican_chain_operator_halt', { p_reason: reason }); } catch (e) { summary.errors.push(`could not record the halt: ${e.message}`); }
   };
 
+  const syncVaultFacts = async (pub) => {
+    try {
+      const vaultAddress = pub.stable_vault_address;
+      const vcode = await provider.getCode(vaultAddress);
+      if (!vcode || vcode === '0x') { summary.errors.push(`no ICEC-S vault at ${vaultAddress} on chain ${chainId}: check the address`); return; }
+      const vault = makeContract(vaultAddress, provider, 'vault');
+      const token = String(await vault.token());
+      const reserve = String(await vault.reserve());
+      let symbol;
+      try { symbol = String(await makeContract(reserve, provider, 'erc20').symbol()).trim(); } catch { symbol = ''; }
+      if (!/^[A-Za-z0-9._+-]{2,12}$/.test(symbol)) symbol = 'USD-STABLE';      // an unreadable symbol must not stop the addresses being kept right
+      const same = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+      const ageS = pub.contracts_checked_at ? (Date.now() - Date.parse(pub.contracts_checked_at)) / 1000 : Infinity;
+      const unchanged = same(pub.stable_token_address, token) && same(pub.reserve_token_address, reserve) && pub.reserve_token_symbol === symbol;
+      if (unchanged && ageS < RECHECK_CONTRACTS_S) return;
+      const r = await db.rpc('ican_chain_operator_sync_contracts', { p_vault: vaultAddress, p_stable_token: token, p_reserve_token: reserve, p_reserve_symbol: symbol });
+      if (r?.success) { if (r.changed) { summary.vaultFacts = { token, reserve, symbol }; log('vault_facts', { token, reserve, symbol }); } }
+      else summary.skipped.push(`vault facts not saved (${r?.code || 'refused'})`);
+    } catch (e) { summary.errors.push(`could not read the ICEC-S vault: ${e?.shortMessage || e?.message || e}`); }
+  };
+
   try {
     // ---- 0. am I where the database thinks I am?
-    const pub = await db.rpc('ican_chain_public_config', {});
-    if (!pub || !pub.chain_id || !pub.icec_community_address) { summary.skipped.push('the database has no chain configured'); return summary; }
-    if (Number(pub.chain_id) !== chainId) { await halt(`environment CHAIN_ID ${chainId} differs from the database's chain ${pub.chain_id}`); return summary; }
-    const net = await provider.getNetwork();
-    if (Number(net.chainId) !== chainId) { await halt(`the RPC endpoint is on chain ${net.chainId}, expected ${chainId}`); return summary; }
+    let pub = await db.rpc('ican_chain_public_config', {});
+    if (!pub || (!pub.icec_community_address && !pub.stable_vault_address)) { summary.skipped.push('the database has no chain configured'); return summary; }
+    if (envChain !== null && envChain !== chainId) { await halt(`the RPC endpoint is on chain ${chainId}, expected ${envChain} (CHAIN_ID)`); return summary; }
+    if (!pub.chain_id) {
+      // The first run on a fresh install: the chain id is the one the endpoint is on. Adopted once; from then on it is a guard.
+      const adopted = await db.rpc('ican_chain_operator_adopt_chain', { p_chain_id: chainId });
+      if (adopted?.adopted) { log('adopted_chain', { chainId }); summary.adoptedChain = chainId; }
+      if (adopted && adopted.success === false) { await halt(`the database is set to chain ${adopted.chain_id}, but the RPC endpoint is on ${chainId}`); return summary; }
+      pub = await db.rpc('ican_chain_public_config', {});
+    }
+    if (Number(pub.chain_id) !== chainId) { await halt(`the database's chain is ${pub.chain_id}, but the RPC endpoint is on ${chainId}`); return summary; }
+
+    // ---- 0b. the ICEC-S vault's facts, read from the vault. Never fatal: the bridge below does not depend on them.
+    if (pub.stable_vault_address) await syncVaultFacts(pub);
+    if (!pub.icec_community_address) { summary.skipped.push('the database has no ICEC-C contract configured (no chain configured for the bridge)'); return summary; }
+
     const address = pub.icec_community_address;
     const code = await provider.getCode(address);
     if (!code || code === '0x') { await halt(`no contract at ${address} on chain ${chainId}`); return summary; }
-    const contract = makeContract ? makeContract(address, signer) : new ethers.Contract(address, ICEC_C_ABI, signer);
+    const contract = makeContract(address, signer, 'icec');
+    // is it really ICEC-C? (a typo that lands on some other contract must not be believed)
+    try {
+      const [sym, dec] = [await contract.symbol(), await contract.decimals()];
+      if (sym !== ICEC_C_SYMBOL || Number(dec) !== ICEC_C_DECIMALS) { await halt(`the contract at ${address} is "${sym}" with ${dec} decimals, not ${ICEC_C_SYMBOL} with ${ICEC_C_DECIMALS}`); return summary; }
+    } catch { await halt(`the contract at ${address} does not answer like ICEC-C (symbol/decimals)`); return summary; }
     const confirmations = Math.max(1, Number(pub.confirmations) || 12);
     const canMint = (await contract.operator()).toLowerCase() === signer.address.toLowerCase();
     if (!canMint) summary.errors.push('the signing key is not the contract\'s operator: reading the chain, but not minting');

@@ -137,9 +137,24 @@ const ICEC_C_ABI = [
   'function mintPaused() view returns (bool)',
 ];
 
-export const stableContracts = (runner, cfg) => ({
-  reserve: new ethers.Contract(cfg.reserve_token_address, ERC20_ABI, runner),
-  token: new ethers.Contract(cfg.stable_token_address, ERC20_ABI, runner),
+// The ICEC-S token and the reserve coin are read from the vault itself, on the chain, so they are right even when the database's
+// copy has not been filled in yet (the relayer fills it in) or is stale. Remembered per chain + vault: they cannot change.
+const vaultFacts = new Map();
+export const resolveStableContracts = async (provider, cfg) => {
+  const key = `${cfg.chain_id}:${String(cfg.stable_vault_address).toLowerCase()}`;
+  if (!vaultFacts.has(key)) {
+    const vault = new ethers.Contract(cfg.stable_vault_address, VAULT_ABI, provider);
+    const pending = Promise.all([vault.token(), vault.reserve()]).then(([token, reserve]) => ({ token, reserve }));
+    vaultFacts.set(key, pending);
+    pending.catch(() => vaultFacts.delete(key));       // a failed read is retried next time
+  }
+  return vaultFacts.get(key);
+};
+
+/** The three contracts, as `{ vault, token, reserve }`. Pass the addresses from resolveStableContracts. */
+export const stableContracts = (runner, cfg, resolved) => ({
+  reserve: new ethers.Contract(resolved.reserve, ERC20_ABI, runner),
+  token: new ethers.Contract(resolved.token, ERC20_ABI, runner),
   vault: new ethers.Contract(cfg.stable_vault_address, VAULT_ABI, runner),
 });
 export const communityContract = (runner, cfg) => new ethers.Contract(cfg.icec_community_address, ICEC_C_ABI, runner);
@@ -159,4 +174,4 @@ export const devChain = {
   fxOverview: (token) => rpc('ican_chain_dev_fx_overview', { dev_token: token }),
 };
 
-export default { getChainConfig, getFxRate, getChainOverview, requestLinkChallenge, submitLink, unlinkAddress, requestWithdrawal, cancelWithdrawal, stableContracts, communityContract, newCreditId, devChain };
+export default { getChainConfig, getFxRate, getChainOverview, requestLinkChallenge, submitLink, unlinkAddress, requestWithdrawal, cancelWithdrawal, stableContracts, resolveStableContracts, communityContract, newCreditId, devChain };
