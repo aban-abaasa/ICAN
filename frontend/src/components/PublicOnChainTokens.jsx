@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { HelpCircle } from 'lucide-react';
 import { CHART_PALETTES } from './chartPalettes';
 import { useInView } from './PublicSectorMarkets';
 import PublicSectionNotice from './PublicSectionNotice';
 import { communityContract, getChainConfig, getFxRate, publicProvider, resolveStableContracts, stableContracts } from '../services/chainService';
-import { explorerLink, formatUnits, localValue, proofOfReserve, rateFreshness, shortAddress } from '../utils/chainMath';
+import { explorerLink, formatUnits, localValue, proofOfReserve, shortAddress } from '../utils/chainMath';
 
 // icaneracoin on the blockchain, on the public /icaneracoin page: the two forms and the facts anyone can check without an account.
 //   ICEC-S  the stable form: a US-dollar token, each one backed 1:1 by a dollar stablecoin held in a public vault
@@ -18,7 +19,7 @@ import { explorerLink, formatUnits, localValue, proofOfReserve, rateFreshness, s
 
 const POLL_MS = 30_000;
 
-const PublicOnChainTokens = ({ theme = 'dark', skin: k, priceUgx = null, onAvailability }) => {
+const PublicOnChainTokens = ({ theme = 'dark', skin: k, priceUgx = null, onAvailability, onLearn }) => {
   const c = CHART_PALETTES[theme] || CHART_PALETTES.dark;
   const rootRef = useRef(null);
   const inView = useInView(rootRef);
@@ -77,10 +78,8 @@ const PublicOnChainTokens = ({ theme = 'dark', skin: k, priceUgx = null, onAvail
   if (!cfg) {
     return (
       <div ref={rootRef}>
-        <PublicSectionNotice id="tokens" theme={theme} skin={k} kicker="Stable coins" title="Stable coins: keep your savings' value when the shilling slips" loading={cfg === undefined}>
-          icaneracoin also exists as tokens you hold in your own crypto wallet. ICEC-S is the stable form: a US-dollar token backed one-for-one by a dollar stablecoin
-          in a public vault, so it holds its dollar value while the shilling loses ground to inflation. ICEC-C is the community form and follows the icaneracoin price.
-          Neither can be moved by IcanEra, and neither is a promise to beat inflation.
+        <PublicSectionNotice id="tokens" theme={theme} skin={k} kicker="On the blockchain" title="Stable coins" loading={cfg === undefined} onLearn={onLearn}>
+          icaneracoin as tokens in your own crypto wallet.
         </PublicSectionNotice>
       </div>
     );
@@ -95,43 +94,40 @@ const PublicOnChainTokens = ({ theme = 'dark', skin: k, priceUgx = null, onAvail
 
   const por = reads?.held != null ? proofOfReserve({ reserve: reads.held, supply: reads.supply }) : null;
   const dec = reads?.decimals ?? 6;
-  const fresh = rateFreshness(fx);
   const oneInShillings = fx?.available ? localValue(10n ** BigInt(dec), dec, fx.rate) : null;
 
   return (
     <div ref={rootRef}>
-    <section id="tokens" aria-labelledby="tokens-heading" className="mt-12 scroll-mt-16" data-testid="public-onchain">
+    <section id="tokens" aria-labelledby="tokens-heading" className="mt-10 scroll-mt-16" data-testid="public-onchain">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className={`text-xs font-bold uppercase tracking-[0.16em] ${k.kicker}`}>Stable coins · on the blockchain</p>
-          <h2 id="tokens-heading" className={`mt-1 text-2xl font-bold ${k.title}`}>Stable coins: keep your savings&apos; value when the shilling slips</h2>
+          <p className={`text-xs font-bold uppercase tracking-[0.16em] ${k.kicker}`}>On the blockchain</p>
+          <h2 id="tokens-heading" className={`mt-1 text-xl font-bold sm:text-2xl ${k.title}`}>Stable coins</h2>
         </div>
-        <span className="text-xs" style={sub}>{cfg.chain_name || `Chain ${cfg.chain_id}`}{cfg.is_testnet ? ' · test network' : ''}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs" style={sub}>{cfg.chain_name || `Chain ${cfg.chain_id}`}{cfg.is_testnet ? ' · test network' : ''}</span>
+          {onLearn && (
+            <button type="button" onClick={onLearn} aria-label="How stable coins work" title="How stable coins work" className="-m-2 rounded-md p-2" style={{ color: c.soft }}>
+              <HelpCircle className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
-      <p className={`mt-2 max-w-3xl text-sm leading-6 ${k.body}`}>
-        Besides the coin you trade on IcanEra, icaneracoin also exists as tokens you hold in your own crypto wallet. One keeps a steady US-dollar value,
-        the other follows the icaneracoin price in the chart above. You keep the keys: IcanEra cannot move your tokens.
-      </p>
       {cfg.is_testnet && (
-        <p className="mt-3 max-w-3xl rounded-lg p-3 text-xs leading-5" style={{ background: c.warnBg, border: `1px solid ${c.warnBorder}`, color: c.warnText }}>
-          This runs on a test network. Test tokens have no real value; nothing here is real money yet.
-        </p>
+        <p className="mt-2 text-xs" style={{ color: c.warnText }}>Test network: test tokens have no real value.</p>
       )}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
         {cfg.stable_vault_address && (
           <div className="rounded-xl p-4" style={card} data-testid="onchain-stable">
             <div className="flex items-baseline justify-between">
               <h3 className="text-lg font-bold" style={{ color: c.strong }}>ICEC-S <span className="text-sm font-normal" style={sub}>· the stable form</span></h3>
               {oneInShillings != null && <span className="text-xs tabular-nums" style={sub}>1 ICEC-S ≈ UGX {oneInShillings.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>}
             </div>
-            <p className="mt-1 text-sm leading-6" style={{ color: c.fg }}>
-              A US-dollar token. Each one is backed by one US-dollar stablecoin held in a public vault, and can be swapped back for it at any time. It holds its
-              dollar value; in shillings it moves with the dollar rate, so it protects against the shilling weakening and falls in shillings if the shilling strengthens.
-            </p>
+            <p className="mt-1 text-sm" style={{ color: c.fg }}>Steady US-dollar value, backed 1:1.</p>
 
             <div className="mt-3 rounded-lg p-3" style={{ background: c.field, border: `1px solid ${c.fieldBorder}` }}>
-              <p className="text-xs font-semibold uppercase tracking-wide" style={sub}>Proof of reserve, read from the chain</p>
+              <p className="text-xs font-semibold uppercase tracking-wide" style={sub}>Proof of reserve</p>
               {por ? (
                 <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                   <dt style={sub}>Held in the vault</dt><dd className="text-right tabular-nums" style={{ color: c.strong }}>{formatUnits(reads.held, dec, 2)} {reads.symbol}</dd>
@@ -143,19 +139,19 @@ const PublicOnChainTokens = ({ theme = 'dark', skin: k, priceUgx = null, onAvail
                 </dl>
               ) : (
                 <p className="mt-2 text-sm" style={sub}>
-                  {reads?.noNode ? 'Open the vault on the block explorer below to check the reserve yourself.'
+                  {reads?.noNode ? 'Check the reserve on the block explorer (see Contract addresses).'
                     : reads?.failed ? 'Could not read the vault just now. Retrying…' : 'Reading the vault…'}
                 </p>
               )}
-              <p className="mt-2 text-[11px] leading-4" style={sub}>
-                The vault refuses any deposit or redemption that would leave it with less than it has issued. {fx ? fresh.text + '.' : ''}
-              </p>
             </div>
-            <p className="mt-3 text-xs" style={sub}>
-              Vault {addr(cfg.stable_vault_address)}
-              {cfg.stable_token_address && <> · token {addr(cfg.stable_token_address)}</>}
-              {cfg.reserve_token_address && <> · reserve {cfg.reserve_token_symbol ? `${cfg.reserve_token_symbol} ` : ''}{addr(cfg.reserve_token_address)}</>}
-            </p>
+            <details className="mt-2">
+              <summary className="min-h-[36px] cursor-pointer list-none py-2 text-xs font-semibold marker:hidden" style={sub}>Contract addresses ▾</summary>
+              <p className="pb-1 text-xs leading-6" style={sub}>
+                Vault {addr(cfg.stable_vault_address)}
+                {cfg.stable_token_address && <> · token {addr(cfg.stable_token_address)}</>}
+                {cfg.reserve_token_address && <> · reserve {cfg.reserve_token_symbol ? `${cfg.reserve_token_symbol} ` : ''}{addr(cfg.reserve_token_address)}</>}
+              </p>
+            </details>
           </div>
         )}
 
@@ -165,27 +161,22 @@ const PublicOnChainTokens = ({ theme = 'dark', skin: k, priceUgx = null, onAvail
               <h3 className="text-lg font-bold" style={{ color: c.strong }}>ICEC-C <span className="text-sm font-normal" style={sub}>· the community form</span></h3>
               {priceUgx != null && <span className="text-xs tabular-nums" style={sub}>1 ICEC-C = 1 icaneracoin ≈ UGX {Number(priceUgx).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>}
             </div>
-            <p className="mt-1 text-sm leading-6" style={{ color: c.fg }}>
-              A receipt for icaneracoin you move out of your IcanEra wallet. It is worth what the coin is worth, so it rises and falls with the chart above as the
-              community uses icaneracoin. It cannot be sent to another address or sold on an exchange: you only mint it to your own linked address and burn it to
-              get your icaneracoin back into IcanEra.
-            </p>
+            <p className="mt-1 text-sm" style={{ color: c.fg }}>Follows the icaneracoin price.</p>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg p-3 text-sm" style={{ background: c.field, border: `1px solid ${c.fieldBorder}` }}>
               <dt style={sub}>ICEC-C in existence</dt>
               <dd className="text-right tabular-nums" style={{ color: c.strong }}>{reads?.community != null ? formatUnits(reads.community, 8, 2) : '—'}</dd>
               <dt style={sub}>Where it can go</dt><dd className="text-right" style={{ color: c.strong }}>Your own wallet only</dd>
             </dl>
-            <p className="mt-3 text-xs" style={sub}>Contract {addr(cfg.icec_community_address)}</p>
+            <details className="mt-2">
+              <summary className="min-h-[36px] cursor-pointer list-none py-2 text-xs font-semibold marker:hidden" style={sub}>Contract address ▾</summary>
+              <p className="pb-1 text-xs" style={sub}>{addr(cfg.icec_community_address)}</p>
+            </details>
           </div>
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <a href="/" className={`inline-flex items-center gap-2 rounded-md px-5 py-3 text-sm font-semibold ${k.cta}`}>Open my IcanEra wallet</a>
-        <p className="max-w-xl text-xs leading-5" style={sub}>
-          Sign in, open the wallet&apos;s On-chain tab and connect your crypto wallet to get ICEC-S or move icaneracoin onto the chain. Token prices can move and
-          contracts can have bugs; the stable form also depends on the stablecoin behind it. This is not financial advice.
-        </p>
+      <div className="mt-3">
+        <a href="/" className={`inline-flex min-h-[44px] items-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold ${k.cta}`}>Open my IcanEra wallet</a>
       </div>
     </section>
     </div>
