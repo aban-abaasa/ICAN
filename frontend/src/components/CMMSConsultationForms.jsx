@@ -2,18 +2,29 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Plus, Trash2, Share2, Printer, Copy, Check, Loader, FileText, Download,
-  ChevronUp, ChevronDown, Sparkles, Power, UserPlus, Pencil
+  ChevronUp, ChevronDown, Sparkles, Power, UserPlus, Pencil, Lock, Paperclip, QrCode, Image as ImageIcon
 } from 'lucide-react';
 import {
   listConsultationForms, saveConsultationForm, deleteConsultationForm, setConsultationFormShare,
   listConsultationFields, saveConsultationField, deleteConsultationField, addCommonClinicalFields,
-  addPhysiotherapyConsultationFields, addPatientAssessmentFields, listConsultationSubmissions, recordConsultationSubmission
+  addPhysiotherapyConsultationFields, addPatientAssessmentFields, listConsultationSubmissions, recordConsultationSubmission,
+  saveConsultationFormSettings
 } from '../services/cmmsConsultationFormService';
 import { useAuth } from '../context/AuthContext';
 import { syncManager } from '../lib/syncManager';
 import { downloadCmmsQrPdf } from '../utils/downloadCmmsQrPdf';
 import { downloadBlankConsultationFormPdf, downloadConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
 import { submissionEntries, formatAnswer, sectionDisplayLabel, bareSectionLabel } from '../utils/consultationSubmissionUtils';
+import { cleanAttachments, formatReferenceCode, MAX_STAFF_ATTACHMENTS, recordAttachments, recordQrPayload, recordReferenceCode } from '../utils/consultationAttachments';
+import { loadLogoAsset, makeQrDataUrl, useResolvedLogo } from '../utils/consultationBranding';
+import { attachmentsHtml, closePrintShell, escapeHtml, fillPrintShell, letterheadHtml, openPrintShell } from '../utils/consultationPrint';
+import {
+  DEFAULT_FORM_SETTINGS, labelsToText, normalizeFormSettings, resolveAttachmentLabels, resolveAttachmentPrompt,
+  settingsEqual, settingsPayload as settingsPayloadOf, settingsSummary, textToLabels
+} from '../utils/consultationFormSettings';
+import { resolveAttachmentUrls } from '../services/cmmsConsultationAttachmentService';
+import ConsultationAttachmentPicker, { attachmentsToSave, attachmentsUploading } from './ConsultationAttachmentPicker';
+import ConsultationRecordAttachments from './ConsultationRecordAttachments';
 
 const FIELD_TYPES = [
   ['text', 'Short text'], ['textarea', 'Long text'], ['date', 'Date'], ['number', 'Number'],
@@ -23,33 +34,11 @@ const FIELD_TYPES = [
 const FIELD_TYPE_LABEL = Object.fromEntries(FIELD_TYPES);
 const NEEDS_OPTIONS = new Set(['select', 'multiselect']);
 
-const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const shareUrl = (token) => `${window.location.origin}/consultation-forms/${token}`;
 
-// Opens a fresh tab with a minimal print-friendly document, the same
-// window.open + document.write(...) + window.onload=print pattern
-// CMSSModule.jsx already uses for its report exports — kept identical so
-// printing behaves the same way everywhere in CMMS.
-const openPrintWindow = (title, bodyHtml) => {
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer');
-  if (!printWindow) { alert('Allow pop-ups to print this form.'); return; }
-  printWindow.document.write(`<!doctype html><html><head><title>${escapeHtml(title)}</title><style>
-    body{font-family:Arial,sans-serif;max-width:720px;margin:32px auto;color:#111;line-height:1.6}
-    h1{margin-bottom:2px;font-size:20px}
-    .subtitle{color:#555;font-size:13px;margin-bottom:22px;border-bottom:1px solid #ddd;padding-bottom:14px}
-    .field{margin-bottom:16px;page-break-inside:avoid}
-    .field .label{font-weight:bold;font-size:13px;margin-bottom:4px}
-    .field .required{color:#b91c1c;font-weight:normal}
-    .field .answer{font-size:13px;white-space:pre-wrap;border-bottom:1px solid #999;min-height:18px;padding-bottom:4px}
-    .blank-line{border-bottom:1px solid #999;height:22px}
-    .blank-lines .blank-line{margin-bottom:6px}
-    .section-heading{margin:26px 0 14px;font-size:14px;font-weight:bold;color:#111;border-bottom:2px solid #333;padding-bottom:4px;page-break-after:avoid}
-    .section-heading:first-of-type{margin-top:4px}
-    .meta{color:#555;font-size:11px;margin-top:28px;border-top:1px solid #ddd;padding-top:10px}
-    @media print{body{margin:18px}}
-  </style></head><body>${bodyHtml}<script>window.onload=()=>window.print()</script></body></html>`);
-  printWindow.document.close();
-};
+// Every printout (blank form, a patient's record) goes through the shared print
+// helpers in utils/consultationPrint.js: the window is opened inside the click,
+// then filled in once the logo / QR / attachments are ready.
 
 // Collapsible section wrapper — used to keep heavy blocks (share link/QR
 // details, the field-building tools) out of the way by default so the page
@@ -69,6 +58,22 @@ const Disclosure = ({ title, icon: Icon, defaultOpen = false, children }) => {
     </div>
   );
 };
+
+// A labelled on/off switch for the owner's per-form options.
+const OptionToggle = ({ label, hint, checked, onChange }) => (
+  <label className="flex cursor-pointer items-start justify-between gap-3">
+    <span className="min-w-0">
+      <span className="block text-sm font-medium text-white">{label}</span>
+      {hint && <span className="block text-xs text-slate-400">{hint}</span>}
+    </span>
+    <button
+      type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
+      className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition ${checked ? 'bg-emerald-500' : 'bg-slate-600'}`}
+    >
+      <span style={{ background: '#ffffff' }} className={`absolute top-0.5 h-5 w-5 rounded-full transition-all ${checked ? 'left-[22px]' : 'left-0.5'}`} />
+    </button>
+  </label>
+);
 
 // Renders one editable input for a field definition — shared by the
 // staff "record a walk-in submission" form below.
@@ -126,8 +131,9 @@ const uniqueById = (rows) => {
   return (rows || []).filter((r) => (seen.has(r.id) ? false : seen.add(r.id)));
 };
 
-export default function CMMSConsultationForms({ businessProfileId, businessName }) {
+export default function CMMSConsultationForms({ businessProfileId, businessName, businessLogo }) {
   const { queueAction } = useAuth();
+  const logoUrl = useResolvedLogo(businessLogo);
   const [forms, setForms] = useState([]);
   const [loadingForms, setLoadingForms] = useState(true);
   const [selectedFormId, setSelectedFormId] = useState(null);
@@ -153,9 +159,39 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
   const [viewingSubmissionId, setViewingSubmissionId] = useState(null);
   const [recording, setRecording] = useState(false);
   const [walkIn, setWalkIn] = useState({ name: '', phone: '', email: '', address: '', dob: '', responses: {} });
+  const [walkInAttachments, setWalkInAttachments] = useState([]);
   const [savingWalkIn, setSavingWalkIn] = useState(false);
 
   const selectedForm = forms.find((f) => f.id === selectedFormId) || null;
+
+  // The owner's options for this form (logo / QR codes / attachments). `brandLogo` is the logo
+  // value handed to every printout, PDF and flyer - null when the owner switched the logo off.
+  const settings = useMemo(() => normalizeFormSettings(selectedForm?.settings), [selectedForm]);
+  const brandLogo = settings.showLogo ? businessLogo : null;
+  const attachmentLabels = resolveAttachmentLabels(settings);
+  const attachmentPrompt = resolveAttachmentPrompt(settings);
+
+  const [optionsDraft, setOptionsDraft] = useState({ ...DEFAULT_FORM_SETTINGS, labelsText: labelsToText(null) });
+  const [savingOptions, setSavingOptions] = useState(false);
+  // Re-seed the editor only when the saved options (or the selected form) really change - a
+  // refresh of the forms list must not throw away what the owner is midway through editing.
+  const savedSettingsKey = `${selectedForm?.id || ''}:${JSON.stringify(settings)}`;
+  useEffect(() => {
+    setOptionsDraft({ ...settings, labelsText: labelsToText(settings.attachmentLabels) });
+  }, [savedSettingsKey]);
+  const draftSettings = { ...optionsDraft, attachmentLabels: textToLabels(optionsDraft.labelsText) };
+  const optionsDirty = !settingsEqual(draftSettings, settings);
+  const setOption = (changes) => setOptionsDraft((d) => ({ ...d, ...changes }));
+
+  const saveOptions = async () => {
+    if (!selectedForm) return;
+    setSavingOptions(true);
+    setError('');
+    const result = await saveConsultationFormSettings(selectedForm.id, settingsPayloadOf(draftSettings));
+    setSavingOptions(false);
+    if (result.success) setForms((current) => current.map((f) => (f.id === selectedForm.id ? result.data : f)));
+    else setError(result.error);
+  };
 
   const loadForms = async () => {
     setLoadingForms(true);
@@ -175,6 +211,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     listConsultationSubmissions(selectedFormId).then((r) => r.success && setSubmissions(r.data));
     setViewingSubmissionId(null);
     setRecording(false);
+    setWalkInAttachments([]);
   }, [selectedFormId]);
 
   // A walk-in recorded offline (see submitWalkIn below) is queued and shown
@@ -357,64 +394,102 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     ]);
   };
 
-  const printBlankForm = () => {
+  // The QR in a blank form's letterhead sends whoever scans it to the online version of
+  // the form - only possible while sharing is on (otherwise the link would be dead).
+  const printBlankForm = async () => {
     if (!selectedForm) return;
-    const fieldsHtml = fields.map((f) => {
-      if (f.field_type === 'section') {
-        return `<div class="section-heading">${escapeHtml(sectionDisplayLabel(fields, f))}</div>`;
-      }
-      let answerHtml;
-      if (f.field_type === 'select' || f.field_type === 'multiselect') {
-        answerHtml = `<div class="answer">${(f.options || []).map((o) => escapeHtml(o)).join(' &nbsp;□&nbsp; ') || '&nbsp;'}</div>`;
-      } else if (f.field_type === 'checkbox') {
-        answerHtml = `<div class="answer">☐ Yes &nbsp;&nbsp; ☐ No</div>`;
-      } else if (f.field_type === 'textarea') {
-        answerHtml = `<div class="blank-lines"><div class="blank-line"></div><div class="blank-line"></div><div class="blank-line"></div></div>`;
-      } else {
-        answerHtml = `<div class="blank-line"></div>`;
-      }
-      return `<div class="field"><div class="label">${escapeHtml(f.label)}${f.is_required ? ' <span class="required">*</span>' : ''}</div>${answerHtml}</div>`;
-    }).join('');
-    openPrintWindow(
-      `${businessName || 'Clinic'} — ${selectedForm.name}`,
-      `<h1>${escapeHtml(businessName || 'Clinic')}</h1>
-       <div class="subtitle">${escapeHtml(selectedForm.name)}${selectedForm.description ? ' — ' + escapeHtml(selectedForm.description) : ''}<br>
-       Patient name: _______________________ &nbsp;&nbsp; Date: _______________</div>
-       ${fieldsHtml}`
-    );
+    const win = openPrintShell();
+    if (!win) return;
+    try {
+      const { url: logoSrc, image: logoImage } = await loadLogoAsset(brandLogo);
+      const qrDataUrl = settings.showQr && selectedForm.share_enabled
+        ? await makeQrDataUrl(shareUrl(selectedForm.share_token), { logo: logoImage })
+        : '';
+      const fieldsHtml = fields.map((f) => {
+        if (f.field_type === 'section') {
+          return `<div class="section-heading">${escapeHtml(sectionDisplayLabel(fields, f))}</div>`;
+        }
+        let answerHtml;
+        if (f.field_type === 'select' || f.field_type === 'multiselect') {
+          answerHtml = `<div class="answer">${(f.options || []).map((o) => escapeHtml(o)).join(' &nbsp;□&nbsp; ') || '&nbsp;'}</div>`;
+        } else if (f.field_type === 'checkbox') {
+          answerHtml = `<div class="answer">☐ Yes &nbsp;&nbsp; ☐ No</div>`;
+        } else if (f.field_type === 'textarea') {
+          answerHtml = `<div class="blank-lines"><div class="blank-line"></div><div class="blank-line"></div><div class="blank-line"></div></div>`;
+        } else {
+          answerHtml = `<div class="blank-line"></div>`;
+        }
+        return `<div class="field"><div class="label">${escapeHtml(f.label)}${f.is_required ? ' <span class="required">*</span>' : ''}</div>${answerHtml}</div>`;
+      }).join('');
+      fillPrintShell(
+        win,
+        `${businessName || 'Clinic'} — ${selectedForm.name}`,
+        `${letterheadHtml({
+          businessName, logoUrl: logoSrc,
+          detailsHtml: `${escapeHtml(selectedForm.name)}${selectedForm.description ? ' — ' + escapeHtml(selectedForm.description) : ''}<br>Patient name: _______________________ &nbsp;&nbsp; Date: _______________`,
+          qrDataUrl, qrCaption: qrDataUrl ? 'Scan to fill in online' : ''
+        })}${fieldsHtml}`
+      );
+    } catch (err) {
+      console.error('Unable to prepare the printable form:', err);
+      closePrintShell(win);
+      setError('Unable to prepare the printout. Please try again.');
+    }
   };
 
-  const printSubmission = (submission) => {
-    const entries = submissionEntries(submission, fields);
-    const fieldsHtml = entries.map((entry) => entry.isSection
-      ? `<div class="section-heading">${escapeHtml(entry.label)}</div>`
-      : `<div class="field"><div class="label">${escapeHtml(entry.label)}</div><div class="answer">${escapeHtml(formatAnswer(entry))}</div></div>`
-    ).join('');
-    openPrintWindow(
-      `${businessName || 'Clinic'} — ${submission.patient_name}`,
-      `<h1>${escapeHtml(businessName || 'Clinic')}</h1>
-       <div class="subtitle">${escapeHtml(submission.form_name_snapshot || selectedForm?.name || 'Consultation form')}<br>
-       Patient: ${escapeHtml(submission.patient_name)}${submission.patient_phone ? ' · ' + escapeHtml(submission.patient_phone) : ''}${submission.patient_email ? ' · ' + escapeHtml(submission.patient_email) : ''}${submission.patient_dob ? ' · DOB ' + escapeHtml(submission.patient_dob) : ''}${submission.patient_address ? '<br>Address: ' + escapeHtml(submission.patient_address) : ''}<br>
-       Submitted: ${escapeHtml(new Date(submission.created_at).toLocaleString())} (${submission.submitted_via === 'public_link' ? 'via public link' : 'recorded by staff'})</div>
-       ${fieldsHtml}
-       <div class="meta">Printed ${escapeHtml(new Date().toLocaleString())} · Powered by IcanEra</div>`
-    );
+  // A patient's record: the letterhead QR is the record's reference code (scan it, or type
+  // the code into Records search, to pull the record up), and its attachments follow the answers.
+  const printSubmission = async (submission) => {
+    const win = openPrintShell();
+    if (!win) return;
+    try {
+      const { url: logoSrc, image: logoImage } = await loadLogoAsset(brandLogo);
+      const code = recordReferenceCode(submission.id);
+      const [qrDataUrl, attachments] = await Promise.all([
+        settings.showQr && code ? makeQrDataUrl(recordQrPayload(submission.id), { logo: logoImage }) : '',
+        resolveAttachmentUrls(recordAttachments(submission))
+      ]);
+      const entries = submissionEntries(submission, fields);
+      const fieldsHtml = entries.map((entry) => entry.isSection
+        ? `<div class="section-heading">${escapeHtml(entry.label)}</div>`
+        : `<div class="field"><div class="label">${escapeHtml(entry.label)}</div><div class="answer">${escapeHtml(formatAnswer(entry))}</div></div>`
+      ).join('');
+      fillPrintShell(
+        win,
+        `${businessName || 'Clinic'} — ${submission.patient_name}`,
+        `${letterheadHtml({
+          businessName, logoUrl: logoSrc,
+          detailsHtml: `${escapeHtml(submission.form_name_snapshot || selectedForm?.name || 'Consultation form')}<br>
+            Patient: ${escapeHtml(submission.patient_name)}${submission.patient_phone ? ' · ' + escapeHtml(submission.patient_phone) : ''}${submission.patient_email ? ' · ' + escapeHtml(submission.patient_email) : ''}${submission.patient_dob ? ' · DOB ' + escapeHtml(submission.patient_dob) : ''}${submission.patient_address ? '<br>Address: ' + escapeHtml(submission.patient_address) : ''}<br>
+            Submitted: ${escapeHtml(new Date(submission.created_at).toLocaleString())} (${submission.submitted_via === 'public_link' ? 'via public link' : 'recorded by staff'})`,
+          qrDataUrl, qrCaption: qrDataUrl ? 'Record reference' : '', qrCode: qrDataUrl ? formatReferenceCode(code) : ''
+        })}${fieldsHtml}${attachmentsHtml(attachments)}
+         <div class="meta">Printed ${escapeHtml(new Date().toLocaleString())} · Powered by IcanEra</div>`
+      );
+    } catch (err) {
+      console.error('Unable to prepare the printable record:', err);
+      closePrintShell(win);
+      setError('Unable to prepare the printout. Please try again.');
+    }
   };
 
-  const downloadBlankPdf = () => {
+  const downloadBlankPdf = async () => {
     if (!selectedForm) return;
     try {
-      downloadBlankConsultationFormPdf({ businessName, form: selectedForm, fields });
+      await downloadBlankConsultationFormPdf({
+        businessName, form: selectedForm, fields, logoRaw: brandLogo,
+        shareUrl: settings.showQr && selectedForm.share_enabled ? shareUrl(selectedForm.share_token) : undefined
+      });
     } catch (err) {
       console.error('Unable to create blank form PDF:', err);
       setError('Unable to create the PDF. Please try again.');
     }
   };
 
-  const downloadSubmissionPdf = (submission) => {
+  const downloadSubmissionPdf = async (submission) => {
     try {
-      downloadConsultationSubmissionPdf({
-        businessName, formName: selectedForm?.name, submission, entries: submissionEntries(submission, fields)
+      await downloadConsultationSubmissionPdf({
+        businessName, formName: selectedForm?.name, submission, entries: submissionEntries(submission, fields), logoRaw: brandLogo, showQr: settings.showQr
       });
     } catch (err) {
       console.error('Unable to create submission PDF:', err);
@@ -431,7 +506,8 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
         location: selectedForm.description || 'Scan to fill out this form on your phone',
         companyName: businessName,
         title: selectedForm.name,
-        note: 'No ICAN account needed — anyone with this code can fill out and submit this form.'
+        note: 'No ICAN account needed — anyone with this code can fill out and submit this form.',
+        logoRaw: brandLogo
       });
     } catch (err) {
       console.error('Unable to create the share QR PDF:', err);
@@ -439,15 +515,33 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     }
   };
 
+  // The same branded QR as a plain PNG - for a sticker, a social post, a WhatsApp status.
+  const downloadShareQrPng = async () => {
+    if (!selectedForm) return;
+    try {
+      const { image } = await loadLogoAsset(brandLogo);
+      const dataUrl = await makeQrDataUrl(shareUrl(selectedForm.share_token), { logo: image, size: 1000 });
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `${(selectedForm.name || 'form').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'form'}-qr.png`;
+      link.click();
+    } catch (err) {
+      console.error('Unable to create the share QR image:', err);
+      setError('Unable to create the QR code image. Please try again.');
+    }
+  };
+
   const submitWalkIn = async (e) => {
     e.preventDefault();
     if (!selectedForm || !walkIn.name.trim()) return;
+    if (attachmentsUploading(walkInAttachments)) { setError('Please wait for the attachments to finish uploading.'); return; }
     setSavingWalkIn(true);
     setError('');
 
     const payload = {
       formId: selectedForm.id, patientName: walkIn.name.trim(), patientPhone: walkIn.phone, patientEmail: walkIn.email,
-      patientAddress: walkIn.address, patientDob: walkIn.dob || null, responses: walkIn.responses
+      patientAddress: walkIn.address, patientDob: walkIn.dob || null, responses: walkIn.responses,
+      attachments: cleanAttachments(attachmentsToSave(walkInAttachments))
     };
 
     // WhatsApp-style offline recording: a clinic filling this in with no
@@ -468,11 +562,13 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
           patient_address: payload.patientAddress || null,
           patient_dob: payload.patientDob || null,
           responses: payload.responses,
+          attachments: payload.attachments,
           submitted_via: 'staff',
           created_at: new Date().toISOString(),
           pendingSync: true,
         }, ...current]);
         setWalkIn({ name: '', phone: '', email: '', address: '', dob: '', responses: {} });
+        setWalkInAttachments([]);
         setRecording(false);
       } catch (err) {
         setError(err.message || 'Could not save this submission offline.');
@@ -486,6 +582,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
     if (!result.success) { setError(result.error); return; }
     setSubmissions((current) => [result.data, ...current]);
     setWalkIn({ name: '', phone: '', email: '', address: '', dob: '', responses: {} });
+    setWalkInAttachments([]);
     setRecording(false);
   };
 
@@ -558,9 +655,19 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
           ) : (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
-                <div className="min-w-0">
-                  <h3 className="truncate text-lg font-bold text-white">{selectedForm.name}</h3>
-                  {selectedForm.description && <p className="text-sm text-slate-400">{selectedForm.description}</p>}
+                <div className="flex min-w-0 items-center gap-3">
+                  {settings.showLogo && logoUrl && (
+                    <img src={logoUrl} alt="" style={{ background: '#ffffff' }} className="h-12 w-12 shrink-0 rounded-xl border border-white/10 object-contain p-0.5" />
+                  )}
+                  <div className="min-w-0">
+                    <h3 className="truncate text-lg font-bold text-white">{selectedForm.name}</h3>
+                    {selectedForm.description && <p className="text-sm text-slate-400">{selectedForm.description}</p>}
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {settingsSummary(settings).map((text) => (
+                        <span key={text} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${/off/.test(text) ? 'bg-slate-600/40 text-slate-400' : 'bg-cyan-500/15 text-cyan-300'}`}>{text}</span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <button type="button" onClick={() => toggleActive(selectedForm)} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
@@ -578,12 +685,12 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                 </div>
               </div>
 
-              {/* Public share link */}
+              {/* Share link & QR code — always available; the QR just needs sharing switched on */}
               <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="flex items-center gap-1.5 text-sm font-semibold text-white"><Share2 className="h-4 w-4 text-cyan-300" /> Public share link</p>
-                    <p className="text-xs text-slate-400">Anyone with this link can fill out and submit this form — no ICAN account needed.</p>
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-white"><QrCode className="h-4 w-4 text-cyan-300" /> Share link &amp; QR code</p>
+                    <p className="text-xs text-slate-400">Anyone with the link or QR code can fill out and submit this form — no ICAN account needed.</p>
                   </div>
                   <button
                     type="button" onClick={toggleShare}
@@ -592,36 +699,127 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                     {selectedForm.share_enabled ? 'Shared — tap to stop' : 'Not shared — tap to enable'}
                   </button>
                 </div>
-                {selectedForm.share_enabled && (
-                  <div className="mt-3">
-                    <Disclosure key={selectedForm.id} title="Show link & QR code" icon={Share2}>
-                      <div className="flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2">
-                        <code className="min-w-0 flex-1 truncate text-xs text-cyan-300">{shareUrl(selectedForm.share_token)}</code>
-                        <button type="button" onClick={copyShareLink} className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20">
-                          {copyState === 'copied' ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
-                          {copyState === 'copied' ? 'Copied' : 'Copy'}
-                        </button>
-                        <button type="button" onClick={shareLink} className="flex items-center gap-1 rounded-lg bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-500">
-                          <Share2 className="h-3.5 w-3.5" /> Share
-                        </button>
+
+                {selectedForm.share_enabled ? (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2">
+                      <code className="min-w-0 flex-1 truncate text-xs text-cyan-300">{shareUrl(selectedForm.share_token)}</code>
+                      <button type="button" onClick={copyShareLink} className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-xs text-white hover:bg-white/20">
+                        {copyState === 'copied' ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copyState === 'copied' ? 'Copied' : 'Copy'}
+                      </button>
+                      <button type="button" onClick={shareLink} className="flex items-center gap-1 rounded-lg bg-cyan-600 px-2 py-1 text-xs text-white hover:bg-cyan-500">
+                        <Share2 className="h-3.5 w-3.5" /> Share
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 rounded-lg border border-white/10 bg-slate-900/60 p-3">
+                      {/* inline white: index.css maps .bg-white to the theme background, and a QR needs a light quiet zone */}
+                      <div className="rounded-lg p-1" style={{ background: '#ffffff' }}>
+                        <QRCodeSVG
+                          value={shareUrl(selectedForm.share_token)} size={128} level="H" marginSize={2}
+                          imageSettings={settings.showLogo && logoUrl ? { src: logoUrl, height: 26, width: 26, excavate: true } : undefined}
+                        />
                       </div>
-                      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-white/10 bg-slate-900/60 p-3">
-                        <div className="rounded-lg bg-white p-2">
-                          <QRCodeSVG value={shareUrl(selectedForm.share_token)} size={104} />
-                        </div>
-                        <div className="min-w-0 flex-1 space-y-2">
-                          <p className="text-xs text-slate-400">
-                            Patients can scan this to open and fill out the form on their own phone — no link needed. Print it at reception or put it on a sign.
-                          </p>
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <p className="text-xs text-slate-400">
+                          Patients scan this to open and fill out the form on their own phone — no link needed.
+                          {settings.showLogo && logoUrl ? ' Your logo sits in the centre.' : ''} Print it at reception, put it on a sign, or post it online.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
                           <button type="button" onClick={downloadShareQr} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
-                            <Download className="h-3.5 w-3.5" /> Download QR (PDF)
+                            <Download className="h-3.5 w-3.5" /> Download flyer (PDF)
+                          </button>
+                          <button type="button" onClick={downloadShareQrPng} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
+                            <ImageIcon className="h-3.5 w-3.5" /> Download image (PNG)
                           </button>
                         </div>
                       </div>
-                    </Disclosure>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex flex-wrap items-center gap-4 rounded-lg border border-dashed border-white/15 bg-slate-900/40 p-3">
+                    <div className="relative rounded-lg p-1" style={{ background: '#ffffff' }}>
+                      <div className="blur-[5px]"><QRCodeSVG value={shareUrl(selectedForm.share_token)} size={104} marginSize={2} /></div>
+                      <Lock className="absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-slate-700" />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <p className="text-xs text-slate-400">
+                        This form's QR code is ready but locked until sharing is on. Once it is, you can print the QR on a flyer, and
+                        {settings.showQr ? ' blank printouts and PDFs get a "scan to fill in online" QR automatically.' : ' you can turn on QR codes for printouts in Form options below.'}
+                      </p>
+                      <button type="button" onClick={toggleShare} className="flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-500">
+                        <QrCode className="h-3.5 w-3.5" /> Turn on sharing &amp; reveal QR
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
+
+              {/* The owner decides how the logo, QR codes and attachments work for THIS form */}
+              <Disclosure key={`options-${selectedForm.id}`} title="Form options — logo, QR codes & attachments" icon={Sparkles}>
+                <p className="text-xs text-slate-400">
+                  These are available on every form and start switched on. Choose how each one works for <span className="font-semibold text-slate-200">{selectedForm.name}</span>.
+                </p>
+                <OptionToggle
+                  label="Business logo" checked={optionsDraft.showLogo} onChange={(v) => setOption({ showLogo: v })}
+                  hint={logoUrl ? 'Shown on the patient form, printouts, PDFs and the QR flyer.' : 'No logo found yet - add one in your Board profile and it appears everywhere.'}
+                />
+                <OptionToggle
+                  label="QR codes" checked={optionsDraft.showQr} onChange={(v) => setOption({ showQr: v })}
+                  hint="A scan-to-fill QR on blank printouts and PDFs, a reference QR on each patient record, and the patient's check-in pass."
+                />
+                <OptionToggle
+                  label="Photo & document attachments" checked={optionsDraft.allowAttachments} onChange={(v) => setOption({ allowAttachments: v })}
+                  hint="Patients and staff can attach X-rays, injury photos, lab results, ID or insurance cards."
+                />
+                {optionsDraft.allowAttachments && (
+                  <div className="space-y-3 border-l border-white/10 pl-3">
+                    <OptionToggle
+                      label="Patients must attach at least one file" checked={optionsDraft.attachmentsRequired}
+                      onChange={(v) => setOption({ attachmentsRequired: v })} hint="Applies to patients filling the form in online; staff recording a walk-in aren't blocked."
+                    />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block text-xs text-slate-400">
+                        Most files per submission
+                        <select
+                          value={optionsDraft.attachmentMax} onChange={(e) => setOption({ attachmentMax: Number(e.target.value) })}
+                          className="mt-1 w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                        >
+                          {Array.from({ length: MAX_STAFF_ATTACHMENTS }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </label>
+                      <label className="block text-xs text-slate-400">
+                        Heading above the attachments
+                        <input
+                          value={optionsDraft.attachmentPrompt} onChange={(e) => setOption({ attachmentPrompt: e.target.value })} maxLength={80}
+                          placeholder="Photos & documents" className="mt-1 w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                        />
+                      </label>
+                    </div>
+                    <label className="block text-xs text-slate-400">
+                      Tags a file can carry (comma-separated — clear the box for no tags)
+                      <input
+                        value={optionsDraft.labelsText} onChange={(e) => setOption({ labelsText: e.target.value })}
+                        className="mt-1 w-full rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button" onClick={saveOptions} disabled={!optionsDirty || savingOptions}
+                    className="flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    {savingOptions && <Loader className="h-3.5 w-3.5 animate-spin" />} Save options
+                  </button>
+                  <button
+                    type="button" onClick={() => setOptionsDraft({ ...DEFAULT_FORM_SETTINGS, labelsText: labelsToText(null) })}
+                    className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/5"
+                  >
+                    Reset to defaults
+                  </button>
+                </div>
+              </Disclosure>
 
               {/* Fields / Submissions sub-tabs */}
               <div className="flex gap-2 border-b border-white/10">
@@ -645,7 +843,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                     <UserPlus className="h-3.5 w-3.5" /> Manually enter a client's answers on this form
                   </button>
 
-                  <Disclosure key={selectedForm.id} title="Presets & add fields" icon={Sparkles} defaultOpen={fields.length === 0}>
+                  <Disclosure key={`presets-${selectedForm.id}`} title="Presets & add fields" icon={Sparkles} defaultOpen={fields.length === 0}>
                     <div className="flex flex-wrap gap-2">
                       <button type="button" onClick={addPresetFields} className="flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-400/20">
                         <Sparkles className="h-3.5 w-3.5" /> Add common clinical fields (bio, medical history, allergies, next of kin…)
@@ -745,7 +943,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                     })}
                   </div>
 
-                  <Disclosure key={selectedForm.id} title="Add a custom field" icon={Plus} defaultOpen={fields.length === 0}>
+                  <Disclosure key={`custom-${selectedForm.id}`} title="Add a custom field" icon={Plus} defaultOpen={fields.length === 0}>
                     <form onSubmit={submitField} className="space-y-2">
                       <div className="grid gap-2 sm:grid-cols-2">
                         <input
@@ -818,9 +1016,18 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                           </div>
                         )
                       ))}
+                      {settings.allowAttachments && (
+                        <div className="border-t border-white/10 pt-3">
+                          <ConsultationAttachmentPicker
+                            items={walkInAttachments} onItemsChange={setWalkInAttachments} variant="staff"
+                            max={settings.attachmentMax} labels={attachmentLabels} title={attachmentPrompt}
+                            disabled={!navigator.onLine} disabledReason="Attachments upload when you're back online - save now and add them to the record later."
+                          />
+                        </div>
+                      )}
                       <div className="flex gap-2">
                         <button type="button" onClick={() => setRecording(false)} className="rounded-lg border border-white/15 px-4 py-2 text-sm text-slate-300">Cancel</button>
-                        <button disabled={savingWalkIn || !walkIn.name.trim()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                        <button disabled={savingWalkIn || !walkIn.name.trim() || attachmentsUploading(walkInAttachments)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
                           {savingWalkIn ? 'Saving…' : 'Save submission'}
                         </button>
                       </div>
@@ -840,6 +1047,9 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                               <p className="truncate text-sm font-semibold text-white">{s.patient_name}</p>
                               <p className="text-xs text-slate-400">
                                 {new Date(s.created_at).toLocaleString()} · {s.submitted_via === 'public_link' ? 'Public link' : 'Recorded by staff'}
+                                {recordAttachments(s).length > 0 && (
+                                  <span className="ml-1.5 inline-flex items-center gap-0.5 text-cyan-300"><Paperclip className="h-3 w-3" />{recordAttachments(s).length}</span>
+                                )}
                                 {s.pendingSync && <span className="ml-1.5 text-amber-400">· Pending sync</span>}
                               </p>
                             </div>
@@ -862,6 +1072,10 @@ export default function CMMSConsultationForms({ businessProfileId, businessName 
                                   </div>
                                 )
                               ))}
+                              <ConsultationRecordAttachments
+                                record={s} settings={selectedForm.settings}
+                                onRecordUpdated={(row) => setSubmissions((current) => current.map((x) => (x.id === row.id ? row : x)))}
+                              />
                               <div className="mt-1 flex gap-2">
                                 <button type="button" onClick={() => printSubmission(s)} className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/5">
                                   <Printer className="h-3.5 w-3.5" /> Print

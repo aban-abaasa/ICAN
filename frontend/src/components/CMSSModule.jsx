@@ -9201,7 +9201,7 @@ const CMMSModule = ({
         )}
         {activeTab === 'fees' && getTabs().includes('fees') && <CMMSFeesPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} cmmsUsers={cmmsData.users} studentView={isActiveStudent} />}
         {['production', 'quality', 'pharmacy'].includes(activeTab) && getTabs().includes(activeTab) && <CMMSOperationsPanel companyId={companyIdToUse} businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} mode={activeTab} />}
-        {activeTab === 'clinical' && getTabs().includes('clinical') && <CMMSClinicalOperationsPanel businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} businessName={cmmsData.companyProfile?.company_name} />}
+        {activeTab === 'clinical' && getTabs().includes('clinical') && <CMMSClinicalOperationsPanel businessProfileId={cmmsData.companyProfile?.pichin_business_profile_id} businessName={cmmsData.companyProfile?.company_name} businessLogo={cmmsData.companyProfile?.logo_url} />}
         {activeTab === 'payroll' && getTabs().includes('payroll') && (
           getToolScope('payroll') === 'own'
             // Baseline employee access: no Payroll grant (and not an

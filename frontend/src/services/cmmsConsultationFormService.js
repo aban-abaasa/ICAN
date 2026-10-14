@@ -35,6 +35,17 @@ export const saveConsultationForm = async ({ id, businessProfileId, name, descri
   return { success: true, data };
 };
 
+// The owner's per-form options (logo, QR codes, attachments - see utils/consultationFormSettings.js).
+// Returns the updated form row.
+export const saveConsultationFormSettings = async (formId, settings) => {
+  const { data, error } = await supabase.rpc('cmms_save_consultation_form_settings', {
+    p_form_id: formId,
+    p_settings: settings || {}
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+};
+
 export const deleteConsultationForm = async (formId) => {
   const { error } = await supabase.rpc('cmms_delete_consultation_form', { p_form_id: formId });
   if (error) return { success: false, error: error.message };
@@ -129,7 +140,10 @@ export const listAllConsultationSubmissions = async (businessProfileId) => {
   return { success: true, data: data || [] };
 };
 
-export const recordConsultationSubmission = async ({ formId, patientName, patientPhone, patientEmail, patientAddress, patientDob, responses }) => {
+// p_attachments is only sent when there is something to attach, so recording a
+// plain walk-in still works against a database that hasn't had
+// CMMS_CONSULTATION_LOGO_QR_ATTACHMENTS.sql run yet.
+export const recordConsultationSubmission = async ({ formId, patientName, patientPhone, patientEmail, patientAddress, patientDob, responses, attachments }) => {
   const { data, error } = await supabase.rpc('cmms_record_consultation_submission', {
     p_form_id: formId,
     p_patient_name: patientName,
@@ -137,10 +151,51 @@ export const recordConsultationSubmission = async ({ formId, patientName, patien
     p_patient_email: patientEmail || null,
     p_patient_address: patientAddress || null,
     p_patient_dob: patientDob || null,
-    p_responses: responses || {}
+    p_responses: responses || {},
+    ...(attachments?.length ? { p_attachments: attachments } : {})
   });
   if (error) return { success: false, error: error.message };
   return { success: true, data };
+};
+
+// Staff adding photos / documents to a record that already exists (a lab result
+// that arrives after the visit). Returns the updated submission row.
+export const addConsultationAttachments = async (submissionId, attachments) => {
+  const { data, error } = await supabase.rpc('cmms_add_consultation_attachments', {
+    p_submission_id: submissionId,
+    p_attachments: attachments || []
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+};
+
+export const removeConsultationAttachment = async (submissionId, key) => {
+  const { data, error } = await supabase.rpc('cmms_remove_consultation_attachment', {
+    p_submission_id: submissionId,
+    p_key: key
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, data };
+};
+
+// The clinic's logo as the DB stores it (an "r2://<key>" marker or a URL), or
+// null. The CMMS Board logo wins; the business profile's avatar is the
+// fallback — the same order the public form's RPC and the notice board use.
+// Staff-side counterpart of the businessLogo the public RPC returns.
+export const getBusinessLogoValue = async (businessProfileId) => {
+  if (!businessProfileId) return null;
+  const { data: board } = await supabase
+    .from('cmms_company_profiles')
+    .select('logo_url')
+    .eq('pichin_business_profile_id', businessProfileId)
+    .maybeSingle();
+  if (board?.logo_url) return board.logo_url;
+  const { data: profile } = await supabase
+    .from('business_profiles')
+    .select('avatar_url')
+    .eq('id', businessProfileId)
+    .maybeSingle();
+  return profile?.avatar_url || null;
 };
 
 // ============================================================
@@ -153,7 +208,7 @@ export const getPublicConsultationForm = async (shareToken) => {
   return { success: true, data: data || null };
 };
 
-export const submitPublicConsultationForm = async (shareToken, { patientName, patientPhone, patientEmail, patientAddress, patientDob, responses }) => {
+export const submitPublicConsultationForm = async (shareToken, { patientName, patientPhone, patientEmail, patientAddress, patientDob, responses, attachments }) => {
   const { data, error } = await supabase.rpc('cmms_submit_public_consultation_form', {
     p_share_token: shareToken,
     p_patient_name: patientName,
@@ -161,7 +216,8 @@ export const submitPublicConsultationForm = async (shareToken, { patientName, pa
     p_patient_email: patientEmail || null,
     p_patient_address: patientAddress || null,
     p_patient_dob: patientDob || null,
-    p_responses: responses || {}
+    p_responses: responses || {},
+    ...(attachments?.length ? { p_attachments: attachments } : {})
   });
   if (error) return { success: false, error: error.message };
   if (!data?.success) return { success: false, error: data?.error || 'Could not submit form' };
@@ -171,6 +227,7 @@ export const submitPublicConsultationForm = async (shareToken, { patientName, pa
 export default {
   listConsultationForms,
   saveConsultationForm,
+  saveConsultationFormSettings,
   deleteConsultationForm,
   setConsultationFormShare,
   listConsultationFields,
@@ -182,6 +239,9 @@ export default {
   listConsultationSubmissions,
   listAllConsultationSubmissions,
   recordConsultationSubmission,
+  addConsultationAttachments,
+  removeConsultationAttachment,
+  getBusinessLogoValue,
   getPublicConsultationForm,
   submitPublicConsultationForm
 };

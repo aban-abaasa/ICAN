@@ -1,8 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileWarning, Loader, Moon, Printer, Sun } from 'lucide-react';
 import { getPublicConsultationForm, submitPublicConsultationForm } from '../services/cmmsConsultationFormService';
+import { resolveAttachmentUrls } from '../services/cmmsConsultationAttachmentService';
 import { downloadPublicConsultationSubmissionPdf } from '../utils/generateConsultationFormPdf';
 import { sectionDisplayLabel } from '../utils/consultationSubmissionUtils';
+import { cleanAttachments, formatReferenceCode, recordQrPayload, recordReferenceCode } from '../utils/consultationAttachments';
+import { loadLogoAsset, makeQrDataUrl, useResolvedLogo } from '../utils/consultationBranding';
+import { normalizeFormSettings, resolveAttachmentLabels, resolveAttachmentPrompt } from '../utils/consultationFormSettings';
+import { attachmentsHtml, closePrintShell, escapeHtml, fillPrintShell, letterheadHtml, openPrintShell } from '../utils/consultationPrint';
+import ConsultationAttachmentPicker, { attachmentsToSave, attachmentsUploading } from './ConsultationAttachmentPicker';
 import LoadingPage from './LoadingPage';
 
 // Same scoped-palette technique as PublicReportExportViewer.jsx (see that
@@ -50,6 +56,9 @@ const CF_STYLES = `
 .cf-theme-toggle:hover { color: var(--cf-text); }
 @keyframes cf-fade-in-up { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 .cf-business-name { animation: cf-fade-in-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.cf-logo { background: #ffffff; border: 1px solid var(--cf-border); object-fit: contain; animation: cf-fade-in-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.cf-pass { background: var(--cf-surface-alt); border: 1px dashed var(--cf-border); }
+.cf-pass-qr { background: #ffffff; padding: 8px; border-radius: 14px; border: 1px solid var(--cf-border); }
 `;
 
 const IcanEraWordmark = () => (
@@ -84,35 +93,36 @@ const CenteredCard = ({ icon: Icon, title, subtitle, theme, onToggleTheme, child
   </div>
 );
 
-const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-// Same window.open + document.write(...) + window.onload=print pattern used
-// throughout CMMS (see CMSSModule.jsx's report exports and
-// CMMSConsultationForms.jsx) so a patient can keep/print a copy of what
-// they just submitted.
-const printSubmittedAnswers = (form, patient, responses) => {
-  const rows = (form.fields || []).map((f) => {
-    if (f.fieldType === 'section') return `<div class="section-heading">${escapeHtml(sectionDisplayLabel(form.fields, f))}</div>`;
-    const value = responses[f.fieldKey];
-    const text = f.fieldType === 'checkbox' ? (value ? 'Yes' : 'No') : Array.isArray(value) ? (value.join(', ') || '—') : (value || '—');
-    return `<div class="field"><div class="label">${escapeHtml(f.label)}</div><div class="answer">${escapeHtml(text)}</div></div>`;
-  }).join('');
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer');
-  if (!printWindow) { alert('Allow pop-ups to print this form.'); return; }
-  printWindow.document.write(`<!doctype html><html><head><title>${escapeHtml(form.businessName || 'Clinic')} — ${escapeHtml(form.formName)}</title><style>
-    body{font-family:Arial,sans-serif;max-width:720px;margin:32px auto;color:#111;line-height:1.6}
-    h1{margin-bottom:2px;font-size:20px}
-    .subtitle{color:#555;font-size:13px;margin-bottom:22px;border-bottom:1px solid #ddd;padding-bottom:14px}
-    .field{margin-bottom:14px;page-break-inside:avoid}
-    .field .label{font-weight:bold;font-size:13px;margin-bottom:2px}
-    .field .answer{font-size:13px;white-space:pre-wrap}
-    .section-heading{margin:22px 0 12px;font-size:14px;font-weight:bold;color:#111;border-bottom:2px solid #333;padding-bottom:4px;page-break-after:avoid}
-    .section-heading:first-of-type{margin-top:4px}
-    @media print{body{margin:18px}}
-  </style></head><body><h1>${escapeHtml(form.businessName || 'Clinic')}</h1>
-  <div class="subtitle">${escapeHtml(form.formName)}<br>Patient: ${escapeHtml(patient.name)}${patient.phone ? ' · ' + escapeHtml(patient.phone) : ''}${patient.dob ? ' · DOB ' + escapeHtml(patient.dob) : ''}${patient.address ? '<br>Address: ' + escapeHtml(patient.address) : ''}<br>Submitted: ${escapeHtml(new Date().toLocaleString())}</div>
-  ${rows}<script>window.onload=()=>window.print()</script></body></html>`);
-  printWindow.document.close();
+// The patient's own printable copy of what they just submitted: letterhead with
+// the clinic's logo and the record's reference QR, their answers, and their
+// attachments. The window opens first (synchronously, inside the click) and is
+// filled in once the logo / QR / photos are ready.
+const printSubmittedAnswers = async (form, settings, patient, responses, attachments, submissionId, logoUrl) => {
+  const win = openPrintShell();
+  if (!win) return;
+  try {
+    const { image: logoImage } = await loadLogoAsset(settings.showLogo ? form.businessLogo : null);
+    const qrDataUrl = settings.showQr && submissionId ? await makeQrDataUrl(recordQrPayload(submissionId), { logo: logoImage }) : '';
+    const resolvedAttachments = await resolveAttachmentUrls(attachments);
+    const rows = (form.fields || []).map((f) => {
+      if (f.fieldType === 'section') return `<div class="section-heading">${escapeHtml(sectionDisplayLabel(form.fields, f))}</div>`;
+      const value = responses[f.fieldKey];
+      const text = f.fieldType === 'checkbox' ? (value ? 'Yes' : 'No') : Array.isArray(value) ? (value.join(', ') || '—') : (value || '—');
+      return `<div class="field"><div class="label">${escapeHtml(f.label)}</div><div class="answer">${escapeHtml(text)}</div></div>`;
+    }).join('');
+    const details = `${escapeHtml(form.formName)}<br>Patient: ${escapeHtml(patient.name)}${patient.phone ? ' · ' + escapeHtml(patient.phone) : ''}${patient.dob ? ' · DOB ' + escapeHtml(patient.dob) : ''}${patient.address ? '<br>Address: ' + escapeHtml(patient.address) : ''}<br>Submitted: ${escapeHtml(new Date().toLocaleString())}`;
+    fillPrintShell(
+      win,
+      `${form.businessName || 'Clinic'} — ${form.formName}`,
+      `${letterheadHtml({
+        businessName: form.businessName, logoUrl: settings.showLogo ? (logoUrl || logoImage?.dataUrl || '') : '', detailsHtml: details,
+        qrDataUrl, qrCaption: qrDataUrl ? 'Show this at reception' : '', qrCode: qrDataUrl ? formatReferenceCode(recordReferenceCode(submissionId)) : ''
+      })}${rows}${attachmentsHtml(resolvedAttachments)}`
+    );
+  } catch (err) {
+    console.error('Unable to prepare the printable copy:', err);
+    closePrintShell(win);
+  }
 };
 
 const FieldControl = ({ field, value, onChange }) => {
@@ -171,7 +181,13 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
   const [responses, setResponses] = useState({});
   const [error, setError] = useState('');
   const [draftRestored, setDraftRestored] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [submissionId, setSubmissionId] = useState(null);
+  const [pass, setPass] = useState({ qr: '', code: '' }); // the "show this at reception" QR
   const draftLoadedRef = useRef(false);
+  // The business owner's per-form options (logo / QR codes / attachments) arrive with the form.
+  const settings = normalizeFormSettings(form?.settings);
+  const logoUrl = useResolvedLogo(settings.showLogo ? form?.businessLogo : null);
 
   // Resolved once at mount from a saved choice or the device's own
   // light/dark setting, then explicit from then on — the toggle button
@@ -198,9 +214,13 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
       setForm(result.data);
       try {
         const saved = JSON.parse(localStorage.getItem(draftStorageKey(shareToken)) || 'null');
-        if (saved && (saved.patient?.name || Object.keys(saved.responses || {}).length)) {
+        if (saved && (saved.patient?.name || Object.keys(saved.responses || {}).length || saved.attachments?.length)) {
           setPatient((p) => ({ ...p, ...saved.patient }));
           setResponses(saved.responses || {});
+          // Files already uploaded stay attached; the picker re-fetches their thumbnails.
+          if (normalizeFormSettings(result.data.settings).allowAttachments) {
+            setAttachments(cleanAttachments(saved.attachments).map((a, i) => ({ ...a, id: `restored_${i}`, status: 'done' })));
+          }
           setDraftRestored(true);
         }
       } catch { /* private-browsing / blocked storage — just start blank */ }
@@ -211,16 +231,25 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
 
   useEffect(() => {
     if (!draftLoadedRef.current || status === 'submitted') return;
-    try { localStorage.setItem(draftStorageKey(shareToken), JSON.stringify({ patient, responses })); } catch { /* ignore */ }
-  }, [shareToken, patient, responses, status]);
+    try {
+      localStorage.setItem(draftStorageKey(shareToken), JSON.stringify({ patient, responses, attachments: cleanAttachments(attachmentsToSave(attachments)) }));
+    } catch { /* ignore */ }
+  }, [shareToken, patient, responses, attachments, status]);
+
+  const savedAttachments = settings.allowAttachments ? cleanAttachments(attachmentsToSave(attachments)) : [];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (attachmentsUploading(attachments)) { setError('Please wait for your files to finish uploading.'); return; }
+    if (settings.allowAttachments && settings.attachmentsRequired && !savedAttachments.length) {
+      setError('Please attach at least one photo or document.');
+      return;
+    }
     setError('');
     setStatus('submitting');
     const result = await submitPublicConsultationForm(shareToken, {
       patientName: patient.name, patientPhone: patient.phone, patientEmail: patient.email,
-      patientAddress: patient.address, patientDob: patient.dob, responses
+      patientAddress: patient.address, patientDob: patient.dob, responses, attachments: savedAttachments
     });
     if (!result.success) {
       setError(result.error || 'Could not submit this form. Please try again.');
@@ -228,15 +257,35 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
       return;
     }
     try { localStorage.removeItem(draftStorageKey(shareToken)); } catch { /* ignore */ }
+    setSubmissionId(result.submissionId);
     setStatus('submitted');
   };
 
-  const downloadOwnCopy = () => {
+  // The check-in pass: once submitted, the patient gets a QR (their record's reference
+  // code, with the clinic's logo in its centre) that reception can scan or read out.
+  useEffect(() => {
+    if (status !== 'submitted' || !submissionId || !settings.showQr) return undefined;
+    let cancelled = false;
+    (async () => {
+      const { image } = await loadLogoAsset(settings.showLogo ? form.businessLogo : null);
+      const qr = await makeQrDataUrl(recordQrPayload(submissionId), { logo: image, size: 520 });
+      if (!cancelled) setPass({ qr, code: formatReferenceCode(recordReferenceCode(submissionId)) });
+    })().catch(() => {});
+    return () => { cancelled = true; };
+  }, [status, submissionId, form, settings.showQr, settings.showLogo]);
+
+  const [downloading, setDownloading] = useState(false);
+  const downloadOwnCopy = async () => {
+    setDownloading(true);
     try {
-      downloadPublicConsultationSubmissionPdf({ form, patient, responses });
+      await downloadPublicConsultationSubmissionPdf({
+        form, patient, responses, attachments: savedAttachments, submissionId,
+        logoRaw: settings.showLogo ? form.businessLogo : null, showQr: settings.showQr
+      });
     } catch (err) {
       console.error('Unable to create the submission PDF:', err);
     }
+    setDownloading(false);
   };
 
   if (status === 'loading') {
@@ -253,16 +302,41 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
 
   if (status === 'submitted') {
     return (
-      <CenteredCard icon={CheckCircle2} title="Thank you" subtitle={`Your ${form.formName.toLowerCase()} has been submitted to ${form.businessName || 'the clinic'}.`} theme={theme} onToggleTheme={toggleTheme}>
-        <div className="space-y-2">
-          <button type="button" onClick={downloadOwnCopy} className="cf-btn w-full px-4 py-2 rounded-lg flex items-center justify-center gap-2">
-            <Download size={16} /> Download PDF copy
-          </button>
-          <button type="button" onClick={() => printSubmittedAnswers(form, patient, responses)} className="cf-input w-full px-4 py-2 rounded-lg flex items-center justify-center gap-2">
-            <Printer size={16} /> Print a copy
-          </button>
+      <div className="icanera-cf relative min-h-screen flex items-center justify-center p-6" data-theme={theme}>
+        <style>{CF_STYLES}</style>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} className="absolute top-4 right-4" />
+        <div className="cf-surface rounded-2xl shadow-sm p-8 w-full max-w-md text-center">
+          {logoUrl ? (
+            <img src={logoUrl} alt="" className="cf-logo w-16 h-16 rounded-2xl mx-auto mb-4" />
+          ) : (
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--cf-surface-alt)' }}>
+              <CheckCircle2 className="w-7 h-7" style={{ color: 'var(--cf-green)' }} />
+            </div>
+          )}
+          <h1 className="text-lg font-bold mb-1 flex items-center justify-center gap-1.5">
+            {logoUrl && <CheckCircle2 size={18} style={{ color: 'var(--cf-green)' }} />} Thank you
+          </h1>
+          <p className="cf-text-muted text-sm mb-4">{`Your ${form.formName.toLowerCase()} has been submitted to ${form.businessName || 'the clinic'}.`}</p>
+
+          {pass.qr && (
+            <div className="cf-pass rounded-2xl p-4 mb-4">
+              <p className="text-xs font-semibold uppercase tracking-wide cf-text-muted mb-2">Your check-in pass</p>
+              <img src={pass.qr} alt="Your record QR code" className="cf-pass-qr w-40 h-40 mx-auto" />
+              <p className="mt-2 font-mono text-lg font-bold tracking-widest">{pass.code}</p>
+              <p className="cf-text-faint text-xs mt-1">Show this at reception so they can find your record instantly.</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <button type="button" onClick={downloadOwnCopy} disabled={downloading} className="cf-btn w-full px-4 py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-60">
+              {downloading ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Download PDF copy
+            </button>
+            <button type="button" onClick={() => printSubmittedAnswers(form, settings, patient, responses, savedAttachments, submissionId, logoUrl)} className="cf-input w-full px-4 py-2 rounded-lg flex items-center justify-center gap-2">
+              <Printer size={16} /> Print a copy
+            </button>
+          </div>
         </div>
-      </CenteredCard>
+      </div>
     );
   }
 
@@ -274,7 +348,10 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
       <style>{CF_STYLES}</style>
       <div className="max-w-xl mx-auto px-4 py-10">
         <div className="flex items-start justify-between gap-3 mb-1">
-          <p className="cf-business-name text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">{form.businessName}</p>
+          <div className="flex min-w-0 items-center gap-3">
+            {logoUrl && <img src={logoUrl} alt="" className="cf-logo w-14 h-14 sm:w-16 sm:h-16 rounded-2xl shrink-0" />}
+            <p className="cf-business-name text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">{form.businessName}</p>
+          </div>
           <ThemeToggle theme={theme} onToggle={toggleTheme} className="mt-1" />
         </div>
         <h1 className="text-base sm:text-lg font-semibold cf-text-muted mb-1">{form.formName}</h1>
@@ -341,9 +418,20 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
             )
           ))}
 
+          {settings.allowAttachments && (
+            <div className="pt-2">
+              <div className="mb-3 border-t" style={{ borderColor: 'var(--cf-border)' }} />
+              <ConsultationAttachmentPicker
+                items={attachments} onItemsChange={setAttachments} variant="public" guest max={settings.attachmentMax}
+                labels={resolveAttachmentLabels(settings)} required={settings.attachmentsRequired}
+                title={`${resolveAttachmentPrompt(settings)}${settings.attachmentsRequired ? '' : ' (optional)'}`}
+              />
+            </div>
+          )}
+
           {error && <p className="text-sm" style={{ color: 'var(--cf-maroon)' }}>{error}</p>}
 
-          <button type="submit" disabled={status === 'submitting'} className="cf-btn w-full px-4 py-2.5 rounded-xl font-semibold disabled:opacity-50 flex items-center justify-center gap-2">
+          <button type="submit" disabled={status === 'submitting' || attachmentsUploading(attachments)} className="cf-btn w-full px-4 py-2.5 rounded-xl font-semibold disabled:opacity-50 flex items-center justify-center gap-2">
             {status === 'submitting' ? <Loader size={16} className="animate-spin" /> : null}
             {status === 'submitting' ? 'Submitting…' : 'Submit'}
           </button>

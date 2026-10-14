@@ -113,3 +113,67 @@ describe('visitor vehicle photos through /api/storage', () => {
     assert.equal(rpcCalls.length, 0);
   });
 });
+
+// Photos / documents attached to a CMMS consultation form (backend/CMMS_CONSULTATION_LOGO_QR_ATTACHMENTS.sql).
+describe('consultation form attachments through /api/storage', () => {
+  const call = async ({ action, token, body }) => {
+    const res = { headers: {}, code: 200, payload: undefined };
+    res.setHeader = (k, v) => { res.headers[k] = v; };
+    res.status = (c) => { res.code = c; return res; };
+    res.json = (p) => { res.payload = p; return res; };
+    res.end = () => res;
+    await storage({ method: 'POST', query: { action }, headers: token ? { authorization: `Bearer ${token}` } : {}, body }, res);
+    return res;
+  };
+
+  const realFetch = globalThis.fetch;
+  beforeEach(() => {
+    globalThis.fetch = async (url, init = {}) => {
+      if (String(url).includes('/auth/v1/user')) {
+        const token = String(init.headers?.Authorization || '').replace('Bearer ', '');
+        return token.startsWith('good-') ? new Response(JSON.stringify({ id: token.slice(5) }), { status: 200 }) : new Response('{}', { status: 401 });
+      }
+      return realFetch(url, init);
+    };
+  });
+  afterEach(() => { globalThis.fetch = realFetch; });
+
+  it('a patient can attach a photo or a PDF, into the consultation guest folder', async () => {
+    const photo = await call({ action: 'presign-upload-chat', body: { filename: 'knee.jpg', contentType: 'image/jpeg', purpose: 'consultation-form' } });
+    assert.equal(photo.code, 200);
+    assert.match(photo.payload.key, /^cmms-consultation-guest\/[0-9a-f-]{36}\/\d+-[0-9a-f]{8}-knee\.jpg$/);
+    const pdf = await call({ action: 'presign-upload-chat', body: { filename: 'labs.pdf', contentType: 'application/pdf', purpose: 'consultation-form' } });
+    assert.equal(pdf.code, 200);
+    assert.match(pdf.payload.key, /^cmms-consultation-guest\//);
+  });
+
+  it('anything else is refused', async () => {
+    for (const contentType of ['text/html', 'application/zip', 'image/svg+xml']) {
+      const res = await call({ action: 'presign-upload-chat', body: { filename: 'x', contentType, purpose: 'consultation-form' } });
+      assert.equal(res.code, 400, contentType);
+    }
+    assert.equal((await call({ action: 'presign-upload-chat', body: { contentType: 'image/png', purpose: 'consultation-form' } })).code, 400);
+  });
+
+  it('has its own, wider rate limit (a reception tablet is one IP for many patients), but still has one', async () => {
+    let last;
+    let allowed = 0;
+    for (let i = 0; i < 60; i += 1) {
+      last = await call({ action: 'presign-upload-chat', body: { filename: `p${i}.png`, contentType: 'image/png', purpose: 'consultation-form' } });
+      if (last.code === 429) break;
+      allowed += 1;
+    }
+    assert.ok(allowed > 12, `only ${allowed} uploads allowed - should be wider than the chat limit of 12`);
+    assert.equal(last.code, 429);
+    // ... and it does not use up the chat bucket
+    const chat = await call({ action: 'presign-upload-chat', body: { filename: 'x.pdf', contentType: 'application/pdf' } });
+    assert.equal(chat.code, 200);
+  });
+
+  it('staff upload into their own namespaced folder with the signed-in route', async () => {
+    const res = await call({ action: 'presign-upload', token: 'good-staff7', body: { folder: 'cmms-consultation', filename: 'xray.png', contentType: 'image/png' } });
+    assert.equal(res.code, 200);
+    assert.match(res.payload.key, /^cmms-consultation\/staff7\/\d+-[0-9a-f]{8}-xray\.png$/);
+    assert.equal((await call({ action: 'presign-upload', body: { folder: 'cmms-consultation', filename: 'x.png', contentType: 'image/png' } })).code, 401);
+  });
+});
