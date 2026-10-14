@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CHART_PALETTES } from './chartPalettes';
 import { useInView } from './PublicSectorMarkets';
+import PublicSectionNotice from './PublicSectionNotice';
 import { communityContract, getChainConfig, getFxRate, publicProvider, resolveStableContracts, stableContracts } from '../services/chainService';
 import { explorerLink, formatUnits, localValue, proofOfReserve, rateFreshness, shortAddress } from '../utils/chainMath';
 
@@ -11,7 +12,8 @@ import { explorerLink, formatUnits, localValue, proofOfReserve, rateFreshness, s
 // it has issued, the supply of each token, and where the contracts are. Using them (deposit, redeem, move coins onto the chain) happens
 // in the visitor's own wallet inside IcanEra, never on this page.
 //
-// It hides itself until the on-chain SQL is installed and a contract is configured, and it only reads the chain while it is on screen.
+// Until the on-chain SQL is installed and a contract is configured it shows an explanatory notice in its place (so the page
+// navigation can always load it), and it only reads the chain while it is on screen.
 // Colours are the page's palettes as inline styles, for the same reason as the Sector Markets section.
 
 const POLL_MS = 30_000;
@@ -72,7 +74,17 @@ const PublicOnChainTokens = ({ theme = 'dark', skin: k, priceUgx = null, onAvail
   }, [cfg, inView, load]);
 
   // The wrapper is always rendered, so the on-screen check has something to watch before the config has arrived.
-  if (!cfg) return <div ref={rootRef} aria-hidden="true" />;
+  if (!cfg) {
+    return (
+      <div ref={rootRef}>
+        <PublicSectionNotice id="tokens" theme={theme} skin={k} kicker="Stable coins" title="Stable coins: keep your savings' value when the shilling slips" loading={cfg === undefined}>
+          icaneracoin also exists as tokens you hold in your own crypto wallet. ICEC-S is the stable form: a US-dollar token backed one-for-one by a dollar stablecoin
+          in a public vault, so it holds its dollar value while the shilling loses ground to inflation. ICEC-C is the community form and follows the icaneracoin price.
+          Neither can be moved by IcanEra, and neither is a promise to beat inflation.
+        </PublicSectionNotice>
+      </div>
+    );
+  }
 
   const card = { background: c.card, border: `1px solid ${c.cardBorder}`, color: c.fg };
   const sub = { color: c.muted };
@@ -91,8 +103,8 @@ const PublicOnChainTokens = ({ theme = 'dark', skin: k, priceUgx = null, onAvail
     <section id="tokens" aria-labelledby="tokens-heading" className="mt-12 scroll-mt-16" data-testid="public-onchain">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className={`text-xs font-bold uppercase tracking-[0.16em] ${k.kicker}`}>On the blockchain</p>
-          <h2 id="tokens-heading" className={`mt-1 text-2xl font-bold ${k.title}`}>icaneracoin in two forms: stable and community</h2>
+          <p className={`text-xs font-bold uppercase tracking-[0.16em] ${k.kicker}`}>Stable coins · on the blockchain</p>
+          <h2 id="tokens-heading" className={`mt-1 text-2xl font-bold ${k.title}`}>Stable coins: keep your savings&apos; value when the shilling slips</h2>
         </div>
         <span className="text-xs" style={sub}>{cfg.chain_name || `Chain ${cfg.chain_id}`}{cfg.is_testnet ? ' · test network' : ''}</span>
       </div>

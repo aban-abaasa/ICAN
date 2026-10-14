@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CHART_PALETTES } from './chartPalettes';
 import SectorIndexChart from './SectorIndexChart';
 import { GoogleMark } from './PublicTradePanel';
+import PublicSectionNotice from './PublicSectionNotice';
 import { useSectorBoard, useSectorTicket } from '../hooks/useSectorTicket';
 import { ICEC, changeTone, formatLevel, formatPct, formatPrice, holdingResult, sectorState, trim } from '../utils/sectorTradeRules';
 
@@ -13,7 +14,8 @@ import { ICEC, changeTone, formatLevel, formatPct, formatPrice, holdingResult, s
 // price, fee and check is the database's (public.ican_sector_trade). Colours are the page's own palettes as inline
 // styles, on purpose: index.css remaps stock Tailwind colour classes onto theme variables these standalone pages lack.
 //
-// It hides itself until the sector SQL is installed, and it only keeps polling while it is on screen (a visitor reading
+// Until the sector SQL is installed (or no sector has data yet) it shows an explanatory notice in the same place rather than
+// disappearing, so the page navigation can always load it. It only keeps polling while it is on screen (a visitor reading
 // the FAQ is not holding a request open).
 
 const RETURN_PARAM = 'sectors';
@@ -63,7 +65,16 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability 
     requestAnimationFrame(() => document.getElementById('sectors')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }, [userId, sectors, setSelected]);
 
-  if (!available) return null;
+  if (!available || (!loading && !error && !sectors.length)) {
+    return (
+      <div ref={rootRef}>
+        <PublicSectionNotice id="sectors" theme={theme} skin={k} kicker="Sector Markets" title="Trade business data: ten sector coins" loading={loading}>
+          Ten coins that each follow the combined, anonymous sales of the businesses in one sector on IcanEra: farms, transport, retail, health, education and more.
+          You buy and sell them with icaneracoin. A sector only opens once enough businesses take part that none can be picked out.
+        </PublicSectionNotice>
+      </div>
+    );
+  }
 
   const card = { background: c.card, border: `1px solid ${c.cardBorder}`, color: c.fg };
   const field = { background: c.field, border: `1px solid ${c.fieldBorder}`, color: c.strong };
