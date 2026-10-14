@@ -152,6 +152,7 @@ import { getUserTrustGroups } from '../services/trustService';
 import { getAllAccessibleBusinessProfiles, getContributorNames } from '../services/pitchingService';
 import { CountryService } from '../services/countryService';
 import { DiamondSpinner } from './IcanDiamond';
+import NavGlowDefs from './NavGlowDefs';
 import '../styles/navGlow.css';
 import {
   getPendingSharedContent,
@@ -7592,8 +7593,8 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ====== COMMENTED OUT - ALL SECTIONS BELOW REMOVED FOR CLEANUP ====== */}
 
       {/* ====== FIXED BOTTOM NAVIGATION - ALWAYS ON TOP ====== */}
-      {/* Truly transparent: no bar fill, no tile fill -- only each icon's own edge
-          line (orbiting on the active one), spaced apart in a row that scrolls
+      {/* Bare icons, like TikTok's: nothing painted behind or around them. The current one is
+          drawn in colours that travel along its own shape; the row is spaced apart and scrolls
           sideways. See styles/navGlow.css. */}
       {!isWebDashboard && (
       <nav
@@ -7601,6 +7602,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         aria-label="Primary"
         className="ng-bar fixed bottom-0 left-0 right-0 z-50 flex"
       >
+        <NavGlowDefs />
         {[
           { id: 'home',   label: 'Home',   icon: Home,      go: 'dashboard' },
           { id: 'pitchin',label: 'Pitchin',icon: Briefcase, go: 'pitchin'   },
