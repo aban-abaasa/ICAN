@@ -558,7 +558,7 @@ const CMMSInvestorPitchPanel = ({ businessProfileId, cmmsCompanyId = null }) => 
       )}
 
       {showRecorder && createPortal(
-        <div className="fixed inset-0 z-[9999] w-screen h-screen bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 overflow-hidden">
+        <div className="fixed inset-0 z-[9999] bg-gradient-to-br from-slate-900 via-purple-900/30 to-slate-900 overflow-hidden">
           <PitchVideoRecorder
             onPitchCreated={handleCreatePitch}
             onClose={() => setShowRecorder(false)}

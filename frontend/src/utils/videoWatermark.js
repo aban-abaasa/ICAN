@@ -68,6 +68,8 @@ function pickSupportedMimeType() {
     'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
     'video/webm',
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4',
   ];
   if (typeof MediaRecorder === 'undefined') return null;
   return candidates.find((type) => MediaRecorder.isTypeSupported?.(type)) || null;
@@ -82,7 +84,7 @@ function pickSupportedMimeType() {
  * @param {{ onProgress?: (fraction: number) => void }} [opts]
  * @returns {Promise<Blob>}
  */
-export function applyWatermarkToVideoBlob(inputBlob, { onProgress } = {}) {
+export function applyWatermarkToVideoBlob(inputBlob, { onProgress, signal } = {}) {
   return new Promise((resolve) => {
     const mimeType = pickSupportedMimeType();
     if (!mimeType || typeof HTMLCanvasElement === 'undefined' || !HTMLCanvasElement.prototype.captureStream) {
@@ -114,6 +116,12 @@ export function applyWatermarkToVideoBlob(inputBlob, { onProgress } = {}) {
     cleanup.push(() => video.remove());
 
     const timeout = setTimeout(() => failSafe(new Error('Timed out waiting for video metadata')), 15000);
+    cleanup.push(() => clearTimeout(timeout));
+    // Lets the caller give up (cancelled, or taking too long in a background tab): the original clip is used.
+    if (signal) {
+      if (signal.aborted) { failSafe(new Error('Cancelled')); return; }
+      signal.addEventListener('abort', () => failSafe(new Error('Cancelled')), { once: true });
+    }
 
     video.onloadedmetadata = () => {
       clearTimeout(timeout);
@@ -149,6 +157,7 @@ export function applyWatermarkToVideoBlob(inputBlob, { onProgress } = {}) {
         const recorder = new MediaRecorder(outputStream, { mimeType, videoBitsPerSecond: 4_000_000 });
         const chunks = [];
         recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+        cleanup.push(() => { if (recorder.state !== 'inactive') { try { recorder.stop(); } catch { /* noop */ } } });
 
         let rafId = null;
         const drawLoop = () => {
@@ -166,7 +175,7 @@ export function applyWatermarkToVideoBlob(inputBlob, { onProgress } = {}) {
             resolve(inputBlob);
             return;
           }
-          resolve(new Blob(chunks, { type: 'video/webm' }));
+          resolve(new Blob(chunks, { type: (recorder.mimeType || mimeType || 'video/webm').split(';')[0] }));
         };
         recorder.onerror = (e) => failSafe(e.error || e);
 

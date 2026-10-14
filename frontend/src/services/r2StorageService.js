@@ -22,9 +22,28 @@ export const fromR2Value = (value) => value.slice(R2_PREFIX.length);
  * @param {File|Blob} params.file
  * @param {'pitches'|'statuses'|'avatars'|'cmms-reports'|'cmms-announcements'|'voice-notes'|'portfolio-chat'|'cmms-employment-documents'|'cmms-opportunities'|'transaction-receipts'|'cmms-visitor-vehicles'|'cmms-consultation'} params.folder
  * @param {string} params.accessToken - current Supabase session access token
+ * @param {(fraction: number) => void} [params.onProgress] - 0..1 as bytes go out (switches the PUT to XHR)
+ * @param {AbortSignal} [params.signal] - cancels an upload that uses onProgress
  * @returns {Promise<{success: boolean, url?: string, key?: string, error?: string}>}
  */
-export const uploadToR2 = async ({ file, folder, accessToken }) => {
+// fetch() cannot report upload progress, so uploads that want a progress bar go through XHR instead.
+const putWithProgress = (url, file, contentType, { onProgress, signal }) => new Promise((resolve, reject) => {
+  const xhr = new XMLHttpRequest();
+  xhr.open('PUT', url);
+  xhr.setRequestHeader('Content-Type', contentType);
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(e.loaded / e.total); };
+  xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status });
+  xhr.onerror = () => reject(new Error('Network connection lost'));
+  xhr.ontimeout = () => reject(new Error('Network connection timed out'));
+  xhr.onabort = () => reject(Object.assign(new Error('Upload cancelled'), { name: 'AbortError' }));
+  if (signal) {
+    if (signal.aborted) { reject(Object.assign(new Error('Upload cancelled'), { name: 'AbortError' })); return; }
+    signal.addEventListener('abort', () => xhr.abort(), { once: true });
+  }
+  xhr.send(file);
+});
+
+export const uploadToR2 = async ({ file, folder, accessToken, onProgress, signal }) => {
   try {
     if (!accessToken) {
       return { success: false, error: 'Not authenticated — cannot upload' };
@@ -69,12 +88,15 @@ export const uploadToR2 = async ({ file, folder, accessToken }) => {
 
     let putRes;
     try {
-      putRes = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': contentType },
-        body: file,
-      });
+      putRes = onProgress
+        ? await putWithProgress(uploadUrl, file, contentType, { onProgress, signal })
+        : await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': contentType },
+          body: file,
+        });
     } catch (networkError) {
+      if (networkError?.name === 'AbortError') return { success: false, cancelled: true, error: 'Upload cancelled' };
       console.error('R2 upload — storage PUT network error:', networkError);
       return { success: false, error: `Could not upload to storage: ${networkError.message}` };
     }

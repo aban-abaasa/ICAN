@@ -795,9 +795,9 @@ export const createPitch = async (pitchData) => {
       return { success: false, error: errorMsg };
     }
 
-    // VALIDATION: Ensure video_url is from Supabase if provided
-    if (pitchData.video_url && !pitchData.video_url.startsWith('http')) {
-      const errorMsg = '❌ ERROR: Invalid video URL. Must be a complete Supabase URL starting with https://';
+    // VALIDATION: Ensure video_url is a real link or a stored R2 key if provided
+    if (pitchData.video_url && !pitchData.video_url.startsWith('http') && !pitchData.video_url.startsWith('r2://')) {
+      const errorMsg = '❌ ERROR: Invalid video URL. Must be a complete URL starting with https:// or a stored r2:// key';
       console.error(errorMsg);
       console.error('Received URL:', pitchData.video_url);
       return { success: false, error: errorMsg };
@@ -2100,7 +2100,7 @@ export const getUserNotifications = async (userId) => {
  */
 
 // Upload video to Cloudflare R2 storage
-export const uploadVideo = async (file, pitchId) => {
+export const uploadVideo = async (file, pitchId, { onProgress, signal } = {}) => {
   try {
     const sb = getSupabase();
     if (!sb) {
@@ -2132,10 +2132,13 @@ export const uploadVideo = async (file, pitchId) => {
     const result = await uploadToR2({
       file,
       folder: 'pitches',
-      accessToken: session.access_token
+      accessToken: session.access_token,
+      onProgress,
+      signal
     });
 
     if (!result.success) {
+      if (result.cancelled) return { success: false, cancelled: true, error: 'Upload cancelled', url: null };
       console.error('❌ R2 upload FAILED - VIDEO NOT SAVED');
       console.error('   Error:', result.error);
       return { success: false, error: result.error || 'Upload failed', url: null };
