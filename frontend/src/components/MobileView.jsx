@@ -152,6 +152,7 @@ import { getUserTrustGroups } from '../services/trustService';
 import { getAllAccessibleBusinessProfiles, getContributorNames } from '../services/pitchingService';
 import { CountryService } from '../services/countryService';
 import { DiamondSpinner } from './IcanDiamond';
+import '../styles/navGlow.css';
 import {
   getPendingSharedContent,
   getSharedFiles,
@@ -901,6 +902,13 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   }, []);
   const [currentBalance, setCurrentBalance] = useState('156,002');
   const [activeBottomTab, setActiveBottomTab] = useState('home');
+  // The bottom bar scrolls sideways (see styles/navGlow.css): keep the active tile in view, centred.
+  const bottomNavRef = useRef(null);
+  useEffect(() => {
+    bottomNavRef.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [activeBottomTab]);
   const [showTransactionEntry, setShowTransactionEntry] = useState(false);
   const [txPeriod, setTxPeriod] = useState('today'); // 'today' | 'week' | 'month' | 'year'
   const [expPeriod, setExpPeriod] = useState('today'); // period filter for the full transactions panel
@@ -7584,62 +7592,42 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {/* ====== COMMENTED OUT - ALL SECTIONS BELOW REMOVED FOR CLEANUP ====== */}
 
       {/* ====== FIXED BOTTOM NAVIGATION - ALWAYS ON TOP ====== */}
+      {/* Truly transparent: no bar fill, no tile fill -- only each icon's own edge
+          line (orbiting on the active one), spaced apart in a row that scrolls
+          sideways. See styles/navGlow.css. */}
       {!isWebDashboard && (
-      <div
-        className="fixed bottom-0 left-0 right-0 z-50 transition-all"
-        style={{
-          background: 'var(--color-bgSecondary)',
-          borderTop: '1px solid var(--color-border)',
-          boxShadow: '0 -8px 24px rgba(0,0,0,0.12)',
-          paddingBottom: 'env(safe-area-inset-bottom)'
-        }}
+      <nav
+        ref={bottomNavRef}
+        aria-label="Primary"
+        className="ng-bar fixed bottom-0 left-0 right-0 z-50 flex"
       >
-        <div className={isWebDashboard
-          ? 'flex items-center justify-between py-3 px-4 sm:px-6 max-w-3xl mx-auto mb-4 rounded-2xl'
-          : 'flex items-center justify-between px-1 py-1.5'
-        } style={isWebDashboard ? { border: '1px solid var(--color-border)', background: 'var(--color-bgSecondary)' } : undefined}>
-          {[
-            { id: 'home',   label: 'Home',   icon: Home,      go: 'dashboard' },
-            { id: 'pitchin',label: 'Pitchin',icon: Briefcase, go: 'pitchin'   },
-            { id: 'wallet', label: 'Wallet', icon: Wallet,    go: 'wallet'    },
-            { id: 'trust',  label: 'Trust',  icon: Lock,      go: 'trust'     },
-            { id: 'cmms',   label: 'CMMS',   icon: Settings,  go: 'cmms'      },
-            { id: 'tithe',  label: 'Tithe',  icon: Heart,     go: 'tithe'     },
-          ].map(({ id, label, icon: Icon, go }) => {
-            const isActive = activeBottomTab === id;
-            return (
-              <button
-                key={id}
-                onClick={() => navigateTo(go)}
-                className="flex-1 flex flex-col items-center gap-1 py-1.5 px-1 transition-colors relative"
+        {[
+          { id: 'home',   label: 'Home',   icon: Home,      go: 'dashboard' },
+          { id: 'pitchin',label: 'Pitchin',icon: Briefcase, go: 'pitchin'   },
+          { id: 'wallet', label: 'Wallet', icon: Wallet,    go: 'wallet'    },
+          { id: 'trust',  label: 'Trust',  icon: Lock,      go: 'trust'     },
+          { id: 'cmms',   label: 'CMMS',   icon: Settings,  go: 'cmms'      },
+          { id: 'tithe',  label: 'Tithe',  icon: Heart,     go: 'tithe'     },
+        ].map(({ id, label, icon: Icon, go }) => {
+          const isActive = activeBottomTab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => navigateTo(go)}
+              aria-current={isActive ? 'page' : undefined}
+              className={`ng-tab ${isActive ? 'ng-on' : ''} flex flex-col items-center justify-center gap-0.5 py-1.5 px-1`}
+            >
+              <Icon className="w-5 h-5" strokeWidth={isActive ? 2.25 : 1.75} />
+              <span
+                className="text-[11px] tracking-wide"
+                style={{ fontWeight: isActive ? 600 : 500 }}
               >
-                <span
-                  className="absolute top-0 h-0.5 rounded-full transition-all"
-                  style={{
-                    width: isActive ? '20px' : '0px',
-                    background: 'var(--color-primary)'
-                  }}
-                />
-                <Icon
-                  className="w-5 h-5"
-                  strokeWidth={isActive ? 2.25 : 1.75}
-                  style={{ color: isActive ? 'var(--color-primary)' : 'var(--color-textSecondary)', opacity: isActive ? 1 : 0.75 }}
-                />
-                <span
-                  className="text-[11px] tracking-wide"
-                  style={{
-                    color: isActive ? 'var(--color-primary)' : 'var(--color-textSecondary)',
-                    fontWeight: isActive ? 600 : 500,
-                    opacity: isActive ? 1 : 0.75
-                  }}
-                >
-                  {label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
       )}
 
       {/* Pitchin Panel - Full Screen Video */}
