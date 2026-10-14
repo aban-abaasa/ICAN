@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseUnits, formatUnits, ledgerToUnits, unitsToLedger, proofOfReserve, localValue, networkStatus, shortAddress, sameAddress, explorerLink,
-  checkDeposit, checkRedeem, checkBurn, checkWithdraw, friendlyChainError, withdrawalStatus, burnStatus, rateFreshness,
+  checkDeposit, checkRedeem, checkBurn, checkWithdraw, friendlyChainError, withdrawalStatus, burnStatus, rateFreshness, extractAddress,
 } from '../src/utils/chainMath.js';
 
 // These hold the on-screen arithmetic to the contracts' integers: what a person types becomes the exact base-unit amount sent,
@@ -128,4 +128,20 @@ test('status words for withdrawals, burns and the rate', () => {
   assert.deepEqual(rateFreshness({ available: true, age_s: 300, stale: false }), { text: 'Rate updated 5 min ago', warn: false });
   assert.deepEqual(rateFreshness({ available: true, age_s: 7200, stale: true }), { text: 'Rate updated 2 h ago', warn: true });
   assert.equal(rateFreshness({ available: false }).warn, true);
+});
+
+test('an address pasted any reasonable way is understood, and a guess is never made', () => {
+  const a = 'ab'.repeat(20);
+  const want = `0x${a}`;
+  assert.equal(extractAddress(`0x${a}`), want);
+  assert.equal(extractAddress(`  "0x${a.toUpperCase()}"  `), want, 'quotes, spaces and capitals');
+  assert.equal(extractAddress(`0X${a}`), want);
+  assert.equal(extractAddress(a), want, 'without 0x');
+  assert.equal(extractAddress(`https://sepolia.etherscan.io/address/0x${a}#code`), want, 'an explorer link');
+  assert.equal(extractAddress(`0x${a} and again 0x${a}`), want, 'the same address twice is still one address');
+  assert.equal(extractAddress(`0x${a} 0x${'cd'.repeat(20)}`), null, 'two different addresses: it will not choose');
+  assert.equal(extractAddress(`0x${'ab'.repeat(32)}`), null, 'a 64-digit transaction hash is not an address');
+  assert.equal(extractAddress('0x1234'), null);
+  assert.equal(extractAddress(''), null);
+  assert.equal(extractAddress(null), null);
 });

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ShieldCheck, ShieldAlert, ExternalLink, RefreshCw } from 'lucide-react';
 import { useWallet } from '../hooks/useWallet';
-import { getFxRate, stableContracts } from '../services/chainService';
+import { getFxRate, stableContracts, resolveStableContracts } from '../services/chainService';
 import {
   checkDeposit, checkRedeem, explorerLink, formatUnits, friendlyChainError, localValue, networkStatus, proofOfReserve, rateFreshness, shortAddress,
 } from '../utils/chainMath';
@@ -18,6 +18,7 @@ export default function StableUnitPanel({ cfg }) {
   const wallet = useWallet();
   const [fx, setFx] = useState(null);
   const [chain, setChain] = useState(null);          // what the contracts say right now
+  const resolvedRef = useRef(null);                  // { token, reserve } read from the vault
   const [loadError, setLoadError] = useState('');
   const [amount, setAmount] = useState('');
   const [mode, setMode] = useState('deposit');
@@ -26,7 +27,7 @@ export default function StableUnitPanel({ cfg }) {
   useEffect(() => () => { alive.current = false; }, []);
 
   const net = networkStatus({ walletChainId: wallet.chainId, expectedChainId: cfg?.chain_id });
-  const deployed = !!(cfg?.stable_vault_address && cfg?.stable_token_address && cfg?.reserve_token_address);
+  const deployed = !!cfg?.stable_vault_address;          // the token and the reserve coin are read from the vault, never typed in
   const ready = wallet.account && net === 'ok' && deployed;
   const symbol = chain?.reserveSymbol || cfg?.reserve_token_symbol || 'USDC';
   const decimals = chain?.decimals ?? 6;
@@ -41,7 +42,8 @@ export default function StableUnitPanel({ cfg }) {
     if (!ready) { setChain(null); return; }
     try {
       const provider = wallet.getProvider();
-      const c = stableContracts(provider, cfg);
+      resolvedRef.current = await resolveStableContracts(provider, cfg);
+      const c = stableContracts(provider, cfg, resolvedRef.current);
       const [dec, sym, reserveBal, allowance, tokenBal, col, paused] = await Promise.all([
         c.reserve.decimals(), c.reserve.symbol(), c.reserve.balanceOf(wallet.account), c.reserve.allowance(wallet.account, cfg.stable_vault_address),
         c.token.balanceOf(wallet.account), c.vault.collateralization(), c.vault.depositsPaused(),
@@ -74,7 +76,8 @@ export default function StableUnitPanel({ cfg }) {
     setTx({ label, state: 'waiting', message: 'Confirm in your wallet…' });
     try {
       const signer = await wallet.getRunner();
-      const sent = await make(stableContracts(signer, cfg));
+      const resolved = resolvedRef.current || await resolveStableContracts(wallet.getProvider(), cfg);
+      const sent = await make(stableContracts(signer, cfg, resolved));
       setTx({ label, hash: sent.hash, state: 'confirming', message: 'Waiting for the network to confirm…' });
       await sent.wait();
       setTx({ label, hash: sent.hash, state: 'done', message: 'Done.' });

@@ -74,7 +74,8 @@ try {
   const BASE = ['supabase/tests/icaneracoin_chart/00_stub.sql', 'frontend/backend/ICAN_PRICE_ENGINE.sql', 'frontend/backend/ICAN_REAL_CANDLESTICK_ENGINE.sql',
     'supabase/migrations/20261017100000_public_icaneracoin_chart.sql', 'supabase/migrations/20261018100000_icaneracoin_burst_safe_feed.sql',
     'supabase/migrations/20261018110000_icaneracoin_atomic_trade.sql', 'supabase/migrations/20261020100000_chain_core.sql',
-    'supabase/migrations/20261020110000_chain_bridge.sql', 'supabase/migrations/20261020120000_chain_fx_oracle.sql'];
+    'supabase/migrations/20261020110000_chain_bridge.sql', 'supabase/migrations/20261020120000_chain_fx_oracle.sql',
+    'supabase/migrations/20261021100000_chain_auto_contracts.sql'];
   for (const f of BASE) sh('psql', ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-d', DB, '-f', path.join(ROOT, f)]);
 
   // ---------------------------------------------------------------- the chain
@@ -104,27 +105,45 @@ try {
   log(`contracts: ${symbol} ${await usdc.getAddress()}, vault ${await vault.getAddress()}, ICEC-C ${await iceC.getAddress()}`);
 
   // ---------------------------------------------------------------- configure the bridge, seed a user
+  // The administrator supplies only the two things the chain cannot say about itself: the ICEC-C contract and the ICEC-S vault.
+  // (Pasted the way people paste: capitals, an explorer link. A wrong "token" typed in as well must be ignored, not believed.)
   const cfgJson = JSON.stringify({
-    chain_id: 31337, icec_community_address: await iceC.getAddress(), stable_vault_address: await vault.getAddress(),
-    stable_token_address: await iceS.getAddress(), reserve_token_address: await usdc.getAddress(),
+    icec_community_address: `https://explorer.local/address/${(await iceC.getAddress()).toUpperCase().replace('0X', '0x')}`,
+    stable_vault_address: ` ${await vault.getAddress()} `,
+    stable_token_address: '0x' + '12'.repeat(20),
   });
-  psql(`SELECT public.ican_chain_dev_set_contracts('${DEV}', '${cfgJson}'::jsonb)`);
-  psql(`SELECT public.ican_chain_dev_set_settings('${DEV}', '{"bridge_enabled": true, "confirmations": 1, "chain_name": "Local Hardhat", "explorer_url": "https://explorer.local", "min_withdrawal_icec": 1, "max_withdrawal_icec": 100, "max_daily_withdrawal_icec": 300, "reserve_token_symbol": "${symbol}"}'::jsonb)`);
+  const setRes = JSON.parse(psql(`SELECT public.ican_chain_dev_set_contracts('${DEV}', '${cfgJson}'::jsonb)`));
+  check('saving the two addresses works as pasted, and the typed token is ignored', setRes.success === true && setRes.auto_detected.includes('stable_token_address'), JSON.stringify(setRes));
+  check('the chain id is not there yet: it is the relayer\'s to detect', psql('SELECT chain_id IS NULL FROM icanera_chain.chain_settings') === 't');
+
+  // ---------------------------------------------------------------- the relayer (the real code, a real key, the real chain and database)
+  const relayerDb = createSupabaseRpc({ url: SHIM, serviceKey: SERVICE_KEY });
+  const relayerCfg = { startBlock: 0, maxMintsPerRun: 10, maxBlocksPerRun: 5000, minGasWei: 10n ** 15n, leaseSeconds: 240 };   // no chainId: it is read from the endpoint
+  const mine = async (n = 2) => { for (let i = 0; i < n; i += 1) await provider.send('evm_mine', []); };
+  const sync = () => runSync({ db: relayerDb, provider, signer: relayerKey, cfg: relayerCfg, holder: 'e2e' });
+
   psql(`SELECT set_config('request.jwt.claim.role', 'service_role', true), public.ican_chain_operator_fx_observe('USD/UGX', 3700, 'e2e-feed', now())`);
   psql(`INSERT INTO auth.users (id, email) VALUES ('${USER_ID}', 'e2e@test.dev'); INSERT INTO public.ican_user_wallets (user_id, ican_balance) VALUES ('${USER_ID}', 500)`);
   const ledger = () => Number(psql(`SELECT ican_balance FROM public.ican_user_wallets WHERE user_id = '${USER_ID}'`));
   const locked = () => Number(psql('SELECT icanera_chain.locked_total()'));
   const reconcile = () => JSON.parse(psql(`SELECT public.ican_chain_dev_reconcile('${DEV}')`));
 
-  // ---------------------------------------------------------------- the relayer (the real code, a real key, the real chain and database)
-  const relayerDb = createSupabaseRpc({ url: SHIM, serviceKey: SERVICE_KEY });
-  const relayerCfg = { chainId: 31337, startBlock: 0, maxMintsPerRun: 10, maxBlocksPerRun: 5000, minGasWei: 10n ** 15n, leaseSeconds: 240 };
-  const mine = async (n = 2) => { for (let i = 0; i < n; i += 1) await provider.send('evm_mine', []); };
-  const sync = () => runSync({ db: relayerDb, provider, signer: relayerKey, cfg: relayerCfg, holder: 'e2e' });
-
   // ---------------------------------------------------------------- the HTTP stand-in, and the web app
   process.env.SUPABASE_URL = SHIM; process.env.SUPABASE_SERVICE_ROLE_KEY = SERVICE_KEY; process.env.SUPABASE_ANON_KEY = ANON_KEY;
   shim = await startShim({ database: DB, serviceKey: SERVICE_KEY, anonKey: ANON_KEY, chainLinkHandler: chainLink });
+
+  // ---------------------------------------------------------------- the first run: the chain, the token and the reserve fill themselves in
+  const first = await sync();
+  check('the first run adopted chain 31337 from the endpoint and raised no error', first.adoptedChain === 31337 && first.errors.length === 0 && !first.halted, JSON.stringify(first));
+  const row = psql("SELECT chain_id || '|' || chain_name || '|' || lower(stable_token_address) || '|' || lower(reserve_token_address) || '|' || reserve_token_symbol || '|' || (contracts_checked_at IS NOT NULL)::text FROM icanera_chain.chain_settings");
+  check('and the ICEC-S token, the reserve coin and its symbol were read from the vault (not from what was typed)',
+    row === `31337|Local test chain|${(await iceS.getAddress()).toLowerCase()}|${(await usdc.getAddress()).toLowerCase()}|${symbol}|true`, row);
+  const again = await sync();
+  check('a second run adopts and writes nothing new', again.adoptedChain === undefined && again.vaultFacts === undefined && again.errors.length === 0, JSON.stringify(again));
+  psql(`SELECT public.ican_chain_dev_set_settings('${DEV}', '{"bridge_enabled": true, "confirmations": 1, "chain_name": "Local Hardhat", "explorer_url": "https://explorer.local", "min_withdrawal_icec": 1, "max_withdrawal_icec": 100, "max_daily_withdrawal_icec": 300}'::jsonb)`);
+  // The screens read the token and the reserve from the vault on the chain, so they must not depend on the database's copy at all:
+  // blank it, and the panels below still have to work. (The relayer writes it back on its next run, checked at the end.)
+  psql("UPDATE icanera_chain.chain_settings SET stable_token_address = NULL, reserve_token_address = NULL, reserve_token_symbol = 'OLD' WHERE id = TRUE");
   log('starting the web app');
   await start('vite', 'npx', ['vite', '--port', '5199', '--host', '127.0.0.1', '--open', 'false'],
     { cwd: FRONTEND, env: { ...process.env, BROWSER: 'none', VITE_SUPABASE_URL: SHIM, VITE_SUPABASE_ANON_KEY: ANON_KEY } }, /Local:/);
@@ -297,6 +316,8 @@ try {
   check('and the relayer is offered no mints at all', Array.isArray(blocked) && blocked.length === 0);
   await shot('4-halted');
 
+  check('the relayer wrote the blanked token, reserve and symbol back from the vault on its own',
+    psql("SELECT lower(stable_token_address) = '" + (await iceS.getAddress()).toLowerCase() + "' AND lower(reserve_token_address) = '" + (await usdc.getAddress()).toLowerCase() + "' AND reserve_token_symbol = '" + symbol + "' FROM icanera_chain.chain_settings") === 't');
   check('no page error was thrown in the browser', pageErrors.length === 0, pageErrors.join(' | '));
 
   console.log(`\nOK: ${results.length} end-to-end checks passed. Screenshots and logs: ${OUT}`);

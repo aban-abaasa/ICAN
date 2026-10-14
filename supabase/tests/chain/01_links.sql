@@ -60,7 +60,7 @@ BEGIN
                             'ican_chain_operator_next_mints(int,int)', 'ican_chain_operator_mark_submitted(uuid,text)', 'ican_chain_operator_requeue(uuid,text)',
                             'ican_chain_operator_record_mint(bigint,text,text,int,bigint,text,text)', 'ican_chain_operator_record_burn(bigint,text,int,bigint,text,text,text)',
                             'ican_chain_operator_retry_unclaimed(int)', 'ican_chain_operator_check_supply(bigint,bigint,text)', 'ican_chain_operator_halt(text)',
-                            'ican_chain_operator_link(uuid,text)', 'ican_chain_operator_get_challenge(uuid)', 'ican_chain_operator_fx_observe(text,numeric,text,timestamptz)'] LOOP
+                            'ican_chain_operator_link(uuid,text)', 'ican_chain_operator_get_challenge(uuid)', 'ican_chain_operator_sync_contracts(text,text,text,text)', 'ican_chain_operator_adopt_chain(bigint)', 'ican_chain_operator_fx_observe(text,numeric,text,timestamptz)'] LOOP
     PERFORM t.check('1.3 ' || f || ': the relayer (service role) only',
       has_function_privilege('service_role', 'public.' || f, 'EXECUTE')
       AND NOT has_function_privilege('authenticated', 'public.' || f, 'EXECUTE') AND NOT has_function_privilege('anon', 'public.' || f, 'EXECUTE'));
@@ -109,7 +109,7 @@ BEGIN
   PERFORM t.as_user(t.u(1));
   e := t.err($$SELECT public.ican_chain_dev_set_settings('dev_test_secret', '{"bridge_enabled": true}')$$);
   PERFORM t.reset();
-  PERFORM t.check('2.3 the bridge cannot be turned on before a chain and contract are set', e LIKE 'set the chain id%', e);
+  PERFORM t.check('2.3 the bridge cannot be turned on before a chain and contract are set', e LIKE 'save the ICEC-C contract address first%', e);
   PERFORM t.as_user(t.u(1));
   e := t.err($$SELECT public.ican_chain_dev_set_settings('wrong', '{}')$$);
   PERFORM t.reset();
@@ -121,7 +121,7 @@ BEGIN
   PERFORM t.as_user(t.u(1));
   e := t.err($$SELECT public.ican_chain_dev_set_contracts('dev_test_secret', '{"icec_community_address": "0x1234"}')$$);
   PERFORM t.reset();
-  PERFORM t.check('2.6 a malformed address is refused', e LIKE '%not a valid 0x address%', e);
+  PERFORM t.check('2.6 a malformed address is refused, naming the field and what was expected', e LIKE 'icec_community_address needs one contract address%' AND e LIKE '%Got "0x1234"%', e);
 END $t$;
 
 -- the network the rest of the tests use: chain 31337 (a local Hardhat chain), with upper-case input to prove it is normalised
@@ -137,6 +137,95 @@ BEGIN
   r := public.ican_chain_public_config();
   PERFORM t.check('2.8 the public config now shows where everything is',
     r ->> 'icec_community_address' = t.a(900) AND r ->> 'stable_vault_address' = t.a(902) AND (r ->> 'chain_id')::BIGINT = 31337 AND r ->> 'chain_name' = 'Local', r::TEXT);
+END $t$;
+
+-- ================================================================ 2b. Addresses and the chain id that fill themselves in
+DO $t$
+DECLARE r JSONB; e TEXT; a TEXT := '0x00000000000000000000000000000000000000ab'; s icanera_chain.chain_settings;
+BEGIN
+  SELECT * INTO s FROM icanera_chain.chain_settings;
+  PERFORM t.check('2b.1 the token and reserve that were sent are ignored: the chain knows them, so the database holds none yet', s.stable_token_address IS NULL AND s.reserve_token_address IS NULL, s.stable_token_address);
+  r := t.cfg('{"stable_token_address": "definitely not an address", "reserve_token_address": ""}');
+  PERFORM t.check('2b.2 a malformed stable_token_address is never an error (it is not something a person types)', (r ->> 'success')::BOOLEAN AND r -> 'auto_detected' ? 'stable_token_address' AND r::TEXT LIKE '%read from the vault on the chain%', r::TEXT);
+
+  PERFORM t.check('2b.3 an address is found in plain text, in capitals, with quotes or spaces, without 0x, or inside an explorer link',
+    icanera_chain.extract_address(a) = a AND icanera_chain.extract_address('  0X00000000000000000000000000000000000000AB ') = a
+    AND icanera_chain.extract_address('"' || a || '"') = a AND icanera_chain.extract_address(substr(a, 3)) = a
+    AND icanera_chain.extract_address('https://sepolia.etherscan.io/address/' || a || '#code') = a
+    AND icanera_chain.extract_address('https://x/address/' || a || '?a=' || a) = a);
+  PERFORM t.check('2b.4 but it never guesses: a transaction hash, two different addresses, or text with none give nothing',
+    icanera_chain.extract_address('0x' || repeat('ab', 32)) IS NULL AND icanera_chain.extract_address('https://x/tx/0x' || repeat('ab', 32)) IS NULL
+    AND icanera_chain.extract_address(a || ' and ' || t.a(7)) IS NULL AND icanera_chain.extract_address('hello') IS NULL
+    AND icanera_chain.extract_address('0x1234') IS NULL AND icanera_chain.extract_address(NULL) IS NULL AND icanera_chain.extract_address('') IS NULL);
+  r := t.cfg(jsonb_build_object('stable_vault_address', 'https://sepolia.etherscan.io/address/' || upper(a)));
+  PERFORM t.check('2b.5 pasting an explorer link for the vault works', r -> 'config' ->> 'stable_vault_address' = a, r::TEXT);
+  PERFORM t.as_user(t.u(1));
+  e := t.err($$SELECT public.ican_chain_dev_set_contracts('dev_test_secret', '{"stable_vault_address": "nope"}')$$);
+  PERFORM t.reset();
+  PERFORM t.check('2b.6 a vault that is not an address is refused, by name', e LIKE 'stable_vault_address needs one contract address%', e);
+  PERFORM t.as_user(t.u(1));
+  e := t.err($$SELECT public.ican_chain_dev_set_contracts('dev_test_secret', '{"chain_id": "abc"}')$$);
+  PERFORM t.reset();
+  PERFORM t.check('2b.7 a chain id that is not a number is refused, with an example', e LIKE 'chain_id must be a whole number such as 11155111%', e);
+  PERFORM t.as_user(t.u(1));
+  e := t.err($$SELECT public.ican_chain_dev_set_contracts('dev_test_secret', '{"chain_id": -5}')$$);
+  PERFORM t.reset();
+  PERFORM t.check('2b.8 so is a negative one', e LIKE 'chain_id must be a whole number%', e);
+  r := t.cfg('{"chain_id": "31337"}');
+  PERFORM t.check('2b.9 a chain id sent as text is fine, and an empty settings object changes nothing', (r ->> 'success')::BOOLEAN AND (t.cfg('{}') ->> 'success')::BOOLEAN AND (r -> 'config' ->> 'chain_id')::BIGINT = 31337, r::TEXT);
+
+  -- the relayer writes down what the vault says
+  PERFORM t.as_service();
+  r := public.ican_chain_operator_sync_contracts(a, t.a(901), t.a(903), 'USDC');
+  PERFORM t.reset();
+  SELECT * INTO s FROM icanera_chain.chain_settings;
+  PERFORM t.check('2b.10 the relayer records the token, the reserve coin and its symbol from the vault, and when it checked',
+    (r ->> 'success')::BOOLEAN AND (r ->> 'changed')::BOOLEAN AND s.stable_token_address = t.a(901) AND s.reserve_token_address = t.a(903) AND s.reserve_token_symbol = 'USDC' AND s.contracts_checked_at IS NOT NULL, r::TEXT);
+  PERFORM t.as_service();
+  r := public.ican_chain_operator_sync_contracts(a, t.a(901), t.a(903), 'USDC');
+  PERFORM t.reset();
+  PERFORM t.check('2b.11 saying the same again changes nothing', (r ->> 'success')::BOOLEAN AND NOT (r ->> 'changed')::BOOLEAN, r::TEXT);
+  PERFORM t.as_service();
+  r := public.ican_chain_operator_sync_contracts(t.a(777), t.a(901), t.a(903), 'USDC');
+  PERFORM t.reset();
+  PERFORM t.check('2b.12 facts read from a vault that is no longer the configured one are not written (a change of vault in between)', r ->> 'code' = 'vault_changed' AND NOT (r ->> 'success')::BOOLEAN, r::TEXT);
+  PERFORM t.as_service();
+  PERFORM t.check('2b.13 bad detections raise', t.err(format($q$SELECT public.ican_chain_operator_sync_contracts(%L, 'x', %L, 'USDC')$q$, a, t.a(903))) = 'bad contract detection'
+    AND t.err(format($q$SELECT public.ican_chain_operator_sync_contracts(%L, %L, %L, 'a b c')$q$, a, t.a(901), t.a(903))) = 'bad contract detection');
+  PERFORM t.reset();
+  r := t.cfg(jsonb_build_object('stable_vault_address', t.a(5678)));
+  SELECT * INTO s FROM icanera_chain.chain_settings;
+  PERFORM t.check('2b.14 a NEW vault clears the old vault''s token and reserve at once, so nothing stale is ever shown',
+    s.stable_token_address IS NULL AND s.reserve_token_address IS NULL AND s.contracts_checked_at IS NULL AND s.stable_vault_address = t.a(5678) AND r::TEXT LIKE '%read from the vault%', r::TEXT);
+  PERFORM t.cfg(jsonb_build_object('stable_vault_address', a));
+END $t$;
+
+-- the chain id: adopted from the network the relayer is on, once, and never changed from there
+DO $t$
+DECLARE r1 JSONB; r2 JSONB; r3 JSONB; r4 JSONB; chain0 BIGINT; name1 TEXT; ex1 TEXT; chain1 BIGINT;
+BEGIN
+  BEGIN
+    UPDATE icanera_chain.chain_settings SET chain_id = NULL, chain_name = NULL, explorer_url = NULL;
+    PERFORM t.as_service();
+    r1 := public.ican_chain_operator_adopt_chain(11155111);
+    r2 := public.ican_chain_operator_adopt_chain(11155111);
+    r3 := public.ican_chain_operator_adopt_chain(1);
+    PERFORM t.reset();
+    SELECT chain_id, chain_name, explorer_url INTO chain1, name1, ex1 FROM icanera_chain.chain_settings;
+    PERFORM t.as_service();
+    r4 := public.ican_chain_operator_adopt_chain(0) ;
+    PERFORM t.reset();
+    RAISE EXCEPTION 'undo' USING ERRCODE = 'P0001';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN NULL;
+            WHEN OTHERS THEN PERFORM t.reset(); chain0 := -1; r4 := to_jsonb(SQLERRM);
+  END;
+  PERFORM t.check('2c.1 with no chain set, the relayer''s chain is adopted, and a known network gets its name and explorer link',
+    (r1 ->> 'adopted')::BOOLEAN AND chain1 = 11155111 AND name1 = 'Sepolia' AND ex1 = 'https://sepolia.etherscan.io', r1::TEXT || name1);
+  PERFORM t.check('2c.2 saying the same chain again is fine and adopts nothing new', (r2 ->> 'success')::BOOLEAN AND NOT (r2 ->> 'adopted')::BOOLEAN, r2::TEXT);
+  PERFORM t.check('2c.3 a DIFFERENT chain once one is set is a mismatch, and is never adopted', NOT (r3 ->> 'success')::BOOLEAN AND r3 ->> 'code' = 'chain_mismatch' AND (r3 ->> 'chain_id')::BIGINT = 11155111, r3::TEXT);
+  PERFORM t.check('2c.4 nonsense raises', r4 #>> '{}' = 'bad chain id', r4::TEXT);
+  PERFORM t.check('2c.5 (the rollback restored the chain the rest of the tests use)', (SELECT chain_id FROM icanera_chain.chain_settings) = 31337);
+  PERFORM t.check('2c.6 only the relayer can adopt a chain', NOT has_function_privilege('authenticated', 'public.ican_chain_operator_adopt_chain(bigint)', 'EXECUTE') AND NOT has_function_privilege('anon', 'public.ican_chain_operator_adopt_chain(bigint)', 'EXECUTE'));
 END $t$;
 
 -- ================================================================ 3. The challenge

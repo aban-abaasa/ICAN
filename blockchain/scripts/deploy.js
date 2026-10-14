@@ -93,11 +93,13 @@ async function main() {
   console.log(`\nSaved ${path.relative(process.cwd(), file)} (addresses only: no keys).\n`);
 
   console.log('Next, in the Supabase SQL editor (the dev token is the one the dev panel uses):');
+  // Only what the chain cannot say about itself. The chain id comes from the network the relayer is on; the ICEC-S token, the
+  // reserve coin and its symbol are read from the vault by the relayer (and by every screen) on their own.
   console.log(`  SELECT public.ican_chain_dev_set_contracts('<dev token>', '${JSON.stringify({
-    chain_id: chainId, icec_community_address: communityAddress, stable_vault_address: await vault.getAddress(), stable_token_address: stableToken, reserve_token_address: reserve,
+    icec_community_address: communityAddress, stable_vault_address: await vault.getAddress(),
   })}'::jsonb);`);
   console.log('  SELECT public.ican_chain_dev_set_settings(\'<dev token>\', \'{"chain_name": "<network name>", "explorer_url": "https://<explorer>", "confirmations": 12}\'::jsonb);');
-  console.log(`And in the host's environment: CHAIN_ID=${chainId}  CHAIN_START_BLOCK=${deployBlock}  (plus CHAIN_RPC_URL, BRIDGE_OPERATOR_KEY for ${operator}, CHAIN_CRON_SECRET).`);
+  console.log(`And in the host's environment: CHAIN_RPC_URL, BRIDGE_OPERATOR_KEY (for ${operator}), CHAIN_CRON_SECRET and CHAIN_START_BLOCK=${deployBlock}. CHAIN_ID is optional (this is chain ${chainId}); the relayer detects it.`);
   console.log('The bridge stays OFF until you turn it on in the dev panel.');
 }
 

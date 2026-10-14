@@ -52,18 +52,30 @@ Roles: **owner** (a multisig; sets the operator, the guardian and the daily cap;
 
 ### 2. The database (Supabase SQL editor)
 
-**Easiest:** paste the whole of `CHAIN_TOKENS_PASTE_INTO_SUPABASE.sql` (repo root) into the SQL editor and press Run once. It is the three files below, in order, generated from them (`node scripts/build-onchain-paste.mjs`). Or run them one at a time:
+**Easiest:** paste the whole of `CHAIN_TOKENS_PASTE_INTO_SUPABASE.sql` (repo root) into the SQL editor and press Run once. It is the four files below, in order, generated from them (`node scripts/build-onchain-paste.mjs`). Or run them one at a time:
 
 1. `supabase/migrations/20261020100000_chain_core.sql`
 2. `supabase/migrations/20261020110000_chain_bridge.sql`
 3. `supabase/migrations/20261020120000_chain_fx_oracle.sql`
+4. `supabase/migrations/20261021100000_chain_auto_contracts.sql` (the chain id, the ICEC-S token and the reserve coin detect themselves; forgiving address entry)
 
-Each is safe to run twice and keeps every setting an administrator changed. Then tell the database where the contracts are (the script prints this):
+Each is safe to run twice and keeps every setting an administrator changed. Then tell the database the **two** things the chain cannot say about itself (the deploy script prints this; the dev panel's *On-chain tokens → Contracts* box does the same):
 
 ```sql
-SELECT public.ican_chain_dev_set_contracts('<dev token>', '{"chain_id": 11155111, "icec_community_address": "0x…", "stable_vault_address": "0x…", "stable_token_address": "0x…", "reserve_token_address": "0x…"}'::jsonb);
-SELECT public.ican_chain_dev_set_settings('<dev token>', '{"chain_name": "Sepolia", "explorer_url": "https://sepolia.etherscan.io", "confirmations": 12}'::jsonb);
+SELECT public.ican_chain_dev_set_contracts('<dev token>', '{"icec_community_address": "0x…", "stable_vault_address": "0x…"}'::jsonb);
 ```
+
+That is all. **Everything else is detected and kept in sync with the chain:**
+
+| Field | Where it comes from |
+|---|---|
+| chain id (and, for the common test networks, the name and explorer link) | the network the relayer's RPC endpoint is on, adopted once on its first run. After that it is a guard: a different endpoint halts the bridge |
+| ICEC-S token, reserve stablecoin, its symbol | read from the vault (`token()`, `reserve()`, `symbol()`) by the relayer on every run and written back whenever they differ (and re-confirmed at least hourly, which the dev panel shows as "last checked"). A new vault clears the old ones at once |
+| what the screens use | the screens read the token and reserve straight from the vault, so they work before the relayer has run and ignore any stale copy |
+
+The address boxes are forgiving: capitals, quotes, spaces, no `0x`, or a whole block-explorer link all work. A wrong `stable_token_address`, `reserve_token_address` or `chain_id` typed in by an older script is accepted and ignored in favour of what the chain says. If something is refused, the message names the field and what it expected. The relayer also checks the ICEC-C address really is ICEC-C (symbol `ICEC-C`, 8 decimals) and halts the bridge if it is some other contract.
+
+To turn the bridge ON you need the chain to have been detected, so save the two addresses, wait for the relayer's next run (a minute or two), then switch it on. Set `chain_name`, `explorer_url`, `confirmations` with `ican_chain_dev_set_settings` if you want different values than the defaults.
 
 The chain and the ICEC-C contract **cannot be changed** once withdrawals exist; moving the bridge to another contract is a migration, not a setting.
 
@@ -73,7 +85,8 @@ The chain and the ICEC-C contract **cannot be changed** once withdrawals exist; 
 |---|---|
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | already used by the other endpoints; the relayer calls only the `ican_chain_operator_*` functions, which are granted to the service role alone |
 | `SUPABASE_ANON_KEY` (or `VITE_SUPABASE_ANON_KEY`) | wallet linking asks Supabase who the caller is |
-| `CHAIN_RPC_URL`, `CHAIN_ID` | the node endpoint and the number the database expects; a mismatch halts the bridge |
+| `CHAIN_RPC_URL` | the node endpoint. The chain id is read from it |
+| `CHAIN_ID` | **optional**. If set, it must equal the endpoint's chain; a mismatch halts the bridge (a cheap guard against pointing at the wrong network) |
 | `BRIDGE_OPERATOR_KEY` | **the one hot key**. Secret store only. Fund it with a few days of gas, nothing more |
 | `CHAIN_CRON_SECRET` (or `CRON_SECRET`) | at least 16 characters; the endpoints refuse everything without it |
 | `CHAIN_START_BLOCK` | the ICEC-C deployment block (the deploy script prints it) so the first scan does not start at genesis |
@@ -138,7 +151,7 @@ Dev panel → **On-chain**: the switch, the contracts, the limits, the queue by 
 ## What was measured
 
 - **Contracts:** 57 tests: 1:1 mint and redeem, no fee, balance-delta crediting, a fee-on-transfer token, a token that re-enters the vault, a donated surplus, permit, pause rules, the mint cap and its daily reset, idempotent mints, every transfer path reverting, ownership in two steps, and 6 randomized sequences of 250 steps each checking the vault's invariant (reserve ≥ supply) and ICEC-C's (supply = minted − burned) against a shadow model after every step.
-- **Database:** `supabase/tests/chain/run.sh`: **282 checks**, plus seven races with real concurrency: 120 attempts to withdraw 30 from a 100 balance → exactly 3 succeed; one request sent 40 times → one withdrawal; one burn event reported 40 times → credited once; 20 burns racing for 6 outstanding → exactly 2 credited; a cancel and a "signed" racing for 300 withdrawals → none both refunded and sent; **100 users bridging at once with a relayer minting and users burning back (about 1,700 operations/s): every ICEC in wallets + locked is identical before and after, to the last digit**; and a coin trade and a bridge withdrawal by the same person at once never deadlock. A 400-step random run holds "wallets + locked = constant" after every step. The race run found one real deadlock (two overlapping retry passes taking user locks in opposite orders); it is fixed with a single-pass lock and the run was repeated six times clean. Both rollbacks and a clean re-install are exercised.
+- **Database:** `supabase/tests/chain/run.sh`: **304 checks**, plus seven races with real concurrency: 120 attempts to withdraw 30 from a 100 balance → exactly 3 succeed; one request sent 40 times → one withdrawal; one burn event reported 40 times → credited once; 20 burns racing for 6 outstanding → exactly 2 credited; a cancel and a "signed" racing for 300 withdrawals → none both refunded and sent; **100 users bridging at once with a relayer minting and users burning back (about 1,700 operations/s): every ICEC in wallets + locked is identical before and after, to the last digit**; and a coin trade and a bridge withdrawal by the same person at once never deadlock. A 400-step random run holds "wallets + locked = constant" after every step. The race run found one real deadlock (two overlapping retry passes taking user locks in opposite orders); it is fixed with a single-pass lock and the run was repeated six times clean. Both rollbacks and a clean re-install are exercised.
 - **Relayer:** 32 unit tests (fake database, chain and contract): confirmation depth, chain order, record-before-broadcast, refusal to send on a bad reference, paused or over-cap, a reverted attempt requeued, a halted run still credits burn-backs, supply check, wallet-link verification, the endpoint lock.
 - **Frontend:** `chainMath` has 12 tests holding the on-screen arithmetic to the contracts' integers (exact BigInt, no floating point).
 - **End to end** (`cd blockchain && npm run e2e`): the real contracts on a local chain, the real database, the real relayer and the real panels in Chromium with a wallet injected, **36 checks**: deposit 250 → 250 ICEC-S one for one; redeem 50; proof of reserve live; link a wallet by signature through the real endpoint; withdraw, cancel and refund; mint; burn 5 back and be credited exactly once; ICEC conserved (485 + 15 = 500); then **a stolen-operator-key incident**: a mint nobody asked for halts the bridge, the attacker burning it gets nothing, and the ledger does not move.
