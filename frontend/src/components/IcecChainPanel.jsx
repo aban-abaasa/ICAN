@@ -120,7 +120,7 @@ export default function IcecChainPanel({ cfg }) {
       say('info', 'Sent. Waiting for the network to confirm…');
       await sent.wait();
       setBurnAmount('');
-      say('ok', `Done. It returns to your IcanEra balance after ${cfg.confirmations || 12} more blocks (usually a few minutes).`);
+      say('ok', `Done. It returns to your IcanEra balance after ${cfg.confirmations || 12} more block${(cfg.confirmations || 12) === 1 ? "" : "s"} (usually a few minutes).`);
     } catch (e) {
       say('err', friendlyChainError(e));
     } finally { setBusy(''); loadOnchain(); refresh(); }

@@ -2,11 +2,12 @@
   "name": "icanera-chain",
   "version": "0.1.0",
   "private": true,
-  "description": "Smart contracts for IcanEra tokenized money: the USD-backed stable unit (iUSD) and the non-transferable ICEC mirror. Testnet only from this repo; see ../CHAIN_TOKENS_DEPLOY.md.",
+  "description": "Smart contracts for IcanEra tokenized money: ICEC-S (the USD-backed stable form of icaneracoin) and ICEC-C (the non-transferable community form, a receipt for ledger icaneracoin). Testnet only from this repo; see ../CHAIN_TOKENS_DEPLOY.md.",
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
-    "node": "hardhat node"
+    "node": "hardhat node",
+    "e2e": "node e2e/chain-e2e.mjs"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "2.0.8",
@@ -16,6 +17,7 @@
     "chai": "4.5.0",
     "ethers": "6.13.4",
     "hardhat": "2.22.17",
+    "pg": "8.13.1",
     "solc": "0.8.24"
   }
 }
