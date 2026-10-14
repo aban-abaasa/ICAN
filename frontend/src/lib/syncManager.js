@@ -429,7 +429,10 @@ export class SyncManager {
       p_patient_email: d.patientEmail || null,
       p_patient_address: d.patientAddress || null,
       p_patient_dob: d.patientDob || null,
-      p_responses: d.responses || {}
+      p_responses: d.responses || {},
+      // Only sent when present, so a queued action still syncs against a
+      // database that hasn't had CMMS_CONSULTATION_LOGO_QR_ATTACHMENTS.sql run.
+      ...(d.attachments?.length ? { p_attachments: d.attachments } : {})
     });
 
     if (error) {

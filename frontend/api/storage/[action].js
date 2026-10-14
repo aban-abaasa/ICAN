@@ -24,7 +24,19 @@ import { buildKey, getUploadUrl, getDownloadUrl, deleteObject } from '../_lib/r2
 import { applyCors } from '../_lib/cors.js';
 import crypto from 'crypto';
 
-const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes', 'portfolio-chat', 'cmms-employment-documents', 'cmms-opportunities', 'transaction-receipts', 'cmms-visitor-vehicles'];
+const ALLOWED_FOLDERS = ['pitches', 'statuses', 'avatars', 'cmms-reports', 'cmms-announcements', 'voice-notes', 'portfolio-chat', 'cmms-employment-documents', 'cmms-opportunities', 'transaction-receipts', 'cmms-visitor-vehicles', 'cmms-consultation'];
+
+// Photos / documents attached to a CMMS consultation form submission
+// (backend/CMMS_CONSULTATION_LOGO_QR_ATTACHMENTS.sql). Staff upload through presign-upload into
+// cmms-consultation (namespaced by their user id, so they can delete their own). A patient on the
+// public share-link page uploads through presign-upload-chat with purpose 'consultation-form' into
+// the guest folder - never in ALLOWED_FOLDERS, so the owner-only DELETE route can't touch it. A
+// reception tablet shares one IP across many patients, so this purpose gets its own, wider
+// rate-limit bucket than chat attachments do.
+const CONSULTATION_GUEST_FOLDER = 'cmms-consultation-guest';
+const CONSULTATION_ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+const CONSULTATION_MAX_PER_WINDOW = 40;
+const consultationHits = new Map(); // ip -> [timestamps]
 
 // Vehicle photos on CMMS visitor check-ins (backend/CMMS_VISITOR_VEHICLE_APPROVAL.sql).
 // Staff upload through presign-upload into cmms-visitor-vehicles; a visitor on the public QR
@@ -99,6 +111,7 @@ async function presignUpload(req, res) {
 }
 
 // Route: POST /api/storage/presign-upload-chat
+// (also: purpose 'visitor-vehicle' and 'consultation-form' - see the folder notes at the top)
 // Used by an anonymous visitor sending a file/image in the direct-message
 // chat on a public /portfolio/<handle> page (see
 // backend/db/CREATE_PORTFOLIO_DIRECT_MESSAGES.sql) — they have no ICAN
@@ -113,25 +126,30 @@ async function presignUploadChat(req, res) {
   }
 
   const ip = getIp(req);
-  if (isRateLimited(chatHits, ip, CHAT_WINDOW_MS, CHAT_MAX_PER_WINDOW)) {
+  const { filename, contentType, purpose } = req.body || {};
+  const isConsultation = purpose === 'consultation-form';
+  const limited = isConsultation
+    ? isRateLimited(consultationHits, ip, CHAT_WINDOW_MS, CONSULTATION_MAX_PER_WINDOW)
+    : isRateLimited(chatHits, ip, CHAT_WINDOW_MS, CHAT_MAX_PER_WINDOW);
+  if (limited) {
     return res.status(429).json({ success: false, error: 'Too many uploads from this device. Please try again later.' });
   }
 
-  const { filename, contentType, purpose } = req.body || {};
   if (!filename) {
     return res.status(400).json({ success: false, error: 'filename is required' });
   }
   // The public visitor QR page reuses this anonymous, rate-limited route for the vehicle photo
-  // (images only, its own folder).
+  // (images only, its own folder); a consultation form's attachments (images + PDF) get theirs.
   const isVisitorPhoto = purpose === 'visitor-vehicle';
-  const allowedTypes = isVisitorPhoto ? VISITOR_PHOTO_TYPES : CHAT_ALLOWED_TYPES;
+  const allowedTypes = isVisitorPhoto ? VISITOR_PHOTO_TYPES : isConsultation ? CONSULTATION_ATTACHMENT_TYPES : CHAT_ALLOWED_TYPES;
   if (!allowedTypes.includes(contentType)) {
     return res.status(400).json({ success: false, error: `contentType must be one of: ${allowedTypes.join(', ')}` });
   }
 
   try {
     const anonymousId = crypto.randomUUID();
-    const key = buildKey(isVisitorPhoto ? VISITOR_VEHICLE_GUEST_FOLDER : PORTFOLIO_CHAT_GUEST_FOLDER, anonymousId, filename);
+    const guestFolder = isVisitorPhoto ? VISITOR_VEHICLE_GUEST_FOLDER : isConsultation ? CONSULTATION_GUEST_FOLDER : PORTFOLIO_CHAT_GUEST_FOLDER;
+    const key = buildKey(guestFolder, anonymousId, filename);
     const uploadUrl = await getUploadUrl({ key, contentType });
     return res.json({ success: true, key, uploadUrl });
   } catch (error) {
