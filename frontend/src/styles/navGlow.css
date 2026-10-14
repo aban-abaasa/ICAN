@@ -29,7 +29,13 @@
 
    Display and breakpoint (flex, sm:hidden), position and z-index stay in the
    host's Tailwind classes so they can never lose a cascade fight with this
-   file; spacing, padding and scrolling live here. */
+   file; spacing, padding and scrolling live here.
+
+   The app's ThemeContext injects a sheet that paints EVERY <button> with the
+   theme's surface colour, text colour and border colour, all !important. Tabs
+   are buttons, so the properties that sheet reaches (background, colour,
+   border) are !important here too -- a class selector with !important beats
+   a bare `button` rule with !important whatever the source order. */
 
 /* Tabs at the edge of the row shrink and dim as they scroll out of view. */
 @keyframes ng-dock {
@@ -100,8 +106,9 @@
   max-width: 6rem;
   scroll-snap-align: center;
   border-radius: 1rem;
-  color: var(--ng-text);
-  background: none;
+  color: var(--ng-text) !important;
+  background: none !important;
+  border: 0 !important;
   transition: color 0.25s ease, transform 0.18s ease;
   -webkit-tap-highlight-color: transparent;
   /* A soft halo of the page colour keeps the label legible over busy content. */
@@ -110,7 +117,7 @@
     0 0 3px color-mix(in srgb, var(--ng-surface) 90%, transparent),
     0 1px 2px color-mix(in srgb, var(--ng-surface) 90%, transparent);
 }
-.ng-tab:hover { color: color-mix(in srgb, var(--ng-active) 70%, var(--ng-text)); }
+.ng-tab:hover { color: color-mix(in srgb, var(--ng-active) 70%, var(--ng-text)) !important; }
 .ng-tab:active { transform: scale(0.92); }
 .ng-tab:focus-visible { outline: 2px solid var(--ng-active); outline-offset: 1px; }
 .ng-tab svg {
@@ -120,7 +127,7 @@
 }
 
 .ng-tab.ng-on,
-.ng-tab.ng-on:hover { color: var(--ng-active); }
+.ng-tab.ng-on:hover { color: var(--ng-active) !important; }
 
 /* The active icon: its own strokes take the travelling gradient, so the colour
    follows the glyph's real outline. (The plain colour after the url() is the
@@ -133,7 +140,7 @@
 
 /* A call-to-action tab (e.g. "Trade"): keeps its emphasis through the accent
    colour on its icon and label, instead of a solid fill. */
-.ng-tab.ng-hero { color: var(--ng-active); }
+.ng-tab.ng-hero { color: var(--ng-active) !important; }
 
 /* Dock effect: only where scroll-driven animations exist. `scale` (not
    `transform`) so the press feedback above still composes with it. */
