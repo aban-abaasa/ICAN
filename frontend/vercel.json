@@ -3,6 +3,9 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
+    { "source": "/api/chain-sync", "destination": "/api/investment-expiry-sweep?job=chain-sync" },
+    { "source": "/api/chain-link", "destination": "/api/investment-expiry-sweep?job=chain-link" },
+    { "source": "/api/fx-oracle", "destination": "/api/investment-expiry-sweep?job=fx-oracle" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/status/:id", "destination": "/api/share-preview?type=status&id=:id" },
     { "source": "/pitchin/:id", "destination": "/api/share-preview?type=pitch&id=:id" },

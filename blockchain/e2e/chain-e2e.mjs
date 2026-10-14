@@ -3,7 +3,7 @@
 //   a local Hardhat chain            with the REAL contracts deployed (ReserveVault + ICEC-S, ICEC-C, a mock USD stablecoin)
 //   a real Postgres                  with the REAL migrations (base icaneracoin stack + the three chain files)
 //   the REAL relayer code            frontend/api/_lib/chainRelayer.js, signing with a real key, talking to the chain and the DB
-//   the REAL wallet-link endpoint    frontend/api/chain-link.js
+//   the REAL wallet-link endpoint    frontend/api/_lib/chainRoutes.js (chainLinkHandler)
 //   the REAL panels in Chromium      OnChainPanel (ICEC-S and ICEC-C) driven like a person would, with a wallet injected
 //
 // The injected wallet forwards to the Hardhat node's unlocked accounts, so every transaction and signature is genuine.
@@ -37,7 +37,7 @@ const USER_ID = '0a0a0a0a-1111-4222-8333-444444444444';
 
 const { ethers } = await import(pathToFileURL(path.join(FRONTEND, 'node_modules/ethers/lib.esm/index.js')).href);
 const { createSupabaseRpc, runSync } = await import(pathToFileURL(path.join(FRONTEND, 'api/_lib/chainRelayer.js')).href);
-const chainLink = (await import(pathToFileURL(path.join(FRONTEND, 'api/chain-link.js')).href)).default;
+const { chainLinkHandler: chainLink } = await import(pathToFileURL(path.join(FRONTEND, 'api/_lib/chainRoutes.js')).href);
 const { chromium } = createRequire('/opt/node-tools/node_modules/')('playwright');
 
 const children = [];

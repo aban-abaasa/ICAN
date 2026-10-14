@@ -4,7 +4,7 @@
 //                            request.jwt.claim.sub / service_role), inside one transaction, exactly like PostgREST
 //   GET  /rest/v1/<table>    a few tables, simple eq filters, read as the database owner (the test seeds only what it needs)
 //   GET  /auth/v1/user       the user a seeded session token names
-//   POST /api/chain-link     the real serverless handler (frontend/api/chain-link.js), called with a minimal req/res
+//   POST /api/chain-link     the real serverless handler (chainLinkHandler in frontend/api/_lib/chainRoutes.js), called with a minimal req/res
 // Tokens are unsigned and trusted: this is a test double, never to be pointed at anything real.
 
 import http from 'node:http';

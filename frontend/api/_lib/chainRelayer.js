@@ -1,6 +1,6 @@
 /**
  * The IcanEra on-chain relayer: the one small program that sits between the database and the chain.
- * Used by api/chain-sync.js (a scheduled endpoint), api/chain-link.js (wallet linking) and api/fx-oracle.js.
+ * Used by api/_lib/chainRoutes.js, which serves /api/chain-sync (scheduled), /api/chain-link (wallet linking) and /api/fx-oracle.
  *
  * WHAT IT DOES, in the order of each run (runSync):
  *   1. takes a lease in the database, so two overlapping runs never sign with the same key at once;

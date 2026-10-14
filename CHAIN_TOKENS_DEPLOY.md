@@ -28,7 +28,7 @@ supabase/migrations/20261020110000_chain_bridge.sql      the bridge functions (u
 supabase/migrations/20261020120000_chain_fx_oracle.sql   informational USD -> local exchange rate (display only)
 supabase/rollback/20261020_rollback_chain*.sql           stop-and-keep-the-books, and the destructive drop
 supabase/tests/chain/run.sh                              282 database checks + 7 concurrency races + rollback
-frontend/api/chain-sync.js  chain-link.js  fx-oracle.js  the relayer, wallet-link verification and the rate feed
+frontend/api/_lib/chainRoutes.js                         /api/chain-sync, /api/chain-link, /api/fx-oracle (served by an existing function: see below)
 frontend/api/_lib/chainRelayer.js                        the relayer's logic (32 unit tests)
 frontend/src/components/OnChainPanel.jsx  StableUnitPanel.jsx  IcecChainPanel.jsx   wallet -> Trade -> On-chain
 frontend/src/components/ICANChainDevTab.jsx              dev panel -> On-chain
@@ -80,6 +80,8 @@ The chain and the ICEC-C contract **cannot be changed** once withdrawals exist; 
 | `FX_PROVIDER_URL`, `FX_PAIRS` | optional; default `open.er-api.com` and `USD/UGX,USD/KES,USD/TZS,USD/RWF` |
 
 ### 4. Schedule it
+
+**Why these three endpoints are not their own files:** every file under `frontend/api/` is a separate Vercel serverless function, and the Hobby plan allows **12 per deployment**. The project was already at 12, so three more files made the whole deploy fail. The three endpoints live in `api/_lib/chainRoutes.js`, `api/investment-expiry-sweep.js` hands them requests carrying `?job=chain-sync | chain-link | fx-oracle`, and `vercel.json` rewrites `/api/chain-sync`, `/api/chain-link` and `/api/fx-oracle` onto it, so the public URLs are exactly as below and cost no function slot. `frontend/tests/apiFunctionCount.test.js` fails if `api/` ever goes over 12 again.
 
 `/api/chain-sync` and `/api/fx-oracle` should run **every minute**. They accept `Authorization: Bearer <secret>` (what Vercel Cron sends when `CRON_SECRET` is set) or `x-automation-secret: <secret>`. Vercel's per-minute cron needs a paid plan, and a too-frequent `crons` entry **fails the deployment on the free plan**, so this repository does not add one to `vercel.json`: add `{ "crons": [{ "path": "/api/chain-sync", "schedule": "* * * * *" }, { "path": "/api/fx-oracle", "schedule": "* * * * *" }] }` yourself on a plan that allows it, or call the URLs from any scheduler (GitHub Actions, Supabase `pg_cron` + `pg_net`, a small VM). A run takes seconds; two overlapping runs are safe (a database lease makes the second one stand down).
 
