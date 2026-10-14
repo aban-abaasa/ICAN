@@ -8,6 +8,8 @@ import { createBusinessProfileFromCategory, publishBusinessAsSupplier, getMySupp
 import BusinessProfileDocuments from './BusinessProfileDocuments';
 import ConversationImportModal from './common/ConversationImportModal';
 import { COUNTRIES } from '../constants/countries';
+import { SectorDataTermsCheckbox } from './SectorDataTerms';
+import { acceptDataTerms } from '../services/sectorMarketService';
 
 const STRUCTURE_LIMITS = {
   sole_proprietorship: 1,
@@ -69,6 +71,10 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
   // "Fill from my idea": details read from a conversation. `conceptDraft` is handed to the
   // documents step, which uses it only for sections that are still empty.
   const [showConversation, setShowConversation] = useState(false);
+  // The Terms & Conditions data clause for Sector Markets: required when a NEW business account is created.
+  // `sectorTerms` stays null (and nothing is shown or required) until the database feature is installed.
+  const [sectorTerms, setSectorTerms] = useState(null);
+  const [sectorTermsOk, setSectorTermsOk] = useState(false);
   const [conceptDraft, setConceptDraft] = useState(null);
 
   const [coOwners, setCoOwners] = useState([]);
@@ -477,6 +483,11 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
       return;
     }
 
+    if (!editingProfile && sectorTerms && !sectorTermsOk) {
+      alert('Please tick the box to agree to the Terms & Conditions for creating a business account.');
+      return;
+    }
+
     if (isSoleProprietorship && editingProfile?.business_co_owners?.length) {
       alert('This profile already has shareholders. Keep its current ownership structure or remove shareholders explicitly before choosing Sole Proprietorship.');
       return;
@@ -651,6 +662,14 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
           }
         } else {
           result = await createBusinessProfile(userId, { user_id: userId, ...profile });
+        }
+
+        if (result.success && result.data?.id && sectorTerms) {
+          const consent = await acceptDataTerms(result.data.id, sectorTerms.version).catch((e) => ({ success: false, error: e?.message }));
+          if (!consent?.success) {
+            // Not fatal: the business is simply left out of the sector totals, and is asked again on its next visit.
+            console.warn('Business created, but the data terms could not be recorded:', consent?.error);
+          }
         }
 
         if (result.success && result.data?.id && businessData.supplierEnabled) {
@@ -2138,6 +2157,10 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                 </div>
               )}
 
+              {!editingProfile && (
+                <SectorDataTermsCheckbox checked={sectorTermsOk} onChange={setSectorTermsOk} onTerms={setSectorTerms} />
+              )}
+
               {/* Mobile-Optimized Navigation */}
               <div className="flex gap-3 mt-8 pt-6 border-t border-slate-700">
                 <button
@@ -2149,7 +2172,7 @@ const BusinessProfileForm = ({ onProfileCreated, onCancel, userId, editingProfil
                 </button>
                 <button
                   onClick={handleCreateProfile}
-                  disabled={(!isSoleProprietorship && (
+                  disabled={(!editingProfile && sectorTerms && !sectorTermsOk) || (!isSoleProprietorship && (
                     isLimitedByGuarantee
                       ? (coOwners.length === 0 || coOwners.some(owner => Number(owner.contributionAmount || 0) < guaranteeMinimum))
                       : (totalShare !== 100 || coOwners.length === 0)

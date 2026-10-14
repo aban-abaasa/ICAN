@@ -14,6 +14,8 @@ import ICANReferralsDevTab from './ICANReferralsDevTab';
 import ICANFranchiseDevTab from './ICANFranchiseDevTab';
 import ICANEraApiDevTab from './ICANEraApiDevTab';
 import ICANInsuranceDevTab from './ICANInsuranceDevTab';
+import ICANSectorDevTab from './ICANSectorDevTab';
+import ICANChainDevTab from './ICANChainDevTab';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { Linkify } from '../utils/linkify';
 import {
@@ -130,6 +132,8 @@ const TABS = [
   { id: 'corporate',  label: 'Corporate',    Icon: CreditCard,  color: '#a855f7' },
   { id: 'referrals',  label: 'Referrals',    Icon: Gift,        color: '#84cc16' },
   { id: 'franchise',  label: 'Franchise',    Icon: Network,     color: '#f59e0b' },
+  { id: 'sectors',    label: 'Sector Markets', Icon: TrendingUp, color: '#fbbf24' },
+  { id: 'onchain',    label: 'On-chain',       Icon: TrendingUp, color: '#38bdf8' },
   { id: 'api',        label: 'API',          Icon: Zap,         color: '#38bdf8' },
   { id: 'insurance',  label: 'Insurance',    Icon: ShieldCheck, color: '#14b8a6' },
   { id: 'board',     label: 'Public Board', Icon: MessageCircle, color: '#14b8a6' },
@@ -613,7 +617,7 @@ const SupportTeamTab = () => {
   const [newAllowedTabs, setNewAllowedTabs] = useState(['messages', 'board']);
   // never let a link grant the tab that manages links/PIN itself, nor the franchise tab (partner approvals and payouts),
   // nor the API tab (it approves outside developers and can switch the whole API off)
-  const shareableTabs = TABS.filter(t => t.id !== 'support' && t.id !== 'franchise' && t.id !== 'api');
+  const shareableTabs = TABS.filter(t => t.id !== 'support' && t.id !== 'franchise' && t.id !== 'api' && t.id !== 'sectors' && t.id !== 'onchain');
   const [creating,   setCreating]   = useState(false);
   const [createError, setCreateError] = useState('');
   const [justCreated, setJustCreated] = useState(null); // { token, label }
@@ -2731,6 +2735,12 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
 
         {/* ══ FRANCHISE (requests, partners, rate card, payouts; needs a real admin account, not the panel token) ══ */}
         {tab==='franchise' && <ICANFranchiseDevTab/>}
+
+        {/* ══ SECTOR MARKETS (kill switch, vault, sectors, settings; the panel's dev token) ══ */}
+        {tab==='sectors' && <ICANSectorDevTab devToken={DEV_TOKEN}/>}
+
+        {/* ══ ON-CHAIN TOKENS (bridge switch, contracts, limits, queue, anomalies, supply check; the panel's dev token) ══ */}
+        {tab==='onchain' && <ICANChainDevTab devToken={DEV_TOKEN}/>}
 
         {/* ══ API (outside developers: requests, keys, endpoint kill switches; needs a real admin account, not the panel token) ══ */}
         {tab==='api' && <ICANEraApiDevTab/>}

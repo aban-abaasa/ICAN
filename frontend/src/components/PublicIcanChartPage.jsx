@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, ArrowRight, BarChart3, HelpCircle, LineChart as LineChartIcon, Moon, RefreshCw, Sun, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, BarChart3, HelpCircle, Layers, LineChart as LineChartIcon, Moon, RefreshCw, Sun, X } from 'lucide-react';
 import IcanTradingChart from './IcanTradingChart';
 import IcanAnalysisPanel from './IcanAnalysisPanel';
 import PublicTradePanel from './PublicTradePanel';
+import PublicSectorMarkets from './PublicSectorMarkets';
 import AmbientToggle from './AmbientToggle';
 import { CHART_PALETTES } from './chartPalettes';
 import { useLineStyles } from './chartLineStyles';
@@ -33,6 +34,10 @@ const FAQ = [
   {
     q: 'How do I read the candlesticks?',
     a: 'Each candle covers the timeframe you pick (five minutes by default). Its body runs from the opening to the closing price (green if the price rose, red if it fell) and its wick shows the highest and lowest price reached. Hover over any candle to read its exact numbers.',
+  },
+  {
+    q: 'What are Sector Markets?',
+    a: 'Sector Markets are ten coins that each follow the combined sales of businesses in one sector on IcanEra, such as agriculture, transport or retail. The figures are anonymous totals: no business or customer is ever named, and a sector only opens once enough businesses take part that none can be picked out. You buy and sell them with icaneracoin. Their prices can fall as well as rise.',
   },
   {
     q: 'What do RSI, moving averages, support and resistance mean?',
@@ -100,7 +105,8 @@ const scrollToId = (id) => {
 };
 
 // Page sections in order, for the phone bottom bar's active tile.
-const NAV_SECTIONS = ['chart', 'analysis', 'learn'];
+// ('sectors' is skipped by the scroll-spy while that section is not on the page)
+const NAV_SECTIONS = ['chart', 'analysis', 'sectors', 'learn'];
 // Edge-line colours of the bottom bar's tiles (see styles/navGlow.css): the
 // dark page's gold accent / the light page's deep emerald, with companions.
 const NAV_COLOURS = {
@@ -123,6 +129,7 @@ const PublicIcanChartPage = () => {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [placement, setPlacement] = useState(false);
   const [draft, setDraft] = useState({ side: 'buy', amount: '', price: '' });
+  const [sectorsShown, setSectorsShown] = useState(false); // false until the Sector Markets SQL is installed
 
   const latest = candles.length ? candles[candles.length - 1] : null;
   const priceUgx = snapshot?.price_ugx != null ? Number(snapshot.price_ugx) : latest?.close ?? null;
@@ -260,6 +267,7 @@ const PublicIcanChartPage = () => {
           </h1>
           <nav aria-label="On this page" className="hidden items-center gap-1 text-sm font-semibold lg:flex">
             <button type="button" onClick={() => scrollToId('analysis')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Analysis</button>
+            {sectorsShown && <button type="button" onClick={() => scrollToId('sectors')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Sectors</button>}
             <button type="button" onClick={() => scrollToId('learn')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Learn</button>
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-1 text-sm tabular-nums sm:gap-2">
@@ -285,7 +293,11 @@ const PublicIcanChartPage = () => {
         </div>
       </header>
 
-      <main className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px]">
+      <main>
+        {/* The chart and the docked trade panel share ONE row of their own. They used to be the first row of a grid that
+            also held everything below, and a sticky panel in a grid stays pinned for the whole grid, not its row, so on a
+            desktop it floated over the right-hand side of the analysis, the FAQ and the sector coins. */}
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px]">
         {/* The chart owns the whole first screen: no card, no border, edge to edge. On a phone it leaves a strip of
             the page showing underneath, and a vertical swipe scrolls the page (see the chart's handleScroll). */}
         <section id="chart" aria-label="icaneracoin candlestick chart" className="h-[calc(100svh-7.25rem-env(safe-area-inset-bottom))] min-h-[420px] w-full lg:h-[calc(100dvh-3rem)]">
@@ -319,8 +331,9 @@ const PublicIcanChartPage = () => {
             {panel}
           </aside>
         )}
+        </div>
 
-        <div className="lg:col-span-2">
+        <div>
           <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
             <p className={`text-xs ${k.soft}`}>
               Drag to move through time, pinch or scroll to zoom, tap or hover for each candle&apos;s open, high, low and close. Switch timeframe above the chart.
@@ -338,11 +351,13 @@ const PublicIcanChartPage = () => {
               </p>
             </section>
 
+            <PublicSectorMarkets theme={theme} skin={k} trading={trading} onAvailability={setSectorsShown} />
+
             <section className={`mt-12 rounded-2xl border p-6 sm:p-8 ${k.card}`}>
               <h2 className={`text-2xl font-bold ${k.title}`}>Trade icaneracoin on IcanEra</h2>
               <p className={`mt-2 max-w-2xl text-sm leading-6 ${k.body}`}>
                 Continue with Google to get your IcanEra wallet, top up with Mobile Money, card or bank, buy coins, and book buy or sell orders
-                at the price you choose straight from this chart. Manage your business and personal finances in the same place.
+                at the price you choose straight from this chart, or trade the ten business-sector coins above. Manage your business and personal finances in the same place.
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <button type="button" onClick={() => { setTradeTab('buy'); setSheetOpen(true); if (isDesktop) scrollToId('chart'); }} className={`inline-flex items-center gap-2 rounded-md px-5 py-3 text-sm font-bold ${k.cta}`}>
@@ -383,6 +398,7 @@ const PublicIcanChartPage = () => {
           {navBtn('chart', 'Chart', LineChartIcon, () => window.scrollTo({ top: 0, behavior: 'smooth' }))}
           {navBtn('trade', 'Trade', ArrowLeftRight, () => setSheetOpen(true), { hero: true })}
           {navBtn('analysis', 'Analysis', BarChart3, () => scrollToId('analysis'))}
+          {sectorsShown && navBtn('sectors', 'Sectors', Layers, () => scrollToId('sectors'))}
           {navBtn('learn', 'Learn', HelpCircle, () => scrollToId('learn'))}
         </nav>
       )}

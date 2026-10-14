@@ -11,9 +11,20 @@
  * Requires env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  * Auth: Vercel cron header, or ?secret=/x-automation-secret matching
  * REPORT_AUTOMATION_SECRET (same secret/pattern as report-automation.js).
+ *
+ * It ALSO serves the on-chain relayer's three endpoints (/api/chain-sync, /api/chain-link, /api/fx-oracle): vercel.json
+ * rewrites those paths here with ?job=..., and they are handled by api/_lib/chainRoutes.js with their own, stricter locks.
+ * They are not separate files because every file under api/ is a serverless function, Vercel's Hobby plan allows 12 per
+ * deployment, and the project is at 12 (tests/apiFunctionCount.test.js guards it).
  */
 
+import { chainRouteFor } from './_lib/chainRoutes.js';
+
 export default async function handler(req, res) {
+  // The hand-off comes first, so none of the checks below (the older, header-trusting sweep rules) ever apply to the relayer.
+  const chain = chainRouteFor(req);
+  if (chain) return chain(req, res);
+
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

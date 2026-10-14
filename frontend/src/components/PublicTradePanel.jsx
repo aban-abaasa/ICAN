@@ -11,7 +11,7 @@ import { coinsForMoney, distanceFromMarketPct, quickTopUpAmounts, validateWallet
 //   Book  queue a buy or sell at the price you pick (tap the chart to choose it), then fill it now or cancel it
 // All the money movement is in usePublicTrading, which only calls the app's existing, server-verified services.
 
-const GoogleMark = () => (
+export const GoogleMark = () => (
   <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
     <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
     <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.3 5.7c4.3-4 6.8-9.9 6.8-17.1z" />

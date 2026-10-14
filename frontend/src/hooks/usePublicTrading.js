@@ -272,11 +272,15 @@ export const usePublicTrading = (livePriceUgx) => {
     }
   });
 
-  const continueWithGoogle = async () => {
-    // Come back to this page with the trade panel open (the sign-in returns to the exact URL it started from).
+  // By default the visitor comes back with the coin trade panel open (?trade=1). A caller that started from somewhere
+  // else on the page (the Sector Markets section) names its own return marker instead.
+  const continueWithGoogle = async (opts) => {
+    const param = typeof opts?.returnParam === 'string' ? opts.returnParam : 'trade';
+    const value = typeof opts?.returnValue === 'string' ? opts.returnValue : '1';
+    // Come back to this page (the sign-in returns to the exact URL it started from).
     try {
       const url = new URL(window.location.href);
-      url.searchParams.set('trade', '1');
+      url.searchParams.set(param, value);
       window.history.replaceState({}, '', `${url.pathname}${url.search}`);
     } catch { /* fall back to a plain return */ }
     try {
