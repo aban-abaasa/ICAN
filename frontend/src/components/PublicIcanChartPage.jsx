@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, ArrowRight, BarChart3, HelpCircle, Layers, LineChart as LineChartIcon, Moon, RefreshCw, Sun, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, BarChart3, Coins, HelpCircle, Layers, LineChart as LineChartIcon, Moon, RefreshCw, Sun, X } from 'lucide-react';
 import IcanTradingChart from './IcanTradingChart';
 import IcanAnalysisPanel from './IcanAnalysisPanel';
 import PublicTradePanel from './PublicTradePanel';
 import PublicSectorMarkets from './PublicSectorMarkets';
+import PublicOnChainTokens from './PublicOnChainTokens';
 import AmbientToggle from './AmbientToggle';
 import { CHART_PALETTES } from './chartPalettes';
 import { useLineStyles } from './chartLineStyles';
@@ -39,6 +40,10 @@ const FAQ = [
   {
     q: 'What are Sector Markets?',
     a: 'Sector Markets are ten coins that each follow the combined sales of businesses in one sector on IcanEra, such as agriculture, transport or retail. The figures are anonymous totals: no business or customer is ever named, and a sector only opens once enough businesses take part that none can be picked out. You buy and sell them with icaneracoin. Their prices can fall as well as rise.',
+  },
+  {
+    q: 'What are ICEC-S and ICEC-C?',
+    a: 'They are icaneracoin as tokens on a blockchain, held in your own crypto wallet. ICEC-S is the stable form: a US-dollar token, each one backed by one US-dollar stablecoin in a public vault and swappable back at any time, so it keeps its dollar value. ICEC-C is the community form: a receipt for icaneracoin you move out of your IcanEra wallet, worth what the coin is worth, which rises and falls as the community uses it. ICEC-C cannot be sent to anyone else or sold on an exchange. IcanEra never holds your keys and cannot move your tokens. Prices can fall as well as rise.',
   },
   {
     q: 'What do RSI, moving averages, support and resistance mean?',
@@ -107,7 +112,7 @@ const scrollToId = (id) => {
 
 // Page sections in order, for the phone bottom bar's active tile.
 // ('sectors' is skipped by the scroll-spy while that section is not on the page)
-const NAV_SECTIONS = ['chart', 'analysis', 'sectors', 'learn'];
+const NAV_SECTIONS = ['chart', 'analysis', 'sectors', 'tokens', 'learn'];
 // Colours that travel along the active icon of the bottom bar (see styles/navGlow.css): the
 // dark page's gold accent / the light page's deep emerald, with companions.
 const NAV_COLOURS = {
@@ -131,6 +136,7 @@ const PublicIcanChartPage = () => {
   const [placement, setPlacement] = useState(false);
   const [draft, setDraft] = useState({ side: 'buy', amount: '', price: '' });
   const [sectorsShown, setSectorsShown] = useState(false); // false until the Sector Markets SQL is installed
+  const [tokensShown, setTokensShown] = useState(false);   // false until the on-chain SQL is installed and a contract is set
 
   const latest = candles.length ? candles[candles.length - 1] : null;
   const priceUgx = snapshot?.price_ugx != null ? Number(snapshot.price_ugx) : latest?.close ?? null;
@@ -269,6 +275,7 @@ const PublicIcanChartPage = () => {
           <nav aria-label="On this page" className="hidden items-center gap-1 text-sm font-semibold lg:flex">
             <button type="button" onClick={() => scrollToId('analysis')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Analysis</button>
             {sectorsShown && <button type="button" onClick={() => scrollToId('sectors')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Sectors</button>}
+            {tokensShown && <button type="button" onClick={() => scrollToId('tokens')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>On-chain</button>}
             <button type="button" onClick={() => scrollToId('learn')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Learn</button>
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-1 text-sm tabular-nums sm:gap-2">
@@ -354,6 +361,8 @@ const PublicIcanChartPage = () => {
 
             <PublicSectorMarkets theme={theme} skin={k} trading={trading} onAvailability={setSectorsShown} />
 
+            <PublicOnChainTokens theme={theme} skin={k} priceUgx={priceUgx} onAvailability={setTokensShown} />
+
             <section className={`mt-12 rounded-2xl border p-6 sm:p-8 ${k.card}`}>
               <h2 className={`text-2xl font-bold ${k.title}`}>Trade icaneracoin on IcanEra</h2>
               <p className={`mt-2 max-w-2xl text-sm leading-6 ${k.body}`}>
@@ -401,6 +410,7 @@ const PublicIcanChartPage = () => {
           {navBtn('trade', 'Trade', ArrowLeftRight, () => setSheetOpen(true), { hero: true })}
           {navBtn('analysis', 'Analysis', BarChart3, () => scrollToId('analysis'))}
           {sectorsShown && navBtn('sectors', 'Sectors', Layers, () => scrollToId('sectors'))}
+          {tokensShown && navBtn('tokens', 'On-chain', Coins, () => scrollToId('tokens'))}
           {navBtn('learn', 'Learn', HelpCircle, () => scrollToId('learn'))}
         </nav>
       )}

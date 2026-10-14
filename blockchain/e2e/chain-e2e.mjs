@@ -146,7 +146,7 @@ try {
   psql("UPDATE icanera_chain.chain_settings SET stable_token_address = NULL, reserve_token_address = NULL, reserve_token_symbol = 'OLD' WHERE id = TRUE");
   log('starting the web app');
   await start('vite', 'npx', ['vite', '--port', '5199', '--host', '127.0.0.1', '--open', 'false'],
-    { cwd: FRONTEND, env: { ...process.env, BROWSER: 'none', VITE_SUPABASE_URL: SHIM, VITE_SUPABASE_ANON_KEY: ANON_KEY } }, /Local:/);
+    { cwd: FRONTEND, env: { ...process.env, BROWSER: 'none', VITE_SUPABASE_URL: SHIM, VITE_SUPABASE_ANON_KEY: ANON_KEY, VITE_CHAIN_RPC_URL: HH } }, /Local:/);
 
   // ---------------------------------------------------------------- the browser, with a wallet injected
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] });
@@ -222,6 +222,32 @@ try {
   check('redeeming 50 returns exactly 50 of the stablecoin', (await usdc.balanceOf(userWallet.address)) === 800n * 10n ** 6n);
   const [held, supply] = await vault.collateralization();
   check('after every step the vault holds at least what it has issued (200 = 200)', held === 200n * 10n ** 6n && supply === 200n * 10n ** 6n);
+
+  // ================================================================ the public /icaneracoin page: a visitor with no account and no wallet
+  log('the public icaneracoin page shows the two on-chain forms');
+  const visitor = await browser.newContext({ viewport: { width: 1100, height: 1400 }, colorScheme: 'dark' });
+  const pub = await visitor.newPage();
+  const pubErrors = [];
+  pub.on('pageerror', (e) => pubErrors.push(String(e)));
+  pub.on('console', (m) => { if (['error', 'warning'].includes(m.type())) consoleLines.push(`public ${m.type()}: ${m.text().slice(0, 300)}`); });
+  pub.on('response', (r) => { if (r.status() >= 400) consoleLines.push(`public HTTP ${r.status()} ${r.url().slice(0, 140)}`); });
+  pub.on('requestfailed', (r) => consoleLines.push(`public request failed: ${r.url().slice(0, 120)} ${r.failure()?.errorText}`));
+  await pub.goto(`${WEB}/icaneracoin`, { waitUntil: 'domcontentloaded' });
+  await pub.waitForSelector('[data-testid="public-onchain"]', { timeout: 60_000 });
+  await pub.locator('[data-testid="public-onchain"]').scrollIntoViewIfNeeded();      // the section only reads the chain while it is on screen
+  const pubText = async (sel) => ((await pub.locator(sel).first().innerText().catch(() => '')) || '').replace(/\s+/g, ' ').trim();
+  const t0 = Date.now();
+  let stableText = '';
+  while (Date.now() - t0 < 25_000) { stableText = await pubText('[data-testid="onchain-stable"]'); if (/every ICEC-S is covered/.test(stableText)) break; await pub.waitForTimeout(300); }
+  check('the page shows ICEC-S with its proof of reserve read from the chain with no wallet: held 200, issued 200, fully covered', /Held in the vault 200 mUSDC/.test(stableText) && /ICEC-S in existence 200/.test(stableText) && /100\.00%/.test(stableText) && /every ICEC-S is covered/.test(stableText), stableText);
+  check('and the shilling value of one ICEC-S at the oracle rate', /1 ICEC-S ≈ UGX 3,700/.test(stableText), stableText);
+  const commText = await pubText('[data-testid="onchain-community"]');
+  check('and ICEC-C, which cannot be sent anywhere but the holder\'s own wallet, with its on-chain supply', /ICEC-C/.test(commText) && /Your own wallet only/.test(commText) && /ICEC-C in existence/.test(commText), commText);
+  const detected = await pub.locator('[data-testid="public-onchain"] a[href]').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
+  check('the contracts link to the block explorer', detected.some((h) => h.startsWith('https://explorer.local/address/')), detected.join(','));
+  await pub.screenshot({ path: path.join(OUT, '1b-public-page.png'), fullPage: true });
+  check('the public page threw no error', pubErrors.length === 0, pubErrors.join(' | '));
+  await visitor.close();
   check('the tokens were never in IcanEra\'s hands: the database has no record of them', Number(psql('SELECT count(*) FROM icanera_chain.bridge_withdrawals')) === 0);
 
   // ================================================================ ICEC-C, the community form

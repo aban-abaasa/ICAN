@@ -93,6 +93,8 @@ The chain and the ICEC-C contract **cannot be changed** once withdrawals exist; 
 | `CHAIN_START_BLOCK` | the ICEC-C deployment block (the deploy script prints it) so the first scan does not start at genesis |
 | `FX_PROVIDER_URL`, `FX_PAIRS` | optional; default `open.er-api.com` and `USD/UGX,USD/KES,USD/TZS,USD/RWF` |
 
+**The public `/icaneracoin` page** shows an *On the blockchain* section (and an **On-chain** link in its menu) as soon as a chain and a contract are set: both forms in plain words, ICEC-S's live proof of reserve (vault balance against ICEC-S issued), the ICEC-C supply, the dollar-rate value of one ICEC-S, and explorer links to every contract. A visitor needs no account and no wallet: it reads the chain through a public node. Common test networks have a built-in free node; for any other network, or to use your own, set `VITE_CHAIN_RPC_URL` for the frontend build. Without a node the section still shows, with a link to check the vault on the explorer. Depositing, swapping back and moving icaneracoin onto the chain stay in the signed-in wallet's On-chain tab.
+
 ### 4. Schedule it
 
 **Why these three endpoints are not their own files:** every file under `frontend/api/` is a separate Vercel serverless function, and the Hobby plan allows **12 per deployment**. The project was already at 12, so three more files made the whole deploy fail. The three endpoints live in `api/_lib/chainRoutes.js`, `api/investment-expiry-sweep.js` hands them requests carrying `?job=chain-sync | chain-link | fx-oracle`, and `vercel.json` rewrites `/api/chain-sync`, `/api/chain-link` and `/api/fx-oracle` onto it, so the public URLs are exactly as below and cost no function slot. `frontend/tests/apiFunctionCount.test.js` fails if `api/` ever goes over 12 again.

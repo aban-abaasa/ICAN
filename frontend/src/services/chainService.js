@@ -152,6 +152,20 @@ export const resolveStableContracts = async (provider, cfg) => {
 };
 
 /** The three contracts, as `{ vault, token, reserve }`. Pass the addresses from resolveStableContracts. */
+// Read-only access for a visitor with no wallet: a public node for the network the contracts are on. VITE_CHAIN_RPC_URL wins; otherwise
+// the well-known free endpoint of the common test networks. null when there is none (the screen then says so instead of guessing).
+const PUBLIC_RPC = {
+  11155111: 'https://ethereum-sepolia-rpc.publicnode.com', 17000: 'https://ethereum-holesky-rpc.publicnode.com',
+  84532: 'https://sepolia.base.org', 421614: 'https://sepolia-rollup.arbitrum.io/rpc', 11155420: 'https://sepolia.optimism.io',
+  80002: 'https://rpc-amoy.polygon.technology',
+};
+export const publicProvider = (cfg) => {
+  const chainId = Number(cfg?.chain_id);
+  const url = (import.meta.env?.VITE_CHAIN_RPC_URL || '').trim() || PUBLIC_RPC[chainId];
+  if (!url || !chainId) return null;
+  return new ethers.JsonRpcProvider(url, chainId, { staticNetwork: true });
+};
+
 export const stableContracts = (runner, cfg, resolved) => ({
   reserve: new ethers.Contract(resolved.reserve, ERC20_ABI, runner),
   token: new ethers.Contract(resolved.token, ERC20_ABI, runner),
@@ -174,4 +188,4 @@ export const devChain = {
   fxOverview: (token) => rpc('ican_chain_dev_fx_overview', { dev_token: token }),
 };
 
-export default { getChainConfig, getFxRate, getChainOverview, requestLinkChallenge, submitLink, unlinkAddress, requestWithdrawal, cancelWithdrawal, stableContracts, resolveStableContracts, communityContract, newCreditId, devChain };
+export default { getChainConfig, getFxRate, getChainOverview, requestLinkChallenge, submitLink, unlinkAddress, requestWithdrawal, cancelWithdrawal, stableContracts, resolveStableContracts, publicProvider, communityContract, newCreditId, devChain };
