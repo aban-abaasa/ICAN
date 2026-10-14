@@ -842,8 +842,17 @@ export const updatePitch = async (pitchId, updates) => {
       throw error;
     }
     
+    // A permission (RLS) rule that hides the row, or a pitch that no longer exists, updates
+    // zero rows WITHOUT an error. Treat that as a failure, otherwise the caller believes the
+    // video was linked when nothing was saved.
+    if (!data || data.length === 0) {
+      const msg = 'No pitch was updated. It may have been removed, or you may not have permission to edit it.';
+      console.error('❌ updatePitch matched no rows for', pitchId);
+      return { success: false, error: msg };
+    }
+
     console.log('✅ updatePitch SUCCESS:', data);
-    if (data && data[0] && data[0].video_url) {
+    if (updates.video_url) {
       console.log('📹 Video URL after update:', data[0].video_url ? '✅ Saved' : '❌ Missing');
     }
     

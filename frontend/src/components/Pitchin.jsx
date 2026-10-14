@@ -891,7 +891,10 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
             
             if (!updateResult.success) {
               console.error('❌ Failed to update pitch with video URL:', updateResult.error);
-              alert('Warning: Video uploaded but failed to link to pitch. Please try refreshing.');
+              // The file is in R2 but the pitch row does not point to it, so the feed cannot show it.
+              // Keep the key in the console/alert so the video can be re-linked rather than lost.
+              console.error('❌ Unlinked R2 video key (re-link to pitch ' + newPitchData.id + '):', uploadResult.path || uploadResult.url);
+              alert(`Your video was uploaded but could not be attached to the pitch, so it will not show in the feed yet.\n\n${updateResult.error || 'Unknown error'}\n\nPlease try again, or contact support with this pitch ID: ${newPitchData.id}`);
             } else {
               console.log('✅ Pitch successfully updated with video URL');
             }
