@@ -104,12 +104,29 @@ BEGIN
   PERFORM t.check('2.2 so does a withdrawal', r ->> 'code' = 'not_configured', r::TEXT);
 END $t$;
 DO $t$
+DECLARE r JSONB; s icanera_chain.chain_settings;
+BEGIN
+  r := t.set('{"bridge_enabled": true}');
+  SELECT * INTO s FROM icanera_chain.chain_settings;
+  PERFORM t.check('2.3 Turn ON before a chain and contract are set is not refused: it is remembered, and the bridge stays off',
+    (r ->> 'success')::BOOLEAN AND (r ->> 'queued')::BOOLEAN AND NOT s.bridge_enabled AND s.bridge_start_requested AND s.bridge_start_requested_at IS NOT NULL, r::TEXT);
+  PERFORM t.as_service();
+  r := public.ican_chain_operator_auto_start();
+  PERFORM t.reset();
+  PERFORM t.check('2.3a the relayer does not start it while nothing is configured', NOT (r ->> 'started')::BOOLEAN AND r ->> 'reason' = 'not_configured', r::TEXT);
+  r := t.set('{"bridge_enabled": false}');
+  SELECT * INTO s FROM icanera_chain.chain_settings;
+  PERFORM t.check('2.3b Turn OFF cancels a waiting request', NOT (r ->> 'queued')::BOOLEAN AND NOT s.bridge_start_requested AND s.bridge_start_requested_at IS NULL, r::TEXT);
+  PERFORM t.as_service();
+  r := public.ican_chain_operator_auto_start();
+  PERFORM t.reset();
+  PERFORM t.check('2.3c and with no request the relayer starts nothing', NOT (r ->> 'started')::BOOLEAN AND r ->> 'reason' = 'not_requested', r::TEXT);
+  PERFORM t.check('2.3d auto-start is for the relayer only', NOT has_function_privilege('anon', 'public.ican_chain_operator_auto_start()', 'EXECUTE')
+    AND NOT has_function_privilege('authenticated', 'public.ican_chain_operator_auto_start()', 'EXECUTE') AND has_function_privilege('service_role', 'public.ican_chain_operator_auto_start()', 'EXECUTE'));
+END $t$;
+DO $t$
 DECLARE e TEXT;
 BEGIN
-  PERFORM t.as_user(t.u(1));
-  e := t.err($$SELECT public.ican_chain_dev_set_settings('dev_test_secret', '{"bridge_enabled": true}')$$);
-  PERFORM t.reset();
-  PERFORM t.check('2.3 the bridge cannot be turned on before a chain and contract are set', e LIKE 'save the ICEC-C contract address first%', e);
   PERFORM t.as_user(t.u(1));
   e := t.err($$SELECT public.ican_chain_dev_set_settings('wrong', '{}')$$);
   PERFORM t.reset();
@@ -138,6 +155,58 @@ BEGIN
   PERFORM t.check('2.8 the public config now shows where everything is',
     r ->> 'icec_community_address' = t.a(900) AND r ->> 'stable_vault_address' = t.a(902) AND (r ->> 'chain_id')::BIGINT = 31337 AND r ->> 'chain_name' = 'Local', r::TEXT);
 END $t$;
+
+-- ================================================================ 2a. Turn ON, queued, then started by the relayer
+DO $t$
+DECLARE r JSONB; s icanera_chain.chain_settings;
+BEGIN
+  -- ready (chain and contract saved): Turn ON switches on at once, nothing is queued
+  r := t.set('{"bridge_enabled": true}');
+  SELECT * INTO s FROM icanera_chain.chain_settings;
+  PERFORM t.check('2a.1 when the chain and contract are known Turn ON takes effect at once', NOT (r ->> 'queued')::BOOLEAN AND s.bridge_enabled AND NOT s.bridge_start_requested, r::TEXT);
+  PERFORM t.set('{"bridge_enabled": false}');
+
+  -- a request made while ready-ness is missing: take the chain away, ask, then let the chain "be detected"
+  UPDATE icanera_chain.chain_settings SET chain_id = NULL;
+  r := t.set('{"bridge_enabled": true}');
+  PERFORM t.check('2a.2 with the chain not detected yet it is queued', (r ->> 'queued')::BOOLEAN AND NOT (SELECT bridge_enabled FROM icanera_chain.chain_settings), r::TEXT);
+  PERFORM t.as_service();
+  r := public.ican_chain_operator_auto_start();
+  PERFORM t.check('2a.3 the relayer waits while the chain is not detected', NOT (r ->> 'started')::BOOLEAN AND r ->> 'reason' = 'not_configured', r::TEXT);
+  PERFORM public.ican_chain_operator_adopt_chain(31337);
+  PERFORM t.reset();
+  PERFORM icanera_chain.raise_anomaly('test_anomaly', '{}', FALSE);
+  PERFORM t.as_service();
+  r := public.ican_chain_operator_auto_start();
+  PERFORM t.check('2a.4 an open anomaly keeps it waiting', NOT (r ->> 'started')::BOOLEAN AND r ->> 'reason' = 'open_anomaly', r::TEXT);
+  PERFORM t.reset();
+  UPDATE icanera_chain.anomalies SET resolved_at = now() WHERE resolved_at IS NULL;
+  PERFORM t.as_service();
+  r := public.ican_chain_operator_auto_start();
+  PERFORM t.reset();
+  SELECT * INTO s FROM icanera_chain.chain_settings;
+  PERFORM t.check('2a.5 once the chain is adopted and nothing is open the relayer starts the bridge, and the request is spent',
+    (r ->> 'started')::BOOLEAN AND s.bridge_enabled AND NOT s.bridge_start_requested AND s.bridge_start_requested_at IS NULL, r::TEXT);
+  PERFORM t.as_service();
+  r := public.ican_chain_operator_auto_start();
+  PERFORM t.reset();
+  PERFORM t.check('2a.6 asking again changes nothing', NOT (r ->> 'started')::BOOLEAN AND r ->> 'reason' = 'already_on', r::TEXT);
+
+  -- a halt cancels a waiting request: a bridge that stopped itself never restarts behind anyone's back
+  PERFORM t.set('{"bridge_enabled": false}');
+  UPDATE icanera_chain.chain_settings SET chain_id = NULL;
+  PERFORM t.set('{"bridge_enabled": true}');
+  PERFORM icanera_chain.raise_anomaly('test_halt', '{}', TRUE);
+  SELECT * INTO s FROM icanera_chain.chain_settings;
+  PERFORM t.check('2a.7 a halt cancels the waiting request', NOT s.bridge_start_requested AND NOT s.bridge_enabled);
+  UPDATE icanera_chain.anomalies SET resolved_at = now() WHERE resolved_at IS NULL;
+  PERFORM t.as_service();
+  PERFORM public.ican_chain_operator_adopt_chain(31337);
+  r := public.ican_chain_operator_auto_start();
+  PERFORM t.reset();
+  PERFORM t.check('2a.8 so after the anomaly is closed nothing starts by itself', NOT (r ->> 'started')::BOOLEAN AND r ->> 'reason' = 'not_requested' AND NOT (SELECT bridge_enabled FROM icanera_chain.chain_settings), r::TEXT);
+END $t$;
+TRUNCATE icanera_chain.anomalies RESTART IDENTITY CASCADE;
 
 -- ================================================================ 2b. Addresses and the chain id that fill themselves in
 DO $t$

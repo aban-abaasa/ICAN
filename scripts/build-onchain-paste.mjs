@@ -39,6 +39,7 @@ const FILES = [
       ['supabase/migrations/20261020110000_chain_bridge.sql', 'the bridge functions for users, the relayer and administrators'],
       ['supabase/migrations/20261020120000_chain_fx_oracle.sql', 'the informational USD -> local exchange rate (display only)'],
       ['supabase/migrations/20261021100000_chain_auto_contracts.sql', 'contract addresses and the chain id that fill themselves in from the chain'],
+      ['supabase/migrations/20261022100000_chain_auto_start.sql', 'Turn ON is queued, not refused, and the relayer starts the bridge when the chain is ready'],
     ],
     after: `-- After it runs: the bridge is OFF and no contract is configured. Next (see CHAIN_TOKENS_DEPLOY.md):
 --   1. deploy the contracts to a TEST network with your own key (blockchain/scripts/deploy.js), then
@@ -47,6 +48,8 @@ const FILES = [
 --      The chain id, the ICEC-S token, the reserve coin and its symbol are read from the chain by the relayer.
 --   3. set the relayer's environment and schedule /api/chain-sync and /api/fx-oracle,
 --   4. turn the bridge on in the dev panel (On-chain tab) only after the launch gates in CHAIN_TOKENS_DEPLOY.md are true.
+--      Turn ON can be pressed at any time: if the relayer has not detected the chain yet, the press is remembered and the
+--      relayer starts the bridge by itself on the first run where the chain and the ICEC-C contract check out.
 `,
   },
 ];

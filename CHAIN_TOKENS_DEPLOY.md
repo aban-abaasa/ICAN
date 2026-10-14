@@ -52,12 +52,13 @@ Roles: **owner** (a multisig; sets the operator, the guardian and the daily cap;
 
 ### 2. The database (Supabase SQL editor)
 
-**Easiest:** paste the whole of `CHAIN_TOKENS_PASTE_INTO_SUPABASE.sql` (repo root) into the SQL editor and press Run once. It is the four files below, in order, generated from them (`node scripts/build-onchain-paste.mjs`). Or run them one at a time:
+**Easiest:** paste the whole of `CHAIN_TOKENS_PASTE_INTO_SUPABASE.sql` (repo root) into the SQL editor and press Run once. It is the five files below, in order, generated from them (`node scripts/build-onchain-paste.mjs`). Or run them one at a time:
 
 1. `supabase/migrations/20261020100000_chain_core.sql`
 2. `supabase/migrations/20261020110000_chain_bridge.sql`
 3. `supabase/migrations/20261020120000_chain_fx_oracle.sql`
 4. `supabase/migrations/20261021100000_chain_auto_contracts.sql` (the chain id, the ICEC-S token and the reserve coin detect themselves; forgiving address entry)
+5. `supabase/migrations/20261022100000_chain_auto_start.sql` (Turn ON is queued instead of refused, and the relayer starts the bridge when the chain is ready)
 
 Each is safe to run twice and keeps every setting an administrator changed. Then tell the database the **two** things the chain cannot say about itself (the deploy script prints this; the dev panel's *On-chain tokens → Contracts* box does the same):
 
@@ -75,7 +76,7 @@ That is all. **Everything else is detected and kept in sync with the chain:**
 
 The address boxes are forgiving: capitals, quotes, spaces, no `0x`, or a whole block-explorer link all work. A wrong `stable_token_address`, `reserve_token_address` or `chain_id` typed in by an older script is accepted and ignored in favour of what the chain says. If something is refused, the message names the field and what it expected. The relayer also checks the ICEC-C address really is ICEC-C (symbol `ICEC-C`, 8 decimals) and halts the bridge if it is some other contract.
 
-To turn the bridge ON you need the chain to have been detected, so save the two addresses, wait for the relayer's next run (a minute or two), then switch it on. Set `chain_name`, `explorer_url`, `confirmations` with `ican_chain_dev_set_settings` if you want different values than the defaults.
+**Turning the bridge on needs no timing.** Press *Turn ON* whenever you like (after the launch gates below). If the relayer has not yet detected the chain or the ICEC-C contract has not been saved, the press is remembered and the panel says *Bridge starts automatically*; the relayer switches the bridge on by itself on its first run where the chain is detected and matches its endpoint, the contract at the ICEC-C address really is ICEC-C, its key is the contract's operator, and no anomaly is open. A halt cancels a waiting request, and *Cancel* in the panel does too, so a bridge that stopped itself never restarts behind your back. Set `chain_name`, `explorer_url`, `confirmations` with `ican_chain_dev_set_settings` if you want different values than the defaults.
 
 The chain and the ICEC-C contract **cannot be changed** once withdrawals exist; moving the bridge to another contract is a migration, not a setting.
 
@@ -97,6 +98,8 @@ The chain and the ICEC-C contract **cannot be changed** once withdrawals exist; 
 **Why these three endpoints are not their own files:** every file under `frontend/api/` is a separate Vercel serverless function, and the Hobby plan allows **12 per deployment**. The project was already at 12, so three more files made the whole deploy fail. The three endpoints live in `api/_lib/chainRoutes.js`, `api/investment-expiry-sweep.js` hands them requests carrying `?job=chain-sync | chain-link | fx-oracle`, and `vercel.json` rewrites `/api/chain-sync`, `/api/chain-link` and `/api/fx-oracle` onto it, so the public URLs are exactly as below and cost no function slot. `frontend/tests/apiFunctionCount.test.js` fails if `api/` ever goes over 12 again.
 
 `/api/chain-sync` and `/api/fx-oracle` should run **every minute**. They accept `Authorization: Bearer <secret>` (what Vercel Cron sends when `CRON_SECRET` is set) or `x-automation-secret: <secret>`. Vercel's per-minute cron needs a paid plan, and a too-frequent `crons` entry **fails the deployment on the free plan**, so this repository does not add one to `vercel.json`: add `{ "crons": [{ "path": "/api/chain-sync", "schedule": "* * * * *" }, { "path": "/api/fx-oracle", "schedule": "* * * * *" }] }` yourself on a plan that allows it, or call the URLs from any scheduler (GitHub Actions, Supabase `pg_cron` + `pg_net`, a small VM). A run takes seconds; two overlapping runs are safe (a database lease makes the second one stand down).
+
+**Automatic scheduling:** `.github/workflows/chain-sync.yml` calls `/api/chain-sync` and `/api/fx-oracle` every 5 minutes (GitHub's minimum). It does nothing until you add two repository secrets: `CHAIN_SYNC_BASE_URL` (the deployed site's address) and `CHAIN_CRON_SECRET` (the same value as on the host). That is the whole setup; use a per-minute Vercel cron instead if you are on a plan that allows it.
 
 The endpoints deliberately do **not** trust the `x-vercel-cron` header (see "Findings").
 

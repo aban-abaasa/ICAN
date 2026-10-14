@@ -33,6 +33,7 @@ CHAIN_MIGRATIONS=(
   "$MIG/20261020110000_chain_bridge.sql"
   "$MIG/20261020120000_chain_fx_oracle.sql"
   "$MIG/20261021100000_chain_auto_contracts.sql"
+  "$MIG/20261022100000_chain_auto_start.sql"
 )
 WORK="$(mktemp -d)"
 trap '[ "${KEEP_DB:-0}" = "1" ] || psql -X -q -d postgres -c "DROP DATABASE IF EXISTS \"$DB\"" >/dev/null 2>&1; rm -rf "$WORK"' EXIT

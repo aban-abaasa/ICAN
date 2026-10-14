@@ -65,10 +65,17 @@ export default function ICANChainDevTab({ devToken }) {
     } catch (e) { setError(e.message || 'Could not load.'); } finally { setLoading(false); }
   }, [devToken]);
   useEffect(() => { load(); }, [load]);
+  // While a Turn ON is waiting for the relayer, look again every few seconds: the bridge starts by itself, so the screen should show it.
+  const waitingToStart = !!ov && !ov.settings.bridge_enabled && !!ov.settings.bridge_start_requested;
+  useEffect(() => {
+    if (!waitingToStart) return undefined;
+    const timer = setInterval(() => { load(); }, 10000);
+    return () => clearInterval(timer);
+  }, [waitingToStart, load]);
 
   const act = async (fn, okMsg) => {
     setBusy(true); setError('');
-    try { const res = await fn(); if (res?.missing) setMissing(true); else { say(okMsg); await load(); } }
+    try { const res = await fn(); if (res?.missing) setMissing(true); else { say(typeof okMsg === 'function' ? okMsg(res) : okMsg); await load(); } }
     catch (e) { setError(e.message || 'That did not work.'); } finally { setBusy(false); }
   };
 
@@ -97,10 +104,13 @@ export default function ICANChainDevTab({ devToken }) {
 
   const s = ov.settings;
   const enabled = !!s.bridge_enabled;
+  const armed = !enabled && !!s.bridge_start_requested;          // Turn ON was pressed before the chain was detected: the relayer starts the bridge when it is ready
   const anomalies = ov.open_anomalies || [];
   const toggleBridge = () => {
-    if (!enabled && !window.confirm('Turn the ICEC bridge ON?\n\nUsers will be able to lock ledger ICEC and receive ICEC-C on the chain. Before you do: have the contracts been independently audited, has a lawyer advised on the bridge and the tokens, is the operator key in a secret store with a small daily cap, and are the owner and guardian multisigs?')) return;
-    act(() => devChain.setSettings(devToken, { bridge_enabled: !enabled }), enabled ? 'Bridge is OFF.' : 'Bridge is ON.');
+    if (!enabled && !armed && !window.confirm('Turn the ICEC bridge ON?\n\nUsers will be able to lock ledger ICEC and receive ICEC-C on the chain. Before you do: have the contracts been independently audited, has a lawyer advised on the bridge and the tokens, is the operator key in a secret store with a small daily cap, and are the owner and guardian multisigs?')) return;
+    const turnOn = !enabled && !armed;
+    act(() => devChain.setSettings(devToken, { bridge_enabled: turnOn }),
+      (res) => (!turnOn ? (enabled ? 'Bridge is OFF.' : 'Cancelled. The bridge stays off.') : res?.queued ? 'Saved. The bridge will start by itself as soon as the relayer has detected the chain.' : 'Bridge is ON.'));
   };
 
   return (
@@ -131,10 +141,14 @@ export default function ICANChainDevTab({ devToken }) {
 
       <div className="rounded-xl border p-4 flex flex-wrap items-center justify-between gap-3" style={card}>
         <div>
-          <p className="font-semibold" style={txt}>Bridge is {enabled ? 'ON' : 'OFF'}{s.is_testnet ? ' · test network' : ''}</p>
-          <p className="text-xs" style={muted}>{enabled ? 'Users can move ICEC onto the chain. Turning it off stops new withdrawals; burn-backs are still credited.' : 'No new withdrawals. Burn-backs of ICEC-C already out are still credited.'}</p>
+          <p className="font-semibold" style={txt}>{armed ? 'Bridge starts automatically' : `Bridge is ${enabled ? 'ON' : 'OFF'}`}{s.is_testnet ? ' · test network' : ''}</p>
+          <p className="text-xs" style={muted}>{enabled
+            ? 'Users can move ICEC onto the chain. Turning it off stops new withdrawals; burn-backs are still credited.'
+            : armed
+              ? `Waiting for the relayer to detect the chain${s.icec_community_address ? '' : ' and for the ICEC-C contract address to be saved'}. It switches the bridge on by itself on its first run where the chain and the contract check out. Nothing else to do.`
+              : 'No new withdrawals. Burn-backs of ICEC-C already out are still credited.'}</p>
         </div>
-        <button type="button" disabled={busy} onClick={toggleBridge} className={`px-4 py-2 rounded-lg text-sm font-bold text-white ${enabled ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500'} disabled:opacity-50`}>{enabled ? 'Turn OFF' : 'Turn ON'}</button>
+        <button type="button" disabled={busy} onClick={toggleBridge} className={`px-4 py-2 rounded-lg text-sm font-bold text-white ${enabled ? 'bg-red-600 hover:bg-red-500' : armed ? 'bg-slate-600 hover:bg-slate-500' : 'bg-emerald-600 hover:bg-emerald-500'} disabled:opacity-50`}>{enabled ? 'Turn OFF' : armed ? 'Cancel' : 'Turn ON'}</button>
       </div>
 
       <div className="rounded-xl border p-4 space-y-3" style={card}>
