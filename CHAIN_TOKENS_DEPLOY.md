@@ -50,7 +50,9 @@ It prints the addresses, saves them to `blockchain/deployments/<chain>.json` (ad
 
 Roles: **owner** (a multisig; sets the operator, the guardian and the daily cap; resumes minting), **guardian** (a separate key; can only pause minting and deposits), **operator** (the relayer's hot key; can only mint against a withdrawal id, up to the daily cap).
 
-### 2. The database (Supabase SQL editor, in this order)
+### 2. The database (Supabase SQL editor)
+
+**Easiest:** paste the whole of `CHAIN_TOKENS_PASTE_INTO_SUPABASE.sql` (repo root) into the SQL editor and press Run once. It is the three files below, in order, generated from them (`node scripts/build-onchain-paste.mjs`). Or run them one at a time:
 
 1. `supabase/migrations/20261020100000_chain_core.sql`
 2. `supabase/migrations/20261020110000_chain_bridge.sql`

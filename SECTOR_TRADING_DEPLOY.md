@@ -4,6 +4,8 @@ Ten sector index coins (`iAGRI`, `iTRNS`, `iRETL`, `iSOCL`, `iHLTH`, `iEDUC`, `i
 
 ## Deploy (Supabase SQL editor, in this order)
 
+**Easiest:** paste the whole of `SECTOR_TRADING_PASTE_INTO_SUPABASE.sql` (repo root) into the SQL editor and press Run once: it is files 1 to 4 below, in order, generated from them (`node scripts/build-onchain-paste.mjs`). Or run them one at a time:
+
 1. `supabase/migrations/20261019100000_sector_trading_core.sql`
 2. `supabase/migrations/20261019110000_sector_trading_telemetry.sql`
 3. `supabase/migrations/20261019120000_sector_trading_index.sql`
