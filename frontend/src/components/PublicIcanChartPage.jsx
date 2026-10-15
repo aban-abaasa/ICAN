@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeftRight, ArrowRight, BarChart3, Database, HelpCircle, ShieldCheck, LineChart as LineChartIcon, Moon, RefreshCw, Sun, X } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, ArrowRight, BarChart3, Database, HelpCircle, ShieldCheck, LineChart as LineChartIcon, Moon, RefreshCw, Sun, X } from 'lucide-react';
 import IcanTradingChart from './IcanTradingChart';
 import IcanAnalysisPanel from './IcanAnalysisPanel';
 import PublicTradePanel from './PublicTradePanel';
@@ -10,7 +10,7 @@ import { CHART_PALETTES } from './chartPalettes';
 import { useLineStyles } from './chartLineStyles';
 import usePublicTrading from '../hooks/usePublicTrading';
 import usePublicIcanCandles from '../hooks/usePublicIcanCandles';
-import useScrollSpy from '../hooks/useScrollSpy';
+import { COIN_BASE, VIEW_TITLES, pathForView, viewFromPath } from '../utils/coinRoutes';
 import { describeCandleWindow, summarizeAnalysis } from '../utils/candleIndicators';
 import NavGlowDefs from './NavGlowDefs';
 import '../styles/navGlow.css';
@@ -21,7 +21,6 @@ import '../styles/navGlow.css';
 // its own light and dark palettes (the visitor's system setting by default, their last choice afterwards). The <head> (title, description, JSON-LD) is written server-side by api/share-preview.js
 // for crawlers that never run this JS; the effect below only keeps it right when the page is reached client-side.
 
-const PAGE_TITLE = 'icaneracoin (ICAN) Price Chart — Live Candlestick Chart & Analysis | IcanEra';
 const PAGE_DESCRIPTION = 'Live icaneracoin (ICAN) price chart: real-time candlesticks, trend, RSI, moving averages, support and resistance, built from real IcanEra transactions.';
 
 // Everything the page used to explain in running text now lives here, one tab per topic, so the sections above stay
@@ -169,14 +168,8 @@ const useIsDesktop = () => {
   return matches;
 };
 
-const scrollToId = (id) => {
-  const el = document.getElementById(id);
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-};
-
-// Page sections in order, for the phone bottom bar's active tile.
-// (both 'sectors' and 'tokens' are always on the page: they show a notice until their data is live)
-const NAV_SECTIONS = ['chart', 'analysis', 'sectors', 'tokens', 'learn'];
+// The bottom bar's icons and the header links are real pages (see utils/coinRoutes.js): each has its own address, so the
+// browser's Back button and a shared link work, and every page has a Back button in the header.
 // Colours that travel along the active icon of the bottom bar (see styles/navGlow.css): the
 // dark page's gold accent / the light page's deep emerald, with companions.
 const NAV_COLOURS = {
@@ -191,7 +184,6 @@ const PublicIcanChartPage = () => {
   const dark = theme === 'dark';
   const c = CHART_PALETTES[theme];
   const isDesktop = useIsDesktop();
-  const navSection = useScrollSpy(NAV_SECTIONS, { enabled: !isDesktop });
 
   // Trading state lives here so the chart (lines, taps) and the panel stay in step.
   const { lineStyles, updateLineStyle, resetLineStyles } = useLineStyles();
@@ -200,6 +192,42 @@ const PublicIcanChartPage = () => {
   const [placement, setPlacement] = useState(false);
   const [draft, setDraft] = useState({ side: 'buy', amount: '', price: '' });
   const [learnTab, setLearnTab] = useState('chart');
+
+  // Which page of /icaneracoin is open. Moving between pages pushes a history entry, so Back returns to the page before.
+  const [view, setView] = useState(() => viewFromPath(window.location.pathname));
+  const navigate = useCallback((next) => {
+    if (next === view) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    try { window.history.pushState({ ican: true }, '', pathForView(next)); } catch { /* the page still switches */ }
+    setView(next);
+  }, [view]);
+  // Back button in the header: a page we pushed has somewhere to go back to; one opened from a link goes to the chart.
+  const goBack = useCallback(() => {
+    if (window.history.state?.ican) { window.history.back(); return; }
+    try { window.history.replaceState({ ican: true }, '', COIN_BASE); } catch { /* ignore */ }
+    setView('chart');
+  }, []);
+  useEffect(() => {
+    const onPop = () => {
+      setView(viewFromPath(window.location.pathname));
+      const phone = window.matchMedia ? !window.matchMedia('(min-width: 1024px)').matches : true;
+      setSheetOpen(!!window.history.state?.sheet && phone);
+    };
+    window.addEventListener('popstate', onPop);
+    try { window.history.scrollRestoration = 'manual'; } catch { /* ignore */ }
+    return () => { window.removeEventListener('popstate', onPop); try { window.history.scrollRestoration = 'auto'; } catch { /* ignore */ } };
+  }, []);
+  // each page opens at its top
+  useEffect(() => { window.scrollTo(0, 0); }, [view]);
+  useEffect(() => { document.title = VIEW_TITLES[view] || VIEW_TITLES.chart; }, [view]);
+
+  // The phone trade sheet is a layer too: opening it adds a history entry, so Back closes the sheet, not the page.
+  useEffect(() => {
+    if (!sheetOpen || isDesktop || window.history.state?.sheet) return;
+    try { window.history.pushState({ ...(window.history.state || {}), ican: true, sheet: true }, '', window.location.href); } catch { /* the sheet still opens */ }
+  }, [sheetOpen, isDesktop]);
+  const closeSheet = useCallback(() => {
+    if (window.history.state?.sheet) window.history.back(); else setSheetOpen(false);
+  }, []);
 
   const latest = candles.length ? candles[candles.length - 1] : null;
   const priceUgx = snapshot?.price_ugx != null ? Number(snapshot.price_ugx) : latest?.close ?? null;
@@ -222,7 +250,6 @@ const PublicIcanChartPage = () => {
   };
 
   useEffect(() => {
-    document.title = PAGE_TITLE;
     setMeta('meta[name="description"]', 'content', PAGE_DESCRIPTION);
     setMeta('link[rel="canonical"]', 'href', 'https://icanera.space/icaneracoin');
     return () => { document.body.style.background = ''; };
@@ -252,10 +279,10 @@ const PublicIcanChartPage = () => {
     if (!sheetOpen || isDesktop) return undefined;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKey = (e) => { if (e.key === 'Escape') setSheetOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') closeSheet(); };
     window.addEventListener('keydown', onKey);
     return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
-  }, [sheetOpen, isDesktop]);
+  }, [sheetOpen, isDesktop, closeSheet]);
 
   // A tap on empty chart while picking a price fills the order form (sell above the market, buy below, like the
   // wallet's chart) and brings the panel back.
@@ -281,8 +308,8 @@ const PublicIcanChartPage = () => {
   // The "?" next to a section opens the matching Learn tab and scrolls to it.
   const openLearn = useCallback((tab) => {
     setLearnTab(tab);
-    requestAnimationFrame(() => scrollToId('learn'));
-  }, []);
+    navigate('learn');
+  }, [navigate]);
 
   const draftPrice = tradeTab === 'book' && Number(draft.price) > 0 ? Number(draft.price) : null;
 
@@ -306,14 +333,14 @@ const PublicIcanChartPage = () => {
       setDraft={setDraft}
       placement={placement}
       setPlacement={setPlacement}
-      onClose={(why) => { if (why === 'chart' && !isDesktop) setSheetOpen(false); }}
+      onClose={(why) => { if (why === 'chart' && !isDesktop) closeSheet(); }}
     />
   );
 
   // One independent glass tile of the phone bottom bar. While the Trade sheet is open
   // only Trade is lit; otherwise the tile for the section being read is.
   const navBtn = (id, label, Icon, onClick, { hero = false } = {}) => {
-    const on = sheetOpen ? id === 'trade' : id === navSection;
+    const on = sheetOpen ? id === 'trade' : id === view;
     return (
       <button
         key={id}
@@ -332,6 +359,11 @@ const PublicIcanChartPage = () => {
     <div className={`min-h-screen font-sans ${k.page}`}>
       <header className={`sticky top-0 z-30 border-b backdrop-blur ${k.bar}`}>
         <div className="flex h-12 items-center gap-3 px-3 sm:px-5">
+          {view !== 'chart' && (
+            <button type="button" onClick={goBack} aria-label="Back" title="Back" className={`-ml-1 shrink-0 rounded-md p-2 ${k.icon} ${k.hover}`}>
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
           <a href="/" className={`flex shrink-0 items-center gap-2 text-base font-bold tracking-tight ${k.title}`} aria-label="IcanEra home">
             <img src="/icons/icon-192x192.png" alt="" width="26" height="26" className="rounded-md" />
             <span className="hidden sm:inline">IcanEra</span>
@@ -342,10 +374,9 @@ const PublicIcanChartPage = () => {
             <span className={`hidden truncate text-sm font-semibold md:inline ${k.soft}`}>(ICAN) price chart</span>
           </h1>
           <nav aria-label="On this page" className="hidden items-center gap-1 text-sm font-semibold lg:flex">
-            <button type="button" onClick={() => scrollToId('analysis')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Analysis</button>
-            <button type="button" onClick={() => scrollToId('sectors')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Business data</button>
-            <button type="button" onClick={() => scrollToId('tokens')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Stable coins</button>
-            <button type="button" onClick={() => scrollToId('learn')} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover}`}>Learn</button>
+            {[['chart', 'Chart'], ['analysis', 'Analysis'], ['sectors', 'Business data'], ['tokens', 'Stable coins'], ['learn', 'Learn']].map(([id, label]) => (
+              <button key={id} type="button" onClick={() => navigate(id)} aria-current={view === id ? 'page' : undefined} className={`rounded-md px-3 py-1.5 ${k.icon} ${k.hover} ${view === id ? 'font-bold underline decoration-2 underline-offset-8' : ''}`}>{label}</button>
+            ))}
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-1 text-sm tabular-nums sm:gap-2">
             {priceUgx != null && (
@@ -371,6 +402,8 @@ const PublicIcanChartPage = () => {
       </header>
 
       <main className="pb-20 lg:pb-0">
+        {view === 'chart' && (
+          <>
         {/* The chart and the docked trade panel share ONE row of their own. They used to be the first row of a grid that
             also held everything below, and a sticky panel in a grid stays pinned for the whole grid, not its row, so on a
             desktop it floated over the right-hand side of the analysis, the FAQ and the sector coins. */}
@@ -410,7 +443,23 @@ const PublicIcanChartPage = () => {
         )}
         </div>
 
-        <div>
+            <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+              <section className={`mt-10 flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between ${k.card}`}>
+                <h2 className={`text-lg font-bold sm:text-xl ${k.title}`}>Ready to trade icaneracoin?</h2>
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={() => { setTradeTab('buy'); setSheetOpen(true); }} className={`inline-flex min-h-[44px] items-center gap-2 rounded-md px-5 py-2.5 text-sm font-bold ${k.cta}`}>
+                    Start trading <ArrowRight className="h-4 w-4" />
+                  </button>
+                  <a href="/" className={`inline-flex min-h-[44px] items-center gap-2 rounded-md border px-5 py-2.5 text-sm font-semibold ${k.ghost}`}>
+                    Explore IcanEra
+                  </a>
+                </div>
+              </section>
+            </div>
+          </>
+        )}
+
+        {view === 'analysis' && (
           <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
             <section id="analysis" aria-labelledby="chart-analysis-heading" className="scroll-mt-16">
               <div className="flex items-end justify-between gap-3">
@@ -434,30 +483,35 @@ const PublicIcanChartPage = () => {
               </div>
               <p className={`mt-2 text-[11px] ${k.soft}`}>For information only, not financial advice.</p>
             </section>
+          </div>
+        )}
 
+        {view === 'sectors' && (
+          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+            <div className="-mt-10">
             <PublicSectorMarkets
               theme={theme}
               skin={k}
               trading={trading}
               onLearn={() => openLearn('sectors')}
               ican={{ candles, price: priceUgx, changePct }}
-              onTradeIcan={() => { setTradeTab('buy'); setSheetOpen(true); scrollToId('chart'); }}
+              onTradeIcan={() => { setTradeTab('buy'); navigate('chart'); setSheetOpen(true); }}
             />
+            </div>
+          </div>
+        )}
 
+        {view === 'tokens' && (
+          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+            <div className="-mt-10">
             <PublicOnChainTokens theme={theme} skin={k} priceUgx={priceUgx} onLearn={() => openLearn('tokens')} />
+            </div>
+          </div>
+        )}
 
-            <section className={`mt-10 flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between ${k.card}`}>
-              <h2 className={`text-lg font-bold sm:text-xl ${k.title}`}>Ready to trade icaneracoin?</h2>
-              <div className="flex flex-wrap gap-3">
-                <button type="button" onClick={() => { setTradeTab('buy'); setSheetOpen(true); if (isDesktop) scrollToId('chart'); }} className={`inline-flex min-h-[44px] items-center gap-2 rounded-md px-5 py-2.5 text-sm font-bold ${k.cta}`}>
-                  Start trading <ArrowRight className="h-4 w-4" />
-                </button>
-                <a href="/" className={`inline-flex min-h-[44px] items-center gap-2 rounded-md border px-5 py-2.5 text-sm font-semibold ${k.ghost}`}>
-                  Explore IcanEra
-                </a>
-              </div>
-            </section>
-
+        {view === 'learn' && (
+          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+            <div className="-mt-10">
             <section id="learn" aria-labelledby="learn-heading" className="mt-10 scroll-mt-16">
               <p className={`text-xs font-bold uppercase tracking-[0.16em] ${k.kicker}`}>Learn</p>
               <h2 id="learn-heading" className={`mt-1 text-xl font-bold sm:text-2xl ${k.title}`}>About icaneracoin</h2>
@@ -502,8 +556,9 @@ const PublicIcanChartPage = () => {
                 </div>
               ))}
             </section>
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
       <footer className={`border-t px-4 pb-28 pt-6 text-center text-xs lg:pb-6 ${k.footBorder}`}>
@@ -513,27 +568,27 @@ const PublicIcanChartPage = () => {
       {/* Phone navigation: always within thumb reach, never hidden behind the chart. */}
       {!isDesktop && (
         <nav
-          aria-label="Page sections"
+          aria-label="Pages"
           className="ng-bar fixed inset-x-0 bottom-0 z-40 flex"
           style={{ ...NAV_COLOURS[theme], '--ng-surface': c.base, '--ng-text': c.soft, background: `${c.base}f2`, borderTop: `1px solid ${c.cardBorder}`, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}
         >
           <NavGlowDefs />
-          {navBtn('chart', 'Chart', LineChartIcon, () => window.scrollTo({ top: 0, behavior: 'smooth' }))}
+          {navBtn('chart', 'Chart', LineChartIcon, () => navigate('chart'))}
           {navBtn('trade', 'Trade', ArrowLeftRight, () => setSheetOpen(true), { hero: true })}
-          {navBtn('analysis', 'Analysis', BarChart3, () => scrollToId('analysis'))}
-          {navBtn('sectors', 'Data', Database, () => scrollToId('sectors'))}
-          {navBtn('tokens', 'Stable', ShieldCheck, () => scrollToId('tokens'))}
-          {navBtn('learn', 'Learn', HelpCircle, () => scrollToId('learn'))}
+          {navBtn('analysis', 'Analysis', BarChart3, () => navigate('analysis'))}
+          {navBtn('sectors', 'Data', Database, () => navigate('sectors'))}
+          {navBtn('tokens', 'Stable', ShieldCheck, () => navigate('tokens'))}
+          {navBtn('learn', 'Learn', HelpCircle, () => navigate('learn'))}
         </nav>
       )}
 
       {!isDesktop && sheetOpen && (
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Trade icaneracoin">
-          <div className="absolute inset-0" style={{ background: c.scrim }} onClick={() => setSheetOpen(false)} aria-hidden="true" />
+          <div className="absolute inset-0" style={{ background: c.scrim }} onClick={closeSheet} aria-hidden="true" />
           <div className="absolute inset-x-0 bottom-0 flex max-h-[90dvh] flex-col rounded-t-2xl shadow-2xl" style={{ background: c.sheet, color: c.fg, paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <div className="relative flex h-11 shrink-0 items-center justify-center">
               <span className="h-1.5 w-10 rounded-full" style={{ background: c.fieldBorder }} aria-hidden="true" />
-              <button type="button" onClick={() => setSheetOpen(false)} aria-label="Close" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2" style={{ color: c.soft }}>
+              <button type="button" onClick={closeSheet} aria-label="Close" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2" style={{ color: c.soft }}>
                 <X className="h-5 w-5" />
               </button>
             </div>
