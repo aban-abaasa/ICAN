@@ -172,6 +172,11 @@
   .pcs-recpill i, .pcs-count { animation: none; }
   .pcs-rec .prg, .pcs-rec .core { transition: none; }
 }
+/* narrow phones: three icons plus the title have to share one row */
+@media (max-width: 360px) {
+  .pcs-top .pcs-ico { width: 40px; }
+  .pcs-title { font-size: 0.88rem; }
+}
 @media (max-height: 560px) { .pcs-hint { display: none; } .pcs-brackets { bottom: calc(var(--pcs-bottom) + 6.5rem); } }
 
 /* ══ Photo pitch builder ════════════════════════════════════════════════ */
