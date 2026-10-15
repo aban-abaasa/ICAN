@@ -13,6 +13,7 @@ import { I18nProvider } from './i18n/I18nProvider';
 // Dependency-free on purpose (no Supabase import) — see referralCapture.js.
 import { captureReferralFromUrl } from './services/referralCapture';
 import { lazyWithRetry } from './lib/lazyWithRetry';
+import { isCoinPath } from './utils/coinRoutes';
 
 // A shared referral link (/?ref=CODE) can land on any page, signed in or not:
 // remember the code now, App redeems it once the visitor has an account.
@@ -65,7 +66,7 @@ const isPublicShopPath = /^\/shop\/?$/.test(window.location.pathname);
 // The public icaneracoin price chart (/icaneracoin): live candlesticks + chart analysis for anyone, signed in
 // or not, and what Google lands on when someone searches "icaneracoin". Self-styled, so it sits outside
 // ThemeProvider; it does get AuthProvider so a visitor can continue with Google and trade from the page.
-const isPublicIcanChartPath = /^\/icaneracoin\/?$/i.test(window.location.pathname);
+const isPublicIcanChartPath = isCoinPath(window.location.pathname);
 // An instalment plan (/plan/<code>) and the customer's list of them (/plans): the plan's code is a
 // handle, not a secret -- the page itself needs the customer (or the seller's team) to be signed in.
 const installmentPlanMatch = window.location.pathname.match(/^\/plan\/([A-Za-z0-9]{6,12})\/?$/);
