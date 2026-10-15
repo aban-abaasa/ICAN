@@ -3,6 +3,7 @@ import { getChainConfig } from '../services/chainService';
 import StableUnitPanel from './StableUnitPanel';
 import IcecChainPanel from './IcecChainPanel';
 import IcanTradingChart from './IcanTradingChart';
+import LearnTab from './LearnTab';
 import usePublicIcanCandles from '../hooks/usePublicIcanCandles';
 
 // The wallet's "On-chain" tab: icaneracoin in its two forms on the blockchain.
@@ -17,10 +18,7 @@ function CommunityPriceChart() {
   const { candles, loading, error, status } = usePublicIcanCandles(500);
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950" aria-label="ICEC-C price chart and analysis">
-      <div className="px-4 pt-3">
-        <p className="text-sm text-slate-400">Price &amp; analysis</p>
-        <p className="text-xs text-slate-500">ICEC-C moves with the IcanEra coin, so this is the same live chart.</p>
-      </div>
+      <p className="px-4 pt-3 text-sm text-slate-400">Price &amp; analysis</p>
       <div className="mt-2 h-[24rem] w-full sm:h-[28rem]">
         {error ? (
           <p className="p-6 text-center text-sm text-slate-400">The live chart could not be loaded right now.</p>
@@ -47,10 +45,16 @@ export default function OnChainPanel() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-bold text-white">icaneracoin on the blockchain</h2>
-        <p className="text-sm text-slate-400">Two forms. One holds a steady dollar value. The other follows the IcanEra coin as the market moves.</p>
-      </div>
+      <h2 className="text-2xl font-bold text-white">icaneracoin on the blockchain</h2>
+      <LearnTab
+        items={[
+          { q: 'What are ICEC-S and ICEC-C?', a: 'Two forms of icaneracoin on the blockchain. ICEC-S holds a steady US-dollar value. ICEC-C follows the IcanEra coin as the market moves.' },
+          { q: 'ICEC-S, the stable form', a: 'A US-dollar token. Each one is backed by one US-dollar stablecoin held in a public vault, and you can swap it back any time. It keeps its dollar value: when the shilling weakens against the dollar an ICEC-S is worth more shillings, when the shilling strengthens it is worth fewer. It does not follow inflation by itself, and nobody can promise it will beat inflation.' },
+          { q: 'What do I rely on with ICEC-S?', a: 'The issuer of the dollar stablecoin behind it (it can lose its peg or freeze an address), the contract code (not yet independently audited), and your own wallet: IcanEra cannot move your ICEC-S or recover a lost key.' },
+          { q: 'ICEC-C, the community form', a: 'Your icaneracoin on the blockchain, as a public receipt. It is priced by the platform exactly like your ledger coin and moves with it, so its chart is the icaneracoin chart.' },
+          { q: 'What happens when I move ICEC onto the chain?', a: 'It is locked in IcanEra and the same amount appears in your wallet, so your IcanEra balance is lower by the same amount. Moving it does not make it worth more or protect its value, and ICEC-C cannot be sent to anyone else: it can only come back to IcanEra.' },
+        ]}
+      />
       <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-900 p-1" role="tablist" aria-label="Which form">
         {[['stable', 'ICEC-S', 'Steady dollar value'], ['community', 'ICEC-C', 'Follows the market']].map(([id, label, hint]) => (
           <button key={id} type="button" role="tab" aria-selected={which === id} onClick={() => setWhich(id)}

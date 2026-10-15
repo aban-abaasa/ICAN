@@ -106,15 +106,9 @@ export default function StableUnitPanel({ cfg }) {
     <div className="space-y-4 text-slate-200" data-testid="stable-panel">
       <div>
         <h3 className="text-xl font-bold text-white">ICEC-S <span className="text-sm font-normal text-slate-400">· the stable form</span></h3>
-        <p className="text-sm text-slate-400">A US-dollar token. Each one is backed by one US-dollar stablecoin held in a public vault, and you can swap it back any time.</p>
       </div>
 
       {cfg?.is_testnet && <p className="text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-300 p-3">This is a test network. Test tokens have no real value; nothing here is real money yet.</p>}
-
-      <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400 space-y-1.5">
-        <p><b className="text-slate-200">What it protects.</b> ICEC-S keeps its US-dollar value. When the shilling weakens against the dollar, an ICEC-S is worth more shillings; when the shilling strengthens it is worth fewer. It does not follow inflation by itself, and nobody can promise it will beat inflation.</p>
-        <p><b className="text-slate-200">What you rely on.</b> The issuer of the dollar stablecoin behind it (it can lose its peg or freeze an address), the contract code (not yet independently audited), and your own wallet: IcanEra cannot move your ICEC-S or recover a lost key.</p>
-      </div>
 
       {!deployed ? (
         <p className="text-sm text-slate-400">ICEC-S is not live on this network yet.</p>

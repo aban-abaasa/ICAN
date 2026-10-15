@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSectorBoard, useSectorTicket } from '../hooks/useSectorTicket';
 import {
@@ -6,6 +6,8 @@ import {
 } from '../utils/sectorTradeRules';
 import IcanTradingChart from './IcanTradingChart';
 import SectorYourBusiness from './SectorYourBusiness';
+import LearnTab from './LearnTab';
+import { getDataTerms } from '../services/sectorMarketService';
 
 // Sector Markets: ten sector index coins, bought and sold with icaneracoin (or any wallet the user holds). Each index
 // follows the anonymous revenue totals of businesses in that sector on IcanEra. Nothing here invents money logic: the
@@ -33,6 +35,17 @@ function OpeningProgress({ st }) {
       {st.detail && <p className="text-[11px] leading-tight text-slate-500">{st.detail}</p>}
     </div>
   );
+}
+
+// The exact data clause businesses agree to, read from the database so it is always the wording on record.
+function SharedDataText() {
+  const [terms, setTerms] = useState(null);
+  useEffect(() => {
+    let live = true;
+    getDataTerms().then((t) => { if (live) setTerms(t); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
+  return <>{terms?.body || 'Only combined sales totals of businesses that agreed are used. No business or customer is ever named.'}</>;
 }
 
 export default function SectorMarketsPanel() {
@@ -64,23 +77,21 @@ export default function SectorMarketsPanel() {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-xl font-bold text-white">Sector Markets</h3>
-          <p className="text-sm text-slate-400">Ten coins that follow what real businesses on IcanEra earn. Trade them with IcanEra coin.</p>
         </div>
         <span className="mt-1 inline-flex flex-shrink-0 items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-slate-300" aria-live="polite">
           <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status]}`} />{STATUS_TEXT[status]}
         </span>
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
-        <p><span className="font-semibold text-slate-200">Prices can fall as well as rise, and you can lose what you put in.</span>{feeBps ? ` A ${trim(feePct, 2)}% fee applies to each buy and sell.` : ''}</p>
-        <details className="mt-1">
-          <summary className="cursor-pointer text-slate-300">How prices work</summary>
-          <p className="mt-1 leading-relaxed text-slate-500">
-            Prices come from combined, anonymous sales totals of businesses that agreed to share them; no business or customer is ever named.
-            A sector opens only when enough businesses are earning that none can be picked out. You trade against the IcanEra market vault.
-          </p>
-        </details>
-      </div>
+      <LearnTab
+        items={[
+          { q: 'What are sector coins?', a: 'Ten coins, one per business sector. Each follows what real businesses in that sector on IcanEra earn, and you trade them with IcanEra coin.' },
+          { q: 'Where do prices come from?', a: 'From combined, anonymous sales totals of businesses that agreed to share them. No business or customer is ever named. A sector opens only when enough businesses are earning that none can be picked out, and you trade against the IcanEra market vault.' },
+          { q: 'What are the risks and fees?', a: `Prices can fall as well as rise, and you can lose what you put in.${feeBps ? ` A ${trim(feePct, 2)}% fee applies to each buy and sell.` : ''} The final amount uses the price at the moment of the trade; if it moves more than 1% against you, the trade is cancelled.` },
+          { q: 'Why is a sector "Opening soon"?', a: 'It has no price until enough businesses are earning in it. The numbers shown are real counts of businesses on IcanEra and of those sharing sales; nothing is estimated, and registering a business does not move a price.' },
+          userId ? { q: 'What does my business share?', a: <SharedDataText /> } : null,
+        ]}
+      />
 
       {error && <p className="text-sm text-red-400" role="alert">Could not load the markets. Retrying…</p>}
       {loading && !sectors.length && <p className="text-sm text-slate-500">Loading markets…</p>}
@@ -134,14 +145,9 @@ export default function SectorMarketsPanel() {
                 </div>
               )}
             </div>
-            {sel.description && <p className="px-4 pt-1 text-xs text-slate-500">{sel.description}</p>}
             {state.kind === 'warming' ? (
               <div className="space-y-3 px-4 pb-5 pt-4">
                 <OpeningProgress st={state} />
-                <p className="text-sm text-slate-400">
-                  This sector opens once {state.need || 'enough'} businesses are earning, so no single one can be picked out of its total.
-                  Until then there is no price and nothing to trade; nothing here is estimated.
-                </p>
               </div>
             ) : (
               <div className="mt-2 h-[26rem] w-full sm:h-[30rem]">
@@ -218,7 +224,6 @@ export default function SectorMarketsPanel() {
                       <div className="flex justify-between"><dt className="text-slate-400">You get about</dt><dd className="text-white font-semibold">{trim(sellQuote.net, 8)} ICEC{inMoney ? ` (paid in ${proceedsIn})` : ''}</dd></div>
                       <div className="flex justify-between"><dt className="text-slate-400">Fee ({trim(feePct, 2)}%)</dt><dd>{trim(sellQuote.fee, 8)} ICEC</dd></div>
                     </>)}
-                    <p className="text-[11px] text-slate-500 pt-1">The final amount uses the price at the moment of the trade. If it moves more than 1% against you, the trade is cancelled.</p>
                   </dl>
                 )}
                 {problem && <p className="text-sm text-amber-400" role="alert">{problem}</p>}

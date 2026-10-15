@@ -6,7 +6,8 @@ import { getDataTerms, getDataConsentStatus, acceptDataTerms } from '../services
 // "Your business" on the Sector Markets screen: the businesses the signed-in person owns (read from their Pitchin business
 // profiles, the same ones Manage your business opens), and whether each one is sharing its sales anonymously into its sector.
 // A sector opens only from real sales of businesses that agreed, so this is where an owner turns that on, or opens
-// Manage your business. Renders nothing for someone with no business, or when the sector feature is not installed.
+// Manage your business. What is shared is explained in the screen's single "How it works" tab, not here.
+// Renders nothing for someone with no business, or when the sector feature is not installed.
 
 export const MANAGE_BUSINESS_EVENT = 'ican-open-manage-business';
 export const openManageBusiness = () => window.dispatchEvent(new CustomEvent(MANAGE_BUSINESS_EVENT));
@@ -48,12 +49,9 @@ export default function SectorYourBusiness({ userId }) {
 
   return (
     <section className="rounded-2xl border border-indigo-400/25 bg-indigo-500/5 p-4 space-y-3" aria-label="Your business">
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-500/20"><Briefcase className="h-5 w-5 text-indigo-300" /></div>
-        <div className="min-w-0">
-          <h4 className="text-sm font-semibold text-white">Your business counts here</h4>
-          <p className="text-xs text-slate-400">A sector opens from the real, combined sales of businesses that agree to share them anonymously. Your name and customers are never shown.</p>
-        </div>
+        <h4 className="text-sm font-semibold text-white">Your business</h4>
       </div>
       <ul className="space-y-2">
         {rows.map((b) => (
@@ -74,10 +72,6 @@ export default function SectorYourBusiness({ userId }) {
         ))}
       </ul>
       {error && <p className="text-xs text-red-400" role="alert">{error}</p>}
-      <details className="text-xs text-slate-400">
-        <summary className="cursor-pointer text-slate-300">What exactly is shared?</summary>
-        <p className="mt-1 leading-relaxed">{terms.body}</p>
-      </details>
       <button type="button" onClick={openManageBusiness}
         className="flex w-full items-center justify-between rounded-lg border border-indigo-400/30 px-3 py-2 text-sm font-semibold text-indigo-200 hover:bg-indigo-500/10">
         Manage your business <ChevronRight className="h-4 w-4" />
