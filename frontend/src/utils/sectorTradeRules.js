@@ -82,10 +82,23 @@ export const sectorState = (sector, tradingEnabled = true) => {
   if (sector.status === 'warming_up') {
     const have = Number(sector.contributors) || 0;
     const need = Number(sector.contributors_needed) || 0;
+    // `registered` / `sharing` come from the business profiles (see 20261023100000_sector_registered_businesses.sql):
+    // how many businesses on IcanEra belong to the sector, and how many of those have agreed to share their sales.
+    // They are counts only. A level still comes from real sales alone, so `have` (businesses with sales) drives progress.
+    const registered = Number(sector.registered) || 0;
+    const sharing = Number(sector.sharing) || 0;
     return {
       kind: 'warming',
       label: need > 0 ? `Opening soon · ${have} of ${need} businesses` : 'Opening soon',
       canTrade: false,
+      have,
+      need,
+      registered,
+      sharing,
+      progress: need > 0 ? Math.min(1, have / need) : 0,
+      detail: registered > 0
+        ? `${registered} ${registered === 1 ? 'business' : 'businesses'} on IcanEra${sharing > 0 ? ` · ${sharing} sharing sales` : ''}`
+        : null,
     };
   }
   if (sector.status === 'halted') return { kind: 'paused', label: 'Paused', canTrade: false };
@@ -173,3 +186,15 @@ export const holdingResult = (h) => {
   const pct = h.pnl_pct == null ? null : Number(h.pnl_pct);
   return { pnl, pct, tone: changeTone(pnl) };
 };
+
+// Sector candles ({ timestamp, open, high, low, close }, oldest first) -> the row shape the analysis chart (IcanTradingChart)
+// reads, so a sector index gets the same candles, moving averages, RSI, timeframes and trend lines as icaneracoin itself.
+// An index has no traded volume, so it is 0 and the volume bars simply stay empty.
+export const sectorChartRows = (candles) => (candles || []).map((c) => ({
+  open_time: c.timestamp,
+  open_price: c.open,
+  high_price: c.high,
+  low_price: c.low,
+  close_price: c.close,
+  trading_volume: 0,
+}));

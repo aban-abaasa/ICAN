@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  floor8, quoteBuy, quoteSell, validateBuy, validateSell, sectorState, friendlySectorError, mapSectorTradeResult,
+  floor8, quoteBuy, quoteSell, validateBuy, validateSell, sectorState, friendlySectorError, mapSectorTradeResult, sectorChartRows,
   toSectorCandles, holdingResult, formatLevel, formatPct, formatPrice, changeTone, trim,
 } from '../src/utils/sectorTradeRules.js';
 import { mergeCandles } from '../src/utils/feedPolling.js';
@@ -74,6 +74,12 @@ test('sectorState: live, warming up with progress, paused', () => {
   assert.equal(warming.kind, 'warming');
   assert.equal(warming.canTrade, false);
   assert.match(warming.label, /4 of 10 businesses/);
+  assert.equal(warming.progress, 0.4);
+  assert.equal(warming.detail, null);                                           // no profile count in the feed: nothing invented
+  const joined = sectorState({ status: 'warming_up', contributors: 0, contributors_needed: 10, registered: 3, sharing: 1 }, true);
+  assert.equal(joined.detail, '3 businesses on IcanEra · 1 sharing sales');
+  assert.equal(joined.progress, 0);                                             // registering a profile never moves the progress bar
+  assert.equal(sectorState({ status: 'warming_up', contributors: 0, contributors_needed: 10, registered: 1 }, true).detail, '1 business on IcanEra');
   assert.equal(sectorState({ status: 'halted' }, true).label, 'Paused');
   assert.equal(sectorState(null).canTrade, false);
 });
@@ -151,4 +157,10 @@ test('display formats', () => {
   assert.equal(changeTone(2), 'up');
   assert.equal(changeTone(-2), 'down');
   assert.equal(changeTone(null), 'flat');
+});
+
+test('sectorChartRows: index candles become rows the analysis chart can read', () => {
+  const rows = sectorChartRows([{ timestamp: '2026-10-15T10:00:00Z', time: 1, open: 100, high: 102, low: 99, close: 101 }]);
+  assert.deepEqual(rows, [{ open_time: '2026-10-15T10:00:00Z', open_price: 100, high_price: 102, low_price: 99, close_price: 101, trading_volume: 0 }]);
+  assert.deepEqual(sectorChartRows(null), []);
 });

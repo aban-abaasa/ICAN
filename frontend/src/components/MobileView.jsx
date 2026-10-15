@@ -5276,6 +5276,17 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // "Manage your business" from anywhere (the wallet's Sector Markets, for one): open Pitchin on the person's own business.
+  useEffect(() => {
+    const openManageBusiness = () => {
+      setOpenPitchinBusinessProfile(true);
+      openFeaturePanel('pitchin');
+    };
+    window.addEventListener('ican-open-manage-business', openManageBusiness);
+    return () => window.removeEventListener('ican-open-manage-business', openManageBusiness);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // A tapped Growth reminder opens the app on the Growth page: straight away when a tab
   // is already open (event from the service-worker message handler), or via ?growth=1
   // when the push had to launch the app.
@@ -6144,7 +6155,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
             </div>
             <div>
               <span className="block text-sm font-semibold text-white">Manage your business</span>
-              <span className="block text-xs text-indigo-200/70">Choose your company type in your Pichin business profile</span>
+              <span className="block text-xs text-indigo-200/70">Opens your business profile in Pitchin; new here? Set one up</span>
             </div>
           </div>
           <ChevronRight className="h-5 w-5 text-indigo-300" />
