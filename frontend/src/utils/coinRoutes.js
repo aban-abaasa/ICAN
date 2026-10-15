@@ -32,6 +32,6 @@ export const VIEW_TITLES = {
   chart: 'icaneracoin (ICAN) Price Chart — Live Candlestick Chart & Analysis | IcanEra',
   analysis: 'icaneracoin (ICAN) Chart Analysis — Trend, RSI & Moving Averages | IcanEra',
   sectors: 'Sector Coins — Business Data Indices on icaneracoin | IcanEra',
-  tokens: 'icaneracoin on-chain & Stable Coins | IcanEra',
+  tokens: 'ICEC-S Stable Coin — a Dollar Inside IcanEra, in Your Own Currency | IcanEra',
   learn: 'About icaneracoin (ICAN) — How It Works | IcanEra',
 };

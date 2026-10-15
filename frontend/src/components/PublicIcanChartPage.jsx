@@ -5,6 +5,7 @@ import IcanAnalysisPanel from './IcanAnalysisPanel';
 import PublicTradePanel from './PublicTradePanel';
 import PublicSectorMarkets from './PublicSectorMarkets';
 import PublicOnChainTokens from './PublicOnChainTokens';
+import PublicStableCoin from './PublicStableCoin';
 import AmbientToggle from './AmbientToggle';
 import { CHART_PALETTES } from './chartPalettes';
 import { useLineStyles } from './chartLineStyles';
@@ -85,20 +86,32 @@ const LEARN_TABS = [
     label: 'Stable coins',
     items: [
       {
-        q: 'What are ICEC-S and ICEC-C?',
-        a: 'They are icaneracoin as tokens on a blockchain, held in your own crypto wallet. ICEC-S is the stable form: a US-dollar token, each one backed by one US-dollar stablecoin in a public vault and swappable back at any time, so it keeps its dollar value. ICEC-C is the community form: a receipt for icaneracoin you move out of your IcanEra wallet, worth what the coin is worth, which rises and falls as the community uses it. ICEC-C cannot be sent to anyone else or sold on an exchange. IcanEra never holds your keys and cannot move your tokens. Prices can fall as well as rise.',
+        q: 'What is ICEC-S?',
+        a: 'ICEC-S is the stable form of icaneracoin: one ICEC-S is worth one US dollar. It lives inside your IcanEra wallet, so there is no blockchain to connect, no gas fee and no crypto wallet to install. It shows its value in your own currency (pounds, yen, euros, shillings, rupees and about 120 more), using the country you picked when you signed up.',
       },
       {
-        q: 'Do stable coins protect against inflation?',
-        a: 'Partly. ICEC-S keeps its US-dollar value, so when the shilling weakens against the dollar it is worth more shillings, and it is worth fewer if the shilling strengthens. It does not follow inflation by itself, the dollar loses value too, and nobody can promise it will beat inflation. It also depends on the stablecoin behind it and on your own wallet.',
+        q: 'Where does its price come from?',
+        a: 'The same live currency rates icaneracoin is priced from, refreshed every hour. If those rates are ever more than a few hours old, swaps pause until they update.',
       },
       {
-        q: 'How is the reserve proven?',
-        a: 'The vault holds the dollar stablecoins and its balance is read straight from the blockchain, next to the number of ICEC-S issued. The vault refuses any deposit or redemption that would leave it with less than it has issued. Contract addresses are listed so you can check them on the block explorer.',
+        q: 'Does it protect against inflation?',
+        a: "It rises with the dollar when your local currency weakens, and it never goes below its start value grown by Uganda's yearly inflation, the same floor idea icaneracoin uses. Nobody can promise it will beat inflation by more than that.",
+      },
+      {
+        q: 'What backs it?',
+        a: 'Dollars. When you buy, your money is converted at the live rate and held in one shared pool as US dollars, so a falling local currency cannot shrink what an ICEC-S is worth. When you sell, the dollars come out of that pool. There is no company reserve behind it: in the rare case where the inflation floor sits above a plain dollar the pool can hold slightly less than the full value, the price is then the pool\'s share and the page says so. It is not a bank deposit.',
+      },
+      {
+        q: 'What does it cost?',
+        a: 'Buying is free. A 3% fee applies only when you cash out, the same single cash-out fee as the rest of IcanEra, and it goes to GODMINDERA ORGANISATION (U) LTD.',
+      },
+      {
+        q: 'What is ICEC-C?',
+        a: 'ICEC-C is the community form: a public blockchain receipt for icaneracoin you move out of your IcanEra wallet, worth what the coin is worth, which rises and falls as the community uses it. It lives in your own crypto wallet (IcanEra never holds your keys), cannot be sent to anyone else or sold on an exchange, and can only come back to IcanEra. It appears on this page once the chain is set up. Prices can fall as well as rise.',
       },
       {
         q: 'How do I get them?',
-        a: "Sign in, open the wallet's On-chain tab and connect your crypto wallet to get ICEC-S or move icaneracoin onto the chain. Token prices can move and contracts can have bugs; the stable form also depends on the stablecoin behind it. This is not financial advice.",
+        a: "Sign in and open the wallet's Trade section, then the ICEC-S & C tab. Choose your currency, and buy or cash out in a few taps. This is not financial advice.",
       },
     ],
   },
@@ -108,7 +121,7 @@ const LEARN_TABS = [
     items: [
       {
         q: 'How do I trade icaneracoin?',
-        a: 'Continue with Google to get your IcanEra wallet, top up with Mobile Money, card or bank, buy coins, and book buy or sell orders at the price you choose straight from the chart, or trade the ten business-sector coins. You can manage your business and personal finances in the same place.',
+        a: 'Continue with Google to get your IcanEra wallet, top up with Mobile Money, card or bank, buy coins, and book buy or sell orders at the price you choose straight from the chart, trade the ten business-sector coins, or hold a steady dollar value with ICEC-S. You can manage your business and personal finances in the same place.',
       },
     ],
   },
@@ -504,6 +517,7 @@ const PublicIcanChartPage = () => {
         {view === 'tokens' && (
           <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
             <div className="-mt-10">
+            <PublicStableCoin theme={theme} skin={k} onLearn={() => openLearn('tokens')} />
             <PublicOnChainTokens theme={theme} skin={k} priceUgx={priceUgx} onLearn={() => openLearn('tokens')} />
             </div>
           </div>
