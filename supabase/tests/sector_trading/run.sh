@@ -33,6 +33,7 @@ SECTOR_MIGRATIONS=(
   "$MIG/20261019120000_sector_trading_index.sql"
   "$MIG/20261019130000_sector_trading_execute.sql"
   "$MIG/20261023100000_sector_registered_businesses.sql"
+  "$MIG/20261024100000_sector_fixed_assets.sql"
 )
 WORK="$(mktemp -d)"
 trap '[ "${KEEP_DB:-0}" = "1" ] || psql -X -q -d postgres -c "DROP DATABASE IF EXISTS \"$DB\"" >/dev/null 2>&1; rm -rf "$WORK"' EXIT

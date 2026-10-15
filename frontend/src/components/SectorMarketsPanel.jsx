@@ -86,7 +86,7 @@ export default function SectorMarketsPanel() {
       <LearnTab
         items={[
           { q: 'What are sector coins?', a: 'Ten coins, one per business sector. Each follows what real businesses in that sector on IcanEra earn, and you trade them with IcanEra coin.' },
-          { q: 'Where do prices come from?', a: 'From combined, anonymous sales totals of businesses that agreed to share them. No business or customer is ever named. A sector opens only when enough businesses are earning that none can be picked out, and you trade against the IcanEra market vault.' },
+          { q: 'Where do prices come from?', a: 'From combined, anonymous sales totals of businesses that agreed to share them, together with the net value of the fixed assets those businesses record in CMMS. Assets only count for a business that also has sales. No business, customer or asset is ever named. A sector opens only when enough businesses are earning that none can be picked out, and you trade against the IcanEra market vault.' },
           { q: 'What are the risks and fees?', a: `Prices can fall as well as rise, and you can lose what you put in.${feeBps ? ` A ${trim(feePct, 2)}% fee applies to each buy and sell.` : ''} The final amount uses the price at the moment of the trade; if it moves more than 1% against you, the trade is cancelled.` },
           { q: 'Why is a sector "Opening soon"?', a: 'It has no price until enough businesses are earning in it. The numbers shown are real counts of businesses on IcanEra and of those sharing sales; nothing is estimated, and registering a business does not move a price.' },
           userId ? { q: 'What does my business share?', a: <SharedDataText /> } : null,
