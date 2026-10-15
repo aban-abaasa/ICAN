@@ -119,6 +119,10 @@ const IcanTradingChart = ({
   // How fresh the feed behind `rows` is: 'live' | 'connecting' | 'delayed' | 'offline' (usePublicIcanCandles reports it).
   // The badge tells the truth: a chart that stopped hearing from the server says so instead of looking live.
   feedState = 'live',
+  // What the legend calls the series. The default is the coin itself; a sector index or the on-chain coin pass their own,
+  // so every market in the app gets the same analysis (moving averages, RSI, timeframes, trend lines) on one chart.
+  symbol = 'ICAN / UGX',
+  emptyNote = 'Candles appear as soon as icaneracoin moves — nothing here is simulated.',
 }) => {
   const looks = useMemo(() => sanitizeLineStyles(lineStyles), [lineStyles]);
   const narrow = useNarrow();
@@ -542,14 +546,14 @@ const IcanTradingChart = ({
             {narrow && !hover ? (
               // Phone: just the symbol and the close, so the first candles stay clear. Touch a candle for the full OHLC.
               <div className="flex flex-wrap items-center gap-x-2">
-                <span className="font-bold" style={{ color: c.strong }}>ICAN / UGX</span>
+                <span className="font-bold" style={{ color: c.strong }}>{symbol}</span>
                 <span style={{ color: c.muted }}>{tf.label}</span>
                 <b style={tone(up)}>{fmtPrice(shown.close, digits)}</b>
                 {change != null && <b style={tone(change >= 0)}>{change >= 0 ? '+' : ''}{change.toFixed(2)}%</b>}
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0">
-                <span className="font-bold" style={{ color: c.strong }}>ICAN / UGX</span>
+                <span className="font-bold" style={{ color: c.strong }}>{symbol}</span>
                 <span style={{ color: c.muted }}>{tf.label}</span>
                 <span>O <b style={tone(up)}>{fmtPrice(shown.open, digits)}</b></span>
                 <span>H <b style={tone(up)}>{fmtPrice(shown.high, digits)}</b></span>
@@ -585,7 +589,7 @@ const IcanTradingChart = ({
             ) : (
               <>
                 <p className="text-sm font-semibold" style={{ color: c.fg }}>No trading activity yet</p>
-                <p className="max-w-xs text-xs" style={{ color: c.muted }}>Candles appear as soon as icaneracoin moves — nothing here is simulated.</p>
+                <p className="max-w-xs text-xs" style={{ color: c.muted }}>{emptyNote}</p>
               </>
             )}
           </div>

@@ -10,7 +10,8 @@ Ten sector index coins (`iAGRI`, `iTRNS`, `iRETL`, `iSOCL`, `iHLTH`, `iEDUC`, `i
 2. `supabase/migrations/20261019110000_sector_trading_telemetry.sql`
 3. `supabase/migrations/20261019120000_sector_trading_index.sql`
 4. `supabase/migrations/20261019130000_sector_trading_execute.sql`
-5. Deploy the frontend.
+5. `supabase/migrations/20261023100000_sector_registered_businesses.sql` (or paste `SECTOR_REGISTERED_BUSINESSES_PASTE_INTO_SUPABASE.sql`): adds the anonymous "businesses on IcanEra" and "sharing sales" counts, taken from the Pitchin business profiles, to each sector that is still opening. Counts only; a sector's level and price still come from real settled sales alone. Optional: without it the cards show the sales-based progress only.
+6. Deploy the frontend.
 
 Every file is safe to run twice, and an administrator's settings, sector names and category map survive a re-run. The app works at every step: the **Sector Markets** tab hides itself until file 3 is installed, and nothing changes for businesses until file 2 is.
 

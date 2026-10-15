@@ -7481,7 +7481,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
             {/* Tab bar — underlined, scrolls sideways on any screen, stays pinned while the page scrolls */}
             <div
-              className={`sticky top-0 z-20 -mx-1 px-1 ${activeTradeTab === 'chart' ? 'mb-0' : 'mb-5'} flex gap-1 overflow-x-auto`}
+              className={`sticky top-0 z-20 -mx-1 px-1 ${activeTradeTab === 'chart' ? 'mb-0' : 'mb-5'} flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
               style={{ background: 'var(--color-bg)', borderBottom: '1px solid rgba(196,160,82,0.35)' }}
               role="tablist"
             >
@@ -7502,8 +7502,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     key={id}
                     role="tab"
                     aria-selected={on}
-                    onClick={() => setActiveTradeTab(id)}
-                    className={`flex-1 min-w-0 sm:flex-none flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-0.5 sm:gap-2 px-1 sm:px-4 ${activeTradeTab === 'chart' ? 'py-1.5 sm:py-2' : 'py-2 sm:py-3'} text-[10px] leading-tight sm:text-sm sm:leading-normal text-center sm:text-left whitespace-normal sm:whitespace-nowrap transition`}
+                    onClick={(e) => {
+                      setActiveTradeTab(id);
+                      // nine tabs do not fit a phone: keep each one readable and bring the chosen one into view
+                      try { e.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); } catch { /* older browser: the bar just stays where it is */ }
+                    }}
+                    className={`flex-shrink-0 min-w-[4.75rem] sm:min-w-0 flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-0.5 sm:gap-2 px-3 sm:px-4 ${activeTradeTab === 'chart' ? 'py-1.5 sm:py-2' : 'py-2 sm:py-3'} text-[11px] leading-tight sm:text-sm sm:leading-normal text-center sm:text-left whitespace-nowrap transition`}
                     style={{
                       background: on ? 'linear-gradient(180deg, transparent, rgba(196,160,82,0.16))' : 'transparent',
                       color: on ? 'var(--color-text)' : 'var(--color-textSecondary)',

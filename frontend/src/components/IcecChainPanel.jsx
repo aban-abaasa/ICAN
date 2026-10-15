@@ -133,14 +133,8 @@ export default function IcecChainPanel({ cfg }) {
     <div className="space-y-4 text-slate-200" data-testid="community-panel">
       <div>
         <h3 className="text-xl font-bold text-white">ICEC-C <span className="text-sm font-normal text-slate-400">· the community form</span></h3>
-        <p className="text-sm text-slate-400">Your icaneracoin on the blockchain, as a public receipt. It moves with the IcanEra coin price, the same as your ledger coin.</p>
       </div>
       {cfg?.is_testnet && <p className="text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-300 p-3">This is a test network. Test tokens have no real value.</p>}
-      <p className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
-        Moving it onto the chain does not make it worth more or protect its value, and ICEC-C cannot be sent to anyone else: it can only come back to IcanEra.
-        While it is on the chain it is locked in IcanEra, so your IcanEra balance is lower by the same amount.
-      </p>
-
       {!configured ? <p className="text-sm text-slate-400">ICEC-C is not live on this network yet.</p>
         : !userId ? <p className="text-sm text-slate-400">Sign in to move icaneracoin onto the chain.</p>
         : !wallet.available ? (

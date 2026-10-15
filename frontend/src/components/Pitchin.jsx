@@ -187,6 +187,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   const [bufferingPitches, setBufferingPitches] = useState(new Set()); // pitch ids whose video is currently buffering
   const [downloadingPitchId, setDownloadingPitchId] = useState(null);
   const [businessProfiles, setBusinessProfiles] = useState([]);
+  // true once the signed-in user's profiles have been looked up (found or not), so "Manage your business" never decides on an empty, not-yet-loaded list
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [currentBusinessProfile, setCurrentBusinessProfile] = useState(null);
   const [showBusinessForm, setShowBusinessForm] = useState(false);
   const [showBusinessCategorySelector, setShowBusinessCategorySelector] = useState(false);
@@ -250,14 +252,30 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
     };
   }, []);
 
+  // "Manage your business" opens the business the person already has, never a blank "choose your company type" form:
+  //   one business they own      -> that business, ready to edit
+  //   several, or only co-owned  -> the list, so they pick (nothing is guessed on their behalf)
+  //   none at all                -> the new-business flow
+  // It waits for the profile lookup first: deciding on the still-empty list would open the new-business flow for someone
+  // who already has a business.
   useEffect(() => {
-    if (openBusinessProfile) {
+    if (!openBusinessProfile || !profilesLoaded) return;
+    onBusinessProfileRequestConsumed?.();
+    setSelectedBusinessCategory(null);
+    const owned = currentUser?.id ? businessProfiles.filter((p) => p.user_id === currentUser.id) : [];
+    if (owned.length === 1) {
+      setEditingProfile(owned[0]);
+      setCurrentBusinessProfile(owned[0]);
+      setShowProfileSelector(false);
+      setShowBusinessForm(true);
+    } else if (businessProfiles.length > 0) {
       setEditingProfile(null);
-      setSelectedBusinessCategory(null);
+      setShowProfileSelector(true);
+    } else {
+      setEditingProfile(null);
       setShowBusinessCategorySelector(true);
-      onBusinessProfileRequestConsumed?.();
     }
-  }, [openBusinessProfile, onBusinessProfileRequestConsumed]);
+  }, [openBusinessProfile, profilesLoaded, businessProfiles, currentUser, onBusinessProfileRequestConsumed]);
 
   const openNewBusinessProfile = () => {
     setShowProfileSelector(false);
@@ -439,6 +457,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
           }
         }
 
+        setProfilesLoaded(true);
+
         // Load pitches (works in demo mode)
         const allPitches = await getAllPitches();
         setPitches(allPitches);
@@ -450,6 +470,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
           .catch(err => console.warn('Could not hydrate live pitch metrics:', err));
       } catch (error) {
         console.error('Error initializing Pitchin:', error);
+        setProfilesLoaded(true);
         // Still show demo content even if there's an error
         const demoData = await getAllPitches();
         setPitches(demoData);

@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSectorBoard, useSectorTicket } from '../hooks/useSectorTicket';
 import {
-  ICEC, formatLevel, formatPct, formatPrice, changeTone, holdingResult, trim, sectorState,
+  ICEC, formatLevel, formatPct, formatPrice, changeTone, holdingResult, trim, sectorState, sectorChartRows,
 } from '../utils/sectorTradeRules';
-import SectorIndexChart from './SectorIndexChart';
+import IcanTradingChart from './IcanTradingChart';
+import SectorYourBusiness from './SectorYourBusiness';
+import LearnTab from './LearnTab';
+import { getDataTerms } from '../services/sectorMarketService';
 
 // Sector Markets: ten sector index coins, bought and sold with icaneracoin (or any wallet the user holds). Each index
 // follows the anonymous revenue totals of businesses in that sector on IcanEra. Nothing here invents money logic: the
@@ -15,6 +18,35 @@ const TONE_TEXT = { up: 'text-emerald-400', down: 'text-red-400', flat: 'text-sl
 const STATE_DOT = { live: 'bg-emerald-400', warming: 'bg-amber-400', paused: 'bg-slate-500' };
 const STATUS_TEXT = { connecting: 'Connecting…', live: 'Live', delayed: 'Delayed', offline: 'Offline' };
 const STATUS_DOT = { connecting: 'bg-slate-500', live: 'bg-emerald-400', delayed: 'bg-amber-400', offline: 'bg-red-500' };
+const SECTOR_ICON = { iAGRI: '🌾', iTRNS: '🚚', iRETL: '🛍️', iSOCL: '🤝', iHLTH: '⚕️', iEDUC: '🎓', iFINC: '🏦', iCNST: '🏗️', iHOSP: '🍽️', iTECH: '💻' };
+const feedStateOf = { live: 'live', connecting: 'connecting', delayed: 'delayed', offline: 'offline' };
+
+// The sector's progress toward opening, as a bar. Counts only: a business is never named.
+function OpeningProgress({ st }) {
+  if (st.kind !== 'warming') return null;
+  return (
+    <div className="mt-2">
+      {st.need > 0 && (
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800" role="progressbar" aria-valuemin={0} aria-valuemax={st.need} aria-valuenow={st.have} aria-label="Businesses earning toward opening this sector">
+          <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.round(st.progress * 100)}%` }} />
+        </div>
+      )}
+      <p className="mt-1 text-[11px] leading-tight text-slate-400">{st.need > 0 ? `${st.have} of ${st.need} businesses earning` : 'Opening soon'}</p>
+      {st.detail && <p className="text-[11px] leading-tight text-slate-500">{st.detail}</p>}
+    </div>
+  );
+}
+
+// The exact data clause businesses agree to, read from the database so it is always the wording on record.
+function SharedDataText() {
+  const [terms, setTerms] = useState(null);
+  useEffect(() => {
+    let live = true;
+    getDataTerms().then((t) => { if (live) setTerms(t); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
+  return <>{terms?.body || 'Only combined sales totals of businesses that agreed are used. No business or customer is ever named.'}</>;
+}
 
 export default function SectorMarketsPanel() {
   const { user } = useAuth();
@@ -28,72 +60,108 @@ export default function SectorMarketsPanel() {
     money, sel, state, price, held, num, inMoney, payIcec, buyQuote, sellQuote, problem, ready, feePct, proceedsIn, submit, startSell,
   } = t;
 
+  const chartRows = useMemo(() => sectorChartRows(candles), [candles]);
+
   if (!available) return null;
 
+  // live sectors first, then the ones still opening (the ones with the most businesses on IcanEra closest to the front)
+  const ordered = [...sectors].sort((a, b) => {
+    const la = sectorState(a, tradingEnabled).kind === 'live' ? 0 : 1;
+    const lb = sectorState(b, tradingEnabled).kind === 'live' ? 0 : 1;
+    return la - lb || (Number(b.contributors) || 0) - (Number(a.contributors) || 0) || (Number(b.registered) || 0) - (Number(a.registered) || 0) || (a.sort_order || 0) - (b.sort_order || 0);
+  });
+  const opening = ordered.filter((s) => sectorState(s, tradingEnabled).kind === 'warming');
+
   return (
-    <div className="space-y-4 text-slate-200">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
+    <div className="space-y-5 text-slate-200">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h3 className="text-xl font-bold text-white">Sector Markets</h3>
-          <p className="text-sm text-slate-400">Ten sector coins that follow what businesses on IcanEra earn. Trade them with IcanEra coin.</p>
         </div>
-        <span className="inline-flex items-center gap-2 text-xs text-slate-400" aria-live="polite">
-          <span className={`w-2 h-2 rounded-full ${STATUS_DOT[status]}`} />{STATUS_TEXT[status]}
+        <span className="mt-1 inline-flex flex-shrink-0 items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-slate-300" aria-live="polite">
+          <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status]}`} />{STATUS_TEXT[status]}
         </span>
       </div>
 
-      <p className="text-xs text-slate-500 border border-slate-800 rounded-lg p-3 bg-slate-900/60">
-        Prices come from combined, anonymous sales totals; no business or customer is ever named. They can fall as well as rise,
-        and you can lose what you put in. You trade against the IcanEra market vault.{feeBps ? ` A ${trim(feePct, 2)}% fee applies to each buy and sell.` : ''}
-      </p>
+      <LearnTab
+        items={[
+          { q: 'What are sector coins?', a: 'Ten coins, one per business sector. Each follows what real businesses in that sector on IcanEra earn, and you trade them with IcanEra coin.' },
+          { q: 'Where do prices come from?', a: 'From combined, anonymous sales totals of businesses that agreed to share them. No business or customer is ever named. A sector opens only when enough businesses are earning that none can be picked out, and you trade against the IcanEra market vault.' },
+          { q: 'What are the risks and fees?', a: `Prices can fall as well as rise, and you can lose what you put in.${feeBps ? ` A ${trim(feePct, 2)}% fee applies to each buy and sell.` : ''} The final amount uses the price at the moment of the trade; if it moves more than 1% against you, the trade is cancelled.` },
+          { q: 'Why is a sector "Opening soon"?', a: 'It has no price until enough businesses are earning in it. The numbers shown are real counts of businesses on IcanEra and of those sharing sales; nothing is estimated, and registering a business does not move a price.' },
+          userId ? { q: 'What does my business share?', a: <SharedDataText /> } : null,
+        ]}
+      />
 
       {error && <p className="text-sm text-red-400" role="alert">Could not load the markets. Retrying…</p>}
       {loading && !sectors.length && <p className="text-sm text-slate-500">Loading markets…</p>}
 
-      {/* the ten sectors */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-        {sectors.map((s) => {
-          const st = sectorState(s, tradingEnabled);
-          const active = s.ticker === selected;
-          return (
-            <button
-              key={s.ticker}
-              type="button"
-              onClick={() => setSelected(s.ticker)}
-              aria-pressed={active}
-              className={`rounded-xl border p-3 text-left transition ${active ? 'border-amber-400 bg-slate-800' : 'border-slate-700 bg-slate-900 hover:border-slate-500'}`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-mono font-bold text-amber-300">{s.ticker}</span>
-                <span className={`w-2 h-2 rounded-full ${STATE_DOT[st.kind]}`} aria-hidden="true" />
-              </div>
-              <div className="text-xs text-slate-400 truncate">{s.name}</div>
-              <div className="mt-1 text-lg font-semibold text-white">{formatLevel(s.level)}</div>
-              <div className={`text-xs ${TONE_TEXT[changeTone(s.change_24h_pct)]}`}>{s.level != null ? formatPct(s.change_24h_pct) : ' '}</div>
-              <div className="text-[11px] text-slate-500 leading-tight mt-0.5">{st.label}</div>
-            </button>
-          );
-        })}
-      </div>
+      {/* the ten sectors: one swipeable rail, so the chart below gets the screen */}
+      {sectors.length > 0 && (
+        <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Sectors">
+          {ordered.map((s) => {
+            const st = sectorState(s, tradingEnabled);
+            const active = s.ticker === selected;
+            return (
+              <button
+                key={s.ticker}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setSelected(s.ticker)}
+                className={`min-w-[8.25rem] flex-shrink-0 snap-start rounded-xl border px-3 py-2 text-left transition ${active ? 'border-amber-400 bg-slate-800' : 'border-slate-700 bg-slate-900 hover:border-slate-500'}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-sm font-bold text-amber-300"><span aria-hidden="true" className="mr-1">{SECTOR_ICON[s.ticker]}</span>{s.ticker}</span>
+                  <span className={`h-2 w-2 rounded-full ${STATE_DOT[st.kind]}`} aria-hidden="true" />
+                </div>
+                {st.kind === 'warming' ? (
+                  <div className="mt-1 text-xs text-slate-400">Opening soon</div>
+                ) : (
+                  <>
+                    <div className="mt-1 text-base font-semibold leading-tight text-white">{formatLevel(s.level)}</div>
+                    <div className={`text-xs ${TONE_TEXT[changeTone(s.change_24h_pct)]}`}>{s.level != null ? formatPct(s.change_24h_pct) : '\u00a0'}</div>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {sel && (
         <div className="grid gap-4 lg:grid-cols-5">
-          {/* chart */}
-          <div className="lg:col-span-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
-            <div className="flex items-baseline justify-between mb-1">
-              <div>
-                <span className="font-mono font-bold text-amber-300">{sel.ticker}</span>
-                <span className="ml-2 text-sm text-slate-400">{sel.name}</span>
+          {/* chart & analysis */}
+          <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 lg:col-span-3">
+            <div className="flex items-start justify-between gap-3 px-4 pt-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm text-slate-400"><span aria-hidden="true" className="mr-1">{SECTOR_ICON[sel.ticker]}</span>{sel.name}</p>
+                <p className="text-2xl font-bold leading-tight text-white">{state.kind === 'warming' ? 'Opening soon' : formatLevel(sel.level)}</p>
               </div>
-              <div className="text-right">
-                <div className="text-lg font-semibold text-white">{formatLevel(sel.level)}</div>
-                <div className="text-xs text-slate-500">{price != null ? `${formatPrice(price)} ICEC per unit` : 'not priced yet'}</div>
-              </div>
+              {state.kind !== 'warming' && (
+                <div className="text-right">
+                  <p className={`text-sm font-semibold ${TONE_TEXT[changeTone(sel.change_24h_pct)]}`}>{sel.level != null ? `${formatPct(sel.change_24h_pct)} · 24h` : ''}</p>
+                  <p className="text-xs text-slate-500">{price != null ? `${formatPrice(price)} ICEC per unit` : 'not priced yet'}</p>
+                </div>
+              )}
             </div>
-            {sel.description && <p className="text-xs text-slate-500 mb-2">{sel.description}</p>}
-            {state.kind === 'warming'
-              ? <p className="py-10 text-center text-sm text-slate-400">{state.label}. A sector opens once enough businesses are contributing that no single one can be identified.</p>
-              : <SectorIndexChart candles={candles} ticker={sel.ticker} />}
+            {state.kind === 'warming' ? (
+              <div className="space-y-3 px-4 pb-5 pt-4">
+                <OpeningProgress st={state} />
+              </div>
+            ) : (
+              <div className="mt-2 h-[26rem] w-full sm:h-[30rem]">
+                <IcanTradingChart
+                  rows={chartRows}
+                  loading={loading && chartRows.length === 0}
+                  theme="dark"
+                  wheelZoom={false}
+                  feedState={feedStateOf[status]}
+                  symbol={`${sel.ticker} · index`}
+                  emptyNote="Candles appear as the sector's sales move its index. Nothing here is simulated."
+                />
+              </div>
+            )}
           </div>
 
           {/* ticket */}
@@ -156,7 +224,6 @@ export default function SectorMarketsPanel() {
                       <div className="flex justify-between"><dt className="text-slate-400">You get about</dt><dd className="text-white font-semibold">{trim(sellQuote.net, 8)} ICEC{inMoney ? ` (paid in ${proceedsIn})` : ''}</dd></div>
                       <div className="flex justify-between"><dt className="text-slate-400">Fee ({trim(feePct, 2)}%)</dt><dd>{trim(sellQuote.fee, 8)} ICEC</dd></div>
                     </>)}
-                    <p className="text-[11px] text-slate-500 pt-1">The final amount uses the price at the moment of the trade. If it moves more than 1% against you, the trade is cancelled.</p>
                   </dl>
                 )}
                 {problem && <p className="text-sm text-amber-400" role="alert">{problem}</p>}
@@ -185,6 +252,31 @@ export default function SectorMarketsPanel() {
             {notice && <p className={`text-sm ${notice.kind === 'ok' ? 'text-emerald-400' : 'text-red-400'}`} role="status">{notice.text}</p>}
           </div>
         </div>
+      )}
+
+      {/* the owner's own business: where a sector's real data comes from */}
+      <SectorYourBusiness userId={userId} />
+
+      {/* sectors still opening: how close each is, from real counts */}
+      {opening.length > 0 && (
+        <section aria-label="Sectors opening soon" className="space-y-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Opening soon</h4>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {opening.map((s) => {
+              const st = sectorState(s, tradingEnabled);
+              return (
+                <button key={s.ticker} type="button" onClick={() => setSelected(s.ticker)}
+                  className="rounded-xl border border-slate-800 bg-slate-900 p-3 text-left hover:border-slate-600">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-white"><span aria-hidden="true" className="mr-1.5">{SECTOR_ICON[s.ticker]}</span>{s.name}</span>
+                    <span className="font-mono text-xs text-amber-300">{s.ticker}</span>
+                  </div>
+                  <OpeningProgress st={st} />
+                </button>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {/* what the user holds */}
