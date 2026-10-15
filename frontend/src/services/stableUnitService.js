@@ -4,7 +4,7 @@
  *  - getQuote     public: the value of one ICEC-S (the live dollar rate with an inflation floor), in every currency
  *  - getHistory   public: its hourly value, for the chart
  *  - swapStable   one buy or sell, a single atomic step on the server (ican_stable_swap); `requestId` makes a retry harmless
- *  - getMyPosition / getMyFills / getMyWallets   the signed-in user's own rows
+ *  - getMyPosition / getMyFills / getMyWallets / getHomeCurrency   the signed-in user's own rows and the currency of the country they picked
  *
  * A function that is not installed yet is reported as { missing: true } instead of throwing, so the screen can say so.
  */
@@ -50,6 +50,18 @@ export const getMyWallets = async (userId) => {
   return (data || []).map((w) => ({ currency: String(w.currency).toUpperCase(), balance: parseFloat(w.balance) || 0 }));
 };
 
+// The currency of the country the person picked at sign-up (the platform's own country -> currency map); null if unknown.
+export const getHomeCurrency = async (userId) => {
+  if (!userId) return null;
+  try {
+    const res = await rpc('ican_user_currency', { p_user_id: userId });
+    const c = res.missing ? null : String(res.data || '').toUpperCase();
+    return /^[A-Z]{3}$/.test(c || '') ? c : null;
+  } catch {
+    return null;
+  }
+};
+
 /** { side: 'buy'|'sell', amount, currency, requestId, expectedUnitUgx, maxSlippagePct } -> { success, ... } | { success:false, code, error } */
 export const swapStable = async ({ side, amount, currency = 'UGX', requestId, expectedUnitUgx = null, maxSlippagePct = 1 }) => {
   const args = { p_side: side, p_amount: amount, p_pay_currency: currency, p_request_id: requestId, p_expected_price_ugx: expectedUnitUgx, p_max_slippage_pct: maxSlippagePct };
@@ -74,4 +86,4 @@ export const devStable = {
   reconcile: (token) => rpc('ican_stable_dev_reconcile', { dev_token: token }),
 };
 
-export default { getQuote, getHistory, getMyPosition, getMyFills, getMyWallets, swapStable, devStable };
+export default { getQuote, getHistory, getMyPosition, getMyFills, getMyWallets, getHomeCurrency, swapStable, devStable };

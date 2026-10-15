@@ -7,7 +7,7 @@ One ICEC-S is worth one US dollar at the live rates in `public.ican_currency_rat
 Every currency's price is that UGX value divided by the currency's live rate, so every wallet sees the same value.
 
 ## Deploy
-1. Run `ICEC_S_IN_SYSTEM_PASTE_INTO_SUPABASE.sql` in the Supabase SQL editor (the three migrations in order: `20261024100000_icec_stable_in_system.sql`, `20261025100000_icec_stable_automatic.sql`, `20261026100000_icec_stable_dollar_pool.sql`). Safe to run twice.
+1. Run `ICEC_S_IN_SYSTEM_PASTE_INTO_SUPABASE.sql` in the Supabase SQL editor (the four migrations in order: `20261024100000_icec_stable_in_system.sql`, `20261025100000_icec_stable_automatic.sql`, `20261026100000_icec_stable_dollar_pool.sql`, `20261027100000_icec_stable_global_currencies.sql`). Safe to run twice.
 2. Deploy the frontend. Wallet -> Trade -> **ICEC-S & C** works straight away. There is nothing to fund and no switch to press.
 
 ## How it works, user to user, held in dollars
@@ -16,7 +16,12 @@ Every currency's price is that UGX value divided by the currency's live rate, so
 - The price is the smaller of the full value and the **pool's dollars per ICEC-S**. Fees stay in the pool, so the pool per ICEC-S only rises. A new buyer never dilutes a holder and nobody is paid ahead of anybody else (tested with 300 random swaps through wild exchange rates).
 - Swaps are refused whenever the currency rates are older than `rates_max_age_s` (default 3 h; the feed runs hourly).
 
+## Global: every country's currency
+- The live rate table covers about 120 currencies (pounds, yen, euros, rupees, ...). `ican_country_currency_map` says which currency each country uses, i.e. the country a person picks at sign-up, and the screen opens on **that** currency ("GBP (your country)").
+- A person whose currency has no wallet row yet (a new UK or Japan user has UGX/KES/USD only) gets an empty wallet in it the first time they sell into it. A buy still needs money that is really there.
+- Money is cut to the decimals the currency really has: whole yen (also won, dong, rupiah, CFA francs), three places for dinars, two for pounds, euros and shillings.
+
 ## The honest limit
 There is no company reserve behind it. The shilling cannot hurt it, but the pool is only what holders paid in: if the inflation floor sits above a plain dollar the pool can hold slightly less than the full value, and then the price is the pool's share (the screen says so). Nothing is guaranteed beyond the pool. An administrator can optionally top it up (dev panel -> ICEC-S -> Pool, in UGX, held as dollars); that only ever helps holders. Nothing can be taken out of the pool while anyone holds ICEC-S. The dev panel's Pause button is an emergency stop only.
 
-Tests: `supabase/tests/stable_unit/run.sh` (42 checks) and `frontend/tests/stableUnitRules.test.js`.
+Tests: `supabase/tests/stable_unit/run.sh` (54 checks) and `frontend/tests/stableUnitRules.test.js`.

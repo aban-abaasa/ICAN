@@ -3,10 +3,10 @@ import { RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import IcanTradingChart from './IcanTradingChart';
 import LearnTab from './LearnTab';
-import { getQuote, getHistory, getMyPosition, getMyFills, getMyWallets, swapStable } from '../services/stableUnitService';
+import { getQuote, getHistory, getMyPosition, getMyFills, getMyWallets, getHomeCurrency, swapStable } from '../services/stableUnitService';
 import { makeRequestIdStore } from '../utils/tradeResult';
 import {
-  trim, previewBuy, previewSell, validateBuy, validateSell, friendlyStableError, historyToRows, rateAge,
+  trim, previewBuy, previewSell, validateBuy, validateSell, friendlyStableError, historyToRows, rateAge, currencyDecimals, fmtMoney, rateToUgx,
 } from '../utils/stableUnitRules';
 
 // ICEC-S, the stable form of icaneracoin, inside IcanEra: no blockchain, no gas, no wallet to connect. One ICEC-S is worth
@@ -23,6 +23,8 @@ export default function StableInSystemPanel() {
   const [quote, setQuote] = useState(undefined);        // undefined: loading
   const [history, setHistory] = useState([]);
   const [wallets, setWallets] = useState([]);
+  const [home, setHome] = useState(null);            // the currency of the country the person picked at sign-up
+  const picked = useRef(false);                       // true once they choose a currency themselves
   const [position, setPosition] = useState({ units: 0, cost_ugx: 0, value_ugx: null });
   const [fills, setFills] = useState([]);
   const [mode, setMode] = useState('buy');
@@ -48,9 +50,9 @@ export default function StableInSystemPanel() {
   const loadMine = useCallback(async () => {
     if (!userId) return;
     try {
-      const [w, p, f] = await Promise.all([getMyWallets(userId), getMyPosition(), getMyFills(8)]);
+      const [w, p, f, h] = await Promise.all([getMyWallets(userId), getMyPosition(), getMyFills(8), getHomeCurrency(userId)]);
       if (!alive.current) return;
-      setWallets(w); setPosition(p); setFills(f);
+      setWallets(w); setPosition(p); setFills(f); setHome(h);
     } catch { /* keep what is on screen */ }
   }, [userId]);
 
@@ -60,13 +62,24 @@ export default function StableInSystemPanel() {
     return () => clearInterval(t);
   }, [loadMarket, loadMine]);
 
-  // default the wallet to UGX if there is one, else the first
+  // The wallets to choose from: the ones they have, plus one in their own country's currency (a new UK or Japan user has none yet;
+  // it is created, empty, the first time they sell into it).
+  const choices = useMemo(() => {
+    const list = [...wallets];
+    if (home && !list.some((w) => w.currency === home)) list.push({ currency: home, balance: 0 });
+    return list;
+  }, [wallets, home]);
+
+  // open on their own currency (pounds for a UK user, yen for a Japan user); never fight a choice they made themselves
   useEffect(() => {
-    if (wallets.length && !wallets.some((w) => w.currency === currency)) setCurrency((wallets.find((w) => w.currency === 'UGX') || wallets[0]).currency);
-  }, [wallets, currency]);
+    if (!choices.length) return;
+    if (!picked.current && home && choices.some((w) => w.currency === home)) { if (currency !== home) setCurrency(home); return; }
+    if (!choices.some((w) => w.currency === currency)) setCurrency((choices.find((w) => w.currency === 'UGX') || choices[0]).currency);
+  }, [choices, home, currency]);
 
   const rows = useMemo(() => historyToRows(history), [history]);
-  const wallet = wallets.find((w) => w.currency === currency);
+  const wallet = choices.find((w) => w.currency === currency);
+  const dp = currencyDecimals(currency);
   const held = Number(position.units) || 0;
   const num = Number(amount);
 
@@ -94,7 +107,7 @@ export default function StableInSystemPanel() {
     if (res.success) {
       requestIds.clear(); setAmount('');
       say('ok', res.duplicate ? 'That swap was already done.'
-        : mode === 'buy' ? `Done. You now hold ${trim(res.newUnits, 8)} ICEC-S.` : `Done. ${trim(res.payAmount, 2)} ${res.payCurrency} was added to your wallet.`);
+        : mode === 'buy' ? `Done. You now hold ${trim(res.newUnits, 8)} ICEC-S.` : `Done. ${fmtMoney(res.payAmount, res.payCurrency)} was added to your wallet.`);
     } else {
       say('err', friendlyStableError(res));
     }
@@ -114,7 +127,7 @@ export default function StableInSystemPanel() {
       <LearnTab
         items={[
           { q: 'What is ICEC-S?', a: 'The stable form of icaneracoin. One ICEC-S is worth one US dollar. It lives inside IcanEra, so there is no blockchain, no gas fee and no outside wallet to connect.' },
-          { q: 'Where does its price come from?', a: 'The same live currency rates icaneracoin uses, refreshed every hour. The value in each currency is the dollar rate for that currency, so a wallet in any currency sees the same value.' },
+          { q: 'Where does its price come from?', a: 'The same live currency rates icaneracoin uses, refreshed every hour, for about 120 currencies. It opens in the currency of the country you picked when you signed up (pounds, yen, euros, shillings, rupees and so on), and any wallet you hold shows the same value in its own currency.' },
           { q: 'How does it protect against inflation?', a: `It rises with the dollar when the shilling weakens, and it never goes below its start value grown by Uganda's yearly inflation (${trim(quote.inflation_pct, 2)}% now). Nobody can promise it will beat inflation by more than that.` },
           { q: 'What backs it?', a: 'Dollars. When you buy, your money is converted at the live rate and held in one shared pool as US dollars; when you sell, the dollars come out of that pool. Because the pool and what it owes are both in dollars, a falling shilling cannot shrink what an ICEC-S is worth, and there is no company reserve to fund and nothing to switch on. Fees stay in the pool, so it only grows relative to what it owes. The one case where the pool can hold less than the full value is when the inflation floor sits above a plain dollar; the screen then shows the pool\'s share, and says so. It is not a bank deposit.' },
           { q: 'What does it cost, and what are the limits?', a: `A ${trim(quote.fee_bps / 100, 2)}% fee on each buy and each sell. Up to UGX ${trim(quote.max_trade_ugx, 0)} per swap. Swaps pause whenever the live rates are more than a few hours old.` },
@@ -126,7 +139,7 @@ export default function StableInSystemPanel() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">1 ICEC-S =</p>
-            <p className="text-3xl font-bold leading-tight text-white">{trim(local, 2)} <span className="text-base font-semibold text-slate-400">{currency}</span></p>
+            <p className="text-3xl font-bold leading-tight text-white">{fmtMoney(local, currency, { precise: true })} <span className="text-base font-semibold text-slate-400">{currency}</span></p>
             <p className="text-sm text-slate-400">{quote.pool_short ? 'the pool\'s share' : '1 US dollar'}{currency !== 'UGX' ? ` · UGX ${trim(quote.unit_ugx, 2)}` : ''}</p>
           </div>
           <div className="text-right">
@@ -166,20 +179,20 @@ export default function StableInSystemPanel() {
           ))}
         </div>
 
-        {!userId ? <p className="text-sm text-slate-400">Sign in to swap.</p> : wallets.length === 0 ? <p className="text-sm text-slate-400">You have no wallet to swap from yet.</p> : (
+        {!userId ? <p className="text-sm text-slate-400">Sign in to swap.</p> : choices.length === 0 ? <p className="text-sm text-slate-400">You have no wallet to swap from yet.</p> : (
           <>
             <label className="block text-xs text-slate-400">{buy ? 'Pay from' : 'Receive in'}
-              <select value={currency} onChange={(e) => { setCurrency(e.target.value); reset(); }}
+              <select value={currency} onChange={(e) => { picked.current = true; setCurrency(e.target.value); reset(); }}
                 className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white">
-                {wallets.map((w) => <option key={w.currency} value={w.currency}>{w.currency} wallet · {trim(w.balance, 2)}</option>)}
+                {choices.map((w) => <option key={w.currency} value={w.currency}>{w.currency}{w.currency === home ? ' (your country)' : ''} · {fmtMoney(w.balance, w.currency)}</option>)}
               </select>
             </label>
             <label className="block text-xs text-slate-400">{buy ? `Amount to spend (${currency})` : `ICEC-S to sell (you hold ${trim(held, 8)})`}
               <div className="mt-1 flex gap-2">
                 <input type="text" inputMode="decimal" autoComplete="off" value={amount} placeholder="0" aria-label="Amount"
-                  onChange={(e) => { setNotice(null); setReviewing(false); setAmount(e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')); }}
+                  onChange={(e) => { setNotice(null); setReviewing(false); setAmount(dp === 0 && buy ? e.target.value.replace(/[^0-9]/g, '') : e.target.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')); }}
                   className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-base text-white" />
-                {buy && wallet && wallet.balance > 0 && <button type="button" onClick={() => setAmount(String(Math.floor(wallet.balance * 100) / 100))} className="rounded-lg border border-slate-700 px-3 text-xs text-slate-300 hover:text-white">Max</button>}
+                {buy && wallet && wallet.balance > 0 && <button type="button" onClick={() => setAmount(String(Math.floor(wallet.balance * 10 ** dp) / 10 ** dp))} className="rounded-lg border border-slate-700 px-3 text-xs text-slate-300 hover:text-white">Max</button>}
                 {!buy && held > 0 && <button type="button" onClick={() => setAmount(String(held))} className="rounded-lg border border-slate-700 px-3 text-xs text-slate-300 hover:text-white">Max</button>}
               </div>
             </label>
@@ -189,9 +202,9 @@ export default function StableInSystemPanel() {
                 {buy ? (
                   <div className="flex justify-between"><dt className="text-slate-400">You get about</dt><dd className="font-semibold text-white">{trim(preview.units, 8)} ICEC-S</dd></div>
                 ) : (
-                  <div className="flex justify-between"><dt className="text-slate-400">You get about</dt><dd className="font-semibold text-white">{trim(preview.local, 2)} {currency}</dd></div>
+                  <div className="flex justify-between"><dt className="text-slate-400">You get about</dt><dd className="font-semibold text-white">{fmtMoney(preview.local, currency)}</dd></div>
                 )}
-                <div className="flex justify-between"><dt className="text-slate-400">Fee ({trim(quote.fee_bps / 100, 2)}%)</dt><dd>UGX {trim(preview.fee, 2)}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-400">Fee ({trim(quote.fee_bps / 100, 2)}%)</dt><dd>{fmtMoney(preview.fee / (rateToUgx(quote, currency) || 1), currency, { precise: true })}</dd></div>
               </dl>
             )}
             {problem && <p className="text-sm text-amber-400" role="alert">{problem}</p>}
@@ -199,7 +212,7 @@ export default function StableInSystemPanel() {
 
             {reviewing ? (
               <div className="space-y-2">
-                <p className="text-sm text-white">{buy ? `Swap ${trim(num, 2)} ${currency} for about ${trim(preview?.units, 8)} ICEC-S?` : `Sell ${trim(num, 8)} ICEC-S for about ${trim(preview?.local, 2)} ${currency}?`}</p>
+                <p className="text-sm text-white">{buy ? `Swap ${fmtMoney(preview?.local, currency)} for about ${trim(preview?.units, 8)} ICEC-S?` : `Sell ${trim(num, 8)} ICEC-S for about ${fmtMoney(preview?.local, currency)}?`}</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setReviewing(false)} disabled={busy} className="rounded-lg border border-slate-600 py-2 text-sm text-slate-300">Back</button>
                   <button type="button" onClick={submit} disabled={busy} className="rounded-lg bg-amber-500 py-2 text-sm font-bold text-slate-900 disabled:opacity-50">{busy ? 'Working…' : 'Confirm'}</button>
@@ -219,7 +232,7 @@ export default function StableInSystemPanel() {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-xl border border-slate-800 bg-slate-900 p-3"><div className="text-xs text-slate-500">You hold</div><div className="text-xl font-semibold text-white">{trim(held, 8)}</div><div className="text-xs text-slate-400">ICEC-S</div></div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-3"><div className="text-xs text-slate-500">Worth now</div><div className="text-xl font-semibold text-white">{position.value_ugx == null ? '—' : trim(position.value_ugx, 0)}</div><div className="text-xs text-slate-400">UGX</div></div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-3"><div className="text-xs text-slate-500">Worth now</div><div className="text-xl font-semibold text-white">{position.value_ugx == null || !rateToUgx(quote, currency) ? '—' : fmtMoney(position.value_ugx / rateToUgx(quote, currency), currency)}</div><div className="text-xs text-slate-400">{currency}</div></div>
           </div>
           {fills.length > 0 && (
             <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900">
@@ -231,7 +244,7 @@ export default function StableInSystemPanel() {
                       <td className="px-4 py-2 text-slate-500">{new Date(f.created_at).toLocaleString()}</td>
                       <td className={f.side === 'buy' ? 'text-emerald-400' : 'text-red-400'}>{f.side === 'buy' ? 'Bought' : 'Sold'}</td>
                       <td className="text-right">{trim(f.units, 8)}</td>
-                      <td className="px-4 text-right">{trim(f.pay_amount, 2)} {f.pay_currency}</td>
+                      <td className="px-4 text-right">{fmtMoney(f.pay_amount, f.pay_currency)}</td>
                     </tr>
                   ))}
                 </tbody>

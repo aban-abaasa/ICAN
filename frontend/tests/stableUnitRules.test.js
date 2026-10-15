@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  floor8, rateToUgx, previewBuy, previewSell, validateBuy, validateSell, friendlyStableError, mapSwapResult, historyToRows, rateAge,
+  floor8, rateToUgx, previewBuy, previewSell, validateBuy, validateSell, friendlyStableError, mapSwapResult, historyToRows, rateAge, currencyDecimals, fmtMoney,
 } from '../src/utils/stableUnitRules.js';
 
 const quote = { unit_ugx: 4022.802, fee_bps: 50, max_trade_ugx: 5000000, currencies: { UGX: 4022.802, USD: 1, KES: 127.633 } };
@@ -64,4 +64,25 @@ test('rateAge: how old the live rates are, in words', () => {
   assert.equal(rateAge('2026-10-15T11:59:30Z', now), 'just now');
   assert.equal(rateAge('2026-10-15T11:18:00Z', now), '42 min ago');
   assert.equal(rateAge('2026-10-15T09:00:00Z', now), '3 h ago');
+});
+
+test('currencyDecimals / fmtMoney: pounds, yen and dinars are shown the way their people read them', () => {
+  assert.equal(currencyDecimals('JPY'), 0);
+  assert.equal(currencyDecimals('gbp'), 2);
+  assert.equal(currencyDecimals('KWD'), 3);
+  assert.equal(currencyDecimals('UGX'), 2);
+  assert.equal(fmtMoney(1234.5, 'GBP'), '£1,234.50');
+  assert.equal(fmtMoney(158.31, 'JPY'), '¥158');
+  assert.equal(fmtMoney(0.7562, 'GBP', { precise: true }), '£0.7562');
+  assert.equal(fmtMoney(0.7562, 'GBP'), '£0.76');
+  assert.equal(fmtMoney('x', 'GBP'), '—');
+  assert.match(fmtMoney(5, 'ZZZZ'), /5 ZZZZ/);
+});
+
+test('previews cut to the currency\'s own decimals, like the database: 1,000.75 yen is 1,000 yen', () => {
+  const q = { unit_ugx: 4022.802, fee_bps: 50, max_trade_ugx: 5e9, currencies: { UGX: 4022.802, JPY: 158.3, GBP: 0.7562 } };
+  assert.equal(previewBuy({ amount: 1000.75, currency: 'JPY', quote: q }).local, 1000);
+  assert.equal(previewBuy({ amount: 10.999, currency: 'GBP', quote: q }).local, 10.99);
+  const sell = previewSell({ units: 2, currency: 'JPY', quote: q });
+  assert.equal(Number.isInteger(sell.local), true);
 });
