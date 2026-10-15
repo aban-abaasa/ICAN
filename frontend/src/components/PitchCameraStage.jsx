@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, Camera, Film, SwitchCamera, RotateCcw, Scissors, Smartphone,
-  Loader2, Play, Pause, Timer, Volume2, VolumeX,
+  Loader2, Play, Pause, Timer, Volume2, VolumeX, ZoomIn,
 } from 'lucide-react';
 import './pitch-camera-stage.css';
 import PitchSlideshowBuilder from './PitchSlideshowBuilder';
@@ -33,6 +33,17 @@ export const MAX_RECORD_SECONDS = 180;
 export const MAX_UPLOAD_MB = 100;
 
 const TIMER_KEY = 'pitchin-record-countdown';
+const ZOOM_KEY = 'pitchin-record-zoom';
+
+// How much of the camera picture is kept when it is fitted to a tall screen. Phones usually hand over a WIDE
+// picture, and filling a tall screen with it ("close") keeps only its middle quarter, which is just a face.
+//   wide  = the whole picture across the screen (soft blurred edges above and below)
+//   std   = about twice that, a normal head-and-shoulders selfie (the default)
+//   close = fills the screen, cropped hard
+const ZOOM_ORDER = ['std', 'close', 'wide'];
+const ZOOM_LABEL = { wide: '1×', std: '2×', close: 'Max' };
+const ZOOM_NAME = { wide: 'wide', std: 'standard', close: 'close' };
+const readZoomPref = () => { try { const v = localStorage.getItem(ZOOM_KEY); return ZOOM_ORDER.includes(v) ? v : 'std'; } catch { return 'std'; } };
 
 const CAMERA_PROBLEM = {
   denied: 'Camera access is blocked. Allow the camera for this site in your browser settings, then try again.',
@@ -87,6 +98,9 @@ export default function PitchCameraStage({
   const finalMsRef = useRef(0);
   const fixingRef = useRef(false);
   const screenArRef = useRef(9 / 16);
+  const zoomRef = useRef('std');
+  const zoomRatioRef = useRef(1);   // how much a full-screen fill crops the camera picture (cover / contain)
+  const tinyRef = useRef(null);     // tiny copy of the frame, scaled up as the soft backdrop
 
   const [camState, setCamState] = useState('opening'); // opening | ready | denied | notfound | unsupported | error
   const [landscape, setLandscape] = useState(false);
@@ -98,6 +112,8 @@ export default function PitchCameraStage({
   const [paused, setPaused] = useState(false);
   const [count, setCount] = useState(null);
   const [useCountdown, setUseCountdown] = useState(readTimerPref);
+  const [zoom, setZoom] = useState(() => { const z = readZoomPref(); zoomRef.current = z; return z; });
+  const [canZoom, setCanZoom] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [fileError, setFileError] = useState('');
   const [readingFile, setReadingFile] = useState(false);
@@ -175,10 +191,28 @@ export default function PitchCameraStage({
         const ctx = canvas.getContext('2d');
         const cw = canvas.width;
         const ch = canvas.height;
-        // "cover": fill the frame and crop the overflow, centred
-        const scale = Math.max(cw / video.videoWidth, ch / video.videoHeight);
-        const dw = video.videoWidth * scale;
-        const dh = video.videoHeight * scale;
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        const contain = Math.min(cw / vw, ch / vh);
+        const cover = Math.max(cw / vw, ch / vh);
+        const ratio = cover / contain;
+        if (Math.abs(ratio - zoomRatioRef.current) > 0.01) { zoomRatioRef.current = ratio; setCanZoom(ratio > 1.25); }
+        // a picture shaped like the screen has nothing to choose between: it just fills it
+        const level = ratio > 1.25 ? zoomRef.current : 'close';
+        const scale = level === 'close' ? cover : level === 'wide' ? contain : contain * Math.min(2, ratio);
+        if (scale < cover - 0.01) {
+          // the picture doesn't reach the edges: fill them with a soft, darkened blur of the same picture
+          let tiny = tinyRef.current;
+          if (!tiny) { tiny = document.createElement('canvas'); tiny.width = 18; tiny.height = 32; tinyRef.current = tiny; }
+          const ts = Math.max(tiny.width / vw, tiny.height / vh);
+          tiny.getContext('2d').drawImage(video, (tiny.width - vw * ts) / 2, (tiny.height - vh * ts) / 2, vw * ts, vh * ts);
+          ctx.imageSmoothingEnabled = true;
+          ctx.drawImage(tiny, 0, 0, cw, ch);
+          ctx.fillStyle = 'rgba(8, 6, 3, 0.45)';
+          ctx.fillRect(0, 0, cw, ch);
+        }
+        const dw = vw * scale;
+        const dh = vh * scale;
         ctx.drawImage(video, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
         drawIcanEraWatermark(ctx, cw, ch);
       }
@@ -390,6 +424,13 @@ export default function PitchCameraStage({
     const next = facing === 'user' ? 'environment' : 'user';
     setFacing(next);
     openCamera(next);
+  };
+
+  const cycleZoom = () => {
+    const next = ZOOM_ORDER[(ZOOM_ORDER.indexOf(zoom) + 1) % ZOOM_ORDER.length];
+    zoomRef.current = next;
+    setZoom(next);
+    try { localStorage.setItem(ZOOM_KEY, next); } catch { /* not remembered */ }
   };
 
   const toggleCountdown = () => {
@@ -625,6 +666,12 @@ export default function PitchCameraStage({
                 <Timer />
                 {useCountdown && <span className="badge">3</span>}
               </button>
+              {canZoom && (
+                <button type="button" onClick={cycleZoom} aria-label={`Zoom: ${ZOOM_NAME[zoom]}. Tap to change`} className="pcs-ico">
+                  <ZoomIn />
+                  <span className="badge">{ZOOM_LABEL[zoom]}</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={switchCamera}
