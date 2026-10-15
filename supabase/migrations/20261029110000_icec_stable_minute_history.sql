@@ -16,28 +16,30 @@
 --
 -- Nothing is simulated: a row is the unit's real value (live rate or inflation floor) at that minute. A minute nobody
 -- recorded (job down, nobody watching) is simply absent and the chart joins the two neighbours.
--- Safe to run more than once. Requires 20261024100000_icec_stable_in_system.sql.
+-- Safe to run more than once. Requires the ICEC-S migrations 20261024100000 .. 20261028100000 (pool_value() in particular).
 -- ============================================================================
 
 DO $$ BEGIN
-  IF to_regclass('icanera_stable.price_history') IS NULL THEN
-    RAISE EXCEPTION 'Run 20261024100000_icec_stable_in_system.sql first.';
+  IF to_regclass('icanera_stable.price_history') IS NULL OR to_regprocedure('icanera_stable.pool_value()') IS NULL THEN
+    RAISE EXCEPTION 'Apply the earlier ICEC-S migrations (20261024100000 ... 20261028100000) first.';
   END IF;
 END $$;
 
 -- 1. One point per minute. A cheap existence check first, so a busy screen that calls this on every poll does no more work
 --    than one index lookup once the minute is recorded.
+--    Like 20261025100000 it records the price a swap would use (the pool-aware price), not the plain dollar value.
 CREATE OR REPLACE FUNCTION icanera_stable.snapshot_price() RETURNS VOID
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = icanera_stable, public AS $$
 DECLARE
-  v RECORD;
+  v RECORD; p RECORD;
   v_minute TIMESTAMPTZ := date_trunc('minute', now());
 BEGIN
   IF EXISTS (SELECT 1 FROM icanera_stable.price_history h WHERE h.taken_at = v_minute) THEN RETURN; END IF;
   SELECT * INTO v FROM icanera_stable.unit_value();
   IF v.unit_ugx IS NULL THEN RETURN; END IF;
+  SELECT * INTO p FROM icanera_stable.pool_value();
   INSERT INTO icanera_stable.price_history (taken_at, unit_ugx, fx_ugx, floor_ugx)
-  VALUES (v_minute, v.unit_ugx, v.fx_ugx, v.floor_ugx) ON CONFLICT (taken_at) DO NOTHING;
+  VALUES (v_minute, p.price_ugx, v.fx_ugx, v.floor_ugx) ON CONFLICT (taken_at) DO NOTHING;
 EXCEPTION WHEN OTHERS THEN NULL;
 END; $$;
 REVOKE ALL ON FUNCTION icanera_stable.snapshot_price() FROM PUBLIC, anon, authenticated;
