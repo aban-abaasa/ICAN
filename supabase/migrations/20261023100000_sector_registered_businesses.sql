@@ -43,7 +43,7 @@ BEGIN
   END IF;
   IF NOT pg_try_advisory_xact_lock(hashtext('icanera_trading.refresh_registered_businesses')) THEN RETURN; END IF;
 
-  DELETE FROM icanera_trading.sector_registered_cache;
+  DELETE FROM icanera_trading.sector_registered_cache WHERE TRUE;
   INSERT INTO icanera_trading.sector_registered_cache (ticker, registered, sharing, computed_at)
   SELECT x.ticker, COUNT(*)::INT, (COUNT(*) FILTER (WHERE x.agreed))::INT, clock_timestamp()
     FROM (

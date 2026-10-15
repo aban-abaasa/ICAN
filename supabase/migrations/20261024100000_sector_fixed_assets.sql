@@ -82,7 +82,7 @@ BEGIN
   IF NOT pg_try_advisory_xact_lock(hashtext('icanera_trading.refresh_contributor_assets')) THEN RETURN; END IF;
 
   SELECT w.asset_terms_version INTO v_terms FROM icanera_trading.sector_settings w WHERE w.id;
-  DELETE FROM icanera_trading.contributor_assets;
+  DELETE FROM icanera_trading.contributor_assets WHERE TRUE;
   INSERT INTO icanera_trading.contributor_assets_meta (id, computed_at) VALUES (TRUE, clock_timestamp())
   ON CONFLICT (id) DO UPDATE SET computed_at = EXCLUDED.computed_at;
 
