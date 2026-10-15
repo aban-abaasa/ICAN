@@ -748,9 +748,27 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
   const [receiveInfo, setReceiveInfo] = useState(null);
   // A store product the visitor tapped on the Market tab: opens the Pay tab with it already listed.
   const [payPrefill, setPayPrefill] = useState(null);
-  const payForProduct = (item) => {
-    setPayPrefill({ key: `${item.product_id}-${Date.now()}`, items: [{ name: item.name, price: item.price, qty: 1 }] });
+  // Store products ticked on the Market tab ({ product_id: quantity }); survives a reload within the tab.
+  const payBasketKey = `icanera_paybasket_nb_${companyId}`;
+  const [payBasket, setPayBasket] = usePersistedCart(payBasketKey);
+  const payCatalog = useMemo(
+    () => storeProducts.filter(isPayableProduct).map((p) => ({ id: String(p.product_id), name: p.name, price: Math.round(Number(p.price) || 0), service: Boolean(p.is_service) })).filter((p) => p.price > 0),
+    [storeProducts],
+  );
+  // Opens the Pay tab with everything ticked already listed -- the visitor only adds a name and continues.
+  const payForBasket = () => {
+    const items = payCatalog
+      .filter((p) => (payBasket[p.id] || 0) > 0)
+      .map((p) => ({ name: p.name, price: p.price, qty: payBasket[p.id], product_id: p.id }));
+    if (items.length === 0) return;
+    setPayPrefill({ key: `basket-${Date.now()}`, items });
     setSection('pay');
+  };
+  // The bill exists now: drop the ticked items so they are not still waiting after the visitor comes back.
+  const clearPayBasket = () => {
+    try { sessionStorage.removeItem(payBasketKey); } catch { /* ignore */ }
+    setPayBasket({});
+    setPayPrefill(null);
   };
   useEffect(() => {
     if (!company) return undefined;
@@ -1341,7 +1359,9 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             <ShopSection
               products={products}
               storeProducts={storeProducts}
-              onPayForProduct={payInfo ? payForProduct : null}
+              payBasket={payInfo ? payBasket : null}
+              setPayBasket={setPayBasket}
+              onPayForBasket={payInfo ? payForBasket : null}
               contact={{ phone: company.phone, whatsapp: company.whatsapp }}
               loading={productsLoading}
               cart={cart}
@@ -1359,6 +1379,8 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
               checked={payChecked}
               receiveInfo={receiveInfo}
               prefill={payPrefill}
+              catalog={payCatalog}
+              onBillCreated={clearPayBasket}
               user={user}
               onEnabled={() => setPayReload((n) => n + 1)}
             />
@@ -1571,7 +1593,7 @@ const AccountSection = ({ company, user, authLoading }) => {
 //
 // When the owner has also switched on "Let clients request money from us", a Pay | Receive switch appears:
 // Receive files a request that an owner approves with the business-wallet PIN before anything is paid.
-const PaySection = ({ company, info, raw = null, checked = true, receiveInfo, prefill = null, user = null, onEnabled }) => {
+const PaySection = ({ company, info, raw = null, checked = true, receiveInfo, prefill = null, catalog = [], onBillCreated = null, user = null, onEnabled }) => {
   const [side, setSide] = useState('pay'); // 'pay' | 'receive'
   const receiving = side === 'receive' && receiveInfo;
   if (!checked) {
@@ -1606,7 +1628,7 @@ const PaySection = ({ company, info, raw = null, checked = true, receiveInfo, pr
         </div>
         {receiving
           ? <ReceiveRequestForm businessProfileId={company.business_profile_id} businessName={company.company_name} info={receiveInfo} />
-          : <PayAnyAmountForm key={prefill ? prefill.key : 'blank'} code={info.code} info={info} skin="nb" initialItems={prefill ? prefill.items : null} />}
+          : <PayAnyAmountForm key={prefill ? prefill.key : 'blank'} code={info.code} info={info} skin="nb" initialItems={prefill ? prefill.items : null} catalog={catalog} onBillCreated={onBillCreated} />}
       </div>
     </div>
   );
@@ -2913,13 +2935,16 @@ const VEHICLE_TYPE_OPTIONS = [
   { value: 'van', label: '🚐 Van' },
 ];
 
+// In-site payment is in UGX (the Pay tab's currency) and only for what can be bought right now.
+const isPayableProduct = (item) => String(item.currency || 'UGX').toUpperCase() === 'UGX' && Boolean(item.is_service || item.in_stock);
+
 // Browsing is free for anyone. Paying with an IcanEra wallet is the
 // recommended way (no extra fee): an anonymous visitor who picks it gets the
 // signup form right here (no navigating away, cart stays intact) and the same
 // button then pays instantly. A visitor who doesn't want a wallet can instead
 // pay with Mobile Money, card or bank -- that adds a small payment-processing
 // fee and is handled by useGuestCheckout / guestCheckoutService.
-const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, contact = {}, loading, cart, setCart, businessProfileId, user, authLoading }) => {
+const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBasket = null, onPayForBasket = null, contact = {}, loading, cart, setCart, businessProfileId, user, authLoading }) => {
   const { askPin, pinDialog } = usePinPrompt();
   const { walletState, recheckWallet } = useWalletReady(user?.id);
   const cartOpenKey = `icanera_cart_nbshop_${businessProfileId}`;
@@ -3021,6 +3046,10 @@ const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, con
   const foreignCurrency = currencyOf(cartItems[0]?.listing);
   const foreign = cartItems.length > 0 && foreignCurrency !== 'UGX';
   const cartCount = cartItems.reduce((sum, row) => sum + row.qty, 0);
+  // Market-tab selection that goes to the Pay tab (separate from the delivery-shop cart above).
+  const pickedRows = payBasket ? storeProducts.filter((p) => (payBasket[String(p.product_id)] || 0) > 0 && isPayableProduct(p)) : [];
+  const pickedCount = pickedRows.reduce((sum, p) => sum + payBasket[String(p.product_id)], 0);
+  const pickedTotal = pickedRows.reduce((sum, p) => sum + (Number(p.price) || 0) * payBasket[String(p.product_id)], 0);
   const allFreeDelivery = cartItems.length > 0 && cartItems.every((row) => row.listing.free_delivery);
   // Preview only -- dropship_checkout always recomputes the REAL fare
   // server-side (BodaGoera's own fare formula for whichever rider actually
@@ -3216,7 +3245,7 @@ const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, con
       {storeProducts.length > 0 && (
         <div className={products.length > 0 ? 'mt-8' : ''}>
           <h3 className="text-sm font-semibold nb-text mb-1">{products.length > 0 ? 'From our store' : 'Our products'}</h3>
-          <p className="text-xs nb-text-muted mb-3">{onPayForProduct ? 'Tap a product to pay for it — cash, IcanEra wallet, Mobile Money, card or bank.' : 'Contact us to order these.'}</p>
+          <p className="text-xs nb-text-muted mb-3">{onPayForBasket ? 'Tap everything you want, then pay for it all together — cash, IcanEra wallet, Mobile Money, card or bank.' : 'Contact us to order these.'}</p>
           {(buildWhatsAppLink(contact.whatsapp) || buildTelLink(contact.phone)) && (
             <div className="flex gap-2 mb-3">
               {buildWhatsAppLink(contact.whatsapp) && (
@@ -3233,19 +3262,24 @@ const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, con
           )}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
             {storeProducts.map((item) => {
-              // In-site payment is in UGX (the Pay tab's currency) and only for what can be bought right now.
-              const payable = !!onPayForProduct && String(item.currency || 'UGX').toUpperCase() === 'UGX' && (item.is_service || item.in_stock);
+              const payable = !!onPayForBasket && !!payBasket && isPayableProduct(item);
+              const id = String(item.product_id);
+              const picked = payable ? (payBasket[id] || 0) : 0;
+              const setPicked = (qty) => setPayBasket((prev) => ({ ...prev, [id]: Math.max(0, Math.min(99, qty)) }));
               return (
               <div
                 key={item.product_id}
-                {...(payable ? { role: 'button', tabIndex: 0, onClick: () => onPayForProduct(item), onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPayForProduct(item); } } } : {})}
-                className={`nb-card rounded-2xl overflow-hidden flex flex-col${payable ? ' cursor-pointer transition active:scale-[0.98]' : ''}`}
+                {...(payable ? { role: 'button', tabIndex: 0, 'aria-pressed': picked > 0, onClick: () => { if (picked === 0) setPicked(1); }, onKeyDown: (e) => { if ((e.key === 'Enter' || e.key === ' ') && picked === 0) { e.preventDefault(); setPicked(1); } } } : {})}
+                className={`nb-card rounded-2xl overflow-hidden flex flex-col${payable ? ' cursor-pointer transition active:scale-[0.98]' : ''}${picked > 0 ? ' ring-2 ring-[var(--nb-green)]' : ''}`}
               >
-                <div className="aspect-square nb-surface-alt flex items-center justify-center overflow-hidden">
+                <div className="aspect-square nb-surface-alt flex items-center justify-center overflow-hidden relative">
                   {item.images?.[0] ? (
                     <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
                   ) : (
                     <Store className="w-8 h-8 nb-icon-muted" />
+                  )}
+                  {picked > 0 && (
+                    <span className="absolute top-2 right-2 nb-badge-count text-xs font-bold rounded-full min-w-[24px] h-6 px-1.5 flex items-center justify-center"><Check className="w-3 h-3 mr-0.5" />{picked}</span>
                   )}
                 </div>
                 <div className="p-2.5 flex-1 flex flex-col">
@@ -3258,14 +3292,32 @@ const ShopSection = ({ products, storeProducts = [], onPayForProduct = null, con
                   ) : (
                     <p className="mt-1 text-[11px] nb-text-muted">In stock</p>
                   )}
-                  {payable && (
-                    <span className="mt-2 w-full min-h-[36px] rounded-lg nb-btn-primary text-xs font-semibold flex items-center justify-center">Pay</span>
-                  )}
+                  {payable && (picked === 0 ? (
+                    <span className="mt-2 w-full min-h-[40px] rounded-lg nb-btn-primary text-xs font-semibold flex items-center justify-center gap-1"><Plus className="w-3.5 h-3.5" />Add</span>
+                  ) : (
+                    <div className="mt-2 w-full min-h-[40px] rounded-lg nb-option-selected flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                      <button type="button" onClick={() => setPicked(picked - 1)} className="min-w-[44px] min-h-[40px] flex items-center justify-center" aria-label={`Fewer ${item.name}`}><Minus className="w-4 h-4" /></button>
+                      <span className="text-sm font-bold" aria-live="polite">{picked}</span>
+                      <button type="button" onClick={() => setPicked(picked + 1)} className="min-w-[44px] min-h-[40px] flex items-center justify-center" aria-label={`More ${item.name}`}><Plus className="w-4 h-4" /></button>
+                    </div>
+                  ))}
                 </div>
               </div>
               );
             })}
           </div>
+          {pickedCount > 0 && (
+            <div className="sticky bottom-[calc(148px+env(safe-area-inset-bottom))] sm:bottom-6 z-30 mt-4 max-w-md mx-auto">
+              <div className="nb-card rounded-2xl shadow-lg p-2.5 pl-4 flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs nb-text-muted">{pickedCount} item{pickedCount === 1 ? '' : 's'} selected</p>
+                  <p className="font-extrabold nb-text truncate">{formatUGX(pickedTotal)}</p>
+                </div>
+                <button type="button" onClick={() => setPayBasket({})} className="nb-text-faint text-xs font-semibold min-h-[44px] px-2">Clear</button>
+                <button type="button" onClick={onPayForBasket} className="nb-btn-primary rounded-xl min-h-[44px] px-5 text-sm font-bold">Pay now</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
