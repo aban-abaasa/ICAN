@@ -18,7 +18,7 @@ const card = { background: 'var(--dp-card)', borderColor: 'var(--dp-card-bd)' };
 const field = { background: 'var(--dp-inner)', borderColor: 'var(--dp-inner-bd)', color: 'var(--dp-txt)' };
 
 const SETTING_FIELDS = [
-  ['fee_bps', 'Fee (basis points)', '50 = 0.5% on each buy and each sell, paid to the vault'],
+  ['fee_bps', 'Cash-out fee (basis points)', '300 = 3%, charged only when someone sells ICEC-S back to their wallet. Buying is free. Paid to the platform fee business (GODMINDERA ORGANISATION (U) LTD, the recipient every platform fee uses); if that credit ever fails the fee stays in the pool'],
     ['max_trade_ugx', 'Largest swap (UGX)', 'Per swap, on the UGX value'],
   ['max_position_ugx', 'Largest holding (UGX)', 'Per user, on cost'],
   ['max_trades_per_minute', 'Swaps per minute', 'Per user'],

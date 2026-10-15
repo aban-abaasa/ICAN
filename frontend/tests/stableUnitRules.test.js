@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  floor8, rateToUgx, previewBuy, previewSell, validateBuy, validateSell, friendlyStableError, mapSwapResult, historyToRows, rateAge, currencyDecimals, fmtMoney,
+  floor8, rateToUgx, previewBuy, previewSell, validateBuy, validateSell, friendlyStableError, mapSwapResult, historyToRows, rateAge, currencyDecimals, fmtMoney, fmtUnits,
 } from '../src/utils/stableUnitRules.js';
 
 const quote = { unit_ugx: 4022.802, fee_bps: 50, max_trade_ugx: 5000000, currencies: { UGX: 4022.802, USD: 1, KES: 127.633 } };
@@ -13,20 +13,21 @@ test('rateToUgx: UGX per one unit of a currency, from the quote', () => {
   assert.equal(rateToUgx(null, 'UGX'), null);
 });
 
-test('previewBuy: fee off first, then units rounded down (the same numbers the database test checks)', () => {
+test('previewBuy: NO fee for buying; all of it becomes units, rounded down (the same numbers the database test checks)', () => {
   const p = previewBuy({ amount: 100000, currency: 'UGX', quote });
   assert.equal(p.gross, 100000);
-  assert.equal(p.fee, 500);
-  assert.equal(p.units, floor8(99500 / 4022.802));
+  assert.equal(p.fee, 0);
+  assert.equal(p.units, floor8(100000 / 4022.802));
   assert.equal(previewBuy({ amount: 0, currency: 'UGX', quote }), null);
   assert.equal(previewBuy({ amount: 5, currency: 'ZZZ', quote }), null);
 });
 
-test('previewSell: value less the fee, paid into the wallet rounded down to 2 places', () => {
-  const p = previewSell({ units: 10, currency: 'UGX', quote });
+test('previewSell: value less the 3% cash-out fee, paid into the wallet rounded down to 2 places', () => {
+  const q3 = { ...quote, fee_bps: 300, sell_fee_bps: 300 };
+  const p = previewSell({ units: 10, currency: 'UGX', quote: q3 });
   assert.equal(p.gross, 40228.02);
-  assert.equal(p.fee, 201.1401);
-  assert.equal(p.local, Math.floor((40228.02 - 201.1401) * 100) / 100);
+  assert.equal(p.fee, 1206.8406);
+  assert.equal(p.local, Math.floor((40228.02 - 1206.8406) * 100) / 100);
 });
 
 test('validateBuy / validateSell: the sentences the screen shows', () => {
@@ -85,4 +86,14 @@ test('previews cut to the currency\'s own decimals, like the database: 1,000.75 
   assert.equal(previewBuy({ amount: 10.999, currency: 'GBP', quote: q }).local, 10.99);
   const sell = previewSell({ units: 2, currency: 'JPY', quote: q });
   assert.equal(Number.isInteger(sell.local), true);
+});
+
+test('fmtUnits / tidy money: numbers that fit a phone screen', () => {
+  assert.equal(fmtUnits(49.46800762), '49.468');
+  assert.equal(fmtUnits(24.7), '24.7');
+  assert.equal(fmtUnits(0.00123456), '0.001235');
+  assert.equal(fmtUnits('x'), '—');
+  assert.equal(fmtMoney(198999.99, 'UGX', { tidy: true }).replace(/\u00a0/g, ' '), 'UGX 199,000');   // (the space is a non-breaking one, so the code and the number never split across lines)
+  assert.equal(fmtMoney(999.5, 'USD', { tidy: true }), '$999.50');
+  assert.equal(fmtMoney(1234.5, 'GBP', { tidy: true }), '£1,235');
 });
