@@ -122,7 +122,7 @@ const IcanTradingChart = ({
   // What the legend calls the series. The default is the coin itself; a sector index or the on-chain coin pass their own,
   // so every market in the app gets the same analysis (moving averages, RSI, timeframes, trend lines) on one chart.
   symbol = 'ICAN / UGX',
-  // The timeframe the chart opens on. A series that updates hourly (ICEC-S) reads best on 1h; the coin itself on 5m.
+  // The timeframe the chart opens on. A slow-moving series (ICEC-S, recorded every minute) reads best on 1h; the coin itself on 5m.
   initialTimeframe = '5m',
   emptyNote = 'Candles appear as soon as icaneracoin moves — nothing here is simulated.',
 }) => {

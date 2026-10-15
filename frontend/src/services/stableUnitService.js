@@ -2,7 +2,7 @@
  * ICEC-S service (in the system, no blockchain): the only place the app talks to the ican_stable_* database functions.
  *
  *  - getQuote     public: the value of one ICEC-S (the live dollar rate with an inflation floor), in every currency
- *  - getHistory   public: its hourly value, for the chart
+ *  - getHistory   public: its value for the chart (every minute for the last 24 hours, hourly before that)
  *  - swapStable   one buy or sell, a single atomic step on the server (ican_stable_swap); `requestId` makes a retry harmless
  *  - getMyPosition / getMyFills / getMyWallets / getHomeCurrency   the signed-in user's own rows and the currency of the country they picked
  *

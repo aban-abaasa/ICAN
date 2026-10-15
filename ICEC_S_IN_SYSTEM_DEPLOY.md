@@ -8,13 +8,14 @@ Every currency's price is that UGX value divided by the currency's live rate, so
 
 ## Deploy
 1. Run `ICEC_S_IN_SYSTEM_PASTE_INTO_SUPABASE.sql` in the Supabase SQL editor (the five migrations in order: `..._in_system`, `..._automatic`, `..._dollar_pool`, `..._global_currencies`, `20261028100000_icec_stable_cash_out_fee.sql`). Safe to run twice.
-2. Deploy the frontend. Wallet -> Trade -> **ICEC-S & C** works straight away. There is nothing to fund and no switch to press.
+2. Run `supabase/migrations/20261029110000_icec_stable_minute_history.sql` (the chart's history: a point every minute for the last 24 hours, hourly before that; needs `pg_cron` enabled for the every-minute job). Safe to run twice.
+3. Deploy the frontend. Wallet -> Trade -> **ICEC-S & C** works straight away. There is nothing to fund and no switch to press.
 
 ## How it works, user to user, held in dollars
 - Whatever a buyer pays, in any wallet currency, is converted at the live rate and **held in the pool as US dollars**. A seller's dollars come out of the pool and are paid into the wallet at the live rate.
 - One ICEC-S is owed one dollar (a little more when the inflation floor is above the plain dollar rate). The pool and what it owes are in the **same unit**, so the shilling falling or rising changes neither: the hedge is the pool itself.
 - The price is the smaller of the full value and the **pool's dollars per ICEC-S**. Fees stay in the pool, so the pool per ICEC-S only rises. A new buyer never dilutes a holder and nobody is paid ahead of anybody else (tested with 300 random swaps through wild exchange rates).
-- Swaps are refused whenever the currency rates are older than `rates_max_age_s` (default 3 h; the feed runs hourly).
+- Swaps are refused whenever the currency rates are older than `rates_max_age_s` (default 3 h; the feed refreshes at least hourly).
 
 ## Fees: none to buy, one cash-out fee, paid to GODMINDERA ORGANISATION
 - **Buying is free.** Everything paid goes into the pool.

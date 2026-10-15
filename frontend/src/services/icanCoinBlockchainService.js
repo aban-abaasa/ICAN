@@ -28,7 +28,7 @@ export class IcanCoinBlockchainService {
   /**
    * 💱 Make the currency conversions on screen agree with what the server will trade at.
    * The built-in exchange rates in CountryService are fixed numbers that have drifted far from the platform's own
-   * table (ican_currency_rates, refreshed hourly), and the server's atomic buy / sell converts with that table. This
+   * table (ican_currency_rates, refreshed at least hourly), and the server's atomic buy / sell converts with that table. This
    * loads it (public, read-only) and hands it to CountryService, at most once every 5 minutes. It never throws: if
    * the table cannot be read the built-in rates stay, and the server still converts correctly.
    */
