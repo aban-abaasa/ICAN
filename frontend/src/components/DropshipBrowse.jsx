@@ -1,20 +1,38 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Loader, AlertCircle, ExternalLink } from 'lucide-react';
+import { Search, Loader, AlertCircle, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { getDropshipBrowseProducts } from '../services/dropshipService';
 import ShopTiles from './shop/ShopTiles';
 import ProductOffersSheet from './shop/ProductOffersSheet';
 
 // In-app Shop: lets any ICAN user -- no reseller storefront of their own
 // required -- discover dropship-listed products across every reseller as a
-// simple two-column product grid (more columns only on wider screens).
-// Tapping a tile opens a sheet with that product's reseller offers, from which "Buy" hands off to the real
-// reseller storefront (PublicDropshipStorefront) for cart + checkout.
+// compact product grid, collapsed to two rows so the catalog stays short
+// however many products exist (expand with "Show more"). Tapping a tile opens
+// a sheet with that product's reseller offers, from which "Buy" hands off to
+// the real reseller storefront (PublicDropshipStorefront) for cart + checkout.
 // The same products are public at /shop for anyone (and search engines).
+// Must match the dense grid in ShopTiles (grid-cols-3 sm:grid-cols-4 lg:grid-cols-5).
+const COLLAPSED_ROWS = 2;
+const getColumnCount = () => {
+  if (typeof window === 'undefined') return 3;
+  if (window.matchMedia('(min-width: 1024px)').matches) return 5;
+  if (window.matchMedia('(min-width: 640px)').matches) return 4;
+  return 3;
+};
+
 const DropshipBrowse = () => {
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [expanded, setExpanded] = useState(false);
+  const [columns, setColumns] = useState(getColumnCount);
+
+  useEffect(() => {
+    const onResize = () => setColumns(getColumnCount());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,11 +41,16 @@ const DropshipBrowse = () => {
       const { data } = await getDropshipBrowseProducts({ query: query.trim(), limit: 60 });
       if (!cancelled) {
         setProducts(data);
+        setExpanded(false);
         setLoading(false);
       }
     }, 300);
     return () => { cancelled = true; clearTimeout(handle); };
   }, [query]);
+
+  const collapsedCount = columns * COLLAPSED_ROWS;
+  const visibleProducts = expanded ? products : products.slice(0, collapsedCount);
+  const hiddenCount = products.length - visibleProducts.length;
 
   return (
     <div className="space-y-2">
@@ -54,7 +77,27 @@ const DropshipBrowse = () => {
           <p className="text-xs text-slate-500">No products found</p>
         </div>
       ) : (
-        <ShopTiles products={products} onSelect={setSelectedProduct} tone="dark" columnsClass="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4" />
+        <>
+          <ShopTiles products={visibleProducts} onSelect={setSelectedProduct} dense tone="dark" />
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="w-full inline-flex items-center justify-center gap-1 rounded-md border border-slate-700 py-1.5 text-[11px] text-slate-300 hover:text-white hover:border-slate-500"
+            >
+              <ChevronDown className="w-3.5 h-3.5" /> Show {hiddenCount} more
+            </button>
+          )}
+          {expanded && products.length > collapsedCount && (
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="w-full inline-flex items-center justify-center gap-1 rounded-md border border-slate-700 py-1.5 text-[11px] text-slate-300 hover:text-white hover:border-slate-500"
+            >
+              <ChevronUp className="w-3.5 h-3.5" /> Show less
+            </button>
+          )}
+        </>
       )}
 
       {selectedProduct && <ProductOffersSheet product={selectedProduct} onClose={() => setSelectedProduct(null)} />}
