@@ -27,13 +27,15 @@ const optionsFor = (COLORS) => ({
   timeScale: { borderColor: COLORS.axis },
 });
 
-export default function SectorIndexChart({ candles, ticker, theme = 'wallet' }) {
+export default function SectorIndexChart({ candles, ticker, theme = 'wallet', precision = 2 }) {
   const boxRef = useRef(null);
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
   const fittedFor = useRef(null);
   const themeRef = useRef(theme);
   themeRef.current = theme;
+  const precisionRef = useRef(precision);
+  precisionRef.current = precision;
 
   useEffect(() => {
     const el = boxRef.current;
@@ -54,7 +56,7 @@ export default function SectorIndexChart({ candles, ticker, theme = 'wallet' }) 
         upColor: COLORS.up, downColor: COLORS.down,
         borderUpColor: COLORS.up, borderDownColor: COLORS.down,
         wickUpColor: COLORS.up, wickDownColor: COLORS.down,
-        priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+        priceFormat: { type: 'price', precision: precisionRef.current, minMove: 1 / 10 ** precisionRef.current },
       });
       chartRef.current = chart;
     } catch {

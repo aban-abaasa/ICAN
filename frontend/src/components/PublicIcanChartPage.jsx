@@ -435,7 +435,14 @@ const PublicIcanChartPage = () => {
               <p className={`mt-2 text-[11px] ${k.soft}`}>For information only, not financial advice.</p>
             </section>
 
-            <PublicSectorMarkets theme={theme} skin={k} trading={trading} onLearn={() => openLearn('sectors')} />
+            <PublicSectorMarkets
+              theme={theme}
+              skin={k}
+              trading={trading}
+              onLearn={() => openLearn('sectors')}
+              ican={{ candles, price: priceUgx, changePct }}
+              onTradeIcan={() => { setTradeTab('buy'); setSheetOpen(true); scrollToId('chart'); }}
+            />
 
             <PublicOnChainTokens theme={theme} skin={k} priceUgx={priceUgx} onLearn={() => openLearn('tokens')} />
 

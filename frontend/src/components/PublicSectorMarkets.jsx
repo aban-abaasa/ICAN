@@ -1,15 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { CHART_PALETTES } from './chartPalettes';
 import SectorIndexChart from './SectorIndexChart';
+import CoinPicker, { ICAN_COIN } from './CoinPicker';
 import { GoogleMark } from './PublicTradePanel';
 import PublicSectionNotice from './PublicSectionNotice';
 import { useSectorBoard, useSectorTicket } from '../hooks/useSectorTicket';
-import { ICEC, changeTone, formatLevel, formatPct, formatPrice, holdingResult, sectorState, trim } from '../utils/sectorTradeRules';
+import { ICEC, changeTone, formatLevel, formatPct, formatPrice, holdingResult, trim } from '../utils/sectorTradeRules';
 
 // Sector Markets on the public /icaneracoin page: ten coins that follow what businesses on IcanEra earn, sector by sector
 // (farms, transport, retail, ...). Anyone can watch the indices with no account. Signing in with Google, the same way the
 // coin trade panel does, opens a ticket to buy and sell them with icaneracoin.
+//
+// One chart serves every coin: a collapsed dropdown (CoinPicker) picks icaneracoin itself or any sector, and the chart,
+// the figures and the ticket below follow the choice. icaneracoin's own trading stays on the page's main chart and panel;
+// choosing it here shows its price history and a button into that panel.
 //
 // This is a SKIN: the trade flow is hooks/useSectorTicket.js, shared with the wallet's own Sector Markets tab, and every
 // price, fee and check is the database's (public.ican_sector_trade). Colours are the page's own palettes as inline
@@ -35,7 +40,7 @@ export const useInView = (ref, margin = '300px') => {
   return inView;
 };
 
-const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability, onLearn }) => {
+const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability, onLearn, ican, onTradeIcan }) => {
   const c = CHART_PALETTES[theme] || CHART_PALETTES.dark;
   const rootRef = useRef(null);
   const inView = useInView(rootRef);
@@ -49,6 +54,27 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability,
     money, sel, state, price, held, inMoney, buyQuote, sellQuote, problem, ready, feePct, proceedsIn, submit, startSell,
   } = t;
 
+  // 'ICAN' while the chart shows icaneracoin itself, null while it follows the selected sector
+  const [coin, setCoin] = useState(null);
+  const isIcan = coin === ICAN_COIN;
+  const pickCoin = (id) => {
+    if (id === ICAN_COIN) { setCoin(ICAN_COIN); return; }
+    setCoin(null);
+    setSelected(id);
+  };
+  const sellHolding = (sector) => { setCoin(null); startSell(sector); };
+
+  // icaneracoin's candles in the chart's shape: unix-seconds time, strictly increasing
+  const icanCandles = useMemo(() => {
+    const out = [];
+    (ican?.candles || []).forEach((r) => {
+      const ms = Date.parse(r.timestamp);
+      const cd = { time: Math.floor(ms / 1000), open: r.open, high: r.high, low: r.low, close: r.close };
+      if (Number.isFinite(ms) && [cd.open, cd.high, cd.low, cd.close].every(Number.isFinite) && (!out.length || cd.time > out[out.length - 1].time)) out.push(cd);
+    });
+    return out;
+  }, [ican?.candles]);
+
   const shown = available && sectors.length > 0;
   useEffect(() => { onAvailability?.(shown); }, [shown, onAvailability]);
 
@@ -59,7 +85,7 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability,
     try { params = new URLSearchParams(window.location.search); } catch { return; }
     const want = params.get(RETURN_PARAM);
     if (!want) return;
-    if (sectors.some((s) => s.ticker === want)) setSelected(want);
+    if (sectors.some((s) => s.ticker === want)) { setCoin(null); setSelected(want); }
     params.delete(RETURN_PARAM);
     const rest = params.toString();
     try { window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash); } catch { /* address stays */ }
@@ -80,7 +106,6 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability,
   const field = { background: c.field, border: `1px solid ${c.fieldBorder}`, color: c.strong };
   const sub = { color: c.muted };
   const tone = { up: c.pos, down: c.neg, flat: c.soft };
-  const dot = { live: c.live, warming: c.book, paused: c.muted };
   const noticeStyle = (kind) => (kind === 'err' ? { background: c.errBg, color: c.errText } : { background: c.okBg, color: c.okText });
   
   const signIn = () => trading?.continueWithGoogle?.({ returnParam: RETURN_PARAM, returnValue: selected || '1' });
@@ -111,51 +136,48 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability,
       {error && <p className="mt-3 text-sm" style={{ color: c.errText }} role="alert">Could not load the markets. Retrying…</p>}
       {loading && !sectors.length && <p className="mt-3 text-sm" style={sub}>Loading markets…</p>}
 
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" data-testid="sector-cards">
-        {sectors.map((s) => {
-          const st = sectorState(s, tradingEnabled);
-          const active = s.ticker === selected;
-          const ch = tone[changeTone(s.change_24h_pct)];
-          return (
-            <button
-              key={s.ticker}
-              type="button"
-              onClick={() => setSelected(s.ticker)}
-              aria-pressed={active}
-              className="rounded-xl p-3 text-left transition"
-              style={{ ...card, borderColor: active ? c.accent : c.cardBorder, borderWidth: active ? 2 : 1, padding: active ? 'calc(0.75rem - 1px)' : '0.75rem' }}
-            >
-              <div className="flex items-center justify-between">
-                <span className={`font-mono font-bold ${k.kicker}`}>{s.ticker}</span>
-                <span className="h-2 w-2 rounded-full" style={{ background: dot[st.kind] }} aria-hidden="true" />
-              </div>
-              <div className="truncate text-xs" style={sub}>{s.name}</div>
-              <div className="mt-1 text-lg font-semibold tabular-nums" style={{ color: c.strong }}>{formatLevel(s.level)}</div>
-              <div className="text-xs tabular-nums" style={{ color: ch }}>{s.level != null ? formatPct(s.change_24h_pct) : ' '}</div>
-              <div className="mt-0.5 text-[11px] leading-tight" style={sub}>{st.label}</div>
-            </button>
-          );
-        })}
-      </div>
+      <CoinPicker theme={theme} skin={k} value={isIcan ? ICAN_COIN : selected} onChange={pickCoin} sectors={sectors} tradingEnabled={tradingEnabled} ican={ican} />
 
-      {sel && (
+      {(isIcan || sel) && (
         <div className="mt-4 grid gap-4 lg:grid-cols-5">
           <div className="rounded-xl p-3 lg:col-span-3" style={card}>
             <div className="mb-1 flex items-baseline justify-between">
               <div>
-                <span className={`font-mono font-bold ${k.kicker}`}>{sel.ticker}</span>
-                <span className="ml-2 text-sm" style={sub} title={sel.description || undefined}>{sel.name}</span>
+                <span className={`font-mono font-bold ${k.kicker}`}>{isIcan ? ICAN_COIN : sel.ticker}</span>
+                <span className="ml-2 text-sm" style={sub} title={isIcan ? undefined : sel.description || undefined}>{isIcan ? 'icaneracoin' : sel.name}</span>
               </div>
               <div className="text-right">
-                <div className="text-lg font-semibold tabular-nums" style={{ color: c.strong }}>{formatLevel(sel.level)}</div>
-                <div className="text-xs" style={sub}>{price != null ? `${formatPrice(price)} ICEC per unit` : 'not priced yet'}</div>
+                {isIcan ? (
+                  <>
+                    <div className="text-lg font-semibold tabular-nums" style={{ color: c.strong }}>{ican?.price != null ? `UGX ${Number(ican.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—'}</div>
+                    <div className="text-xs" style={{ color: tone[changeTone(ican?.changePct)] }}>{ican?.changePct != null ? formatPct(ican.changePct) : ' '}</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-lg font-semibold tabular-nums" style={{ color: c.strong }}>{formatLevel(sel.level)}</div>
+                    <div className="text-xs" style={sub}>{price != null ? `${formatPrice(price)} ICEC per unit` : 'not priced yet'}</div>
+                  </>
+                )}
               </div>
             </div>
-                        {state.kind === 'warming'
-              ? <p className="py-10 text-center text-sm" style={sub}>{state.label}. Opens once enough businesses take part.</p>
-              : <SectorIndexChart candles={candles} ticker={sel.ticker} theme={theme} />}
+            {isIcan
+              ? <SectorIndexChart candles={icanCandles} ticker={ICAN_COIN} theme={theme} precision={2} />
+              : state.kind === 'warming'
+                ? <p className="py-10 text-center text-sm" style={sub}>{state.label}. Opens once enough businesses take part.</p>
+                : <SectorIndexChart candles={candles} ticker={sel.ticker} theme={theme} />}
           </div>
 
+          {isIcan ? (
+            <div className="space-y-3 rounded-xl p-4 lg:col-span-2" style={card} data-testid="ican-card">
+              <p className="text-sm" style={{ color: c.fg }}>
+                <b style={{ color: c.strong }}>icaneracoin</b> is the main coin. Its full chart and trading panel are at the top of this page.
+              </p>
+              <button type="button" onClick={onTradeIcan} className="w-full rounded-lg py-3 text-sm font-bold" style={{ background: c.accent, color: c.accentText }}>
+                Trade icaneracoin
+              </button>
+              <p className="text-xs" style={sub}>Pick a sector coin from the list above to see its chart and trade it here.</p>
+            </div>
+          ) : (
           <div className="space-y-3 rounded-xl p-4 lg:col-span-2" style={card} data-testid="sector-ticket">
             <div className="grid grid-cols-2 gap-1 rounded-lg p-1" style={{ background: c.tabsBg }} role="tablist" aria-label="Buy or sell">
               {['buy', 'sell'].map((m) => (
@@ -269,6 +291,7 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability,
             )}
             {notice && <p className="rounded-md px-3 py-2 text-sm" role="status" style={noticeStyle(notice.kind)}>{notice.text}</p>}
           </div>
+          )}
         </div>
       )}
 
@@ -286,7 +309,7 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability,
                     <td className="px-2 text-right tabular-nums">{trim(h.units, 8)}</td>
                     <td className="px-2 text-right tabular-nums">{trim(h.value_icec, 6)}</td>
                     <td className="px-2 text-right tabular-nums" style={{ color: tone[r.tone] }}>{r.pnl == null ? '—' : `${r.pnl > 0 ? '+' : ''}${trim(r.pnl, 6)}`}{r.pct != null ? ` (${formatPct(r.pct)})` : ''}</td>
-                    <td className="px-3 text-right"><button type="button" onClick={() => startSell(h.sector)} className={`text-xs font-semibold ${k.kicker}`}>Sell</button></td>
+                    <td className="px-3 text-right"><button type="button" onClick={() => sellHolding(h.sector)} className={`text-xs font-semibold ${k.kicker}`}>Sell</button></td>
                   </tr>
                 );
               })}
