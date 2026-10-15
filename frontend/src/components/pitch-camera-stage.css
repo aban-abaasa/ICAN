@@ -1,0 +1,263 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Pitch recorder · "Ebony & Gold"
+   The capture + preview screens of the pitch recorder, in the same classic
+   language as the rest of Pitchin (see pitchin-classic.css): warm ebony,
+   antique-gold hairlines, ivory type, Playfair serif.
+
+   Everything is scoped to .pcs and uses its own variables, so it looks the
+   same wherever the recorder is mounted (Pitchin, CMMS, creator page).
+   ────────────────────────────────────────────────────────────────────────── */
+
+.pcs {
+  --pcs-e0: #0e0c08;
+  --pcs-e1: #15120c;
+  --pcs-e2: #1c1810;
+  --pcs-e3: #261f14;
+  --pcs-gold: #c4a052;
+  --pcs-gold-hi: #e6c980;
+  --pcs-gold-deep: #8a6a1f;
+  --pcs-ivory: #faf3e0;
+  --pcs-dim: rgba(250, 243, 224, 0.68);
+  --pcs-line: rgba(196, 160, 82, 0.34);
+  --pcs-rec: #c8352b;
+  --pcs-serif: "Playfair Display", Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  --pcs-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  color: var(--pcs-ivory);
+  font-family: var(--pcs-sans);
+  background:
+    radial-gradient(120% 55% at 50% 0%, rgba(196, 160, 82, 0.11), transparent 62%),
+    var(--pcs-e0);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+.pcs-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3.6rem;
+  padding: max(0.6rem, env(safe-area-inset-top, 0px)) 0.75rem 0.3rem;
+}
+.pcs-head-spacer { width: 44px; height: 44px; flex: none; }
+.pcs-title { flex: 1; min-width: 0; text-align: center; line-height: 1.15; }
+.pcs-title h2 {
+  margin: 0;
+  font-family: var(--pcs-serif);
+  font-size: 1.08rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--pcs-ivory);
+}
+.pcs-eyebrow {
+  display: block;
+  margin-top: 0.18rem;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--pcs-gold-hi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pcs-eyebrow::before, .pcs-eyebrow::after { content: "◆"; font-size: 0.45rem; margin: 0 0.5em; color: var(--pcs-gold); vertical-align: 0.12em; }
+
+.pcs-iconbtn {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--pcs-gold-hi);
+  background: rgba(38, 31, 20, 0.88);
+  border: 1px solid var(--pcs-line);
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.pcs-iconbtn:active { transform: scale(0.94); background: rgba(52, 43, 27, 0.96); }
+.pcs-iconbtn[disabled], .pcs-iconbtn.is-off { opacity: 0.35; cursor: default; }
+.pcs-iconbtn[aria-pressed="true"] { background: rgba(196, 160, 82, 0.2); border-color: var(--pcs-gold); color: var(--pcs-ivory); }
+
+.pcs-timerchip { position: relative; }
+.pcs-timerchip b {
+  position: absolute; right: -2px; bottom: -2px;
+  min-width: 1.1rem; padding: 0 0.2rem;
+  font: 600 0.55rem/1.1rem var(--pcs-sans); text-align: center;
+  color: #1a1408; background: var(--pcs-gold-hi); border-radius: 999px;
+}
+
+.pcs-recpill {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  background: rgba(14, 12, 8, 0.82);
+  border: 1px solid rgba(200, 53, 43, 0.7);
+  box-shadow: 0 0 18px rgba(200, 53, 43, 0.25);
+}
+.pcs-recpill i { width: 8px; height: 8px; border-radius: 50%; background: var(--pcs-rec); animation: pcs-pulse 1.2s ease-in-out infinite; }
+.pcs-recpill.is-paused i { animation: none; background: var(--pcs-gold); }
+.pcs-recpill span { font-weight: 600; font-size: 0.85rem; }
+.pcs-recpill em { font-style: normal; font-size: 0.72rem; color: var(--pcs-dim); }
+
+/* ── Stage: a fixed portrait (or landscape) frame, centred ───────────────── */
+.pcs-stagewrap {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.75rem;
+  container-type: size;
+}
+.pcs-frame {
+  position: relative;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: var(--pcs-ar, 0.5625);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+  box-shadow:
+    0 0 0 1px var(--pcs-line),
+    0 0 0 4px rgba(196, 160, 82, 0.06),
+    0 20px 44px rgba(0, 0, 0, 0.65);
+  transition: box-shadow 0.25s ease;
+}
+@supports (width: 1cqw) {
+  .pcs-frame { height: auto; width: min(100cqw, calc(100cqh * var(--pcs-ar, 0.5625))); }
+}
+.pcs-frame.is-rec {
+  box-shadow: 0 0 0 1px rgba(200, 53, 43, 0.75), 0 0 0 4px rgba(200, 53, 43, 0.1), 0 0 30px rgba(200, 53, 43, 0.3);
+}
+
+.pcs-canvas, .pcs-video { position: absolute; inset: 0; width: 100%; height: 100%; background: #000; }
+.pcs-canvas { object-fit: cover; }
+.pcs-video { object-fit: contain; }
+
+/* viewfinder corner marks */
+.pcs-corner { position: absolute; width: 22px; height: 22px; pointer-events: none; opacity: 0.9; transition: border-color 0.25s ease; border: 0 solid var(--pcs-gold-hi); }
+.pcs-corner.tl { top: 10px; left: 10px; border-top-width: 2px; border-left-width: 2px; border-top-left-radius: 6px; }
+.pcs-corner.tr { top: 10px; right: 10px; border-top-width: 2px; border-right-width: 2px; border-top-right-radius: 6px; }
+.pcs-corner.bl { bottom: 10px; left: 10px; border-bottom-width: 2px; border-left-width: 2px; border-bottom-left-radius: 6px; }
+.pcs-corner.br { bottom: 10px; right: 10px; border-bottom-width: 2px; border-right-width: 2px; border-bottom-right-radius: 6px; }
+.pcs-frame.is-rec .pcs-corner { border-color: var(--pcs-rec); }
+.pcs-vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, 0.38) 100%); }
+
+/* microphone level */
+.pcs-meter { position: absolute; left: 14px; right: 36%; bottom: 14px; display: flex; align-items: center; gap: 0.5rem; color: var(--pcs-gold-hi); pointer-events: none; }
+.pcs-meter-track { flex: 1; height: 3px; border-radius: 3px; overflow: hidden; background: rgba(250, 243, 224, 0.2); }
+.pcs-meter-fill { height: 100%; width: 100%; transform-origin: left center; transform: scaleX(0); background: linear-gradient(90deg, var(--pcs-gold-deep), var(--pcs-gold-hi)); will-change: transform; }
+
+/* countdown + paused overlays */
+.pcs-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(14, 12, 8, 0.46); text-align: center; }
+.pcs-count { font-family: var(--pcs-serif); font-weight: 700; font-size: 7.5rem; line-height: 1; color: var(--pcs-ivory); text-shadow: 0 0 44px rgba(230, 201, 128, 0.65); animation: pcs-pop 1s ease-out both; }
+.pcs-paused { font-family: var(--pcs-serif); font-style: italic; font-size: 1.4rem; color: var(--pcs-ivory); }
+.pcs-paused small { display: block; margin-top: 0.4rem; font: 500 0.65rem var(--pcs-sans); letter-spacing: 0.22em; text-transform: uppercase; color: var(--pcs-gold-hi); }
+
+/* camera unavailable */
+.pcs-blocked { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 1.5rem; text-align: center; background: linear-gradient(180deg, var(--pcs-e2), var(--pcs-e0)); }
+.pcs-blocked p { margin: 0; font-family: var(--pcs-serif); font-size: 0.98rem; line-height: 1.5; color: var(--pcs-ivory); }
+.pcs-blocked .pcs-pill { width: 100%; max-width: 18rem; }
+
+/* ── Control deck ─────────────────────────────────────────────────────── */
+.pcs-deck {
+  position: relative;
+  padding: 0.85rem 1rem max(1rem, env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, var(--pcs-e0) 55%, rgba(14, 12, 8, 0));
+}
+.pcs-deck::before {
+  content: ""; position: absolute; top: 0; left: 14%; right: 14%; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--pcs-gold), transparent);
+}
+.pcs-hint { margin: 0 0 0.75rem; text-align: center; font-family: var(--pcs-serif); font-style: italic; font-size: 0.86rem; color: var(--pcs-dim); }
+.pcs-error { margin: 0 0 0.6rem; text-align: center; font-size: 0.76rem; color: #f0a39b; }
+
+.pcs-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; max-width: 24rem; margin: 0 auto; }
+.pcs-side { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; width: 64px; cursor: pointer; background: none; border: 0; padding: 0; color: inherit; }
+.pcs-side.left { justify-self: start; }
+.pcs-side.right { justify-self: end; }
+.pcs-side.is-hidden { visibility: hidden; }
+.pcs-cap { font-size: 0.58rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: var(--pcs-gold); }
+.pcs-side:active .pcs-iconbtn { transform: scale(0.94); }
+
+/* record button: a gold ring that fills as the time limit approaches */
+.pcs-rec { position: relative; width: 84px; height: 84px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; transition: transform 0.12s ease; }
+.pcs-rec:active { transform: scale(0.95); }
+.pcs-rec[disabled] { opacity: 0.4; cursor: default; }
+.pcs-rec svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.pcs-rec .trk { fill: none; stroke: rgba(230, 201, 128, 0.38); stroke-width: 2; }
+.pcs-rec .prg { fill: none; stroke: var(--pcs-gold-hi); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset 0.3s linear; filter: drop-shadow(0 0 4px rgba(230, 201, 128, 0.55)); }
+.pcs-rec .core {
+  width: 62px; height: 62px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, #ea5d51, var(--pcs-rec) 55%, #8f1f18);
+  box-shadow: 0 0 0 2px var(--pcs-e0), 0 0 0 3px var(--pcs-gold), 0 8px 20px rgba(0, 0, 0, 0.6);
+  transition: width 0.2s ease, height 0.2s ease, border-radius 0.2s ease;
+}
+.pcs-rec.is-rec .core { width: 30px; height: 30px; border-radius: 8px; }
+.pcs-rec.is-count .core { background: radial-gradient(circle at 35% 28%, #3a3224, var(--pcs-e3) 60%, var(--pcs-e1)); }
+
+/* ── Preview ──────────────────────────────────────────────────────────── */
+.pcs-meta { margin: 0.15rem 0 0; font-size: 0.62rem; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--pcs-gold-hi); }
+.pcs-playbtn { position: absolute; left: 50%; top: 50%; width: 68px; height: 68px; margin: -34px 0 0 -34px; display: grid; place-items: center; border-radius: 50%; color: var(--pcs-ivory); cursor: pointer; background: rgba(14, 12, 8, 0.6); border: 1px solid var(--pcs-gold); box-shadow: 0 0 24px rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); }
+.pcs-playbtn:active { transform: scale(0.95); }
+.pcs-scrub { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 0.6rem; padding: 1.6rem 0.9rem 0.75rem; background: linear-gradient(to top, rgba(0, 0, 0, 0.78), transparent); }
+.pcs-scrub time { font-size: 0.7rem; font-variant-numeric: tabular-nums; color: var(--pcs-ivory); min-width: 2.4rem; }
+.pcs-scrub button { display: grid; place-items: center; width: 32px; height: 32px; background: none; border: 0; padding: 0; color: var(--pcs-gold-hi); cursor: pointer; }
+.pcs-range { flex: 1; height: 28px; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
+.pcs-range::-webkit-slider-runnable-track { height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--pcs-gold-hi) var(--pcs-fill, 0%), rgba(250, 243, 224, 0.25) var(--pcs-fill, 0%)); }
+.pcs-range::-moz-range-track { height: 3px; border-radius: 3px; background: rgba(250, 243, 224, 0.25); }
+.pcs-range::-moz-range-progress { height: 3px; border-radius: 3px; background: var(--pcs-gold-hi); }
+.pcs-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5.5px; border-radius: 50%; background: var(--pcs-ivory); border: 2px solid var(--pcs-gold); }
+.pcs-range::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--pcs-ivory); border: 2px solid var(--pcs-gold); }
+
+.pcs-actions { display: flex; gap: 0.6rem; max-width: 26rem; margin: 0 auto; }
+.pcs-pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+  min-height: 50px; padding: 0 1.1rem;
+  border-radius: 999px;
+  font-family: var(--pcs-sans); font-size: 0.86rem; font-weight: 500; letter-spacing: 0.02em;
+  color: var(--pcs-gold-hi);
+  background: rgba(38, 31, 20, 0.7);
+  border: 1px solid var(--pcs-line);
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+.pcs-pill:active { transform: scale(0.97); background: rgba(52, 43, 27, 0.95); }
+.pcs-pill.primary {
+  flex: 1;
+  font-family: var(--pcs-serif); font-size: 1rem; font-weight: 700; letter-spacing: 0.03em;
+  color: #1a1408;
+  border-color: var(--pcs-gold-hi);
+  background: linear-gradient(180deg, var(--pcs-gold-hi), var(--pcs-gold) 55%, var(--pcs-gold-deep));
+  box-shadow: 0 6px 18px rgba(138, 106, 31, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.pcs-pill.primary:active { background: linear-gradient(180deg, var(--pcs-gold), var(--pcs-gold-deep)); }
+.pcs-preview-fail { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 1.5rem; text-align: center; background: linear-gradient(180deg, var(--pcs-e2), var(--pcs-e0)); }
+.pcs-preview-fail p { margin: 0; font-family: var(--pcs-serif); font-size: 0.95rem; color: var(--pcs-ivory); }
+.pcs-preview-fail small { font-size: 0.72rem; color: var(--pcs-dim); }
+
+@keyframes pcs-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.8); } }
+@keyframes pcs-pop { 0% { opacity: 0; transform: scale(0.6); } 25% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0.85; transform: scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pcs-recpill i, .pcs-count { animation: none; }
+  .pcs-rec .prg, .pcs-rec .core, .pcs-frame { transition: none; }
+}
+/* short phones: give the picture the room */
+@media (max-height: 620px) {
+  .pcs-head { min-height: 3rem; }
+  .pcs-hint { margin-bottom: 0.5rem; }
+  .pcs-cap { display: none; }
+}
