@@ -22,7 +22,7 @@ const SETTING_FIELDS = [
     ['max_trade_ugx', 'Largest swap (UGX)', 'Per swap, on the UGX value'],
   ['max_position_ugx', 'Largest holding (UGX)', 'Per user, on cost'],
   ['max_trades_per_minute', 'Swaps per minute', 'Per user'],
-  ['rates_max_age_s', 'Rates must be fresher than (seconds)', 'The currency feed runs hourly; older than this and swaps pause'],
+  ['rates_max_age_s', 'Rates must be fresher than (seconds)', 'The currency feed refreshes at least hourly; older than this and swaps pause'],
 ];
 
 export default function ICANStableDevTab({ devToken }) {

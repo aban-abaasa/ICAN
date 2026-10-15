@@ -10,7 +10,7 @@ import {
 } from '../utils/stableUnitRules';
 
 // ICEC-S, the stable form of icaneracoin, inside IcanEra: no blockchain, no gas, no wallet to connect. One ICEC-S is worth
-// one US dollar at the live rates the platform's hourly currency feed keeps (public.ican_currency_rates, the same table
+// one US dollar at the live rates the platform's live currency feed keeps (public.ican_currency_rates, the same table
 // icaneracoin is priced from), and never less than its start value grown by inflation. You buy it from any wallet you hold
 // and sell it back into any wallet. The price, the fee, the exchange rate and every check are the database's
 // (ican_stable_swap); this screen previews, asks and reports.
@@ -127,7 +127,7 @@ export default function StableInSystemPanel() {
       <LearnTab
         items={[
           { q: 'What is ICEC-S?', a: 'The stable form of icaneracoin. One ICEC-S is worth one US dollar. It lives inside IcanEra, so there is no blockchain, no gas fee and no outside wallet to connect.' },
-          { q: 'Where does its price come from?', a: 'The same live currency rates icaneracoin uses, refreshed every hour, for about 120 currencies. It opens in the currency of the country you picked when you signed up (pounds, yen, euros, shillings, rupees and so on), and any wallet you hold shows the same value in its own currency.' },
+          { q: 'Where does its price come from?', a: 'The same live currency rates icaneracoin uses, refreshed through the day, for about 120 currencies. The chart records its value every minute. It opens in the currency of the country you picked when you signed up (pounds, yen, euros, shillings, rupees and so on), and any wallet you hold shows the same value in its own currency.' },
           { q: 'How does it protect against inflation?', a: `It rises with the dollar when the shilling weakens, and it never goes below its start value grown by Uganda's yearly inflation (${trim(quote.inflation_pct, 2)}% now). Nobody can promise it will beat inflation by more than that.` },
           { q: 'What backs it?', a: 'Dollars. When you buy, your money is converted at the live rate and held in one shared pool as US dollars; when you sell, the dollars come out of that pool. Because the pool and what it owes are both in dollars, a falling shilling cannot shrink what an ICEC-S is worth, and there is no company reserve to fund and nothing to switch on. Fees stay in the pool, so it only grows relative to what it owes. The one case where the pool can hold less than the full value is when the inflation floor sits above a plain dollar; the screen then shows the pool\'s share, and says so. It is not a bank deposit.' },
           { q: 'What does it cost, and what are the limits?', a: `Buying is free. A ${trim(quote.sell_fee_bps / 100, 2)}% fee applies only when you cash out (sell ICEC-S back into your wallet), the same single cash-out fee as the rest of IcanEra${quote.fee_recipient ? `, and it goes to ${quote.fee_recipient}` : ''}. You can swap up to ${fmtMoney(quote.max_trade_ugx / (rateToUgx(quote, currency) || 1), currency, { tidy: true })} at a time. Swaps pause whenever the live rates are more than a few hours old.` },
@@ -166,7 +166,7 @@ export default function StableInSystemPanel() {
         <p className="px-4 pt-3 text-sm text-slate-400">Value &amp; analysis</p>
         <div className="mt-2 h-[22rem] w-full sm:h-[26rem]">
           <IcanTradingChart rows={rows} loading={false} theme="dark" wheelZoom={false} feedState={quote.rates_stale ? 'delayed' : 'live'}
-            symbol="ICEC-S / UGX" initialTimeframe="1h" emptyNote="The value is recorded every hour from the live rates. Nothing here is simulated." />
+            symbol="ICEC-S / UGX" initialTimeframe="1h" emptyNote="The value is recorded every minute from the live rates. Nothing here is simulated." />
         </div>
       </section>
 

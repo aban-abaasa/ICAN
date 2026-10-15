@@ -91,7 +91,7 @@ const LEARN_TABS = [
       },
       {
         q: 'Where does its price come from?',
-        a: 'The same live currency rates icaneracoin is priced from, refreshed every hour. If those rates are ever more than a few hours old, swaps pause until they update.',
+        a: 'The same live currency rates icaneracoin is priced from, refreshed through the day. The chart records its value every minute. If those rates are ever more than a few hours old, swaps pause until they update.',
       },
       {
         q: 'Does it protect against inflation?',

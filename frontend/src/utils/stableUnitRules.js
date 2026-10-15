@@ -127,8 +127,9 @@ export const mapSwapResult = (data) => {
   };
 };
 
-// The hourly values of one ICEC-S (newest first, { t, v }) -> rows the analysis chart reads (oldest first). Each hour opens
-// where the last one closed, so the chart is continuous; a point that is not a positive number is dropped, not drawn.
+// The recorded values of one ICEC-S, a point a minute for the last day then a point an hour (newest first, { t, v }) -> rows the
+// analysis chart reads (oldest first). Each point opens where the last one closed, so the chart is continuous; a point that is
+// not a positive number is dropped, not drawn.
 export const historyToRows = (history) => {
   const pts = [...(history || [])].reverse()
     .map((h) => ({ t: h?.t, v: Number(h?.v) }))

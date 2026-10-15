@@ -138,7 +138,7 @@ const PublicStableCoin = ({ theme = 'dark', skin: k, onAvailability, onLearn }) 
           <p className="px-4 pt-3 text-sm" style={sub}>Value &amp; analysis</p>
           <div className="mt-2 h-[24rem] w-full lg:h-[28rem]">
             <IcanTradingChart rows={rows} loading={false} theme={theme} wheelZoom={false} feedState={live ? 'live' : 'delayed'}
-              symbol="ICEC-S / UGX" initialTimeframe="1h" emptyNote="The value is recorded every hour from the live rates. Nothing here is simulated." />
+              symbol="ICEC-S / UGX" initialTimeframe="1h" emptyNote="The value is recorded every minute from the live rates. Nothing here is simulated." />
           </div>
         </div>
       </div>
