@@ -44,16 +44,16 @@ BEGIN
   -- ============================================================ 3. the first buy, exactly
   r := t.swap(1, 'buy', 100000, 'UGX', 'req-buy-00001');
   PERFORM t.check('3.1 the very first buy works with an empty pool', (r ->> 'success')::BOOLEAN, r::TEXT);
-  PERFORM t.check('3.2 the fee is 0.5% and units are the rest at the dollar value, rounded down',
-    (r ->> 'fee_ugx')::NUMERIC = 500 AND (r ->> 'units')::NUMERIC = trunc(99500 / 4022.802, 8), r::TEXT);
+  PERFORM t.check('3.2 there is NO fee for buying: every shilling becomes ICEC-S at the dollar value, rounded down',
+    (r ->> 'fee_ugx')::NUMERIC = 0 AND (r ->> 'units')::NUMERIC = trunc(100000 / 4022.802, 8), r::TEXT);
   PERFORM t.check('3.3 the wallet paid exactly the amount and the pool holds what was paid', t.bal(1, 'UGX') = 900000 AND icanera_stable.vault_balance() = 100000);
   PERFORM t.check('3.3b ...and it holds them as DOLLARS (100,000 shillings at 4,022.80 = 24.8588 dollars)',
     icanera_stable.vault_usd(4022.802) = trunc(100000 / 4022.802, 8), icanera_stable.vault_usd(4022.802)::TEXT);
   r2 := t.swap(1, 'buy', 100000, 'UGX', 'req-buy-00001');
   PERFORM t.check('3.4 the same request id again moves nothing and answers the same', (r2 ->> 'duplicate')::BOOLEAN AND t.bal(1, 'UGX') = 900000 AND (SELECT count(*) FROM icanera_stable.fills) = 1, r2::TEXT);
   PERFORM t.as_anon(); q := public.ican_stable_quote(); PERFORM t.reset();
-  PERFORM t.check('3.5 the pool holds more than a dollar per ICEC-S (the fee stays in it), so the price is still a dollar',
-    NOT (q ->> 'pool_short')::BOOLEAN AND (q ->> 'unit_ugx')::NUMERIC = 4022.802 AND (q ->> 'cover_pct')::NUMERIC > 100, q::TEXT);
+  PERFORM t.check('3.5 the pool holds a dollar per ICEC-S, so the price is a dollar',
+    NOT (q ->> 'pool_short')::BOOLEAN AND (q ->> 'unit_ugx')::NUMERIC = 4022.802 AND (q ->> 'cover_pct')::NUMERIC >= 100, q::TEXT);
 
   -- ============================================================ 4. other wallets, same value
   r := t.swap(1, 'buy', 10, 'USD', 'req-buy-usd-1');
@@ -74,7 +74,7 @@ BEGIN
   -- ============================================================ 6. a sell
   SELECT units INTO fx FROM icanera_stable.holdings WHERE user_id = t.u(1);
   r := t.swap(1, 'sell', 10, 'UGX', 'req-sell-00001');
-  PERFORM t.check('6.1 a sell pays the value less the fee', (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = trunc((40228.02 - trunc(40228.02 * 50 / 10000, 8)), 2), r::TEXT);
+  PERFORM t.check('6.1 a sell pays the value less the 3% cash-out fee', (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = trunc((40228.02 - trunc(40228.02 * 300 / 10000, 8)), 2), r::TEXT);
   PERFORM t.check('6.2 the units left are exact', (SELECT units FROM icanera_stable.holdings WHERE user_id = t.u(1)) = fx - 10);
   r := t.swap(1, 'sell', 100000, 'UGX', 'req-sell-00002');
   PERFORM t.check('6.3 you cannot sell more than you hold', r ->> 'code' = 'insufficient_units', r::TEXT);
@@ -100,8 +100,8 @@ BEGIN
   PERFORM t.check('8.2 a purchase at the new rate is priced at a full dollar and never dilutes the pool',
     (r ->> 'success')::BOOLEAN AND icanera_stable.vault_usd(400000) / icanera_stable.units_outstanding() >= nav_before - 0.000001, r::TEXT);
   r := t.swap(1, 'sell', 1, 'UGX', 'req-weak-00002');
-  PERFORM t.check('8.3 a holder selling one ICEC-S gets a full dollar (400,000 less the 0.5% fee = 398,000), straight from the pool',
-    (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = 398000, r::TEXT);
+  PERFORM t.check('8.3 a holder selling one ICEC-S gets a full dollar (400,000 less the 3% cash-out fee = 388,000), straight from the pool',
+    (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = 388000, r::TEXT);
   SELECT * INTO pv FROM icanera_stable.pool_value();
   PERFORM t.check('8.4 ...and the pool still holds at least what it owes', pv.pool_usd >= icanera_stable.units_outstanding() * pv.price_usd - 0.00001);
   -- the other direction: the shilling strengthens until the inflation floor is above the plain dollar rate

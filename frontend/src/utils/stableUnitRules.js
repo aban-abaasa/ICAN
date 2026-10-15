@@ -25,16 +25,24 @@ export const currencyDecimals = (code) => {
 
 // Money as a person reads it, in their own currency: the right symbol and decimals (a value under one shows four places, so a
 // pound's worth of ICEC-S reads 0.7562, not 0.76). Falls back to "1,234.50 XYZ" for a code the browser does not know.
-export const fmtMoney = (amount, currency, { precise = false } = {}) => {
+export const fmtMoney = (amount, currency, { precise = false, tidy = false } = {}) => {
   const n = Number(amount);
   if (!Number.isFinite(n)) return '—';
   const dp = currencyDecimals(currency);
-  const places = precise && Math.abs(n) < 100 ? Math.max(dp, 4) : dp;
+  // `tidy` (for totals and balances): a thousand or more needs no cents, so UGX 198,999.99 reads UGX 199,000 and fits
+  const places = tidy && Math.abs(n) >= 1000 ? 0 : precise && Math.abs(n) < 100 ? Math.max(dp, 4) : dp;
   try {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: String(currency).toUpperCase(), minimumFractionDigits: places, maximumFractionDigits: places }).format(n);
   } catch {
     return `${trim(n, places)} ${currency}`;
   }
+};
+
+// ICEC-S units as a person reads them: four places, trimmed (49.468, not 49.46800762); a tiny amount keeps six so it never reads 0.
+export const fmtUnits = (n) => {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  return trim(v, Math.abs(v) > 0 && Math.abs(v) < 0.01 ? 6 : 4);
 };
 
 // UGX per 1 of a currency, from the quote (the unit's price in UGX and in that currency). null when unknown.
@@ -45,14 +53,14 @@ export const rateToUgx = (quote, currency) => {
   return positive(price) ? Number(quote.unit_ugx) / price : null;
 };
 
-// What a BUY of `amount` (in `currency`) gives: the fee comes off, the rest becomes units at the unit's value.
+// What a BUY of `amount` (in `currency`) gives: there is NO fee for buying, so all of it becomes ICEC-S at the unit's value.
 export const previewBuy = ({ amount, currency, quote }) => {
   const rate = rateToUgx(quote, currency);
   if (!positive(amount) || rate == null) return null;
   const local = floorDp(amount, currencyDecimals(currency));
   const gross = floor8(local * rate);
-  const fee = floor8((gross * Number(quote.fee_bps || 0)) / 10000);
-  const net = gross - fee;
+  const fee = 0;
+  const net = gross;
   const units = floor8(net / Number(quote.unit_ugx));
   return { local, gross, fee, net, units };
 };
@@ -63,7 +71,7 @@ export const previewSell = ({ units, currency, quote }) => {
   if (!positive(units) || rate == null) return null;
   const u = floor8(units);
   const gross = floor8(u * Number(quote.unit_ugx));
-  const fee = floor8((gross * Number(quote.fee_bps || 0)) / 10000);
+  const fee = floor8((gross * Number(quote.sell_fee_bps ?? quote.fee_bps ?? 0)) / 10000);   // the cash-out fee
   const net = gross - fee;
   return { units: u, gross, fee, net, local: floorDp(net / rate, currencyDecimals(currency)) };
 };
