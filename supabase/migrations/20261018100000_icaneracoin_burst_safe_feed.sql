@@ -136,7 +136,7 @@ BEGIN
   -- Take every committed tick. A tick whose transaction has not committed yet is
   -- invisible to this DELETE and is picked up by the next flush, never lost.
   FOR b IN
-    WITH taken AS (DELETE FROM public.ican_price_ticks RETURNING tick_time, volume)
+    WITH taken AS (DELETE FROM public.ican_price_ticks WHERE TRUE RETURNING tick_time, volume)
     SELECT to_timestamp(floor(extract(epoch FROM tick_time) / 300) * 300) AS bucket,
            SUM(volume)                       AS vol,
            COUNT(*) FILTER (WHERE volume > 0) AS n,
