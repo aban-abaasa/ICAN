@@ -96,8 +96,15 @@ export const sectorState = (sector, tradingEnabled = true) => {
       registered,
       sharing,
       progress: need > 0 ? Math.min(1, have / need) : 0,
-      detail: registered > 0
-        ? `${registered} ${registered === 1 ? 'business' : 'businesses'} on IcanEra${sharing > 0 ? ` · ${sharing} sharing sales` : ''}`
+      // Two plain lines under the bar. The bar counts businesses EARNING (the price comes from sales alone), while
+      // `registered` counts every business on IcanEra in the sector; saying both avoids "0 of 10" next to "3 businesses".
+      headline: need > 0
+        ? (registered > 0
+          ? `${registered} ${registered === 1 ? 'business' : 'businesses'} on IcanEra · ${have} earning`
+          : `${have} of ${need} businesses earning`)
+        : 'Opening soon',
+      detail: need > 0
+        ? `Opens when ${need} are earning${sharing > 0 ? ` · ${sharing} sharing sales` : ''}`
         : null,
     };
   }

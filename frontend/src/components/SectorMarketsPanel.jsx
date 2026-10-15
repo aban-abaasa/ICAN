@@ -31,7 +31,7 @@ function OpeningProgress({ st }) {
           <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.round(st.progress * 100)}%` }} />
         </div>
       )}
-      <p className="mt-1 text-[11px] leading-tight text-slate-400">{st.need > 0 ? `${st.have} of ${st.need} businesses earning` : 'Opening soon'}</p>
+      <p className="mt-1 text-[11px] leading-tight text-slate-400">{st.headline}</p>
       {st.detail && <p className="text-[11px] leading-tight text-slate-500">{st.detail}</p>}
     </div>
   );
