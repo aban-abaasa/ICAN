@@ -371,19 +371,21 @@ const PublicIcanChartPage = () => {
   return (
     <div className={`min-h-screen font-sans ${k.page}`}>
       <header className={`sticky top-0 z-30 border-b backdrop-blur ${k.bar}`}>
-        <div className="flex h-12 items-center gap-3 px-3 sm:px-5">
+        <div className="flex h-12 items-center gap-2 px-3 sm:gap-3 sm:px-5">
           {view !== 'chart' && (
             <button type="button" onClick={goBack} aria-label="Back" title="Back" className={`-ml-1 shrink-0 rounded-md p-2 ${k.icon} ${k.hover}`}>
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <a href="/" className={`flex shrink-0 items-center gap-2 text-base font-bold tracking-tight ${k.title}`} aria-label="IcanEra home">
+          {/* With the Back button showing, a narrow phone drops the small logo so the name keeps its room. */}
+          <a href="/" className={`${view === 'chart' ? 'flex' : 'hidden min-[420px]:flex'} shrink-0 items-center gap-2 text-base font-bold tracking-tight ${k.title}`} aria-label="IcanEra home">
             <img src="/icons/icon-192x192.png" alt="" width="26" height="26" className="rounded-md" />
             <span className="hidden sm:inline">IcanEra</span>
           </a>
-          {/* The name never gets squeezed out by the price and icons; the longer wording only shows when there is room. */}
-          <h1 className="mr-2 flex min-w-0 items-baseline gap-1.5 font-bold">
-            <span className={`shrink-0 text-base sm:text-lg ${k.title}`}>icaneracoin</span>
+          {/* The name takes the room between the logo and the price and is cut with an ellipsis when it is tight (large text
+              sizes on a small phone); it used to be unshrinkable, spilled out of its box and was drawn under the price. */}
+          <h1 className="mr-1 flex min-w-0 flex-1 items-baseline gap-1.5 font-bold lg:flex-none">
+            <span className={`min-w-0 truncate text-base sm:text-lg ${k.title}`}>icaneracoin</span>
             <span className={`hidden truncate text-sm font-semibold md:inline ${k.soft}`}>(ICAN) price chart</span>
           </h1>
           <nav aria-label="On this page" className="hidden items-center gap-1 text-sm font-semibold lg:flex">
@@ -402,12 +404,12 @@ const PublicIcanChartPage = () => {
                 )}
               </span>
             )}
-            <button type="button" onClick={refresh} aria-label="Refresh chart" title={updatedAt ? `Updated ${updatedAt.toLocaleTimeString()}` : 'Refresh'} className={`hidden rounded-md p-2 min-[400px]:block ${k.icon} ${k.hover}`}>
+            <button type="button" onClick={refresh} aria-label="Refresh chart" title={updatedAt ? `Updated ${updatedAt.toLocaleTimeString()}` : 'Refresh'} className={`hidden rounded-md p-1.5 sm:p-2 min-[400px]:block ${k.icon} ${k.hover}`}>
               <RefreshCw className="h-4 w-4" />
             </button>
             {/* The same switch as the website's: also turns this chart's own diamond backdrop on or off. */}
-            <AmbientToggle className={`rounded-md p-2 ${k.icon} ${k.hover}`} />
-            <button type="button" onClick={toggleTheme} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Light mode' : 'Dark mode'} className={`rounded-md p-2 ${k.icon} ${k.hover}`}>
+            <AmbientToggle className={`rounded-md p-1.5 sm:p-2 ${k.icon} ${k.hover}`} />
+            <button type="button" onClick={toggleTheme} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Light mode' : 'Dark mode'} className={`rounded-md p-1.5 sm:p-2 ${k.icon} ${k.hover}`}>
               {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
           </div>
