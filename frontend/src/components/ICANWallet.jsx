@@ -7493,7 +7493,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 { id: 'book', label: 'Book Order', Icon: Bookmark },
                 { id: 'history', label: 'History', Icon: History },
                 { id: 'sectors', label: 'Sector Markets', Icon: BarChart3 },
-                { id: 'onchain', label: 'On-chain', Icon: Link2 },
+                { id: 'onchain', label: 'ICEC-S & C', Icon: Link2 },
                 { id: 'dropship', label: 'Dropship', Icon: ShoppingBag }
               ].map(({ id, label, Icon }) => {
                 const on = activeTradeTab === id;
