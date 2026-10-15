@@ -29,7 +29,7 @@ BEGIN
   UPDATE public.ican_currency_rates SET rate_to_ugx = 3600 WHERE currency_code = 'USD';
   PERFORM t.as_anon(); q := public.ican_stable_quote(); PERFORM t.reset();
   PERFORM t.check('1.4 if the dollar rate ever fell below the inflation-adjusted start, the floor holds the value up and says so',
-    (q ->> 'unit_ugx')::NUMERIC = trunc(flo, 6) AND (q ->> 'protected')::BOOLEAN, q::TEXT);
+    abs((q ->> 'unit_ugx')::NUMERIC - flo) < 0.001 AND (q ->> 'protected')::BOOLEAN, q::TEXT);   -- (the dollar price is cut to 8 places, always down)
   UPDATE public.ican_currency_rates SET rate_to_ugx = 4022.802 WHERE currency_code = 'USD';
   PERFORM t.check('1.5 the value history records a point for the screen''s chart', jsonb_array_length(public.ican_stable_history(10)) >= 1);
   PERFORM t.check('1.6 the API roles cannot read or write the tables',
@@ -47,6 +47,8 @@ BEGIN
   PERFORM t.check('3.2 the fee is 0.5% and units are the rest at the dollar value, rounded down',
     (r ->> 'fee_ugx')::NUMERIC = 500 AND (r ->> 'units')::NUMERIC = trunc(99500 / 4022.802, 8), r::TEXT);
   PERFORM t.check('3.3 the wallet paid exactly the amount and the pool holds what was paid', t.bal(1, 'UGX') = 900000 AND icanera_stable.vault_balance() = 100000);
+  PERFORM t.check('3.3b ...and it holds them as DOLLARS (100,000 shillings at 4,022.80 = 24.8588 dollars)',
+    icanera_stable.vault_usd(4022.802) = trunc(100000 / 4022.802, 8), icanera_stable.vault_usd(4022.802)::TEXT);
   r2 := t.swap(1, 'buy', 100000, 'UGX', 'req-buy-00001');
   PERFORM t.check('3.4 the same request id again moves nothing and answers the same', (r2 ->> 'duplicate')::BOOLEAN AND t.bal(1, 'UGX') = 900000 AND (SELECT count(*) FROM icanera_stable.fills) = 1, r2::TEXT);
   PERFORM t.as_anon(); q := public.ican_stable_quote(); PERFORM t.reset();
@@ -87,21 +89,30 @@ BEGIN
   PERFORM t.check('7.2 ...and the screen is told', (q ->> 'rates_stale')::BOOLEAN AND NOT (q ->> 'trading_enabled')::BOOLEAN, q::TEXT);
   UPDATE public.ican_currency_rates SET updated_at = now() WHERE currency_code = 'USD';
 
-  -- ============================================================ 8. the shilling collapses: the pool's share becomes the price
+  -- ============================================================ 8. the shilling collapses: the dollar pool does not care
+  nav_before := icanera_stable.vault_usd(4022.802) / icanera_stable.units_outstanding();
   UPDATE public.ican_currency_rates SET rate_to_ugx = 400000 WHERE currency_code = 'USD';
   PERFORM t.as_anon(); q := public.ican_stable_quote(); PERFORM t.reset();
   SELECT * INTO pv FROM icanera_stable.pool_value();
-  PERFORM t.check('8.1 a dollar is now worth 400,000 shillings but the pool holds far less per ICEC-S, so the price is the pool''s share and the screen says so',
-    (q ->> 'pool_short')::BOOLEAN AND (q ->> 'dollar_ugx')::NUMERIC = 400000 AND (q ->> 'unit_ugx')::NUMERIC = pv.nav_ugx AND pv.nav_ugx < 400000, q::TEXT);
-  nav_before := icanera_stable.vault_balance() / icanera_stable.units_outstanding();
-  r := t.swap(2, 'buy', 1000, 'UGX', 'req-weak-00001');
-  nav_after := icanera_stable.vault_balance() / icanera_stable.units_outstanding();
-  PERFORM t.check('8.2 a new buyer is not diluting anyone: they get units at the pool price and the pool per ICEC-S does not fall',
-    (r ->> 'success')::BOOLEAN AND nav_after >= nav_before - 0.000001, r::TEXT || ' ' || nav_before || ' ' || nav_after);
-  v_vault := icanera_stable.vault_balance(); v_units := icanera_stable.units_outstanding();
+  PERFORM t.check('8.1 a dollar now costs 400,000 shillings and the pool still holds the same dollars per ICEC-S: no shortfall, the price is a full dollar',
+    NOT (q ->> 'pool_short')::BOOLEAN AND (q ->> 'unit_ugx')::NUMERIC = 400000 AND abs(pv.nav_usd - nav_before) < 0.000001, q::TEXT || ' ' || pv.nav_usd || ' ' || nav_before);
+  r := t.swap(2, 'buy', 1000, 'UGX', 'req-weak-00001');       -- 1,000 shillings is now a quarter of a cent
+  PERFORM t.check('8.2 a purchase at the new rate is priced at a full dollar and never dilutes the pool',
+    (r ->> 'success')::BOOLEAN AND icanera_stable.vault_usd(400000) / icanera_stable.units_outstanding() >= nav_before - 0.000001, r::TEXT);
   r := t.swap(1, 'sell', 1, 'UGX', 'req-weak-00002');
-  PERFORM t.check('8.3 a holder sells at the pool price: paid in full from the pool, which stays whole',
-    (r ->> 'success')::BOOLEAN AND icanera_stable.vault_balance() >= 0 AND icanera_stable.vault_balance() >= icanera_stable.units_outstanding() * (SELECT price_ugx FROM icanera_stable.pool_value()) - 0.01, r::TEXT);
+  PERFORM t.check('8.3 a holder selling one ICEC-S gets a full dollar (400,000 less the 0.5% fee = 398,000), straight from the pool',
+    (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = 398000, r::TEXT);
+  SELECT * INTO pv FROM icanera_stable.pool_value();
+  PERFORM t.check('8.4 ...and the pool still holds at least what it owes', pv.pool_usd >= icanera_stable.units_outstanding() * pv.price_usd - 0.00001);
+  -- the other direction: the shilling strengthens until the inflation floor is above the plain dollar rate
+  UPDATE public.ican_currency_rates SET rate_to_ugx = 3600 WHERE currency_code = 'USD';
+  PERFORM t.as_anon(); q := public.ican_stable_quote(); PERFORM t.reset();
+  SELECT * INTO pv FROM icanera_stable.pool_value();
+  PERFORM t.check('8.5 when the floor is above the dollar rate the pool can hold less than the full value: the price is then the pool''s share, and it says so',
+    (q ->> 'pool_short')::BOOLEAN AND (q ->> 'protected')::BOOLEAN AND pv.price_usd = pv.nav_usd AND pv.price_usd < pv.unit_usd, q::TEXT);
+  r := t.swap(1, 'sell', 1, 'UGX', 'req-floor-00001');
+  SELECT * INTO pv FROM icanera_stable.pool_value();
+  PERFORM t.check('8.6 ...and a sale then is still paid in full from the pool', (r ->> 'success')::BOOLEAN AND pv.pool_usd >= icanera_stable.units_outstanding() * pv.price_usd - 0.00001, r::TEXT);
   UPDATE public.ican_currency_rates SET rate_to_ugx = 4022.802 WHERE currency_code = 'USD';
 
   -- ============================================================ 9. the pool can always pay: a randomised run through wild exchange rates
@@ -123,10 +134,10 @@ BEGIN
     END IF;
     swaps := swaps + 1; IF (r ->> 'success')::BOOLEAN THEN ok := ok + 1; END IF;
     SELECT * INTO pv FROM icanera_stable.pool_value();
-    IF icanera_stable.vault_balance() < 0 OR (icanera_stable.units_outstanding() > 0 AND icanera_stable.vault_balance() < icanera_stable.units_outstanding() * pv.price_ugx - 0.01) THEN bad := bad + 1; END IF;
+    IF pv.pool_usd < 0 OR (icanera_stable.units_outstanding() > 0 AND pv.pool_usd < icanera_stable.units_outstanding() * pv.price_usd - 0.00001) THEN bad := bad + 1; END IF;
   END LOOP;
   UPDATE public.ican_currency_rates SET rate_to_ugx = 4022.802, updated_at = now() WHERE currency_code = 'USD';
-  PERFORM t.check('9.1 across 300 random buys and sells through wild exchange rates, the pool always held at least what it owed at its own price (' || ok || ' swaps went through)', bad = 0 AND ok > 100, 'bad=' || bad || ' ok=' || ok);
+  PERFORM t.check('9.1 across 300 random buys and sells through wild exchange rates, the dollar pool always held at least what it owed at its own price (' || ok || ' swaps went through)', bad = 0 AND ok > 100, 'bad=' || bad || ' ok=' || ok);
   rec := public.ican_stable_dev_reconcile('dev_test_secret');
   PERFORM t.check('9.2 ...and the books balance afterwards', (rec ->> 'ok')::BOOLEAN, rec::TEXT);
   PERFORM t.check('9.3 nobody was left with a negative balance', NOT EXISTS (SELECT 1 FROM public.wallet_accounts WHERE balance < 0) AND NOT EXISTS (SELECT 1 FROM icanera_stable.holdings WHERE units < 0));
@@ -137,9 +148,9 @@ BEGIN
   PERFORM t.check('10.2 the operator functions refuse a wrong token', t.err($$SELECT public.ican_stable_dev_overview('nope')$$) LIKE '%unauthorized%');
   PERFORM t.check('10.3 nothing can be taken out of the pool while anyone holds ICEC-S',
     icanera_stable.units_outstanding() > 0 AND t.err($$SELECT public.ican_stable_dev_vault_adjust('dev_test_secret', -1, 'try to take some')$$) LIKE '%belongs to the people who hold%');
-  bal_before := icanera_stable.vault_balance();
-  PERFORM public.ican_stable_dev_vault_adjust('dev_test_secret', 1000, 'optional top-up for the tests');
-  PERFORM t.check('10.4 an optional top-up only ever helps holders (the pool per ICEC-S rises)', icanera_stable.vault_balance() = bal_before + 1000);
+  bal_before := icanera_stable.vault_usd(4022.802);
+  PERFORM public.ican_stable_dev_vault_adjust('dev_test_secret', 1000000, 'optional top-up for the tests');
+  PERFORM t.check('10.4 an optional top-up is held as dollars and only ever helps holders (the pool per ICEC-S rises)', icanera_stable.vault_usd(4022.802) = bal_before + trunc(1000000 / 4022.802, 8));
   ov := public.ican_stable_dev_overview('dev_test_secret');
   PERFORM t.check('10.5 the operator sees the pool per ICEC-S', (ov -> 'vault' ->> 'pool_per_unit_ugx') IS NOT NULL AND (ov ->> 'holders')::INT >= 1, ov::TEXT);
   PERFORM t.check('10.6 an unknown setting is refused', t.err($$SELECT public.ican_stable_dev_set_settings('dev_test_secret', '{"nope":1}')$$) LIKE '%unknown setting%');

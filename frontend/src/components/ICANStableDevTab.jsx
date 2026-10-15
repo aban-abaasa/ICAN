@@ -8,8 +8,9 @@ import { trim } from '../utils/stableUnitRules';
  * reconcile that recomputes the books from the immutable ledgers. Talks to ican_stable_dev_*
  * (supabase/migrations/20261024100000_icec_stable_in_system.sql) with the panel's dev token, like every other tab.
  *
- * Swaps are ON by themselves and need nothing from an operator: what buyers pay in is the pool, what sellers take out comes from it,
- * and the price is a dollar's worth or the pool's share per ICEC-S if the pool holds less (20261025100000_icec_stable_automatic.sql).
+ * Swaps are ON by themselves and need nothing from an operator: what buyers pay in is converted at the live rate and held in the pool as US
+ * DOLLARS, what sellers take out comes from it, and the price is the full value or the pool's share per ICEC-S if the pool holds less
+ * (20261025100000_icec_stable_automatic.sql, 20261026100000_icec_stable_dollar_pool.sql).
  * Everything here is optional: the emergency switch, a top-up that only helps holders, the limits, and a reconcile.
  */
 
@@ -120,16 +121,16 @@ export default function ICANStableDevTab({ devToken }) {
       <div className="rounded-xl border p-4 space-y-3" style={card}>
         <div className="flex items-center gap-2">
           {thin ? <AlertTriangle className="w-4 h-4 text-amber-400" /> : <ShieldCheck className="w-4 h-4 text-emerald-400" />}
-          <p className="font-semibold" style={{ color: 'var(--dp-txt)' }}>Pool (UGX){thin ? ' · below a dollar per ICEC-S' : ''}</p>
+          <p className="font-semibold" style={{ color: 'var(--dp-txt)' }}>Pool (held in US dollars){thin ? ' · below the full value per ICEC-S' : ''}</p>
         </div>
         <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-          <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>Balance</dt><dd style={{ color: 'var(--dp-txt)' }}>{trim(vault.balance_ugx, 2)}</dd></div>
+          <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>Balance (USD)</dt><dd style={{ color: 'var(--dp-txt)' }}>{trim(vault.balance_usd, 2)}</dd></div>
           <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>ICEC-S in circulation</dt><dd style={{ color: 'var(--dp-txt)' }}>{trim(vault.units_outstanding, 8)}</dd></div>
           <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>Cover</dt><dd className={thin ? 'text-amber-400' : ''} style={thin ? undefined : { color: 'var(--dp-txt)' }}>{vault.cover_ratio == null ? 'nothing owed' : `${vault.cover_ratio}x`}</dd></div>
-          <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>Pool per ICEC-S</dt><dd style={{ color: 'var(--dp-txt)' }}>{vault.pool_per_unit_ugx == null ? 'none held' : trim(vault.pool_per_unit_ugx, 2)}</dd></div>
+          <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>Pool per ICEC-S</dt><dd style={{ color: 'var(--dp-txt)' }}>{vault.pool_per_unit_usd == null ? 'none held' : `$${trim(vault.pool_per_unit_usd, 4)}`}</dd></div>
         </dl>
         <div className="flex flex-wrap gap-2">
-          <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.-]/g, ''))} placeholder="UGX to add (optional)" inputMode="decimal" className="w-48 rounded-lg border px-3 py-2 text-sm" style={field} />
+          <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.-]/g, ''))} placeholder="UGX to add (held as dollars)" inputMode="decimal" className="w-48 rounded-lg border px-3 py-2 text-sm" style={field} />
           <input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Reason (kept forever)" className="flex-1 min-w-[10rem] rounded-lg border px-3 py-2 text-sm" style={field} />
           <button type="button" disabled={busy || !Number(amount) || memo.trim().length < 3}
             onClick={() => act(async () => { const r = await devStable.adjustVault(devToken, Number(amount), memo.trim()); setAmount(''); setMemo(''); return r; }, 'Vault updated.')}

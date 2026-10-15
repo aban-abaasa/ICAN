@@ -30,7 +30,8 @@ ALTER TABLE icanera_stable.settings ALTER COLUMN stress_pct SET DEFAULT 0;
 UPDATE icanera_stable.settings SET trading_enabled = TRUE, stress_pct = 0, updated_at = now()
  WHERE id AND NOT EXISTS (SELECT 1 FROM icanera_stable.fills);
 
--- The price a swap uses (and the pool's own numbers).
+-- The price a swap uses (and the pool's own numbers). (Dropped first: a later file widens its columns.)
+DROP FUNCTION IF EXISTS icanera_stable.pool_value();
 CREATE OR REPLACE FUNCTION icanera_stable.pool_value()
 RETURNS TABLE (price_ugx NUMERIC, dollar_ugx NUMERIC, nav_ugx NUMERIC, pool_short BOOLEAN)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = icanera_stable, public AS $$

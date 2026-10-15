@@ -116,7 +116,7 @@ export default function StableInSystemPanel() {
           { q: 'What is ICEC-S?', a: 'The stable form of icaneracoin. One ICEC-S is worth one US dollar. It lives inside IcanEra, so there is no blockchain, no gas fee and no outside wallet to connect.' },
           { q: 'Where does its price come from?', a: 'The same live currency rates icaneracoin uses, refreshed every hour. The value in each currency is the dollar rate for that currency, so a wallet in any currency sees the same value.' },
           { q: 'How does it protect against inflation?', a: `It rises with the dollar when the shilling weakens, and it never goes below its start value grown by Uganda's yearly inflation (${trim(quote.inflation_pct, 2)}% now). Nobody can promise it will beat inflation by more than that.` },
-          { q: 'What backs it?', a: 'The other holders. Everything people pay in becomes one shared pool, and everything people sell comes out of it, so there is no company reserve to fund and nothing to switch on. While the pool holds a dollar for each ICEC-S, one ICEC-S is a dollar. If the shilling falls so sharply that the pool holds less than that, everyone holds the same smaller share until the rate recovers, and the screen tells you. It is not a bank deposit and nobody guarantees the dollar beyond the pool.' },
+          { q: 'What backs it?', a: 'Dollars. When you buy, your money is converted at the live rate and held in one shared pool as US dollars; when you sell, the dollars come out of that pool. Because the pool and what it owes are both in dollars, a falling shilling cannot shrink what an ICEC-S is worth, and there is no company reserve to fund and nothing to switch on. Fees stay in the pool, so it only grows relative to what it owes. The one case where the pool can hold less than the full value is when the inflation floor sits above a plain dollar; the screen then shows the pool\'s share, and says so. It is not a bank deposit.' },
           { q: 'What does it cost, and what are the limits?', a: `A ${trim(quote.fee_bps / 100, 2)}% fee on each buy and each sell. Up to UGX ${trim(quote.max_trade_ugx, 0)} per swap. Swaps pause whenever the live rates are more than a few hours old.` },
         ]}
       />
@@ -127,7 +127,7 @@ export default function StableInSystemPanel() {
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">1 ICEC-S =</p>
             <p className="text-3xl font-bold leading-tight text-white">{trim(local, 2)} <span className="text-base font-semibold text-slate-400">{currency}</span></p>
-            <p className="text-sm text-slate-400">{quote.pool_short ? 'the pool\'s share of a dollar' : '1 US dollar'}{currency !== 'UGX' ? ` · UGX ${trim(quote.unit_ugx, 2)}` : ''}</p>
+            <p className="text-sm text-slate-400">{quote.pool_short ? 'the pool\'s share' : '1 US dollar'}{currency !== 'UGX' ? ` · UGX ${trim(quote.unit_ugx, 2)}` : ''}</p>
           </div>
           <div className="text-right">
             <span className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-slate-300" aria-live="polite">
@@ -138,7 +138,7 @@ export default function StableInSystemPanel() {
         </div>
         {quote.pool_short && (
           <p className="mt-3 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300" role="status">
-            The pool holds less than a dollar per ICEC-S right now (a dollar is UGX {trim(quote.dollar_ugx, 2)}). Everyone shares the same smaller value until the rate recovers.
+            The pool holds a little less than the full inflation-protected value (UGX {trim(quote.dollar_ugx, 2)}) per ICEC-S right now, so everyone shares the pool\'s value until it catches up.
           </p>
         )}
         {quote.protected && (
