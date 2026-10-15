@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { CHART_PALETTES } from './chartPalettes';
-import SectorIndexChart from './SectorIndexChart';
+import IcanTradingChart from './IcanTradingChart';
 import CoinPicker, { ICAN_COIN } from './CoinPicker';
 import { GoogleMark } from './PublicTradePanel';
 import PublicSectionNotice from './PublicSectionNotice';
 import { useSectorBoard, useSectorTicket } from '../hooks/useSectorTicket';
-import { ICEC, changeTone, formatLevel, formatPct, formatPrice, holdingResult, trim } from '../utils/sectorTradeRules';
+import { ICEC, changeTone, formatLevel, formatPct, formatPrice, holdingResult, trim, sectorChartRows } from '../utils/sectorTradeRules';
 
 // Sector Markets on the public /icaneracoin page: ten coins that follow what businesses on IcanEra earn, sector by sector
 // (farms, transport, retail, ...). Anyone can watch the indices with no account. Signing in with Google, the same way the
@@ -64,16 +64,10 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability,
   };
   const sellHolding = (sector) => { setCoin(null); startSell(sector); };
 
-  // icaneracoin's candles in the chart's shape: unix-seconds time, strictly increasing
-  const icanCandles = useMemo(() => {
-    const out = [];
-    (ican?.candles || []).forEach((r) => {
-      const ms = Date.parse(r.timestamp);
-      const cd = { time: Math.floor(ms / 1000), open: r.open, high: r.high, low: r.low, close: r.close };
-      if (Number.isFinite(ms) && [cd.open, cd.high, cd.low, cd.close].every(Number.isFinite) && (!out.length || cd.time > out[out.length - 1].time)) out.push(cd);
-    });
-    return out;
-  }, [ican?.candles]);
+  // Both charts are the SAME analysis chart as icaneracoin's own (candles, moving averages, RSI, timeframes, trend lines).
+  // icaneracoin's candles and the selected sector's candles are both { timestamp, open, high, low, close }.
+  const icanRows = useMemo(() => sectorChartRows(ican?.candles), [ican?.candles]);
+  const sectorRows = useMemo(() => sectorChartRows(candles), [candles]);
 
   const shown = available && sectors.length > 0;
   useEffect(() => { onAvailability?.(shown); }, [shown, onAvailability]);
@@ -160,11 +154,25 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability,
                 )}
               </div>
             </div>
-            {isIcan
-              ? <SectorIndexChart candles={icanCandles} ticker={ICAN_COIN} theme={theme} precision={2} />
-              : state.kind === 'warming'
-                ? <p className="py-10 text-center text-sm" style={sub}>{state.label}. Opens once enough businesses take part.</p>
-                : <SectorIndexChart candles={candles} ticker={sel.ticker} theme={theme} />}
+            {!isIcan && state.kind === 'warming' ? (
+              <div className="space-y-1 py-8 text-center">
+                <p className="text-sm font-semibold" style={{ color: c.strong }}>{state.headline || state.label}</p>
+                {state.detail && <p className="text-xs" style={sub}>{state.detail}</p>}
+                <p className="mx-auto max-w-xs text-xs" style={sub}>No price and nothing to trade until then; nothing here is estimated.</p>
+              </div>
+            ) : (
+              <div className="mt-2 h-[22rem] w-full overflow-hidden rounded-lg sm:h-[26rem]">
+                <IcanTradingChart
+                  rows={isIcan ? icanRows : sectorRows}
+                  loading={loading && !(isIcan ? icanRows : sectorRows).length}
+                  theme={theme}
+                  wheelZoom={false}
+                  feedState={status}
+                  symbol={isIcan ? 'ICAN / UGX' : `${sel.ticker} · index`}
+                  emptyNote={isIcan ? undefined : "Candles appear as the sector's sales move its index. Nothing here is simulated."}
+                />
+              </div>
+            )}
           </div>
 
           {isIcan ? (
