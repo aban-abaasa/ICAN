@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft, ArrowRight, Camera, Images, SwitchCamera, RotateCcw, Scissors, Smartphone,
+  ArrowLeft, ArrowRight, Camera, Film, SwitchCamera, RotateCcw, Scissors, Smartphone,
   Loader2, Play, Pause, Timer, Mic, Volume2, VolumeX,
 } from 'lucide-react';
 import './pitch-camera-stage.css';
@@ -632,7 +632,7 @@ export default function PitchCameraStage({
         <div className="pcs-row">
           {/* choose a video from the gallery */}
           <label className={`pcs-side left ${isRecording || count !== null ? 'is-hidden' : ''}`} aria-label="Choose a video from your phone">
-            <span className="pcs-iconbtn"><Images size={20} /></span>
+            <span className="pcs-iconbtn"><Film size={20} /></span>
             <span className="pcs-cap">Library</span>
             <input type="file" accept="video/*,.mp4,.mov,.m4v,.webm,.3gp,.mkv" onChange={handleFile} className="hidden" style={{ display: 'none' }} />
           </label>
