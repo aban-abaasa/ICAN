@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, Camera, Film, SwitchCamera, RotateCcw, Scissors, Smartphone,
-  Loader2, Play, Pause, Timer, Mic, Volume2, VolumeX,
+  Loader2, Play, Pause, Timer, Volume2, VolumeX,
 } from 'lucide-react';
 import './pitch-camera-stage.css';
+import PitchSlideshowBuilder from './PitchSlideshowBuilder';
 import { drawIcanEraWatermark, applyWatermarkToVideoBlob } from '../utils/videoWatermark';
 import {
   pickRecorderFormat,
   isVideoFile,
+  isImageFile,
   probeVideo,
   formatBytes,
   formatDuration,
@@ -16,15 +18,15 @@ import {
 } from '../utils/videoFormat';
 
 // The capture + preview half of the pitch recorder, in the Pitchin "Ebony & Gold" classic style.
+//  - Full screen: the camera (and later the preview) fills the whole screen and the controls float over it as small,
+//    transparent icons. The recording has the same shape as the screen, so what you see is what you record.
 //  - Opens the camera as soon as the screen appears, so the person sees themselves BEFORE recording.
-//  - The picture is always cropped to a fixed portrait (phone) or landscape (desktop) frame. Phones often hand
-//    over a wide landscape camera stream; cropping it keeps the recording upright and filling the feed player
-//    instead of a thin strip with black bars.
-//  - Big record button whose gold ring fills toward the time limit, optional 3-2-1 countdown, pause/resume,
-//    a live microphone level, switch camera and "choose from gallery". The screen is kept awake while recording.
+//  - Record button whose ring fills toward the time limit, optional 3-2-1 countdown, pause/resume, a live microphone
+//    level, switch camera and "Library". The screen is kept awake while recording.
+//  - Library takes a video, or several pictures: pictures open the photo-pitch builder (pictures + audio -> video).
 //  - Records in whatever format the phone supports (WebM on Android, MP4 on iPhone/Safari).
 //  - Falls back to the phone's own camera app when the browser can't record (or camera access is refused).
-//  - After recording or picking a file: a preview with play/scrub controls, size/length/format, Retake, Trim, Next.
+//  - After recording or building: a preview with play/scrub controls, size/length/format, Retake, Trim, Next.
 // It hands the finished clip to its parent through onVideoReady; the parent owns the rest of the publish flow.
 
 export const MAX_RECORD_SECONDS = 180;
@@ -39,16 +41,18 @@ const CAMERA_PROBLEM = {
   error: "The camera couldn't start. Try again, or use your phone's camera app.",
 };
 
-const pickShape = () => (typeof window !== 'undefined' && window.innerWidth > window.innerHeight * 1.1 ? 'landscape' : 'portrait');
-
 const readTimerPref = () => { try { return localStorage.getItem(TIMER_KEY) === '1'; } catch { return false; } };
 const buzz = (ms = 12) => { try { navigator.vibrate?.(ms); } catch { /* not supported */ } };
+const even = (v) => Math.max(2, Math.round(v / 2) * 2);
 
-// Output size: never bigger than the camera can really deliver (no blurry upscaling, less for modest phones to encode).
-const outputSize = (shape, sourceLongSide) => {
+// Recording shape: the screen's own proportions (so the full-screen picture is exactly what is recorded), kept
+// within sensible limits, and never bigger than the camera can really deliver (no blurry upscaling).
+const outputSize = (landscape, sourceLongSide, screenAr) => {
   const big = sourceLongSide >= 1280;
-  if (shape === 'landscape') return big ? { w: 1280, h: 720 } : { w: 960, h: 540 };
-  return big ? { w: 720, h: 1280 } : { w: 540, h: 960 };
+  if (landscape) return big ? { w: 1280, h: 720 } : { w: 960, h: 540 };
+  const ar = Math.min(9 / 16, Math.max(0.42, screenAr || 9 / 16));
+  const long = big ? 1280 : 960;
+  return { w: even(long * ar), h: long };
 };
 
 const RING_R = 38;
@@ -64,6 +68,7 @@ export default function PitchCameraStage({
   onTrim,
   onNext,
 }) {
+  const rootRef = useRef(null);
   const videoRef = useRef(null);      // hidden element that plays the live camera stream
   const canvasRef = useRef(null);     // what the person sees AND what gets recorded (so the mark is baked in)
   const streamRef = useRef(null);
@@ -72,7 +77,6 @@ export default function PitchCameraStage({
   const rafRef = useRef(null);
   const previewVideoRef = useRef(null);
   const openSeqRef = useRef(0);       // ignores a camera that finished opening after we asked for another
-  const shapeRef = useRef(pickShape());
   const audioRef = useRef(null);      // { ctx, analyser, data } for the microphone level
   const meterRef = useRef(null);
   const levelRef = useRef(0);
@@ -82,9 +86,12 @@ export default function PitchCameraStage({
   const segStartRef = useRef(null);   // start of the running segment, null while paused
   const finalMsRef = useRef(0);
   const fixingRef = useRef(false);
+  const screenArRef = useRef(9 / 16);
 
   const [camState, setCamState] = useState('opening'); // opening | ready | denied | notfound | unsupported | error
-  const [shape, setShape] = useState(shapeRef.current);
+  const [landscape, setLandscape] = useState(false);
+  const [screenAr, setScreenAr] = useState(9 / 16);
+  const [canvasAr, setCanvasAr] = useState(9 / 16);
   const [facing, setFacing] = useState(cameraMode === 'back' ? 'environment' : 'user');
   const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -94,6 +101,7 @@ export default function PitchCameraStage({
   const [elapsed, setElapsed] = useState(0);
   const [fileError, setFileError] = useState('');
   const [readingFile, setReadingFile] = useState(false);
+  const [slideFiles, setSlideFiles] = useState(null); // pictures chosen from the library -> photo-pitch builder
   const [playing, setPlaying] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [cur, setCur] = useState(0);
@@ -104,6 +112,24 @@ export default function PitchCameraStage({
 
   const releaseAwake = () => { try { wakeRef.current?.release(); } catch { /* already released */ } wakeRef.current = null; };
   const holdAwake = async () => { try { wakeRef.current = (await navigator.wakeLock?.request('screen')) || null; } catch { /* optional */ } };
+
+  // follow the size of the screen area (and the phone being turned, while idle)
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return undefined;
+    const measure = () => {
+      const { width, height } = el.getBoundingClientRect();
+      if (!width || !height) return;
+      screenArRef.current = width / height;
+      setScreenAr(width / height);
+      if (!isRecording && !previewUrl) setLandscape(width > height * 1.1);
+    };
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', measure);
+    return () => { ro?.disconnect(); window.removeEventListener('resize', measure); };
+  }, [isRecording, previewUrl, slideFiles]);
 
   const cancelCountdown = useCallback(() => {
     if (countRef.current) clearInterval(countRef.current);
@@ -126,15 +152,20 @@ export default function PitchCameraStage({
     setCount(null);
   }, []);
 
-  // Sizes the recording canvas for the chosen shape and what the camera really delivers.
+  // Sizes the recording canvas for the screen shape and what the camera really delivers.
+  const landscapeRef = useRef(landscape);
+  landscapeRef.current = landscape;
   const applyCanvasSize = useCallback(() => {
     const canvas = canvasRef.current;
     const track = streamRef.current?.getVideoTracks()[0];
     if (!canvas || !track) return;
     const s = track.getSettings?.() || {};
-    const { w, h } = outputSize(shapeRef.current, Math.max(s.width || 0, s.height || 0));
+    const { w, h } = outputSize(landscapeRef.current, Math.max(s.width || 0, s.height || 0), screenArRef.current);
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    setCanvasAr(w / h);
   }, []);
+
+  useEffect(() => { if (!isRecording) applyCanvasSize(); }, [landscape, screenAr, isRecording, applyCanvasSize]);
 
   const startDrawLoop = useCallback(() => {
     const draw = () => {
@@ -176,15 +207,15 @@ export default function PitchCameraStage({
     }
     setCamState('opening');
     const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
-    const landscape = shapeRef.current === 'landscape';
+    const wide = landscapeRef.current;
     try {
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: facingMode },
-            width: { ideal: landscape ? 1280 : 720 },
-            height: { ideal: landscape ? 720 : 1280 },
+            width: { ideal: wide ? 1280 : 720 },
+            height: { ideal: wide ? 720 : 1280 },
             frameRate: { ideal: 30 },
           },
           audio,
@@ -229,12 +260,13 @@ export default function PitchCameraStage({
     }
   }, [applyCanvasSize, startDrawLoop, stopCamera]);
 
-  // Show the viewfinder whenever there is no clip yet (first open and after Retake); release the camera once there is one.
+  // Show the viewfinder whenever there is no clip yet (first open and after Retake); release the camera once there
+  // is one, or while the photo-pitch builder is open.
   useEffect(() => {
-    if (!previewUrl) openCamera(facing);
+    if (!previewUrl && !slideFiles) openCamera(facing);
     else stopCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewUrl]);
+  }, [previewUrl, slideFiles]);
 
   useEffect(() => () => {
     const recorder = recorderRef.current;
@@ -242,20 +274,6 @@ export default function PitchCameraStage({
     releaseAwake();
     stopCamera();
   }, [stopCamera]);
-
-  // Follow the phone being turned (only while idle: a take keeps the shape it started with).
-  useEffect(() => {
-    const onResize = () => {
-      if (isRecording || previewUrl) return;
-      const next = pickShape();
-      if (next === shapeRef.current) return;
-      shapeRef.current = next;
-      setShape(next);
-      applyCanvasSize();
-    };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [applyCanvasSize, isRecording, previewUrl]);
 
   const finishRecording = useCallback((recorder) => {
     const type = (recorder.mimeType || pickRecorderFormat()?.mime || 'video/webm').split(';')[0];
@@ -380,16 +398,8 @@ export default function PitchCameraStage({
     try { localStorage.setItem(TIMER_KEY, next ? '1' : '0'); } catch { /* not remembered */ }
   };
 
-  // Picked from the gallery, or filmed with the phone's own camera app.
-  const handleFile = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = ''; // the same file can be chosen again after Retake
-    if (!file) return;
-    setFileError('');
-    if (!isVideoFile(file)) {
-      setFileError('That file is not a video. Please choose an MP4, MOV or WebM video.');
-      return;
-    }
+  // A video from the library, or one filmed with the phone's own camera app.
+  const acceptVideoFile = async (file) => {
     const sizeMB = file.size / 1024 / 1024;
     if (sizeMB > MAX_UPLOAD_MB) {
       setFileError(`This video is ${sizeMB.toFixed(0)} MB. The limit is ${MAX_UPLOAD_MB} MB, so please trim it or pick a shorter clip.`);
@@ -405,6 +415,19 @@ export default function PitchCameraStage({
       { timeoutMs: Math.max(60000, (durationSec || 60) * 2500) }
     );
     onVideoReady({ blob: file, durationSec, source: 'upload', needsWatermark: true, task, width: info?.width, height: info?.height });
+  };
+
+  // Library: one video, or several pictures (which open the photo-pitch builder).
+  const handleFiles = async (event) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = ''; // the same files can be chosen again after Retake
+    if (!files.length) return;
+    setFileError('');
+    const videos = files.filter(isVideoFile);
+    const pictures = files.filter(isImageFile);
+    if (videos.length) { await acceptVideoFile(videos[0]); return; }
+    if (pictures.length) { setSlideFiles(pictures); return; }
+    setFileError('Please choose a video, or pictures for a photo pitch.');
   };
 
   // ---------- preview helpers ----------
@@ -428,6 +451,20 @@ export default function PitchCameraStage({
 
   const framePct = (value) => `${Math.max(0, Math.min(100, value)).toFixed(1)}%`;
 
+  // ================= PHOTO PITCH =================
+  if (slideFiles) {
+    return (
+      <PitchSlideshowBuilder
+        initialFiles={slideFiles}
+        onCancel={() => setSlideFiles(null)}
+        onDone={({ blob, durationSec, width, height }) => {
+          setSlideFiles(null);
+          onVideoReady({ blob, durationSec, source: 'slideshow', needsWatermark: false, width, height });
+        }}
+      />
+    );
+  }
+
   // ================= PREVIEW =================
   if (previewUrl) {
     const meta = [
@@ -435,89 +472,93 @@ export default function PitchCameraStage({
       videoMeta?.size ? formatBytes(videoMeta.size) : null,
       videoMeta?.type ? videoExtension({ type: videoMeta.type }).toUpperCase() : null,
     ].filter(Boolean).join('  ·  ');
-    const ar = videoMeta?.width && videoMeta?.height
-      ? Math.max(0.5, Math.min(1.9, videoMeta.width / videoMeta.height))
-      : (shape === 'landscape' ? 16 / 9 : 9 / 16);
+    const videoAr = videoMeta?.width && videoMeta?.height ? videoMeta.width / videoMeta.height : null;
+    // fill the screen when the video is shaped like it; otherwise show it whole
+    const contain = !videoAr || Math.abs(videoAr - screenAr) > 0.06;
     const total = dur > 0 ? dur : (videoMeta?.durationSec || 0);
 
     return (
-      <div className="pcs">
-        <div className="pcs-head">
-          <button type="button" onClick={onClose} aria-label="Close" className="pcs-iconbtn"><ArrowLeft size={20} /></button>
-          <div className="pcs-title">
-            <h2>Your Pitch</h2>
+      <div className="pcs" ref={rootRef}>
+        {previewFailed ? (
+          <div className="pcs-preview-fail">
+            <Smartphone size={30} color="#c4a052" />
+            <p>This phone can't preview this video format.</p>
+            <small>It can still be uploaded, and will play for viewers on supported devices.</small>
+          </div>
+        ) : (
+          <video
+            key={previewUrl}
+            ref={previewVideoRef}
+            src={previewUrl}
+            className={`pcs-video ${contain ? 'is-contain' : ''}`}
+            playsInline
+            preload="metadata"
+            muted={muted}
+            onClick={togglePlay}
+            onLoadedMetadata={fixRecordedDuration}
+            onDurationChange={(e) => { if (Number.isFinite(e.currentTarget.duration)) setDur(e.currentTarget.duration); }}
+            onTimeUpdate={(e) => { if (!fixingRef.current) setCur(e.currentTarget.currentTime); }}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={() => setPlaying(false)}
+            onError={() => setPreviewFailed(true)}
+          />
+        )}
+        <div className="pcs-scrim-top" />
+        <div className="pcs-scrim-bottom" />
+
+        <div className="pcs-top">
+          <button type="button" onClick={onClose} aria-label="Close" className="pcs-ico"><ArrowLeft /></button>
+          <div className="grow">
+            <h2 className="pcs-title">Your Pitch</h2>
             {meta && <p className="pcs-meta">{meta}</p>}
           </div>
-          <div className="pcs-head-spacer" aria-hidden="true" />
-        </div>
-
-        <div className="pcs-stagewrap">
-          <div className="pcs-frame" style={{ '--pcs-ar': ar }}>
-            {previewFailed ? (
-              <div className="pcs-preview-fail">
-                <Smartphone size={30} color="#c4a052" />
-                <p>This phone can't preview this video format.</p>
-                <small>It can still be uploaded, and will play for viewers on supported devices.</small>
-              </div>
-            ) : (
-              <>
-                <video
-                  key={previewUrl}
-                  ref={previewVideoRef}
-                  src={previewUrl}
-                  className="pcs-video"
-                  playsInline
-                  preload="metadata"
-                  muted={muted}
-                  onClick={togglePlay}
-                  onLoadedMetadata={fixRecordedDuration}
-                  onDurationChange={(e) => { if (Number.isFinite(e.currentTarget.duration)) setDur(e.currentTarget.duration); }}
-                  onTimeUpdate={(e) => { if (!fixingRef.current) setCur(e.currentTarget.currentTime); }}
-                  onPlay={() => setPlaying(true)}
-                  onPause={() => setPlaying(false)}
-                  onEnded={() => setPlaying(false)}
-                  onError={() => setPreviewFailed(true)}
-                />
-                {!playing && (
-                  <button type="button" onClick={togglePlay} aria-label="Play preview" className="pcs-playbtn">
-                    <Play size={28} fill="currentColor" style={{ marginLeft: 3 }} />
-                  </button>
-                )}
-                <div className="pcs-scrub">
-                  <button type="button" onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'}>
-                    {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-                  </button>
-                  <time>{formatDuration(cur)}</time>
-                  <input
-                    className="pcs-range"
-                    type="range"
-                    min={0}
-                    max={total || 1}
-                    step={0.05}
-                    value={Math.min(cur, total || 1)}
-                    aria-label="Seek"
-                    style={{ '--pcs-fill': framePct(total ? (cur / total) * 100 : 0) }}
-                    onChange={(e) => {
-                      const t = Number(e.target.value);
-                      setCur(t);
-                      if (previewVideoRef.current) previewVideoRef.current.currentTime = t;
-                    }}
-                  />
-                  <time>{formatDuration(total)}</time>
-                  <button type="button" onClick={() => setMuted((m) => !m)} aria-label={muted ? 'Unmute' : 'Mute'}>
-                    {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-                  </button>
-                </div>
-              </>
+          <div className="end">
+            {!previewFailed && (
+              <button type="button" className="pcs-ico" onClick={() => setMuted((m) => !m)} aria-label={muted ? 'Unmute' : 'Mute'}>
+                {muted ? <VolumeX /> : <Volume2 />}
+              </button>
             )}
           </div>
         </div>
 
-        <div className="pcs-deck">
+        {!previewFailed && !playing && (
+          <button type="button" onClick={togglePlay} aria-label="Play preview" className="pcs-playbtn">
+            <Play size={26} fill="currentColor" style={{ marginLeft: 3 }} />
+          </button>
+        )}
+
+        <div className="pcs-bottom">
           {fileError && <p className="pcs-error" role="alert">{fileError}</p>}
+          {!previewFailed && (
+            <div className="pcs-scrub">
+              <button type="button" className="pcs-ico" onClick={togglePlay} aria-label={playing ? 'Pause' : 'Play'} style={{ width: 36, height: 36 }}>
+                {playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
+              </button>
+              <time>{formatDuration(cur)}</time>
+              <input
+                className="pcs-range"
+                type="range"
+                min={0}
+                max={total || 1}
+                step={0.05}
+                value={Math.min(cur, total || 1)}
+                aria-label="Seek"
+                style={{ '--pcs-fill': framePct(total ? (cur / total) * 100 : 0) }}
+                onChange={(e) => {
+                  const t = Number(e.target.value);
+                  setCur(t);
+                  if (previewVideoRef.current) previewVideoRef.current.currentTime = t;
+                }}
+              />
+              <time>{formatDuration(total)}</time>
+            </div>
+          )}
           <div className="pcs-actions">
-            <button type="button" onClick={onRetake} className="pcs-pill"><RotateCcw size={16} /> Retake</button>
-            <button type="button" onClick={onTrim} className="pcs-pill"><Scissors size={16} /> Trim</button>
+            <div className="tools">
+              <button type="button" onClick={onRetake} className="pcs-ico"><RotateCcw /><span className="cap">Retake</span></button>
+              <button type="button" onClick={onTrim} className="pcs-ico"><Scissors /><span className="cap">Trim</span></button>
+            </div>
             <button type="button" onClick={onNext} className="pcs-pill primary">Next <ArrowRight size={18} /></button>
           </div>
         </div>
@@ -528,6 +569,8 @@ export default function PitchCameraStage({
   // ================= CAMERA =================
   const cameraBlocked = camState !== 'ready' && camState !== 'opening';
   const frac = isRecording ? Math.min(1, elapsed / MAX_RECORD_SECONDS) : 0;
+  const coverFits = Math.abs(canvasAr - screenAr) < 0.06; // same shape as the screen: fill it, nothing cropped away
+  const idle = !isRecording && count === null;
   const hint = count !== null
     ? 'Tap to cancel'
     : paused
@@ -539,16 +582,22 @@ export default function PitchCameraStage({
           : '';
 
   return (
-    <div className="pcs">
+    <div className={`pcs ${isRecording ? 'is-rec' : ''}`} ref={rootRef}>
       {/* the stream source stays hidden; the canvas is what is shown and recorded */}
       <video ref={videoRef} className="hidden" style={{ display: 'none' }} autoPlay playsInline muted />
+      <canvas ref={canvasRef} className={`pcs-canvas ${coverFits ? '' : 'is-contain'}`} />
+      <div className="pcs-scrim-top" />
+      <div className="pcs-scrim-bottom" />
+      <div className="pcs-brackets" aria-hidden="true">
+        <span className="pcs-corner tl" /><span className="pcs-corner tr" /><span className="pcs-corner bl" /><span className="pcs-corner br" />
+      </div>
 
-      <div className="pcs-head">
-        {!isRecording && count === null ? (
-          <button type="button" onClick={onClose} aria-label="Close" className="pcs-iconbtn"><ArrowLeft size={20} /></button>
-        ) : <div className="pcs-head-spacer" aria-hidden="true" />}
+      <div className="pcs-top">
+        {idle ? (
+          <button type="button" onClick={onClose} aria-label="Close" className="pcs-ico"><ArrowLeft /></button>
+        ) : <div style={{ width: 44 }} aria-hidden="true" />}
 
-        <div className="pcs-title">
+        <div className="grow">
           {isRecording ? (
             <span className={`pcs-recpill ${paused ? 'is-paused' : ''}`}>
               <i />
@@ -557,84 +606,87 @@ export default function PitchCameraStage({
             </span>
           ) : (
             <>
-              <h2>Record Your Pitch</h2>
-              <span className="pcs-eyebrow">Pitchin</span>
+              <h2 className="pcs-title">Record Your Pitch</h2>
+              <span className="pcs-sub">Pitchin</span>
             </>
           )}
         </div>
 
-        {!isRecording && count === null && camState === 'ready' ? (
-          <button
-            type="button"
-            onClick={toggleCountdown}
-            aria-pressed={useCountdown}
-            aria-label={useCountdown ? '3 second countdown on' : '3 second countdown off'}
-            className="pcs-iconbtn pcs-timerchip"
-          >
-            <Timer size={20} />
-            {useCountdown && <b>3s</b>}
-          </button>
-        ) : <div className="pcs-head-spacer" aria-hidden="true" />}
-      </div>
-
-      <div className="pcs-stagewrap">
-        <div className={`pcs-frame ${isRecording ? 'is-rec' : ''}`} style={{ '--pcs-ar': shape === 'landscape' ? 16 / 9 : 9 / 16 }}>
-          <canvas ref={canvasRef} className="pcs-canvas" />
-          <div className="pcs-vignette" />
-          <span className="pcs-corner tl" /><span className="pcs-corner tr" /><span className="pcs-corner bl" /><span className="pcs-corner br" />
-
-          {camState === 'opening' && (
-            <div className="pcs-overlay">
-              <Loader2 size={30} className="animate-spin" color="#e6c980" aria-label="Opening camera" />
-            </div>
-          )}
-
-          {count !== null && (
-            <div className="pcs-overlay" aria-live="assertive">
-              <div key={count} className="pcs-count">{count}</div>
-            </div>
-          )}
-
-          {paused && (
-            <div className="pcs-overlay">
-              <div className="pcs-paused">Paused<small>Take a breath</small></div>
-            </div>
-          )}
-
-          {camState === 'ready' && (
-            <div className="pcs-meter" aria-hidden="true">
-              <Mic size={14} />
-              <div className="pcs-meter-track"><div ref={meterRef} className="pcs-meter-fill" /></div>
-            </div>
-          )}
-
-          {cameraBlocked && (
-            <div className="pcs-blocked">
-              <Camera size={34} color="#c4a052" />
-              <p>{CAMERA_PROBLEM[camState]}</p>
-              {(camState === 'denied' || camState === 'error') && (
-                <button type="button" onClick={() => openCamera(facing)} className="pcs-pill">Try again</button>
-              )}
-              <label className="pcs-pill primary" style={{ flex: 'none' }}>
-                <Smartphone size={16} /> Use phone camera
-                <input type="file" accept="video/*" capture={facing === 'environment' ? 'environment' : 'user'} onChange={handleFile} className="hidden" style={{ display: 'none' }} />
-              </label>
-            </div>
+        <div className="end">
+          {idle && camState === 'ready' && (
+            <>
+              <button
+                type="button"
+                onClick={toggleCountdown}
+                aria-pressed={useCountdown}
+                aria-label={useCountdown ? '3 second countdown on' : '3 second countdown off'}
+                className="pcs-ico"
+              >
+                <Timer />
+                {useCountdown && <span className="badge">3</span>}
+              </button>
+              <button
+                type="button"
+                onClick={switchCamera}
+                disabled={!hasMultipleCameras}
+                aria-label={`Switch to ${facing === 'user' ? 'back' : 'front'} camera`}
+                className="pcs-ico"
+              >
+                <SwitchCamera />
+              </button>
+            </>
           )}
         </div>
       </div>
 
-      <div className="pcs-deck">
+      {camState === 'opening' && (
+        <div className="pcs-overlay" style={{ background: 'transparent' }}>
+          <Loader2 size={30} className="animate-spin" color="#e6c980" aria-label="Opening camera" />
+        </div>
+      )}
+
+      {count !== null && (
+        <div className="pcs-overlay" aria-live="assertive">
+          <div key={count} className="pcs-count">{count}</div>
+        </div>
+      )}
+
+      {paused && (
+        <div className="pcs-overlay">
+          <div className="pcs-paused">Paused<small>Take a breath</small></div>
+        </div>
+      )}
+
+      {cameraBlocked && (
+        <div className="pcs-blocked">
+          <Camera size={34} color="#c4a052" />
+          <p>{CAMERA_PROBLEM[camState]}</p>
+          {(camState === 'denied' || camState === 'error') && (
+            <button type="button" onClick={() => openCamera(facing)} className="pcs-pill">Try again</button>
+          )}
+          <label className="pcs-pill primary">
+            <Smartphone size={16} /> Use phone camera
+            <input type="file" accept="video/*" capture={facing === 'environment' ? 'environment' : 'user'} onChange={handleFiles} className="hidden" style={{ display: 'none' }} />
+          </label>
+          <label className="pcs-pill">
+            <Film size={16} /> Choose from library
+            <input type="file" accept="video/*,image/*" multiple onChange={handleFiles} className="hidden" style={{ display: 'none' }} />
+          </label>
+        </div>
+      )}
+
+      <div className="pcs-bottom">
         {fileError && <p className="pcs-error" role="alert">{fileError}</p>}
         {readingFile && <p className="pcs-hint">Reading your video…</p>}
         {!fileError && !readingFile && hint && <p className="pcs-hint">{hint}</p>}
+        {camState === 'ready' && <div className="pcs-meter" aria-hidden="true"><div ref={meterRef} className="pcs-meter-fill" /></div>}
 
         <div className="pcs-row">
-          {/* choose a video from the gallery */}
-          <label className={`pcs-side left ${isRecording || count !== null ? 'is-hidden' : ''}`} aria-label="Choose a video from your phone">
-            <span className="pcs-iconbtn"><Film size={20} /></span>
-            <span className="pcs-cap">Library</span>
-            <input type="file" accept="video/*,.mp4,.mov,.m4v,.webm,.3gp,.mkv" onChange={handleFile} className="hidden" style={{ display: 'none' }} />
+          {/* choose a video, or pictures for a photo pitch */}
+          <label className={`pcs-ico left ${idle ? '' : 'is-hidden'}`} aria-label="Choose a video or pictures from your phone">
+            <Film />
+            <span className="cap">Library</span>
+            <input type="file" accept="video/*,image/*,.mp4,.mov,.m4v,.webm,.3gp,.mkv" multiple onChange={handleFiles} className="hidden" style={{ display: 'none' }} />
           </label>
 
           {/* record / stop, with the time-limit ring */}
@@ -652,25 +704,13 @@ export default function PitchCameraStage({
             <span className="core" />
           </button>
 
-          {/* flip camera, or pause while recording */}
+          {/* pause while recording */}
           {isRecording ? (
-            <button type="button" onClick={togglePause} className="pcs-side right" aria-label={paused ? 'Resume recording' : 'Pause recording'}>
-              <span className="pcs-iconbtn" aria-hidden="true">{paused ? <Play size={20} fill="currentColor" /> : <Pause size={20} fill="currentColor" />}</span>
-              <span className="pcs-cap">{paused ? 'Resume' : 'Pause'}</span>
+            <button type="button" onClick={togglePause} className="pcs-ico right" aria-label={paused ? 'Resume recording' : 'Pause recording'}>
+              {paused ? <Play fill="currentColor" /> : <Pause fill="currentColor" />}
+              <span className="cap">{paused ? 'Resume' : 'Pause'}</span>
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={switchCamera}
-              disabled={!hasMultipleCameras || camState !== 'ready' || count !== null}
-              className={`pcs-side right ${count !== null ? 'is-hidden' : ''}`}
-              aria-label={`Switch to ${facing === 'user' ? 'back' : 'front'} camera`}
-              style={!hasMultipleCameras || camState !== 'ready' ? { opacity: 0.35, cursor: 'default' } : undefined}
-            >
-              <span className="pcs-iconbtn" aria-hidden="true"><SwitchCamera size={20} /></span>
-              <span className="pcs-cap">Flip</span>
-            </button>
-          )}
+          ) : <span className="pcs-ico right is-hidden" aria-hidden="true" />}
         </div>
       </div>
     </div>

@@ -109,3 +109,50 @@ export function createBlobTask(run, { timeoutMs = 120000 } = {}) {
   });
   return task;
 }
+
+// ---------- pictures and audio (photo pitches) ----------
+
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'avif', 'heic', 'heif'];
+const AUDIO_EXTENSIONS = ['mp3', 'm4a', 'aac', 'wav', 'ogg', 'oga', 'opus', 'flac', 'weba'];
+
+export function isImageFile(file) {
+  if (!file) return false;
+  if ((file.type || '').startsWith('image/')) return true;
+  return IMAGE_EXTENSIONS.includes(extOfName(file.name));
+}
+
+export function isAudioFile(file) {
+  if (!file) return false;
+  if ((file.type || '').startsWith('audio/')) return true;
+  return AUDIO_EXTENSIONS.includes(extOfName(file.name));
+}
+
+/** Best audio-only recording format (WebM/Opus on Android and desktop, MP4/AAC on iPhone), or null for the default. */
+export function pickAudioFormat() {
+  if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return null;
+  return ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']
+    .find((m) => MediaRecorder.isTypeSupported(m)) || null;
+}
+
+/** Length of an audio file in seconds, or null when the browser can't read it. */
+export function probeAudio(blob, timeoutMs = 8000) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const el = new Audio();
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      el.removeAttribute('src');
+      el.load();
+      URL.revokeObjectURL(url);
+      resolve(value);
+    };
+    const timer = setTimeout(() => done(null), timeoutMs);
+    el.preload = 'metadata';
+    el.onloadedmetadata = () => done(Number.isFinite(el.duration) ? el.duration : null);
+    el.onerror = () => done(null);
+    el.src = url;
+  });
+}
