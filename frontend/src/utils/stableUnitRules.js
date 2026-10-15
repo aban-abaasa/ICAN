@@ -5,13 +5,36 @@
 
 const scaled = (n) => Number((Number(n) * 1e8).toFixed(4));
 export const floor8 = (n) => Math.floor(scaled(n)) / 1e8;
-const floor2 = (n) => Math.floor(Number((Number(n) * 100).toFixed(4))) / 100;
+const floorDp = (n, dp) => { const k = 10 ** dp; return Math.floor(Number((Number(n) * k).toFixed(4))) / k; };
 const positive = (n) => Number.isFinite(Number(n)) && Number(n) > 0;
 
 export const trim = (n, max = 6) => {
   const v = Number(n);
   if (!Number.isFinite(v)) return '—';
   return v.toLocaleString('en-US', { maximumFractionDigits: max, minimumFractionDigits: 0 });
+};
+
+// The decimal places a currency really has (the database cuts amounts the same way): yen, won, dong, rupiah and the CFA francs
+// have none, dinars have three, everything else two (UGX stays at two, as the wallets already hold it).
+const NO_DECIMALS = new Set(['JPY', 'KRW', 'VND', 'IDR', 'CLP', 'PYG', 'ISK', 'XAF', 'XOF', 'XPF', 'RWF', 'BIF', 'DJF', 'GNF', 'KMF', 'VUV']);
+const THREE_DECIMALS = new Set(['KWD', 'BHD', 'OMR', 'JOD', 'TND', 'IQD', 'LYD']);
+export const currencyDecimals = (code) => {
+  const c = String(code || '').toUpperCase();
+  return NO_DECIMALS.has(c) ? 0 : THREE_DECIMALS.has(c) ? 3 : 2;
+};
+
+// Money as a person reads it, in their own currency: the right symbol and decimals (a value under one shows four places, so a
+// pound's worth of ICEC-S reads 0.7562, not 0.76). Falls back to "1,234.50 XYZ" for a code the browser does not know.
+export const fmtMoney = (amount, currency, { precise = false } = {}) => {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return '—';
+  const dp = currencyDecimals(currency);
+  const places = precise && Math.abs(n) < 100 ? Math.max(dp, 4) : dp;
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: String(currency).toUpperCase(), minimumFractionDigits: places, maximumFractionDigits: places }).format(n);
+  } catch {
+    return `${trim(n, places)} ${currency}`;
+  }
 };
 
 // UGX per 1 of a currency, from the quote (the unit's price in UGX and in that currency). null when unknown.
@@ -26,7 +49,7 @@ export const rateToUgx = (quote, currency) => {
 export const previewBuy = ({ amount, currency, quote }) => {
   const rate = rateToUgx(quote, currency);
   if (!positive(amount) || rate == null) return null;
-  const local = floor2(amount);
+  const local = floorDp(amount, currencyDecimals(currency));
   const gross = floor8(local * rate);
   const fee = floor8((gross * Number(quote.fee_bps || 0)) / 10000);
   const net = gross - fee;
@@ -42,7 +65,7 @@ export const previewSell = ({ units, currency, quote }) => {
   const gross = floor8(u * Number(quote.unit_ugx));
   const fee = floor8((gross * Number(quote.fee_bps || 0)) / 10000);
   const net = gross - fee;
-  return { units: u, gross, fee, net, local: floor2(net / rate) };
+  return { units: u, gross, fee, net, local: floorDp(net / rate, currencyDecimals(currency)) };
 };
 
 export const validateBuy = ({ amount, balance, quote, currency }) => {

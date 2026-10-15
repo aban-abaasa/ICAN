@@ -13,12 +13,16 @@ psql -X -q -d postgres -c "DROP DATABASE IF EXISTS \"$DB\"" -c "CREATE DATABASE 
 for f in "$ROOT/supabase/tests/icaneracoin_chart/00_stub.sql" "$HERE/00_stub.sql"; do
   psql_db -f "$f" >/dev/null 2>"$WORK/err.txt" || { grep -v NOTICE "$WORK/err.txt" >&2; echo "$(basename "$f") failed" >&2; exit 2; }
 done
-MIG="$ROOT/supabase/migrations/20261024100000_icec_stable_in_system.sql"
-psql_db -f "$MIG" >/dev/null 2>"$WORK/err.txt" || { grep -v NOTICE "$WORK/err.txt" >&2; echo "migration failed" >&2; exit 2; }
-psql_db -f "$MIG" >/dev/null 2>&1 || { echo "re-applying the migration FAILED" >&2; exit 1; }
-echo "migration applied, and again (safe to run twice)."
+MIGS=("$ROOT/supabase/migrations/20261024100000_icec_stable_in_system.sql" "$ROOT/supabase/migrations/20261025100000_icec_stable_automatic.sql" "$ROOT/supabase/migrations/20261026100000_icec_stable_dollar_pool.sql" "$ROOT/supabase/migrations/20261027100000_icec_stable_global_currencies.sql")
+for MIG in "${MIGS[@]}"; do
+  psql_db -f "$MIG" >/dev/null 2>"$WORK/err.txt" || { grep -v NOTICE "$WORK/err.txt" >&2; echo "$(basename "$MIG") failed" >&2; exit 2; }
+done
+for MIG in "${MIGS[@]}"; do
+  psql_db -f "$MIG" >/dev/null 2>&1 || { echo "re-applying $(basename "$MIG") FAILED" >&2; exit 1; }
+done
+echo "the four migrations applied, and again (safe to run twice)."
 psql_db -c "UPDATE icanera_stable.settings SET fee_bps = 77" >/dev/null
-psql_db -f "$MIG" >/dev/null 2>&1
+for MIG in "${MIGS[@]}"; do psql_db -f "$MIG" >/dev/null 2>&1; done
 [ "$(psql_db -Atc "SELECT fee_bps FROM icanera_stable.settings")" = "77" ] || { echo "re-applying overwrote an administrator's setting" >&2; exit 1; }
 psql_db -c "UPDATE icanera_stable.settings SET fee_bps = 50" >/dev/null
 echo "an administrator's settings survive a re-run."

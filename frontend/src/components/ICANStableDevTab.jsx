@@ -8,8 +8,10 @@ import { trim } from '../utils/stableUnitRules';
  * reconcile that recomputes the books from the immutable ledgers. Talks to ican_stable_dev_*
  * (supabase/migrations/20261024100000_icec_stable_in_system.sql) with the panel's dev token, like every other tab.
  *
- * Trading ships OFF. Fund the vault first (UGX): a buy is refused unless the vault covers every ICEC-S in circulation plus the
- * stress margin, which is what makes the dollar promise a backed one.
+ * Swaps are ON by themselves and need nothing from an operator: what buyers pay in is converted at the live rate and held in the pool as US
+ * DOLLARS, what sellers take out comes from it, and the price is the full value or the pool's share per ICEC-S if the pool holds less
+ * (20261025100000_icec_stable_automatic.sql, 20261026100000_icec_stable_dollar_pool.sql).
+ * Everything here is optional: the emergency switch, a top-up that only helps holders, the limits, and a reconcile.
  */
 
 const card = { background: 'var(--dp-card)', borderColor: 'var(--dp-card-bd)' };
@@ -17,8 +19,7 @@ const field = { background: 'var(--dp-inner)', borderColor: 'var(--dp-inner-bd)'
 
 const SETTING_FIELDS = [
   ['fee_bps', 'Fee (basis points)', '50 = 0.5% on each buy and each sell, paid to the vault'],
-  ['stress_pct', 'Vault stress margin (%)', 'A buy needs vault >= what holders are owed x (1 + this)'],
-  ['max_trade_ugx', 'Largest swap (UGX)', 'Per swap, on the UGX value'],
+    ['max_trade_ugx', 'Largest swap (UGX)', 'Per swap, on the UGX value'],
   ['max_position_ugx', 'Largest holding (UGX)', 'Per user, on cost'],
   ['max_trades_per_minute', 'Swaps per minute', 'Per user'],
   ['rates_max_age_s', 'Rates must be fresher than (seconds)', 'The currency feed runs hourly; older than this and swaps pause'],
@@ -72,19 +73,18 @@ export default function ICANStableDevTab({ devToken }) {
   }, [form, ov]);
 
   if (loading) return <p className="text-sm" style={{ color: 'var(--dp-muted)' }}>Loading…</p>;
-  if (missing) return <p className="text-sm" style={{ color: 'var(--dp-muted)' }}>ICEC-S is not installed yet. Run supabase/migrations/20261024100000_icec_stable_in_system.sql (or ICEC_S_IN_SYSTEM_PASTE_INTO_SUPABASE.sql).</p>;
+  if (missing) return <p className="text-sm" style={{ color: 'var(--dp-muted)' }}>ICEC-S is not installed yet. Run ICEC_S_IN_SYSTEM_PASTE_INTO_SUPABASE.sql (the two ICEC-S migrations).</p>;
   if (!ov) return <p className="text-sm text-red-400">{error || 'Nothing to show.'}</p>;
 
   const s = ov.settings;
   const enabled = !!s.trading_enabled;
   const vault = ov.vault;
   const val = ov.value || {};
-  const thin = vault.cover_ratio != null && vault.cover_ratio < vault.required_ratio;
-  const unfunded = !(Number(vault.balance_ugx) > 0);
-
+  const thin = !!vault.pool_short;
+  
   const toggle = () => {
-    if (!enabled && !window.confirm('Turn ICEC-S swaps ON?\n\nUsers can buy and sell with their real wallet balances as soon as this is on. Is the vault funded, and have you checked the fee and limits?')) return;
-    act(() => devStable.setSettings(devToken, { trading_enabled: !enabled }), enabled ? 'ICEC-S swaps are OFF.' : 'ICEC-S swaps are ON.');
+    if (!enabled && !window.confirm('Resume ICEC-S swaps?')) return;
+    act(() => devStable.setSettings(devToken, { trading_enabled: !enabled }), enabled ? 'ICEC-S swaps are paused.' : 'ICEC-S swaps are ON.');
   };
 
   return (
@@ -98,13 +98,13 @@ export default function ICANStableDevTab({ devToken }) {
 
       <div className="rounded-xl border p-4 flex flex-wrap items-center justify-between gap-3" style={card}>
         <div>
-          <p className="font-semibold" style={{ color: 'var(--dp-txt)' }}>Swaps are {enabled ? 'ON' : 'OFF'}</p>
+          <p className="font-semibold" style={{ color: 'var(--dp-txt)' }}>Swaps are {enabled ? 'ON' : 'PAUSED'}</p>
           <p className="text-xs" style={{ color: 'var(--dp-muted)' }}>
-            {enabled ? 'Users can buy and sell ICEC-S. Turning it off pauses every swap at once.' : unfunded ? 'Nobody can swap. Fund the vault first, then turn this on.' : 'Nobody can swap. The vault is funded: you can turn it on.'}
+            {enabled ? 'Automatic: users swap with each other through the pool. This switch is only an emergency stop that pauses every swap at once.' : 'Paused. Nobody can swap until you turn it back on.'}
           </p>
         </div>
         <button type="button" disabled={busy} onClick={toggle}
-          className={`px-4 py-2 rounded-lg text-sm font-bold text-white ${enabled ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500'} disabled:opacity-50`}>{enabled ? 'Turn OFF' : 'Turn ON'}</button>
+          className={`px-4 py-2 rounded-lg text-sm font-bold text-white ${enabled ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500'} disabled:opacity-50`}>{enabled ? 'Pause' : 'Resume'}</button>
       </div>
 
       <div className="rounded-xl border p-4 space-y-2" style={card}>
@@ -120,23 +120,23 @@ export default function ICANStableDevTab({ devToken }) {
 
       <div className="rounded-xl border p-4 space-y-3" style={card}>
         <div className="flex items-center gap-2">
-          {thin || unfunded ? <AlertTriangle className="w-4 h-4 text-amber-400" /> : <ShieldCheck className="w-4 h-4 text-emerald-400" />}
-          <p className="font-semibold" style={{ color: 'var(--dp-txt)' }}>Vault (UGX)</p>
+          {thin ? <AlertTriangle className="w-4 h-4 text-amber-400" /> : <ShieldCheck className="w-4 h-4 text-emerald-400" />}
+          <p className="font-semibold" style={{ color: 'var(--dp-txt)' }}>Pool (held in US dollars){thin ? ' · below the full value per ICEC-S' : ''}</p>
         </div>
         <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-          <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>Balance</dt><dd style={{ color: 'var(--dp-txt)' }}>{trim(vault.balance_ugx, 2)}</dd></div>
+          <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>Balance (USD)</dt><dd style={{ color: 'var(--dp-txt)' }}>{trim(vault.balance_usd, 2)}</dd></div>
           <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>ICEC-S in circulation</dt><dd style={{ color: 'var(--dp-txt)' }}>{trim(vault.units_outstanding, 8)}</dd></div>
           <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>Cover</dt><dd className={thin ? 'text-amber-400' : ''} style={thin ? undefined : { color: 'var(--dp-txt)' }}>{vault.cover_ratio == null ? 'nothing owed' : `${vault.cover_ratio}x`}</dd></div>
-          <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>Needed for new buys</dt><dd style={{ color: 'var(--dp-txt)' }}>{vault.required_ratio}x</dd></div>
+          <div><dt className="text-xs" style={{ color: 'var(--dp-muted)' }}>Pool per ICEC-S</dt><dd style={{ color: 'var(--dp-txt)' }}>{vault.pool_per_unit_usd == null ? 'none held' : `$${trim(vault.pool_per_unit_usd, 4)}`}</dd></div>
         </dl>
         <div className="flex flex-wrap gap-2">
-          <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.-]/g, ''))} placeholder="UGX (negative to withdraw)" inputMode="decimal" className="w-48 rounded-lg border px-3 py-2 text-sm" style={field} />
+          <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.-]/g, ''))} placeholder="UGX to add (held as dollars)" inputMode="decimal" className="w-48 rounded-lg border px-3 py-2 text-sm" style={field} />
           <input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Reason (kept forever)" className="flex-1 min-w-[10rem] rounded-lg border px-3 py-2 text-sm" style={field} />
           <button type="button" disabled={busy || !Number(amount) || memo.trim().length < 3}
             onClick={() => act(async () => { const r = await devStable.adjustVault(devToken, Number(amount), memo.trim()); setAmount(''); setMemo(''); return r; }, 'Vault updated.')}
             className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 disabled:opacity-40">Record</button>
         </div>
-        <p className="text-xs" style={{ color: 'var(--dp-muted)' }}>Record only UGX you really hold in reserve. Every movement is a permanent ledger entry. A withdrawal that would leave the vault below what holders are owed plus the margin is refused.</p>
+        <p className="text-xs" style={{ color: 'var(--dp-muted)' }}>Optional. A top-up only ever helps holders (the pool per ICEC-S rises); record only UGX you really hold. Nothing can be taken out of the pool while anyone holds ICEC-S.</p>
       </div>
 
       <div className="rounded-xl border p-4 space-y-3" style={card}>
