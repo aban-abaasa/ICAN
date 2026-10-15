@@ -254,7 +254,8 @@ END $t$;
 DO $t$
 DECLARE r JSONB;
 BEGIN
-  INSERT INTO icanera_trading.data_terms_text (version, title, body) VALUES (2, 'Anonymous sector statistics', 'Version two of the wording, with more detail about retention.');
+  INSERT INTO icanera_trading.data_terms_text (version, title, body) VALUES (2, 'Anonymous sector statistics', 'Version two of the wording, with more detail about retention.')
+    ON CONFLICT (version) DO UPDATE SET body = EXCLUDED.body;   -- 20261024100000_sector_fixed_assets.sql ships a draft v2
   UPDATE icanera_trading.sector_settings SET current_terms_version = 2;
   PERFORM t.sale('v2a', 1);
   PERFORM t.check('5.1 after the wording changes, a business that accepted v1 stops contributing', NOT EXISTS (SELECT 1 FROM t.events('v2a')));
