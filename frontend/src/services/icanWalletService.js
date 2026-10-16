@@ -109,6 +109,69 @@ export async function transferFromBusinessWallet({ businessProfileId, recipientU
   return data;
 }
 
+/**
+ * Is the signed-in user an administrator of this business (owner, a qualifying
+ * co-owner or a manager)? Only administrators can approve a business-wallet
+ * payment. The database is the authority; if it can't be asked we fall back to
+ * "is this the profile's owner", which is the common case and never over-grants
+ * (the server re-checks every approval anyway).
+ */
+export async function isBusinessWalletAdmin(businessProfileId, { ownerUserId = null, currentUserId = null } = {}) {
+  try {
+    const { data, error } = await supabase.rpc('ican_business_admin', {
+      p_business_profile_id: businessProfileId,
+    });
+    if (!error && typeof data === 'boolean') return data;
+  } catch {
+    // fall through to the owner check
+  }
+  return Boolean(ownerUserId && currentUserId && ownerUserId === currentUserId);
+}
+
+/**
+ * Pay IcanEra coin OUT of a business wallet, to a person or to another
+ * business. The database queues every business-wallet payment for
+ * administrator approval with the business-wallet PIN. When the signed-in user
+ * is that administrator we submit and approve in one step (one PIN), so an
+ * owner pays straight away; anyone else — e.g. an assigned finance user —
+ * just submits the request and the administrator approves it later.
+ *
+ * If the request was created but the approval step fails (wrong PIN, not
+ * enough balance, …) the server leaves it pending or rejects it, depending on
+ * why; either way the thrown error carries `requestId` so the caller can point
+ * the person at the request instead of implying nothing happened.
+ *
+ * @returns {Promise<{status: 'completed'|'pending_approval', transactionId: string, message?: string}>}
+ */
+export async function sendFromBusinessWallet({
+  businessProfileId, recipientUserId = null, recipientBusinessProfileId = null,
+  amount, note = '', referenceId = null, pin, isAdmin = false,
+}) {
+  if (!recipientUserId && !recipientBusinessProfileId) throw new Error('Choose who to pay.');
+
+  const request = await transferFromBusinessWallet({
+    businessProfileId, recipientUserId, recipientBusinessProfileId,
+    amount, note, referenceId, pin,
+  });
+  const transactionId = request.transaction_id;
+
+  if (!isAdmin) {
+    return {
+      status: 'pending_approval',
+      transactionId,
+      message: request.message || 'Payment request submitted. The business administrator must approve it with the business-wallet PIN.',
+    };
+  }
+
+  try {
+    const approved = await approveBusinessWalletTransaction(transactionId, 'approved', pin);
+    return { status: approved.status === 'completed' ? 'completed' : 'pending_approval', transactionId };
+  } catch (error) {
+    error.requestId = transactionId;
+    throw error;
+  }
+}
+
 export async function setBusinessWalletPin(businessProfileId, pin) {
   const { data, error } = await supabase.rpc('set_pitchin_business_wallet_pin', {
     p_business_profile_id: businessProfileId,
@@ -339,6 +402,7 @@ export async function sendFiatToMobileMoney({
   recipientPhone,
   network, // 'MTN' | 'AIRTEL'
   note = '',
+  purpose = 'send', // 'withdraw' = cashing out to the sender's own number, which a plain send refuses
 }) {
   const { data, error } = await supabase.functions.invoke('flutterwave-momo-send', {
     body: {
@@ -347,6 +411,7 @@ export async function sendFiatToMobileMoney({
       recipient_phone: recipientPhone,
       recipient_network: network,
       note,
+      purpose,
     },
   });
   if (error) throw new Error(await functionErrorMessage(error, 'Transfer failed'));
@@ -434,6 +499,8 @@ export default {
   getBusinessWalletNotifications,
   markBusinessWalletNotificationRead,
   transferFromBusinessWallet,
+  sendFromBusinessWallet,
+  isBusinessWalletAdmin,
   approveBusinessWalletTransaction,
   setBusinessWalletPin,
   getWallet,
