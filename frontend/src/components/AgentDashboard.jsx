@@ -442,7 +442,7 @@ const AgentDashboard = () => {
           setNotification({
             type: 'success',
             title: '✅ IcanEra Business Transfer Successful',
-            message: `${confirmationData.icanAmount.toFixed(4)} IcanEra sent to ${confirmationData.customerName}. The business received ${Number(result.business_received || 0).toFixed(4)} IcanEra after tithe.`
+            message: `${confirmationData.icanAmount.toFixed(4)} IcanEra sent to ${confirmationData.customerName}. The business received ${Number(result.business_received || 0).toFixed(4)} IcanEra.`
           });
           setCashOutForm({ userAccountId: '', amount: '', currency: localCurrency, phoneNumber: '' });
           setCashOutAccountKind('ican');

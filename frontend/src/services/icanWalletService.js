@@ -6,7 +6,8 @@
  * mirrors those three apps' icanWalletService so buy / sell / send-out work
  * identically everywhere. Distinct from the older icanCoinService.js, which
  * is a separate legacy wallet system used elsewhere in this app.
- * 1 ICAN = 5,000 UGX floor price. 10% tithe is auto-deducted on all earnings.
+ * 1 ICAN = 5,000 UGX floor price. The wallet takes no tithe — tithe lives only in
+ * the Tithe tab (church giving).
  */
 
 import { supabase } from '../lib/supabase/client';
@@ -163,7 +164,6 @@ export async function getBalance(userId) {
     address: wallet?.wallet_address ?? null,
     totalEarned: wallet?.total_earned ?? 0,
     totalSpent: wallet?.total_spent ?? 0,
-    totalTithe: wallet?.total_tithe_paid ?? 0,
   };
 }
 
