@@ -10,10 +10,12 @@ import {
 } from 'lightweight-charts';
 import { TIMEFRAMES, toSeries, fillGaps, aggregateSeries, smaSeries, rsiSeries, trendChannel, channelValue } from '../utils/candleSeries';
 import DiamondChartBackdrop from './DiamondChartBackdrop';
-import { supabase } from '../lib/supabase/client';
 import { CHART_PALETTES as PALETTES } from './chartPalettes';
 import { LineStyleEditor } from './chartLineStyles';
+import { ChartScrollStrip, ChartPeriodPicker } from './ChartRangeControls';
 import { sanitizeLineStyles } from '../utils/lineStyles';
+import { ROLLING_RANGES, rangeFromKey, yearRange, monthRange, yearsAvailable, bucketName } from '../utils/chartRanges';
+import { coinHistory } from '../services/chartHistorySources';
 
 // The icaneracoin trading chart: true OHLC candlesticks (body + wicks) on a TradingView-style canvas, with a
 // crosshair and OHLC read-out, volume histogram, 20/50 moving-average overlays, an RSI pane, timeframe
@@ -25,23 +27,25 @@ import { sanitizeLineStyles } from '../utils/lineStyles';
 
 const DASH = { solid: LineStyle.Solid, dashed: LineStyle.Dashed, dotted: LineStyle.Dotted, long: LineStyle.LargeDashed };
 const LINE_HIT_PX = 12; // how close a tap must be to a trading line to select it
-// History ranges: the period asked for and the candle size it is drawn in (about 100-400 candles each).
-const HISTORY_RANGES = [
-  { id: '1w', label: '1W', title: 'Last week, hourly candles', days: 7, bucket: 3600 },
-  { id: '1m', label: '1M', title: 'Last month, 4-hour candles', days: 30, bucket: 14400 },
-  { id: '1y', label: '1Y', title: 'Last year, daily candles', days: 365, bucket: 86400 },
-  { id: 'all', label: 'All', title: 'Everything, weekly candles', days: 3650, bucket: 604800 },
-];
+// History ranges (1W / 1M / 3M / 1Y / All and any year or month) come from utils/chartRanges: the candle size is chosen
+// from the period and the screen width, so a year on a small phone is weekly candles and on a desktop daily ones.
 
 const LINE_EXTEND_BARS = 8; // the channel runs on past the last candle, like a hand-drawn trend line
 
+// Axis labels. The time scale reports what each tick marks: 0 year, 1 month, 2 day, 3+ a time of day.
 const localTick = (time, type) => {
   const d = new Date(time * 1000);
-  return type <= 2
-    ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    : d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  if (type === 0) return String(d.getFullYear());
+  if (type === 1) return d.toLocaleDateString(undefined, { month: 'short' });
+  if (type === 2) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 };
-const localStamp = (time) => new Date(time * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+// The crosshair's time stamp. A history view names the year (it may be a past one) and, for day-sized candles, drops the clock.
+const makeStamp = (bucket, withYear) => (time) => {
+  const d = new Date(time * 1000);
+  const date = { month: 'short', day: 'numeric', ...(withYear ? { year: 'numeric' } : {}) };
+  return bucket >= 86400 ? d.toLocaleDateString(undefined, date) : d.toLocaleString(undefined, { ...date, hour: '2-digit', minute: '2-digit' });
+};
 
 const precisionFor = (price) => (price < 1 ? 6 : price < 100 ? 4 : 2);
 const fmtPrice = (n, digits = 2) => (Number.isFinite(n) ? n.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits }) : '—');
@@ -133,8 +137,9 @@ const IcanTradingChart = ({
   symbol = 'ICAN / UGX',
   // The timeframe the chart opens on. A slow-moving series (ICEC-S, recorded every minute) reads best on 1h; the coin itself on 5m.
   initialTimeframe = '5m',
-  // Offer the 1W / 1M / 1Y / All history buttons. Only for the coin's own chart: they read the coin's stored
-  // candles, so a sector index or stable-coin chart leaves this off.
+  // Offer the 1W / 1M / 3M / 1Y / All buttons and the year / month picker. `true` reads the coin's stored candles; a
+  // chart of another series passes its own source (services/chartHistorySources: stableHistory for ICEC-S). A chart that
+  // has no stored history of its own (a sector index) leaves this off.
   history = false,
   emptyNote = 'Candles appear as soon as icaneracoin moves — nothing here is simulated.',
 }) => {
@@ -171,35 +176,66 @@ const IcanTradingChart = ({
     return full ? (narrow ? 48 : 120) : (narrow ? 40 : 80);
   };
 
-  // History range: 'live' is the normal chart (recent 5-minute candles rolled up by the timeframe buttons). A range
-  // (week / month / year / all) asks the server for the whole period already rolled into candles of a fitting size.
-  const [rangeId, setRangeId] = useState('live');
-  const [histRows, setHistRows] = useState([]);
+  // History range: 'live' is the normal chart (recent candles rolled up by the timeframe buttons). A range (week / month /
+  // 3 months / year / all, or a picked year or month) asks the source for the whole period already rolled into candles
+  // of a fitting size. A range that ends now (everything but a finished past year or month) refreshes quietly each minute.
+  const source = history ? (history === true ? coinHistory : history) : null;
+  const [rangeKey, setRangeKey] = useState('live');
+  const [rangeTick, setRangeTick] = useState(0);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [bounds, setBounds] = useState(null); // { first, last } of the stored data, read the first time the picker opens
+  const [hist, setHist] = useState({ id: '', rows: [] }); // the rows fetched, tagged with the range they belong to
   const [histState, setHistState] = useState('idle'); // idle | loading | ready | failed
-  const range = history ? HISTORY_RANGES.find((r) => r.id === rangeId) : null;
+  const fetchedRef = useRef('');
+  const range = useMemo(
+    () => (source ? rangeFromKey(rangeKey, Date.now(), narrow, source.minBucket) : null),
+    [source, rangeKey, rangeTick, narrow], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   useEffect(() => {
-    if (!range) { setHistState('idle'); return undefined; }
+    if (!source || !range) { setHistState('idle'); fetchedRef.current = ''; return undefined; }
     let alive = true;
-    setHistState('loading');
-    setHistRows([]);
-    supabase.rpc('ican_get_public_candle_history', { p_days: range.days, p_bucket_seconds: range.bucket })
-      .then(({ data, error }) => {
+    const id = `${range.key}:${range.bucket}`;
+    const quiet = fetchedRef.current === id; // a refresh of what is already drawn: no spinner, no flash
+    if (!quiet) setHistState('loading');
+    Promise.resolve(source.load(range))
+      .then((rows) => {
         if (!alive) return;
-        if (error || !Array.isArray(data)) { setHistState('failed'); return; }
-        setHistRows(data);
+        if (!Array.isArray(rows)) throw new Error('no history');
+        fetchedRef.current = id;
+        setHist({ id, rows });
         setHistState('ready');
       })
-      .catch(() => { if (alive) setHistState('failed'); });
+      .catch(() => { if (alive && !quiet) setHistState('failed'); });
     return () => { alive = false; };
-  }, [range]);
+  }, [source, range?.key, range?.bucket, rangeTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!range?.rolling) return undefined;
+    const id = setInterval(() => { if (document.visibilityState !== 'hidden') setRangeTick((t) => t + 1); }, 60000);
+    return () => clearInterval(id);
+  }, [range?.rolling]);
+  const openPicker = () => {
+    setToolsOpen(false);
+    setPickerOpen((v) => !v);
+    if (!bounds && source) Promise.resolve(source.bounds?.()).then((b) => { if (b) setBounds(b); }).catch(() => {});
+  };
+  const years = useMemo(() => yearsAvailable(bounds?.first), [bounds]);
+  const pickPeriod = (kind, year, month) => {
+    const r = kind === 'year' ? yearRange(year) : monthRange(year, month);
+    setRangeKey(r.key);
+    if (kind === 'month') setPickerOpen(false);
+  };
+  const yearPicked = !!range && /^[ym]\d{4}/.test(range.key);
 
   const tfBase = TIMEFRAMES.find((t) => t.id === tfId) || TIMEFRAMES[0];
-  const tf = range ? { id: range.id, label: range.label, seconds: range.bucket } : tfBase;
+  const tf = range ? { id: range.key, label: range.label, seconds: range.bucket } : tfBase;
+  const tfLabel = range ? `${range.label} · ${bucketName(range.bucket)}` : tf.label;
   // A steady 5-minute grid: quiet windows (the feed only stores candles where the price ticked) become flat candles.
+  const histId = range ? `${range.key}:${range.bucket}` : '';
   const base = useMemo(() => (range ? [] : fillGaps(toSeries(rows))), [rows, range]);
   const bars = useMemo(
-    () => (range ? toSeries(histRows) : aggregateSeries(base, tf.seconds)),
-    [base, tf.seconds, range, histRows],
+    // rows of another range (one frame after a switch) are never drawn under the new one
+    () => (range ? (hist.id === histId ? toSeries(hist.rows) : []) : aggregateSeries(base, tf.seconds)),
+    [base, tf.seconds, range, hist, histId],
   );
   const busy = range ? histState === 'loading' : loading;
   const last = bars.length ? bars[bars.length - 1] : null;
@@ -234,7 +270,7 @@ const IcanTradingChart = ({
         rightOffset: 6,
         tickMarkFormatter: localTick,
       },
-      localization: { timeFormatter: localStamp },
+      localization: { timeFormatter: makeStamp(0, false) },
       handleScale: { axisPressedMouseMove: true, mouseWheel: wheelZoom },
       // A vertical swipe on a phone scrolls the PAGE instead of being swallowed by the chart (the chart still
       // pans sideways and pinch-zooms), so the content below the chart stays reachable.
@@ -407,14 +443,24 @@ const IcanTradingChart = ({
       api.support.setData([]);
     }
 
-    const key = `${range ? range.id : tfId}:${bars.length ? 'data' : 'empty'}`;
+    const key = `${range ? histId : tfId}:${bars.length ? 'data' : 'empty'}`;
     if (bars.length && viewKeyRef.current !== key) {
       viewKeyRef.current = key;
       api.chart.timeScale().setVisibleLogicalRange({ from: Math.max(-2, bars.length - framedBars()), to: bars.length + LINE_EXTEND_BARS + 4 });
     }
     requestAnimationFrame(() => placeRef.current());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bars, tfId, range, full, tf.seconds, c]);
+  }, [bars, tfId, range, histId, full, tf.seconds, c]);
+
+  // Axis and crosshair wording follow the view: a history view names the year, and day-sized candles drop the clock.
+  useEffect(() => {
+    const api = apiRef.current;
+    if (!api) return;
+    api.chart.applyOptions({
+      localization: { timeFormatter: makeStamp(range ? range.bucket : 0, !!range) },
+      timeScale: { timeVisible: !range || range.bucket < 86400 },
+    });
+  }, [range?.bucket, !!range]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const api = apiRef.current;
@@ -486,59 +532,91 @@ const IcanTradingChart = ({
       <DiamondChartBackdrop theme={theme} />
       {full && (
         <div
-          className="relative z-10 flex flex-nowrap items-center gap-x-2 whitespace-nowrap border-b px-2 py-2 text-xs backdrop-blur-sm sm:gap-x-3 sm:px-3"
+          className="relative z-10 flex items-center gap-2 border-b px-2 py-1.5 text-xs backdrop-blur-sm sm:px-3"
           style={{ background: c.barBg, borderColor: c.barBorder }}
         >
-          <div className="flex shrink-0 items-center gap-0.5 rounded-md p-0.5" style={{ background: c.tabsBg }} role="tablist" aria-label="Timeframe">
-            {TIMEFRAMES.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={!range && t.id === tfId}
-                onClick={() => { setTfId(t.id); setRangeId('live'); }}
-                className="rounded px-2.5 py-1 font-semibold transition-colors"
-                style={!range && t.id === tfId ? { background: c.tabOnBg, color: c.tabOnText } : { color: c.soft }}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          {history && (
-            <div className="flex shrink-0 items-center gap-0.5 rounded-md p-0.5" style={{ background: c.tabsBg }} role="tablist" aria-label="History range">
-              {HISTORY_RANGES.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={rangeId === r.id}
-                  title={r.title}
-                  onClick={() => setRangeId(r.id)}
-                  className="rounded px-2.5 py-1 font-semibold transition-colors"
-                  style={rangeId === r.id ? { background: c.tabOnBg, color: c.tabOnText } : { color: c.soft }}
-                >
-                  {r.label}
+          {/* Periods and tools: one row that scrolls sideways, so nothing is cut off on a 320px phone. */}
+          <ChartScrollStrip activeKey={range ? range.key : tfId} className="min-w-0 flex-1 snap-x">
+            <div className="flex w-max items-center gap-1.5 whitespace-nowrap">
+              <div className="flex shrink-0 items-center gap-0.5 rounded-md p-0.5" style={{ background: c.tabsBg }} role="tablist" aria-label="Candle size">
+                {TIMEFRAMES.map((t) => {
+                  const on = !range && t.id === tfId;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={on}
+                      data-active={on}
+                      onClick={() => { setTfId(t.id); setRangeKey('live'); setPickerOpen(false); }}
+                      className="min-h-[36px] min-w-[40px] snap-center rounded px-2.5 font-semibold transition-colors"
+                      style={on ? { background: c.tabOnBg, color: c.tabOnText } : { color: c.soft }}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {source && (
+                <>
+                  <div className="flex shrink-0 items-center gap-0.5 rounded-md p-0.5" style={{ background: c.tabsBg }} role="tablist" aria-label="Period">
+                    {ROLLING_RANGES.map((r) => {
+                      const on = rangeKey === r.key;
+                      return (
+                        <button
+                          key={r.key}
+                          type="button"
+                          role="tab"
+                          aria-selected={on}
+                          data-active={on}
+                          title={r.title}
+                          onClick={() => { setRangeKey(r.key); setPickerOpen(false); }}
+                          className="min-h-[36px] min-w-[40px] snap-center rounded px-2.5 font-semibold transition-colors"
+                          style={on ? { background: c.tabOnBg, color: c.tabOnText } : { color: c.soft }}
+                        >
+                          {r.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-expanded={pickerOpen}
+                    data-active={yearPicked}
+                    onClick={openPicker}
+                    title="Pick any year or month"
+                    className="min-h-[36px] shrink-0 snap-center rounded-md border px-2.5 font-semibold"
+                    style={yearPicked ? { background: c.tabOnBg, color: c.tabOnText, borderColor: c.tabOnBg } : chip(pickerOpen)}
+                  >
+                    <span aria-hidden="true">📅</span> {yearPicked ? range.label : 'Year'}
+                  </button>
+                </>
+              )}
+              <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+                <button type="button" aria-pressed={showMA} onClick={() => setShowMA((v) => !v)} className="min-h-[36px] rounded-md border px-2.5 font-semibold transition-colors" style={chip(showMA)}>
+                  <span style={{ color: c.ma20 }}>MA20</span> <span style={{ color: c.ma50 }}>MA50</span>
                 </button>
-              ))}
+                <button type="button" aria-pressed={showVolume} onClick={() => setShowVolume((v) => !v)} className="min-h-[36px] rounded-md border px-2.5 font-semibold transition-colors" style={chip(showVolume)}>
+                  Volume
+                </button>
+                <button type="button" aria-pressed={showTrend} onClick={() => setShowTrend((v) => !v)} className="min-h-[36px] rounded-md border px-2.5 font-semibold transition-colors" style={chip(showTrend)}>
+                  Trend lines
+                </button>
+                <button type="button" onClick={resetView} className="min-h-[36px] rounded-md border px-2.5 font-semibold" style={{ borderColor: c.chipOffBorder, color: c.soft }}>
+                  Reset view
+                </button>
+              </div>
             </div>
-          )}
-          <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-            <button type="button" aria-pressed={showMA} onClick={() => setShowMA((v) => !v)} className="rounded-md border px-2.5 py-1 font-semibold transition-colors" style={chip(showMA)}>
-              <span style={{ color: c.ma20 }}>MA20</span> <span style={{ color: c.ma50 }}>MA50</span>
-            </button>
-            <button type="button" aria-pressed={showVolume} onClick={() => setShowVolume((v) => !v)} className="rounded-md border px-2.5 py-1 font-semibold transition-colors" style={chip(showVolume)}>
-              Volume
-            </button>
-            <button type="button" aria-pressed={showTrend} onClick={() => setShowTrend((v) => !v)} className="rounded-md border px-2.5 py-1 font-semibold transition-colors" style={chip(showTrend)}>
-              Trend lines
-            </button>
-          </div>
+          </ChartScrollStrip>
+
+          {/* Always in reach, outside the scrolling row. */}
           {allowPlacement && (
             <button
               type="button"
               aria-pressed={placeInternal}
               onClick={() => setPlaceInternal((v) => !v)}
-              className="shrink-0 rounded-md border px-2.5 py-1 font-semibold"
+              className="min-h-[36px] shrink-0 rounded-md border px-2.5 font-semibold"
               style={placeInternal ? { background: c.tabOnBg, color: c.tabOnText, borderColor: c.tabOnBg } : chip(false)}
               title="Tap the chart to book an order at that price"
             >
@@ -547,29 +625,22 @@ const IcanTradingChart = ({
           )}
           <button
             type="button"
-            onClick={resetView}
-            className="hidden shrink-0 rounded-md border px-2.5 py-1 font-semibold sm:block"
-            style={{ borderColor: c.chipOffBorder, color: c.soft }}
-          >
-            Reset view
-          </button>
-          <button
-            type="button"
             aria-expanded={toolsOpen}
             aria-haspopup="dialog"
-            onClick={() => setToolsOpen((v) => !v)}
-            className="shrink-0 rounded-md border px-2.5 py-1 font-semibold"
+            aria-label="Chart tools"
+            onClick={() => { setPickerOpen(false); setToolsOpen((v) => !v); }}
+            className="min-h-[36px] shrink-0 rounded-md border px-2.5 font-semibold"
             style={chip(toolsOpen)}
           >
-            ⚙ Tools
+            ⚙<span className="hidden min-[400px]:inline"> Tools</span>
           </button>
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 pl-1 text-[11px] sm:gap-2 sm:pl-2" style={{ color: c.soft }} role="status" aria-live="polite">
+          <div className="flex shrink-0 items-center gap-1.5 text-[11px] sm:gap-2" style={{ color: c.soft }} role="status" aria-live="polite">
             <span className="relative flex h-2 w-2" aria-hidden="true">
               {feedState === 'live' && <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: c.live }} />}
               <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: feedDot }} />
             </span>
-            <span className={`${feedState === 'live' ? 'hidden sm:inline' : 'inline'} font-semibold uppercase tracking-wide`} style={{ color: feedState === 'live' ? c.liveText : feedDot }}>{feedLabel}</span>
-            {feedState === 'live' && (
+            <span className={`${feedState === 'live' ? 'hidden sm:inline' : 'hidden min-[360px]:inline'} font-semibold uppercase tracking-wide`} style={{ color: feedState === 'live' ? c.liveText : feedDot }}>{feedLabel}</span>
+            {feedState === 'live' && !range && (
               <span className="hidden tabular-nums min-[400px]:inline"><span className="hidden sm:inline">candle closes in </span>{countdown(secondsLeft)}</span>
             )}
           </div>
@@ -607,14 +678,14 @@ const IcanTradingChart = ({
               // Phone: just the symbol and the close, so the first candles stay clear. Touch a candle for the full OHLC.
               <div className="flex flex-wrap items-center gap-x-2">
                 <span className="font-bold" style={{ color: c.strong }}>{symbol}</span>
-                <span style={{ color: c.muted }}>{tf.label}</span>
+                <span style={{ color: c.muted }}>{tfLabel}</span>
                 <b style={tone(up)}>{fmtPrice(shown.close, digits)}</b>
                 {change != null && <b style={tone(change >= 0)}>{change >= 0 ? '+' : ''}{change.toFixed(2)}%</b>}
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0">
                 <span className="font-bold" style={{ color: c.strong }}>{symbol}</span>
-                <span style={{ color: c.muted }}>{tf.label}</span>
+                <span style={{ color: c.muted }}>{tfLabel}</span>
                 <span>O <b style={tone(up)}>{fmtPrice(shown.open, digits)}</b></span>
                 <span>H <b style={tone(up)}>{fmtPrice(shown.high, digits)}</b></span>
                 <span>L <b style={tone(up)}>{fmtPrice(shown.low, digits)}</b></span>
@@ -644,24 +715,34 @@ const IcanTradingChart = ({
             {busy ? (
               <>
                 <div className="h-8 w-8 animate-spin rounded-full border-2" style={{ borderColor: c.spinTrack, borderTopColor: c.spinHead }} />
-                <p className="text-sm" style={{ color: c.soft }}>{range ? `Loading ${range.title.toLowerCase()}…` : 'Connecting to the market feed…'}</p>
+                <p className="text-sm" style={{ color: c.soft }}>{range ? `Loading ${range.title}…` : 'Connecting to the market feed…'}</p>
               </>
             ) : (
               <>
-                <p className="text-sm font-semibold" style={{ color: c.fg }}>{range ? (histState === 'failed' ? 'History could not be loaded' : 'No history for this range') : 'No trading activity yet'}</p>
-                <p className="max-w-xs text-xs" style={{ color: c.muted }}>{range ? (histState === 'failed' ? 'Try again in a moment, or switch back to a timeframe.' : 'Nothing was traded in this period.') : emptyNote}</p>
+                <p className="text-sm font-semibold" style={{ color: c.fg }}>{range ? (histState === 'failed' ? 'History could not be loaded' : 'No history for this period') : 'No trading activity yet'}</p>
+                <p className="max-w-xs text-xs" style={{ color: c.muted }}>{range ? (histState === 'failed' ? 'Check your connection and try again, or pick another period.' : 'No data was recorded in this period.') : emptyNote}</p>
               </>
             )}
           </div>
         )}
       </div>
+      {full && source && pickerOpen && (
+        <ChartPeriodPicker
+          c={c}
+          years={years}
+          firstTime={bounds?.first}
+          active={range?.key}
+          onPick={pickPeriod}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
       {full && toolsOpen && (
         <>
           <div className="absolute inset-0 z-[19]" onClick={() => setToolsOpen(false)} aria-hidden="true" />
           <div
             role="dialog"
             aria-label="Chart tools"
-            className="absolute right-2 top-[46px] z-20 max-h-[calc(100%-56px)] w-[min(23rem,calc(100%-1rem))] overflow-y-auto rounded-xl border p-3 shadow-xl"
+            className="absolute right-2 top-[52px] z-20 max-h-[calc(100%-60px)] w-[min(23rem,calc(100%-1rem))] overflow-y-auto rounded-xl border p-3 shadow-xl"
             style={{ background: c.card, borderColor: c.cardBorder, color: c.fg }}
           >
             <div className="mb-3 flex flex-wrap gap-1.5 sm:hidden">

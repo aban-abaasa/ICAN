@@ -90,7 +90,7 @@ const IcanPriceChartWidget = () => {
           {/* Straight on the page: no card, no border, no rounded corners. */}
           <div className="h-[380px] w-full md:h-[440px]">
             {fullScreen ? null : error ? failed : (
-              <IcanTradingChart rows={candles} loading={loading} theme={theme} wheelZoom={false} feedState={status} />
+              <IcanTradingChart rows={candles} loading={loading} theme={theme} wheelZoom={false} feedState={status} history />
             )}
           </div>
           <p className="mt-2 px-1 text-xs leading-5" style={{ color: 'var(--color-textSecondary)' }}>{summary}</p>
