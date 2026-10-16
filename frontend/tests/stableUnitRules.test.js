@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  floor8, rateToUgx, previewBuy, previewSell, validateBuy, validateSell, friendlyStableError, mapSwapResult, historyToRows, rateAge, currencyDecimals, fmtMoney, fmtUnits,
+  floor8, rateToUgx, sellFeeBps, previewBuy, previewSell, validateBuy, validateSell, friendlyStableError, mapSwapResult, historyToRows, rateAge, currencyDecimals, fmtMoney, fmtUnits,
 } from '../src/utils/stableUnitRules.js';
 
-const quote = { unit_ugx: 4022.802, fee_bps: 50, max_trade_ugx: 5000000, currencies: { UGX: 4022.802, USD: 1, KES: 127.633 } };
+const quote = { unit_ugx: 4022.802, fee_bps: 0, sell_fee_bps: 0, max_trade_ugx: 5000000, currencies: { UGX: 4022.802, USD: 1, KES: 127.633 } };
 
 test('rateToUgx: UGX per one unit of a currency, from the quote', () => {
   assert.equal(rateToUgx(quote, 'UGX'), 1);
@@ -22,7 +22,27 @@ test('previewBuy: NO fee for buying; all of it becomes units, rounded down (the 
   assert.equal(previewBuy({ amount: 5, currency: 'ZZZ', quote }), null);
 });
 
-test('previewSell: value less the 3% cash-out fee, paid into the wallet rounded down to 2 places', () => {
+test('sellFeeBps: no fee unless the developer panel set one (a missing, zero, negative or bad value all mean free)', () => {
+  assert.equal(sellFeeBps(quote), 0);
+  assert.equal(sellFeeBps({}), 0);
+  assert.equal(sellFeeBps(null), 0);
+  assert.equal(sellFeeBps({ sell_fee_bps: 0, fee_bps: 300 }), 0);   // the cash-out figure wins over the general one
+  assert.equal(sellFeeBps({ sell_fee_bps: -5 }), 0);
+  assert.equal(sellFeeBps({ sell_fee_bps: 'abc' }), 0);
+  assert.equal(sellFeeBps({ fee_bps: 300 }), 300);
+  assert.equal(sellFeeBps({ sell_fee_bps: '250' }), 250);
+});
+
+test('previewSell: with no fee (the default) the whole value is paid, rounded down to 2 places', () => {
+  const p = previewSell({ units: 10, currency: 'UGX', quote });
+  assert.equal(p.gross, 40228.02);
+  assert.equal(p.fee, 0);
+  assert.equal(p.net, 40228.02);
+  assert.equal(p.local, 40228.02);
+  assert.equal(previewSell({ units: 10, currency: 'UGX', quote: { unit_ugx: 4022.802, currencies: { UGX: 4022.802 } } }).fee, 0);   // an old quote with no fee fields
+});
+
+test('previewSell: when the developer panel sets a fee (3%), it comes off, paid into the wallet rounded down to 2 places', () => {
   const q3 = { ...quote, fee_bps: 300, sell_fee_bps: 300 };
   const p = previewSell({ units: 10, currency: 'UGX', quote: q3 });
   assert.equal(p.gross, 40228.02);

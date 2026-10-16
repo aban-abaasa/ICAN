@@ -65,13 +65,20 @@ export const previewBuy = ({ amount, currency, quote }) => {
   return { local, gross, fee, net, units };
 };
 
+// The cash-out fee in basis points (100 = 1%), as the quote reports it. There is NO fee unless the developer panel has set one, so a
+// quote without the field, or with 0, means free. Buying never has a fee.
+export const sellFeeBps = (quote) => {
+  const bps = Number(quote?.sell_fee_bps ?? quote?.fee_bps ?? 0);
+  return Number.isFinite(bps) && bps > 0 ? bps : 0;
+};
+
 // What a SELL of `units` pays into the wallet in `currency`.
 export const previewSell = ({ units, currency, quote }) => {
   const rate = rateToUgx(quote, currency);
   if (!positive(units) || rate == null) return null;
   const u = floor8(units);
   const gross = floor8(u * Number(quote.unit_ugx));
-  const fee = floor8((gross * Number(quote.sell_fee_bps ?? quote.fee_bps ?? 0)) / 10000);   // the cash-out fee
+  const fee = floor8((gross * sellFeeBps(quote)) / 10000);   // 0 unless a cash-out fee is set
   const net = gross - fee;
   return { units: u, gross, fee, net, local: floorDp(net / rate, currencyDecimals(currency)) };
 };

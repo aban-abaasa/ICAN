@@ -7,7 +7,7 @@ import { useInView } from './PublicSectorMarkets';
 import { CHART_PALETTES } from './chartPalettes';
 import { CountryService } from '../services/countryService';
 import { getQuote, getHistory } from '../services/stableUnitService';
-import { trim, fmtMoney, historyToRows, rateAge } from '../utils/stableUnitRules';
+import { trim, fmtMoney, historyToRows, rateAge, sellFeeBps } from '../utils/stableUnitRules';
 
 // ICEC-S, the stable form of icaneracoin, on the public /icaneracoin page. It lives INSIDE IcanEra (no blockchain, no gas): one
 // ICEC-S is a US dollar at the live rates icaneracoin itself is priced from, never below its start value grown by inflation, held
@@ -80,7 +80,8 @@ const PublicStableCoin = ({ theme = 'dark', skin: k, onAvailability, onLearn }) 
   const chips = [...new Set([currency, ...COMMON])].filter((x) => quote.currencies?.[x] != null);
   const local = quote.currencies?.[currency];
   const live = !quote.rates_stale;
-  const recipient = quote.fee_recipient;
+  const feeBps = sellFeeBps(quote);   // 0 (no fee) unless the developer panel has set a cash-out fee
+  const recipient = feeBps > 0 ? quote.fee_recipient : null;
 
   return (
     <section id="stable" ref={rootRef} aria-labelledby="stable-heading" className="mt-10 scroll-mt-16" data-testid="public-stable">
@@ -117,7 +118,10 @@ const PublicStableCoin = ({ theme = 'dark', skin: k, onAvailability, onLearn }) 
           </div>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg p-3 text-sm" style={field}>
             <dt style={sub}>To buy</dt><dd className="text-right font-semibold" style={{ color: c.pos }}>No fee</dd>
-            <dt style={sub}>To cash out</dt><dd className="text-right tabular-nums" style={{ color: c.strong }}>{trim(quote.sell_fee_bps / 100, 2)}%</dd>
+            <dt style={sub}>To cash out</dt>
+            {feeBps > 0
+              ? <dd className="text-right tabular-nums" style={{ color: c.strong }}>{trim(feeBps / 100, 2)}%</dd>
+              : <dd className="text-right font-semibold" style={{ color: c.pos }}>No fee</dd>}
             <dt style={sub}>Inflation floor</dt>
             <dd className="text-right tabular-nums" style={{ color: quote.protected ? c.pos : c.strong }}>UGX {trim(quote.floor_ugx, 0)}{quote.protected ? ' · holding' : ''}</dd>
             <dt style={sub}>Pool per ICEC-S</dt>
