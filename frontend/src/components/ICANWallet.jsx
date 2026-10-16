@@ -7752,6 +7752,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                           lineStyles={chartLineStyles}
                           onLineStyleChange={updateChartLineStyle}
                           onLineStylesReset={resetChartLineStyles}
+                          history
                         />
                       </div>
                     ) : candleLoading ? (
