@@ -2975,3 +2975,23 @@ select.rz-input { appearance: none; background-image: linear-gradient(45deg, tra
 @media (prefers-reduced-motion: reduce) {
   .icn-page-head, .icn-page-head::before, .icn-page-head::after, .icn-page-title, .icn-classic > *, .icn-menu-item, .icn-menu-item.is-active::before { animation: none !important; }
 }
+
+/* ---- Public business website + public IcanEra Coin page: full-screen on large displays ----
+   Page width is a rem cap that grows with the screen; the root font ramp is scoped to
+   these pages only (via :has on their marker class) so rem-based type scales with them. */
+.ican-public-wide { --ican-public-w: 64rem; max-width: var(--ican-public-w); }
+.ican-chart-page .ican-public-wide { --ican-public-w: 72rem; }
+@media (min-width: 1280px) { .ican-public-wide { --ican-public-w: 76rem; } .ican-chart-page .ican-public-wide { --ican-public-w: 84rem; } }
+@media (min-width: 1536px) { .ican-public-wide { --ican-public-w: 92rem; } .ican-chart-page .ican-public-wide { --ican-public-w: 100rem; } }
+@media (min-width: 1920px) { .ican-public-wide { --ican-public-w: 112rem; } .ican-chart-page .ican-public-wide { --ican-public-w: 120rem; } }
+@media (min-width: 2560px) { .ican-public-wide { --ican-public-w: 140rem; } .ican-chart-page .ican-public-wide { --ican-public-w: 150rem; } }
+@media (min-width: 3200px) { .ican-public-wide { --ican-public-w: 170rem; } .ican-chart-page .ican-public-wide { --ican-public-w: 180rem; } }
+@media (min-width: 1920px) { html:has(.icanera-nb), html:has(.ican-chart-page) { font-size: 106.25%; } }
+@media (min-width: 2200px) { html:has(.icanera-nb), html:has(.ican-chart-page) { font-size: 118.75%; } }
+@media (min-width: 2560px) { html:has(.icanera-nb), html:has(.ican-chart-page) { font-size: 125%; } }
+@media (min-width: 3200px) { html:has(.icanera-nb), html:has(.ican-chart-page) { font-size: 150%; } }
+@media (min-width: 3840px) { html:has(.icanera-nb), html:has(.ican-chart-page) { font-size: 175%; } }
+/* News / jobs lists: two columns on wide screens instead of one long strip */
+@media (min-width: 1920px) {
+  .icanera-nb .nb-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2.5rem; }
+}
