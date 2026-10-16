@@ -7,7 +7,7 @@ import LearnTab from './LearnTab';
 import { getQuote, getHistory, getMyPosition, getMyFills, getMyWallets, getHomeCurrency, swapStable } from '../services/stableUnitService';
 import { makeRequestIdStore } from '../utils/tradeResult';
 import {
-  trim, previewBuy, previewSell, validateBuy, validateSell, friendlyStableError, historyToRows, rateAge, currencyDecimals, fmtMoney, fmtUnits, rateToUgx,
+  trim, previewBuy, previewSell, validateBuy, validateSell, friendlyStableError, historyToRows, rateAge, currencyDecimals, fmtMoney, fmtUnits, rateToUgx, sellFeeBps,
 } from '../utils/stableUnitRules';
 
 // ICEC-S, the stable form of icaneracoin, inside IcanEra: no blockchain, no gas, no wallet to connect. One ICEC-S is worth
@@ -120,6 +120,7 @@ export default function StableInSystemPanel() {
   if (!quote.available) return <p className="text-sm text-slate-400">The live exchange rates are not available right now. Please try again shortly.</p>;
 
   const local = quote.currencies?.[currency];
+  const feeBps = sellFeeBps(quote);   // 0 (no fee) unless the developer panel has set a cash-out fee
   const status = quote.rates_stale ? { text: 'Rates updating', dot: 'bg-amber-400' } : { text: 'Live', dot: 'bg-emerald-400' };
   const noticeCls = { ok: 'bg-emerald-500/10 text-emerald-300', err: 'bg-red-500/10 text-red-300' };
 
@@ -130,8 +131,8 @@ export default function StableInSystemPanel() {
           { q: 'What is ICEC-S?', a: 'The stable form of icaneracoin. One ICEC-S is worth one US dollar. It lives inside IcanEra, so there is no blockchain, no gas fee and no outside wallet to connect.' },
           { q: 'Where does its price come from?', a: 'The same live currency rates icaneracoin uses, refreshed through the day, for about 120 currencies. The chart records its value every minute. It opens in the currency of the country you picked when you signed up (pounds, yen, euros, shillings, rupees and so on), and any wallet you hold shows the same value in its own currency.' },
           { q: 'How does it protect against inflation?', a: `It rises with the dollar when the shilling weakens, and it never goes below its start value grown by Uganda's yearly inflation (${trim(quote.inflation_pct, 2)}% now). Nobody can promise it will beat inflation by more than that.` },
-          { q: 'What backs it?', a: 'Dollars. When you buy, your money is converted at the live rate and held in one shared pool as US dollars; when you sell, the dollars come out of that pool. Because the pool and what it owes are both in dollars, a falling shilling cannot shrink what an ICEC-S is worth, and there is no company reserve to fund and nothing to switch on. Fees stay in the pool, so it only grows relative to what it owes. The one case where the pool can hold less than the full value is when the inflation floor sits above a plain dollar; the screen then shows the pool\'s share, and says so. It is not a bank deposit.' },
-          { q: 'What does it cost, and what are the limits?', a: `Buying is free. A ${trim(quote.sell_fee_bps / 100, 2)}% fee applies only when you cash out (sell ICEC-S back into your wallet), the same single cash-out fee as the rest of IcanEra${quote.fee_recipient ? `, and it goes to ${quote.fee_recipient}` : ''}. You can swap up to ${fmtMoney(quote.max_trade_ugx / (rateToUgx(quote, currency) || 1), currency, { tidy: true })} at a time. Swaps pause whenever the live rates are more than a few hours old.` },
+          { q: 'What backs it?', a: 'Dollars. When you buy, your money is converted at the live rate and held in one shared pool as US dollars; when you sell, the dollars come out of that pool. Because the pool and what it owes are both in dollars, a falling shilling cannot shrink what an ICEC-S is worth, and there is no company reserve to fund and nothing to switch on. The one case where the pool can hold less than the full value is when the inflation floor sits above a plain dollar; the screen then shows the pool\'s share, and says so. It is not a bank deposit.' },
+          { q: 'What does it cost, and what are the limits?', a: `${feeBps > 0 ? `Buying is free. A ${trim(feeBps / 100, 2)}% fee applies only when you cash out (sell ICEC-S back into your wallet)${quote.fee_recipient ? `, and it goes to ${quote.fee_recipient}` : ''}.` : 'There is no fee: buying and cashing out ICEC-S are both free.'} You can swap up to ${fmtMoney(quote.max_trade_ugx / (rateToUgx(quote, currency) || 1), currency, { tidy: true })} at a time. Swaps pause whenever the live rates are more than a few hours old.` },
         ]}
       />
 
@@ -205,11 +206,18 @@ export default function StableInSystemPanel() {
                 ) : (
                   <div className="flex items-baseline justify-between gap-3"><dt className="text-slate-400">You get about</dt><dd className="min-w-0 text-right font-semibold text-white">{fmtMoney(preview.local, currency)}</dd></div>
                 )}
-                <div className="flex items-baseline justify-between gap-3">
-                  <dt className="text-slate-400">{buy ? 'Fee' : `Cash-out fee (${trim(quote.sell_fee_bps / 100, 2)}%)`}</dt>
-                  <dd className={`text-right ${buy ? 'font-semibold text-emerald-300' : ''}`}>{buy ? 'None' : fmtMoney(preview.fee / (rateToUgx(quote, currency) || 1), currency, { precise: true })}</dd>
-                </div>
-                {!buy && quote.fee_recipient && <p className="pt-0.5 text-[11px] leading-snug text-slate-500">The cash-out fee goes to {quote.fee_recipient}.</p>}
+                {!buy && feeBps > 0 ? (
+                  <div className="flex items-baseline justify-between gap-3">
+                    <dt className="text-slate-400">{`Cash-out fee (${trim(feeBps / 100, 2)}%)`}</dt>
+                    <dd className="text-right">{fmtMoney(preview.fee / (rateToUgx(quote, currency) || 1), currency, { precise: true })}</dd>
+                  </div>
+                ) : (
+                  <div className="flex items-baseline justify-between gap-3">
+                    <dt className="text-slate-400">Fee</dt>
+                    <dd className="text-right font-semibold text-emerald-300">None</dd>
+                  </div>
+                )}
+                {!buy && feeBps > 0 && quote.fee_recipient && <p className="pt-0.5 text-[11px] leading-snug text-slate-500">The cash-out fee goes to {quote.fee_recipient}.</p>}
               </dl>
             )}
             {problem && <p className="text-sm text-amber-400" role="alert">{problem}</p>}
@@ -217,7 +225,7 @@ export default function StableInSystemPanel() {
 
             {reviewing ? (
               <div className="space-y-2">
-                <p className="text-sm text-white">{buy ? `Swap ${fmtMoney(preview?.local, currency)} for about ${fmtUnits(preview?.units)} ICEC-S? There is no fee for buying.` : `Sell ${fmtUnits(num)} ICEC-S for about ${fmtMoney(preview?.local, currency)}, after the ${trim(quote.sell_fee_bps / 100, 2)}% cash-out fee?`}</p>
+                <p className="text-sm text-white">{buy ? `Swap ${fmtMoney(preview?.local, currency)} for about ${fmtUnits(preview?.units)} ICEC-S? There is no fee for buying.` : `Sell ${fmtUnits(num)} ICEC-S for about ${fmtMoney(preview?.local, currency)}${feeBps > 0 ? `, after the ${trim(feeBps / 100, 2)}% cash-out fee` : '. There is no fee'}?`}</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setReviewing(false)} disabled={busy} className="rounded-lg border border-slate-600 py-2 text-sm text-slate-300">Back</button>
                   <button type="button" onClick={submit} disabled={busy} className="rounded-lg bg-amber-500 py-2 text-sm font-bold text-slate-900 disabled:opacity-50">{busy ? 'Working…' : 'Confirm'}</button>

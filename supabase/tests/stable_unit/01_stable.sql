@@ -74,7 +74,7 @@ BEGIN
   -- ============================================================ 6. a sell
   SELECT units INTO fx FROM icanera_stable.holdings WHERE user_id = t.u(1);
   r := t.swap(1, 'sell', 10, 'UGX', 'req-sell-00001');
-  PERFORM t.check('6.1 a sell pays the value less the 3% cash-out fee', (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = trunc((40228.02 - trunc(40228.02 * 300 / 10000, 8)), 2), r::TEXT);
+  PERFORM t.check('6.1 a sell pays the full value, with no fee (the default): 10 ICEC-S at 4,022.802 = 40,228.02', (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = 40228.02 AND (r ->> 'fee_ugx')::NUMERIC = 0, r::TEXT);
   PERFORM t.check('6.2 the units left are exact', (SELECT units FROM icanera_stable.holdings WHERE user_id = t.u(1)) = fx - 10);
   r := t.swap(1, 'sell', 100000, 'UGX', 'req-sell-00002');
   PERFORM t.check('6.3 you cannot sell more than you hold', r ->> 'code' = 'insufficient_units', r::TEXT);
@@ -100,8 +100,8 @@ BEGIN
   PERFORM t.check('8.2 a purchase at the new rate is priced at a full dollar and never dilutes the pool',
     (r ->> 'success')::BOOLEAN AND icanera_stable.vault_usd(400000) / icanera_stable.units_outstanding() >= nav_before - 0.000001, r::TEXT);
   r := t.swap(1, 'sell', 1, 'UGX', 'req-weak-00002');
-  PERFORM t.check('8.3 a holder selling one ICEC-S gets a full dollar (400,000 less the 3% cash-out fee = 388,000), straight from the pool',
-    (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = 388000, r::TEXT);
+  PERFORM t.check('8.3 a holder selling one ICEC-S gets a full dollar (400,000, no fee), straight from the pool',
+    (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = 400000, r::TEXT);
   SELECT * INTO pv FROM icanera_stable.pool_value();
   PERFORM t.check('8.4 ...and the pool still holds at least what it owes', pv.pool_usd >= icanera_stable.units_outstanding() * pv.price_usd - 0.00001);
   -- the other direction: the shilling strengthens until the inflation floor is above the plain dollar rate

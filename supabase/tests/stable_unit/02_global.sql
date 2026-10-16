@@ -23,12 +23,12 @@ BEGIN
   -- no GBP wallet yet: a sell creates it
   PERFORM t.check('11.4 a person with no pound wallet has none', NOT EXISTS (SELECT 1 FROM public.wallet_accounts WHERE user_id = t.u(20) AND currency = 'GBP'));
   r := t.swap(20, 'sell', 5, 'GBP', 'glob-sell-gbp1');
-  PERFORM t.check('11.5 selling into pounds creates the wallet and pays pence-exact: 5 dollars less the 3% fee = 4.85 dollars = 19,510.59 UGX = 3.66 GBP',
-    (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = 3.66 AND t.bal(20, 'GBP') = 3.66, r::TEXT);
+  PERFORM t.check('11.5 selling into pounds creates the wallet and pays pence-exact: 5 dollars (no fee) = 20,114.01 UGX = 3.78 GBP',
+    (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = 3.78 AND t.bal(20, 'GBP') = 3.78, r::TEXT);
 
   r := t.swap(20, 'sell', 2, 'JPY', 'glob-sell-jpy1');
-  PERFORM t.check('11.6 selling into yen pays WHOLE yen: 1.94 dollars = 7,804.2 UGX = 307 JPY, no fraction',
-    (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = 307 AND t.bal(20, 'JPY') = 307, r::TEXT);
+  PERFORM t.check('11.6 selling into yen pays WHOLE yen: 2 dollars = 8,045.604 UGX = 316 JPY, no fraction',
+    (r ->> 'success')::BOOLEAN AND (r ->> 'pay_amount')::NUMERIC = 316 AND t.bal(20, 'JPY') = 316, r::TEXT);
 
   UPDATE public.wallet_accounts SET balance = 5000 WHERE user_id = t.u(20) AND currency = 'JPY';
   r := t.swap(20, 'buy', 1000.75, 'JPY', 'glob-buy-jpy1');

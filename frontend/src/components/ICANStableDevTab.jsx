@@ -18,8 +18,8 @@ const card = { background: 'var(--dp-card)', borderColor: 'var(--dp-card-bd)' };
 const field = { background: 'var(--dp-inner)', borderColor: 'var(--dp-inner-bd)', color: 'var(--dp-txt)' };
 
 const SETTING_FIELDS = [
-  ['fee_bps', 'Cash-out fee (basis points)', '300 = 3%, charged only when someone sells ICEC-S back to their wallet. Buying is free. Paid to the platform fee business (GODMINDERA ORGANISATION (U) LTD, the recipient every platform fee uses); if that credit ever fails the fee stays in the pool'],
-    ['max_trade_ugx', 'Largest swap (UGX)', 'Per swap, on the UGX value'],
+  ['fee_bps', 'Cash-out fee (basis points, 0 = no fee)', 'Whole number, 0 to 1000. 0 = no fee (the default), 100 = 1%, 300 = 3%. Charged only when someone sells ICEC-S back to their wallet; buying is always free. Takes effect on the next swap and every ICEC-S screen follows. Paid to the platform fee business (GODMINDERA ORGANISATION (U) LTD, the recipient every platform fee uses); if that credit ever fails the fee stays in the pool'],
+  ['max_trade_ugx', 'Largest swap (UGX)', 'Per swap, on the UGX value'],
   ['max_position_ugx', 'Largest holding (UGX)', 'Per user, on cost'],
   ['max_trades_per_minute', 'Swaps per minute', 'Per user'],
   ['rates_max_age_s', 'Rates must be fresher than (seconds)', 'The currency feed refreshes at least hourly; older than this and swaps pause'],
@@ -144,7 +144,7 @@ export default function ICANStableDevTab({ devToken }) {
         <div className="grid gap-3 sm:grid-cols-2">
           {SETTING_FIELDS.map(([k, label, hint]) => (
             <label key={k} className="block text-xs" style={{ color: 'var(--dp-muted)' }}>{label}
-              <input value={form[k] ?? ''} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value.replace(/[^0-9.]/g, '') }))} inputMode="decimal" className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" style={field} />
+              <input value={form[k] ?? ''} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value.replace(k === 'fee_bps' ? /[^0-9]/g : /[^0-9.]/g, '') }))} inputMode="decimal" className="mt-1 w-full rounded-lg border px-3 py-2 text-sm" style={field} />
               <span className="block mt-0.5 text-[11px] opacity-80">{hint}</span>
             </label>
           ))}
