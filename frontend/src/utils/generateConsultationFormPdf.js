@@ -272,7 +272,7 @@ export const downloadBlankConsultationFormPdf = async ({ businessName, form, fie
     formName: form.name,
     subtitleLines: [form.description, 'Patient name: _______________________     Date: _______________'],
     entries,
-    footer: `Printed ${new Date().toLocaleString()} · Powered by IcanEra`,
+    footer: `Printed ${new Date().toLocaleString()} · Powered by IcanEra · A product of GODMINDERA ORGANISATION (U) LTD`,
     logo,
     qr
   });
@@ -311,7 +311,7 @@ export const downloadConsultationSubmissionPdf = async ({ businessName, formName
       `Submitted: ${new Date(submission.created_at).toLocaleString()} (${submission.submitted_via === 'public_link' ? 'via public link' : 'recorded by staff'})`
     ],
     entries: pdfEntries,
-    footer: `Printed ${new Date().toLocaleString()} · Powered by IcanEra`,
+    footer: `Printed ${new Date().toLocaleString()} · Powered by IcanEra · A product of GODMINDERA ORGANISATION (U) LTD`,
     logo,
     qr,
     attachments
@@ -353,7 +353,7 @@ export const downloadPublicConsultationSubmissionPdf = async ({ form, patient, r
     formName: form.formName,
     subtitleLines: [`Patient: ${patient.name}${contactLine ? ' · ' + contactLine : ''}`, patient.address ? `Address: ${patient.address}` : null, `Submitted: ${new Date().toLocaleString()}`],
     entries,
-    footer: 'Powered by IcanEra',
+    footer: 'Powered by IcanEra · A product of GODMINDERA ORGANISATION (U) LTD',
     logo,
     qr,
     attachments: preparedAttachments

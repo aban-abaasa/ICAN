@@ -230,7 +230,7 @@ const PublicStaffAttendanceCheckIn = () => {
           </div>
         )}
 
-        <p className="mt-6 text-center text-[11px] uppercase tracking-widest text-slate-500">Powered by IcanEra</p>
+        <p className="mt-6 text-center text-[11px] uppercase tracking-widest text-slate-500">Powered by IcanEra · A product of GODMINDERA ORGANISATION (U) LTD</p>
       </section>
     </main>
   );

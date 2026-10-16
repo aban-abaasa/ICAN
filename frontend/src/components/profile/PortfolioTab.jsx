@@ -902,7 +902,7 @@ export default function PortfolioTab() {
 
       <footer className="text-center pt-2">
         <div className="rz-rule" />
-        <p className="text-xs text-slate-500">Powered by <span className="rz-serif font-bold text-[color:var(--rz-gold-text)]">IcanEra</span></p>
+        <p className="text-xs text-slate-500">Powered by <span className="rz-serif font-bold text-[color:var(--rz-gold-text)]">IcanEra</span> · A product of GODMINDERA ORGANISATION (U) LTD</p>
       </footer>
 
       {showPreview && handle && <PublicPortfolioPage handle={handle} onClose={() => setShowPreview(false)} />}

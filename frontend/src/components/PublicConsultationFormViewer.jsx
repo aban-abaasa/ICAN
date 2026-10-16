@@ -438,7 +438,7 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
         </form>
 
         <footer className="text-center text-xs cf-text-faint pt-10 pb-6">
-          Powered by <IcanEraWordmark />
+          Powered by <IcanEraWordmark /> · A product of GODMINDERA ORGANISATION (U) LTD
         </footer>
       </div>
     </div>

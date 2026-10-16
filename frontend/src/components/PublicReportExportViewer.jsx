@@ -453,7 +453,7 @@ const PublicReportExportViewer = ({ shareToken }) => {
         )}
 
         <footer className="text-center text-xs rs-text-faint pt-12 pb-6">
-          Powered by <IcanEraWordmark />
+          Powered by <IcanEraWordmark /> · A product of GODMINDERA ORGANISATION (U) LTD
         </footer>
       </div>
     </div>
