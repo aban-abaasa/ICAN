@@ -46,7 +46,9 @@ import paymentMethodDetector from '../services/paymentMethodDetector';
 import agentService from '../services/agentService';
 import { walletAccountService, hashPIN, requestPinResetEmail } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
-import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFiatToMobileMoney, sendFiatToBank, detectUgandaMobileNetwork } from '../services/icanWalletService';
+import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFromBusinessWallet, isBusinessWalletAdmin, sendFiatToMobileMoney, sendFiatToBank, detectUgandaMobileNetwork } from '../services/icanWalletService';
+import { classifyRecipient } from '../utils/walletRouting';
+import { resolveRecipientWallet as lookupRecipientWallet, runCoinSend, describeSendError } from '../services/coinSendFlow';
 import { listUgandaBanks } from '../services/digitalCardService';
 import { payIcanRequest, parseIcanPayCode, getIcanPaymentRequest } from '../services/icanPaymentRequestService';
 import { getSupabaseClient } from '../lib/supabase/client';
@@ -81,6 +83,7 @@ import PINRecoveryModal from './PINRecoveryModal';
 import WalletAccessModal from './WalletAccessModal';
 import BusinessWalletAccessModal from './BusinessWalletAccessModal';
 import { usePinPrompt } from './PinPromptDialog';
+import SmartWithdrawPanel from './SmartWithdrawPanel';
 
 // Big balances (14,378,412 UGX) overflow the balance card, so the headline shows
 // them short: 1K, 14.38M, 5T. Under 1,000 it stays exact. Up to 2 decimals,
@@ -133,13 +136,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [sendForm, setSendForm] = useState({ recipient: '', amount: '', description: '' });
   const [sendMethod, setSendMethod] = useState('ican'); // 'ican' | 'mobile' | 'icaneracoin' — explicit choice, replaces the old recipient-string heuristic
   const [recipientAccountKind, setRecipientAccountKind] = useState('ican'); // 'ican' | 'biz' — explicit choice, replaces relying on the sender remembering to type a "BIZ-" prefix themselves
+  const [sendFrom, setSendFrom] = useState('personal'); // 'personal' | a business profile id — which wallet the money leaves
+  const [sendFromIsAdmin, setSendFromIsAdmin] = useState(null); // null until checked; only an administrator can approve a business-wallet payment
+  const [recipientPreview, setRecipientPreview] = useState(null); // { status: 'checking'|'found'|'notfound', name, accountType } for the recipient being typed
   const [sendBankCode, setSendBankCode] = useState('');
   const [sendBeneficiary, setSendBeneficiary] = useState('');
   const [bankList, setBankList] = useState([]);
   const [sendNetwork, setSendNetwork] = useState(null); // 'MTN' | 'AIRTEL' | null — null means auto-detect from the phone number; only set explicitly when detection can't tell (see detectUgandaMobileNetwork)
   const [receiveForm, setReceiveForm] = useState({ amount: '', description: '' });
   const [topupForm, setTopupForm] = useState({ amount: '', paymentInput: '', method: null, detectedMethod: null });
-  const [withdrawForm, setWithdrawForm] = useState({ method: '', phoneAccount: '', amount: '', bankName: '' });
   const [detectedPaymentMethod, setDetectedPaymentMethod] = useState(null);
   const [transactionInProgress, setTransactionInProgress] = useState(false);
   const [transactionResult, setTransactionResult] = useState(null);
@@ -289,7 +294,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   });
 
   // 💰 Unified Transaction System (Deposit/Withdraw for Users & Agents)
-  const [transactionHistory, setTransactionHistory] = useState([]);
   const [transactionInitiator, setTransactionInitiator] = useState('user'); // 'user' or 'agent'
   
   // 💵 Real Wallet Balances from Database
@@ -379,6 +383,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // Prefer a caller-supplied businessProfiles prop if one was actually passed;
   // otherwise fall back to what this component fetches for itself from Pitchin.
   const effectiveBusinessProfiles = (businessProfiles && businessProfiles.length > 0) ? businessProfiles : realBusinessProfiles;
+  // Business wallets a payment can leave from. Prefer the profiles this component
+  // loaded itself (they carry the IcanEra wallet); team members only have
+  // transaction-only access and the server rejects them, so they're left out.
+  const senderBusinessProfiles = (realBusinessProfiles.length > 0 ? realBusinessProfiles : effectiveBusinessProfiles)
+    .filter((p) => p.ican_wallet && !p.isTeamMember);
+  const sendFromBusiness = sendFrom === 'personal' ? null : (senderBusinessProfiles.find((p) => p.id === sendFrom) || null);
   const dropshipBusinessProfiles = effectiveBusinessProfiles.filter((p) => String(p.business_type || '').toLowerCase().includes('dropship'));
   const activeDropshipId = selectedDropshipId || dropshipBusinessProfiles[0]?.id || null;
   const isRestoringWalletHistoryRef = useRef(false);
@@ -1582,7 +1592,73 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // a personal/business fiat account number, just a different leading digit.
   const normalizeRecipientForKind = (value, kind) => String(value || '').trim();
 
-  const isBusinessWalletAddress = (value) => /^3\d{15}$/.test(String(value || '').trim());
+  // Opening Send or Withdraw: load the business wallets once, so a business can
+  // be chosen as the source. (A person with no business isn't re-fetched on
+  // every open.)
+  const businessSendersRequestedRef = useRef(false);
+  useEffect(() => {
+    if (!currentUserId || businessSendersRequestedRef.current || realBusinessProfiles.length > 0) return;
+    if (activeModal === 'send' || activeTab === 'withdraw') {
+      businessSendersRequestedRef.current = true;
+      loadBusinessAccountProfiles();
+    }
+  }, [activeModal, activeTab, currentUserId, realBusinessProfiles.length]);
+
+  // Which business a payment leaves from, and whether this person can approve it.
+  useEffect(() => {
+    setSendFromIsAdmin(null);
+    if (!sendFromBusiness) return undefined;
+    let cancelled = false;
+    isBusinessWalletAdmin(sendFromBusiness.id, { ownerUserId: sendFromBusiness.user_id, currentUserId })
+      .then((ok) => { if (!cancelled) setSendFromIsAdmin(ok); });
+    return () => { cancelled = true; };
+  }, [sendFromBusiness?.id, currentUserId]);
+
+  // The personal coin balance, shown under the amount on an IcanEra Coin send.
+  useEffect(() => {
+    if (activeModal === 'send' && sendMethod === 'icaneracoin' && !sendFromBusiness && currentUserId) {
+      loadIcanBalance();
+    }
+  }, [activeModal, sendMethod, sendFromBusiness?.id, currentUserId]);
+
+  // Live "who is this?" under the recipient box: once what's typed looks like a
+  // complete account number, wallet number, email or phone, look it up and show
+  // the holder's name and whether it's a personal or business account — before
+  // any money or PIN is involved. Debounced; a stale answer is discarded.
+  useEffect(() => {
+    if (activeModal !== 'send' || sendMethod === 'mobile' || sendMethod === 'bank') {
+      setRecipientPreview(null);
+      return undefined;
+    }
+    const parsed = classifyRecipient(sendForm.recipient);
+    const looksComplete = parsed.kind === 'account'
+      || parsed.kind === 'business_wallet'
+      || (parsed.kind === 'email' && /\S+@\S+\.\S+/.test(parsed.value))
+      || (parsed.kind === 'phone' && parsed.value.replace(/\D/g, '').length >= 9);
+    if (!looksComplete) {
+      setRecipientPreview(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setRecipientPreview({ status: 'checking' });
+    const timer = setTimeout(async () => {
+      try {
+        const found = await resolveRecipientWallet(getSupabaseClient(), sendForm.recipient);
+        if (cancelled) return;
+        setRecipientPreview(found.error
+          ? { status: 'notfound' }
+          : { status: 'found', name: found.name, accountType: found.accountType });
+      } catch {
+        if (!cancelled) setRecipientPreview(null);
+      }
+    }, 450);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [activeModal, sendMethod, sendForm.recipient]);
+
+  // Who does this recipient string point at? Shared by every IcanEra send and
+  // the live preview under the recipient box (see services/coinSendFlow.js).
+  const resolveRecipientWallet = (supabase, identifier) =>
+    lookupRecipientWallet(supabase, identifier, { countryCallingCode: userCountry === 'UG' ? '256' : null });
 
   const handleSendMoney = async (e) => {
     e.preventDefault();
@@ -1594,7 +1670,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     setTransactionInProgress(true);
 
     try {
-      if (sendMethod === 'mobile') {
+      if (sendFromBusiness) {
+        // A business wallet holds IcanEra coin, so every send from one is a coin send.
+        await handleSendICANCoin(sendForm.recipient, sendForm.amount, sendForm.description);
+      } else if (sendMethod === 'mobile') {
         // Network is auto-detected from the phone number (see
         // detectUgandaMobileNetwork) — sendNetwork only holds a value when
         // detection failed and the fallback picker in the form set it.
@@ -1629,6 +1708,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     setSendForm({ recipient: '', amount: '', description: '' });
     setSendMethod('ican');
     setRecipientAccountKind('ican');
+    setSendFrom('personal');
     setSendNetwork(null);
     setSendBankCode('');
     setSendBeneficiary('');
@@ -1652,110 +1732,21 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         throw new Error('User not authenticated');
       }
 
-      // Leading-digit-3 addresses belong to dedicated PitchIn business
-      // wallets, not to user_accounts. Route them through the atomic ICAN
-      // business transfer.
-      if (isBusinessWalletAddress(recipientIdentifier)) {
-        const { data, error } = await supabase.rpc('resolve_ican_business_wallet', {
-          p_wallet_address: recipientIdentifier.trim(),
-        });
-        const businessWallet = Array.isArray(data) ? data[0] : data;
-        if (error || !businessWallet) {
-          setTransactionResult({
-            type: 'send',
-            success: false,
-            message: `Business account not found: ${recipientIdentifier}${error ? ` (${error.message})` : ''}`
-          });
-          return;
-        }
-
-        const parsedAmount = parseFloat(amount);
-        if (!(parsedAmount > 0)) {
-          setTransactionResult({ type: 'send', success: false, message: 'Enter a valid IcanEra amount' });
-          return;
-        }
-
-        // Confirm the resolved, real registered business wallet before PIN —
-        // businessWallet came from resolve_ican_business_wallet(), a genuine
-        // registered PitchIn business, not just whatever the sender typed.
-        const businessConfirmed = window.confirm(
-          `Send ${parsedAmount.toFixed(4)} IcanEra to ${businessWallet.business_name || recipientIdentifier}?\n\n` +
-          `Verified business wallet: ${recipientIdentifier}`
-        );
-        if (!businessConfirmed) return;
-
-        const businessPin = await askPin({ title: 'Confirm transfer', message: 'Enter your transaction PIN to send this IcanEra.' });
-        if (businessPin === null) return;
-        const businessPinCheck = await walletAccountService.verifyUserPIN(currentUserId, businessPin);
-        if (!businessPinCheck?.success) {
-          setTransactionResult({ type: 'send', success: false, message: businessPinCheck?.error || 'Incorrect transaction PIN. Transfer cancelled.' });
-          return;
-        }
-
-        const result = await sendICANToBusiness({
-          fromUserId: currentUserId,
-          businessProfileId: businessWallet.business_profile_id,
-          amount: parsedAmount,
-          note: description || `Transfer to ${businessWallet.business_name || recipientIdentifier}`,
-        });
-        setTransactionResult({
-          type: 'send',
-          success: true,
-          message: `✅ Sent ${parsedAmount.toFixed(4)} IcanEra to ${businessWallet.business_name || recipientIdentifier}.`,
-          transactionId: result.out_tx_id,
-        });
+      // A business wallet number (leading digit 3) only holds IcanEra coin —
+      // the coin sender already knows how to pay one (verify, confirm, PIN).
+      if (classifyRecipient(recipientIdentifier).kind === 'business_wallet') {
+        await handleSendICANCoin(recipientIdentifier, amount, description);
         return;
       }
 
-      // Find recipient by account number, email, or phone
-      let recipientUser = null;
-      let lookupError = null;
-
-      if (/^\d{16}$/.test(recipientIdentifier.trim())) {
-        // Search by account number — 16 raw digits, no phone number in this
-        // app is that long, so length alone disambiguates it from a phone.
-        const { data, error } = await supabase
-          .from('user_accounts')
-          .select('user_id, account_holder_name, account_number')
-          .eq('account_number', recipientIdentifier.trim())
-          .maybeSingle();
-        recipientUser = data;
-        lookupError = error;
-        console.log('Search by account number:', { recipientIdentifier, data, error });
-      } else if (recipientIdentifier.includes('@')) {
-        // Search by email
-        const { data, error } = await supabase
-          .from('user_accounts')
-          .select('user_id, account_holder_name, email')
-          .eq('email', recipientIdentifier.toLowerCase())
-          .maybeSingle();
-        recipientUser = data;
-        lookupError = error;
-        console.log('Search by email:', { email: recipientIdentifier.toLowerCase(), data, error });
-      } else {
-        // Search by phone number
-        const { data, error } = await supabase
-          .from('user_accounts')
-          .select('user_id, account_holder_name, phone_number')
-          .eq('phone_number', recipientIdentifier)
-          .maybeSingle();
-        recipientUser = data;
-        lookupError = error;
-        console.log('Search by phone:', { phone: recipientIdentifier, data, error });
-      }
-
-      if (!recipientUser || lookupError) {
-        console.error('Recipient lookup failed:', { recipientIdentifier, lookupError, recipientUser });
-        setTransactionResult({
-          type: 'send',
-          success: false,
-          message: `Recipient not found: ${recipientIdentifier}${lookupError ? ` (${lookupError.message})` : ''}`
-        });
+      const recipientUser = await resolveRecipientWallet(supabase, recipientIdentifier);
+      if (recipientUser.error) {
+        setTransactionResult({ type: 'send', success: false, message: recipientUser.error });
         return;
       }
 
       // Prevent self-transfer
-      if (recipientUser.user_id === currentUserId) {
+      if (recipientUser.userId === currentUserId) {
         setTransactionResult({
           type: 'send',
           success: false,
@@ -1765,7 +1756,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       }
 
       const parsedAmount = parseFloat(amount);
-      
+      if (!(parsedAmount > 0)) {
+        setTransactionResult({ type: 'send', success: false, message: 'Enter a valid amount' });
+        return;
+      }
+
       // Optional: Add small transaction fee (0.5% for ICAN transfers)
       const transactionFee = parsedAmount * 0.005;
       const totalDeduction = parsedAmount + transactionFee;
@@ -1783,11 +1778,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       // ✅ SHOW APPROVAL MODAL INSTEAD OF PROCESSING IMMEDIATELY
       setPendingTransaction({
         type: 'send',
-        recipientId: recipientUser.user_id,
-        recipientName: recipientUser.account_holder_name,
+        recipientId: recipientUser.userId,
+        recipientName: recipientUser.name,
         amount: parsedAmount,
         currency: selectedCurrency,
-        description: description || `Transfer to ${recipientUser.account_holder_name}`,
+        description: description || `Transfer to ${recipientUser.name}`,
         fee: transactionFee,
         totalDeduction,
         senderWalletId: null  // Will be set when processing
@@ -1808,12 +1803,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   };
 
   // 💎 Send icaneracoin (ICAN coin) — a separate balance from local currency,
-  // shared across all four apps via ican_user_wallets. Uses the same
-  // recipient lookup (account number, email, or phone → user_id) as
-  // handleSendToICANUser, then transfers through transfer_ican() directly.
-  // Still asks for the wallet PIN first, the same simple way Pay does
-  // (window.prompt + verifyUserPIN) — real money moves here, so it doesn't
-  // skip confirmation just because it bypasses the bigger approval modal.
+  // shared across all four apps. The whole flow (recipient lookup, route,
+  // balance check, confirm, PIN, transfer) lives in services/coinSendFlow.js and
+  // covers every direction: personal → personal, personal → business,
+  // business → personal and business → business. A business account number
+  // (leading 2) is paid into the business's own wallet, not its owner's. A
+  // business-wallet payment is queued for administrator approval by the
+  // database; when the sender IS the administrator one business-wallet PIN
+  // submits and approves it, anyone else just submits the request.
   const handleSendICANCoin = async (recipientIdentifier, amount, description) => {
     try {
       const supabase = getSupabaseClient();
@@ -1823,151 +1820,38 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         throw new Error('User not authenticated');
       }
 
-      let recipientUser = null;
-      let lookupError = null;
-
-      // A leading-digit-3 address is the public address of a dedicated
-      // business wallet, not a user_accounts.account_number. Resolve it
-      // before personal-account lookup.
-      if (isBusinessWalletAddress(recipientIdentifier)) {
-        const { data, error } = await supabase.rpc('resolve_ican_business_wallet', {
-          p_wallet_address: recipientIdentifier.trim(),
-        });
-        const businessWallet = Array.isArray(data) ? data[0] : data;
-        if (error || !businessWallet) {
-          setTransactionResult({
-            type: 'send',
-            success: false,
-            message: `Business account not found: ${recipientIdentifier}${error ? ` (${error.message})` : ''}`
-          });
-          return;
-        }
-
-        const parsedAmount = parseFloat(amount);
-        if (!(parsedAmount > 0)) {
-          setTransactionResult({ type: 'send', success: false, message: 'Enter a valid IcanEra amount' });
-          return;
-        }
-
-        // Confirm the resolved, real registered business wallet before PIN —
-        // businessWallet came from resolve_ican_business_wallet(), a genuine
-        // registered PitchIn business, not just whatever the sender typed.
-        const businessConfirmed = window.confirm(
-          `Send ${parsedAmount.toFixed(4)} IcanEra to ${businessWallet.business_name || recipientIdentifier}?\n\n` +
-          `Verified business wallet: ${recipientIdentifier}`
-        );
-        if (!businessConfirmed) return;
-
-        const businessPin = await askPin({ title: 'Confirm transfer', message: 'Enter your transaction PIN to send this IcanEra.' });
-        if (businessPin === null) return;
-        const businessPinCheck = await walletAccountService.verifyUserPIN(currentUserId, businessPin);
-        if (!businessPinCheck?.success) {
-          setTransactionResult({ type: 'send', success: false, message: businessPinCheck?.error || 'Incorrect transaction PIN. Transfer cancelled.' });
-          return;
-        }
-
-        const result = await sendICANToBusiness({
-          fromUserId: currentUserId,
-          businessProfileId: businessWallet.business_profile_id,
-          amount: parsedAmount,
-          note: description || `Transfer to ${businessWallet.business_name || recipientIdentifier}`,
-        });
-        setTransactionResult({
-          type: 'send',
-          success: true,
-          message: `✅ Sent ${parsedAmount.toFixed(4)} IcanEra to ${businessWallet.business_name || recipientIdentifier}.`,
-          transactionId: result.out_tx_id,
-        });
-        return;
-      }
-
-      if (/^\d{16}$/.test(recipientIdentifier.trim())) {
-        const { data, error } = await supabase
-          .from('user_accounts')
-          .select('user_id, account_holder_name, account_number')
-          .eq('account_number', recipientIdentifier.trim())
-          .maybeSingle();
-        recipientUser = data;
-        lookupError = error;
-      } else if (recipientIdentifier.includes('@')) {
-        const { data, error } = await supabase
-          .from('user_accounts')
-          .select('user_id, account_holder_name, email')
-          .eq('email', recipientIdentifier.toLowerCase())
-          .maybeSingle();
-        recipientUser = data;
-        lookupError = error;
-      } else {
-        const { data, error } = await supabase
-          .from('user_accounts')
-          .select('user_id, account_holder_name, phone_number')
-          .eq('phone_number', recipientIdentifier)
-          .maybeSingle();
-        recipientUser = data;
-        lookupError = error;
-      }
-
-      if (!recipientUser || lookupError) {
-        setTransactionResult({
-          type: 'send',
-          success: false,
-          message: `Recipient not found: ${recipientIdentifier}${lookupError ? ` (${lookupError.message})` : ''}`
-        });
-        return;
-      }
-
-      if (recipientUser.user_id === currentUserId) {
-        setTransactionResult({
-          type: 'send',
-          success: false,
-          message: 'Cannot send IcanEra to yourself'
-        });
-        return;
-      }
-
-      const parsedAmount = parseFloat(amount);
-      if (!(parsedAmount > 0)) {
-        setTransactionResult({ type: 'send', success: false, message: 'Enter a valid IcanEra amount' });
-        return;
-      }
-
-      // Confirm the resolved, real registered account before anything moves —
-      // recipientUser was looked up from user_accounts above, so this name is
-      // an actual verified account holder, not just whatever the sender typed.
-      const confirmed = window.confirm(
-        `Send ${parsedAmount.toFixed(4)} IcanEra to ${recipientUser.account_holder_name || recipientIdentifier}?\n\n` +
-        `Verified IcanEra account: ${recipientIdentifier}`
-      );
-      if (!confirmed) return;
-
-      const pin = await askPin({ title: 'Confirm transfer', message: 'Enter your transaction PIN to send this IcanEra.' });
-      if (pin === null) return;
-      const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
-      if (!pinCheck?.success) {
-        setTransactionResult({ type: 'send', success: false, message: pinCheck?.error || 'Incorrect transaction PIN. Transfer cancelled.' });
-        return;
-      }
-
-      const result = await sendIcaneracoin({
-        fromUserId: currentUserId,
-        toUserId: recipientUser.user_id,
-        amount: parsedAmount,
-        note: description || `Transfer to ${recipientUser.account_holder_name}`,
+      const outcome = await runCoinSend({
+        supabase,
+        currentUserId,
+        sendFromBusiness,
+        sendFromIsAdmin,
+        recipientIdentifier,
+        amount,
+        description,
+        countryCallingCode: userCountry === 'UG' ? '256' : null,
+        askPin,
+        confirm: (message) => window.confirm(message),
+        verifyUserPIN: (userId, pin) => walletAccountService.verifyUserPIN(userId, pin),
+        verifyBusinessWalletPin: (businessId, pin) => walletAccountService.verifyBusinessWalletPin(businessId, pin),
+        api: { sendIcaneracoin, sendICANToBusiness, sendFromBusinessWallet, isBusinessWalletAdmin },
       });
+      if (outcome.cancelled) return;
 
       setTransactionResult({
         type: 'send',
-        success: true,
-        message: `✅ Sent ${parsedAmount.toFixed(4)} IcanEra to ${recipientUser.account_holder_name || recipientIdentifier}. No fee — they receive the full amount.`,
-        transactionId: result.tx_id,
+        success: outcome.success,
+        message: outcome.message,
+        ...(outcome.success ? { transactionId: outcome.transactionId } : {}),
       });
+
+      // Balances changed: the personal coin balance, and/or a business wallet.
+      if (outcome.success) {
+        if (currentUserId) loadIcanBalance();
+        if (outcome.touchesBusiness) loadBusinessAccountProfiles();
+      }
     } catch (error) {
       console.error('❌ Icaneracoin transfer failed:', error);
-      setTransactionResult({
-        type: 'send',
-        success: false,
-        message: error.message || 'Icaneracoin transfer failed'
-      });
+      setTransactionResult({ type: 'send', success: false, message: describeSendError(error) });
     }
   };
 
@@ -3504,9 +3388,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         if (currentUserId) {
           await loadWalletBalances(currentUserId);
         }
-
-        // Clear form
-        setWithdrawForm({ method: '', phoneAccount: '', amount: '', bankName: '' });
 
         // Auto-close success after 3 seconds
         setTimeout(() => {
@@ -6012,6 +5893,18 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
       {/* Withdraw Tab */}
       {activeTab === 'withdraw' && (
+        <>
+        <SmartWithdrawPanel
+          userId={currentUserId}
+          ownPhone={userAccount?.phone_number || ''}
+          fiatUgx={realWalletBalances.UGX}
+          businesses={senderBusinessProfiles}
+          askPin={askPin}
+          onChanged={(info) => {
+            if (currentUserId) loadWalletBalances(currentUserId);
+            if (info?.business) loadBusinessAccountProfiles();
+          }}
+        />
         <div className="glass-card p-6">
           <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <ArrowUpRight className="w-5 h-5 text-orange-400" />
@@ -6071,6 +5964,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             </div>
           )}
         </div>
+        </>
       )}
 
       {/* MODALS */}
@@ -6228,6 +6122,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             setSendForm({ recipient: '', amount: '', description: '' });
             setSendMethod('ican');
             setRecipientAccountKind('ican');
+            setSendFrom('personal');
             setSendNetwork(null);
             setSendBankCode('');
             setSendBeneficiary('');
@@ -6254,10 +6149,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           boxShadow: '0 8px 22px rgba(138,106,31,0.30)'
         };
 
-        const isCoin = sendMethod === 'icaneracoin';
-        const isMobile = sendMethod === 'mobile';
-        const isBankSend = sendMethod === 'bank';
+        const fromBiz = isSend ? sendFromBusiness : null;
+        const isCoin = sendMethod === 'icaneracoin' || Boolean(fromBiz);
+        const isMobile = !fromBiz && sendMethod === 'mobile';
+        const isBankSend = !fromBiz && sendMethod === 'bank';
         const isBiz = recipientAccountKind === 'biz';
+        const chooseSendFrom = (id) => {
+          setSendFrom(id);
+          if (id !== 'personal') setSendMethod('icaneracoin'); // a business wallet holds IcanEra coin
+          setRecipientPreview(null);
+        };
+        const coinAvailable = fromBiz ? Number(fromBiz.ican_wallet?.ican_balance || 0) : icanBalance;
         const amountStr = isSend ? sendForm.amount : receiveForm.amount;
         const amountNum = parseFloat(amountStr);
         const unit = isSend && isCoin ? 'ICAN' : selectedCurrency;
@@ -6326,6 +6228,54 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                 <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
                   {isSend && (
                     <>
+                      {senderBusinessProfiles.length > 0 && (
+                        <div>
+                          <label className={labelCls} style={{ color: T2 }}>Send from</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() => chooseSendFrom('personal')}
+                              aria-pressed={!fromBiz}
+                              className="flex items-center gap-2 px-3 py-3 rounded-xl text-left transition-all active:scale-[0.98]"
+                              style={pill(!fromBiz)}
+                            >
+                              <Wallet style={{ width: 18, height: 18, color: GOLD_C }} />
+                              <span className="block text-sm font-semibold leading-tight" style={{ color: T }}>Personal wallet</span>
+                            </button>
+                            {senderBusinessProfiles.map((b) => (
+                              <button
+                                key={b.id}
+                                type="button"
+                                onClick={() => chooseSendFrom(b.id)}
+                                aria-pressed={fromBiz?.id === b.id}
+                                className="flex items-center gap-2 px-3 py-3 rounded-xl text-left transition-all active:scale-[0.98]"
+                                style={pill(fromBiz?.id === b.id)}
+                              >
+                                <Store style={{ width: 18, height: 18, color: GOLD_C }} />
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-semibold leading-tight truncate" style={{ color: T }}>{b.business_name}</span>
+                                  <span className="block text-[11px]" style={{ color: T2 }}>IcanEra {formatIcanValue(b.ican_wallet?.ican_balance)}</span>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                          {fromBiz && (
+                            <p className="mt-1.5 text-xs leading-relaxed" style={{ color: T2 }}>
+                              {sendFromIsAdmin === null
+                                ? 'Checking your access to this business…'
+                                : sendFromIsAdmin
+                                  ? 'You administer this business — its wallet PIN approves the payment straight away. It can go to a person or to another business.'
+                                  : "Payments from this wallet need the business administrator's approval. Yours is sent to them as a request."}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {fromBiz ? (
+                        <p className="text-xs leading-relaxed" style={{ color: T2 }}>
+                          A business wallet holds IcanEra coin, so this is sent as IcanEra Coin.
+                        </p>
+                      ) : (
                       <div>
                         <label className={labelCls} style={{ color: T2 }}>Send to</label>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -6345,6 +6295,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                           ))}
                         </div>
                       </div>
+                      )}
 
                       {!isMobile && !isBankSend && (
                         <div>
@@ -6396,8 +6347,18 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                             ? 'Sent straight to this mobile money number — double-check it, this cannot be reversed once accepted.'
                             : isBiz
                               ? "Enter the business's 16-digit wallet number (from its PitchIn profile)."
-                              : 'A 16-digit IcanEra account number, a phone number or an email address.'}
+                              : 'A 16-digit IcanEra account number (starts 1 personal, 2 business), a phone number or an email address.'}
                         </p>
+                        {recipientPreview && !isMobile && !isBankSend && (
+                          <p
+                            className="mt-1.5 text-xs font-medium"
+                            style={{ color: recipientPreview.status === 'found' ? '#2f9e72' : recipientPreview.status === 'notfound' ? '#b91c1c' : T2 }}
+                          >
+                            {recipientPreview.status === 'checking' && 'Checking…'}
+                            {recipientPreview.status === 'notfound' && 'No IcanEra account found for this.'}
+                            {recipientPreview.status === 'found' && `● ${recipientPreview.name || 'Account found'} · ${recipientPreview.accountType === 'business' ? 'Business' : 'Personal'} account`}
+                          </p>
+                        )}
                         {detectedNetwork && (
                           <p className="mt-1.5 text-xs font-medium" style={{ color: '#2f9e72' }}>
                             ● Detected network: {detectedNetwork}
@@ -6494,7 +6455,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     {isSend && (
                       <p className="mt-1.5 text-xs" style={{ color: T2 }}>
                         {isCoin
-                          ? 'Amount in IcanEra coins — no fee, the recipient receives the full amount.'
+                          ? `Amount in IcanEra coins — no fee, the recipient receives the full amount. Available: ${formatIcanValue(coinAvailable)}`
                           : `Amount in ${selectedCurrency} (${userCountry}).`}
                       </p>
                     )}
@@ -7190,230 +7151,6 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             setShowPINRecovery(true);
           }}
         />
-      )}
-
-      {/* WITHDRAW MODAL */}
-      {activeModal === 'withdraw' && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="glass-card p-6 w-full max-w-md">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Upload className="w-5 h-5 text-orange-400" />
-              Withdraw Money
-            </h3>
-
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              if (!withdrawForm.method || !withdrawForm.phoneAccount || !withdrawForm.amount) {
-                alert('Please fill in all fields');
-                return;
-              }
-
-              setTransactionInProgress(true);
-
-              try {
-                // Get current user
-                const supabase = getSupabaseClient();
-                const { data: { user } } = await supabase.auth.getUser();
-
-                if (!user) {
-                  throw new Error('Not authenticated');
-                }
-
-                // Prepare withdrawal request
-                const withdrawalData = {
-                  userId: user.id,
-                  amount: parseFloat(withdrawForm.amount),
-                  currency: selectedCurrency,
-                  phoneNumber: withdrawForm.phoneAccount,
-                  provider: withdrawForm.method
-                };
-
-                console.log('💸 Submitting withdrawal:', withdrawalData);
-
-                // Call appropriate withdrawal endpoint
-                let response;
-                if (withdrawForm.method === 'bank') {
-                  response = await fetch('http://localhost:5000/api/withdrawals/bank', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                      userId: user.id,
-                      amount: parseFloat(withdrawForm.amount),
-                      currency: selectedCurrency,
-                      accountNumber: withdrawForm.phoneAccount,
-                      bankName: withdrawForm.bankName || 'Not specified'
-                    })
-                  });
-                } else {
-                  // Mobile money withdrawal
-                  response = await fetch('http://localhost:5000/api/withdrawals/mobile-money', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(withdrawalData)
-                  });
-                }
-
-                const result = await response.json();
-
-                if (result.success) {
-                  // Update wallet balance (optional - can be fetched from backend)
-                  // Commented out because setCurrentWallet is not a state hook
-                  // const newBalance = parseFloat(currentWallet.balance) - parseFloat(withdrawForm.amount);
-                  // setCurrentWallet({
-                  //   ...currentWallet,
-                  //   balance: newBalance
-                  // });
-
-                  // Add to transaction history
-                  const transaction = {
-                    id: result.transaction.id,
-                    type: 'withdraw',
-                    amount: parseFloat(withdrawForm.amount),
-                    to: withdrawForm.phoneAccount,
-                    date: new Date().toLocaleDateString(),
-                    status: result.transaction.status,
-                    provider: withdrawForm.method,
-                    fee: result.transaction.fee
-                  };
-
-                  setTransactionHistory([transaction, ...transactionHistory]);
-
-                  setTransactionResult({
-                    type: 'withdraw',
-                    success: true,
-                    message: `✅ ${result.message}`,
-                    transaction: result.transaction
-                  });
-                } else {
-                  throw new Error(result.error || 'Withdrawal failed');
-                }
-
-              } catch (error) {
-                console.error('❌ Withdrawal error:', error);
-                setTransactionResult({
-                  type: 'withdraw',
-                  success: false,
-                  message: `❌ Withdrawal failed: ${error.message}`
-                });
-              } finally {
-                setTransactionInProgress(false);
-                setTimeout(() => {
-                  setActiveModal(null);
-                  setTransactionResult(null);
-                  setWithdrawForm({ method: '', phoneAccount: '', amount: '', bankName: '' });
-                }, 3000);
-              }
-            }} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Withdrawal Method *</label>
-                <select 
-                  value={withdrawForm.method}
-                  onChange={(e) => setWithdrawForm({ ...withdrawForm, method: e.target.value })}
-                  className="w-full px-4 py-3 bg-gradient-to-r from-slate-700 to-slate-800 border-2 border-orange-400/50 hover:border-orange-400 rounded-lg text-white font-semibold focus:border-orange-400 focus:outline-none transition-all cursor-pointer appearance-none"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23fb923c' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 0.75rem center',
-                    backgroundSize: '16px 16px',
-                    paddingRight: '2.5rem'
-                  }}
-                >
-                  <option value="" className="bg-slate-800 text-white font-semibold">Select method...</option>
-                  <option value="mtn" className="bg-slate-800 text-white font-semibold">🟡 MTN Mobile Money</option>
-                  <option value="airtel" className="bg-slate-800 text-white font-semibold">🔴 Airtel Money</option>
-                  <option value="vodafone" className="bg-slate-800 text-white font-semibold">🟣 Vodafone Money</option>
-                  <option value="bank" className="bg-slate-800 text-white font-semibold">🏦 Bank Transfer</option>
-                </select>
-              </div>
-
-              {withdrawForm.method && (
-                <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
-                  <p className="text-sm text-orange-200">
-                    {withdrawForm.method === 'mtn' && '🟡 Enter your MTN phone number (e.g., 256701234567)'}
-                    {withdrawForm.method === 'airtel' && '🔴 Enter your Airtel phone number (e.g., 256701234567)'}
-                    {withdrawForm.method === 'vodafone' && '🟣 Enter your Vodafone phone number (e.g., 256701234567)'}
-                    {withdrawForm.method === 'bank' && '🏦 Enter your bank account number or IBAN'}
-                  </p>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {withdrawForm.method === 'bank' ? 'Account Number / IBAN *' : 'Phone Number *'}
-                </label>
-                <input
-                  type="text"
-                  placeholder={withdrawForm.method === 'bank' ? 'Your account number' : '256701234567'}
-                  value={withdrawForm.phoneAccount}
-                  onChange={(e) => setWithdrawForm({ ...withdrawForm, phoneAccount: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none transition-all"
-                />
-              </div>
-
-              {withdrawForm.method === 'bank' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Bank Name *</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Stanbic Bank, Equity Bank"
-                    value={withdrawForm.bankName}
-                    onChange={(e) => setWithdrawForm({ ...withdrawForm, bankName: e.target.value })}
-                    className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none transition-all"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Amount ({selectedCurrency}) *</label>
-                <input
-                  type="number"
-                  placeholder="500"
-                  value={withdrawForm.amount}
-                  onChange={(e) => setWithdrawForm({ ...withdrawForm, amount: e.target.value })}
-                  className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none transition-all"
-                />
-              </div>
-
-              <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
-                <p className="text-xs text-orange-200">
-                  ℹ️ Withdrawal fees: 1-2% depending on method. Processing time: 24-48 hours.
-                </p>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveModal(null);
-                    setWithdrawForm({ method: '', phoneAccount: '', amount: '', bankName: '' });
-                  }}
-                  className="flex-1 px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={transactionInProgress}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:shadow-lg hover:shadow-orange-500/30 disabled:opacity-50 transition-all font-semibold"
-                >
-                  {transactionInProgress ? 'Processing...' : '💸 Withdraw'}
-                </button>
-              </div>
-            </form>
-
-            {transactionResult && transactionResult.type === 'withdraw' && (
-              <div className={`mt-4 p-4 rounded-lg ${transactionResult.success ? 'bg-green-500/20 border border-green-500/50' : 'bg-red-500/20 border border-red-500/50'}`}>
-                <p className={`text-sm font-medium ${transactionResult.success ? 'text-green-400' : 'text-red-400'}`}>
-                  {transactionResult.success ? '✅ ' : '❌ '}{transactionResult.message}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
       )}
 
       {/* ✅ UNIFIED APPROVAL MODAL */}

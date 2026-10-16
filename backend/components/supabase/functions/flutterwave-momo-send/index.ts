@@ -89,6 +89,8 @@ serve(async (req) => {
       account_number,
       bank_code,
       beneficiary_name,
+      // "withdraw" = the wallet owner cashing out to their own number.
+      purpose,
     } = body;
     const isBank = channel === "bank";
 
@@ -121,13 +123,20 @@ serve(async (req) => {
     const normalizedPhone = isBank ? String(account_number).trim() : String(recipient_phone).trim();
 
     // Refuse to send to your own registered phone number — an accidental
-    // self-send should fail loudly rather than round-trip real money.
-    const { data: senderAccount } = await adminClient
+    // self-send should fail loudly rather than round-trip real money. A
+    // deliberate withdrawal to your own number (purpose: "withdraw", from the
+    // wallet's Withdraw tab) is the one case that is allowed. A person with a
+    // personal and a business account has two rows here, so check them all
+    // (.maybeSingle() errors on two rows and silently skipped this guard).
+    const { data: senderAccounts } = await adminClient
       .from("user_accounts")
       .select("phone_number")
-      .eq("user_id", currentUser.id)
-      .maybeSingle();
-    if (!isBank && senderAccount?.phone_number && senderAccount.phone_number === normalizedPhone) {
+      .eq("user_id", currentUser.id);
+    const sendsToOwnNumber = (senderAccounts ?? []).some(
+      (account: { phone_number: string | null }) =>
+        account.phone_number && account.phone_number === normalizedPhone,
+    );
+    if (!isBank && purpose !== "withdraw" && sendsToOwnNumber) {
       return jsonResponse({ success: false, error: "Cannot send money to your own phone number." }, 400);
     }
 
