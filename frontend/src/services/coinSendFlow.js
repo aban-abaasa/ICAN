@@ -121,13 +121,14 @@ const fmt = (n) => Number(n).toFixed(4);
  * @param {(message: string) => boolean} p.confirm
  * @param {(userId: string, pin: string) => Promise<{success: boolean, error?: string}>} p.verifyUserPIN
  * @param {(businessProfileId: string, pin: string) => Promise<{success: boolean, error?: string}>} p.verifyBusinessWalletPin
+ * @param {() => Promise<number>} [p.getPersonalBalance] the sender's coin balance, checked before any PIN is asked
  * @param {{sendIcaneracoin: Function, sendICANToBusiness: Function, sendFromBusinessWallet: Function, isBusinessWalletAdmin: Function}} p.api
  * @returns {Promise<{cancelled: true} | {success: false, message: string} | {success: true, message: string, transactionId: string, pendingApproval: boolean, touchesBusiness: boolean}>}
  */
 export async function runCoinSend({
   supabase, currentUserId, sendFromBusiness = null, sendFromIsAdmin = null,
   recipientIdentifier, amount, description = '', countryCallingCode = null,
-  askPin, confirm, verifyUserPIN, verifyBusinessWalletPin, api,
+  askPin, confirm, verifyUserPIN, verifyBusinessWalletPin, getPersonalBalance = null, api,
 }) {
   const fail = (message) => ({ success: false, message });
 
@@ -154,6 +155,16 @@ export async function runCoinSend({
     const available = Number(sendFromBusiness.ican_wallet?.ican_balance || 0);
     if (parsedAmount > available) {
       return fail(`${senderName} has only ${fmt(available)} IcanEra, not enough to send ${fmt(parsedAmount)}.`);
+    }
+  }
+
+  // Don't ask for a PIN just to be told there isn't enough. If the balance can't
+  // be read, carry on — the database enforces it anyway.
+  if (!sendFromBusiness && getPersonalBalance) {
+    let available = NaN;
+    try { available = Number(await getPersonalBalance()); } catch { /* ignore */ }
+    if (Number.isFinite(available) && parsedAmount > available) {
+      return fail(`You have ${fmt(available)} IcanEra, not enough to send ${fmt(parsedAmount)}.`);
     }
   }
 
