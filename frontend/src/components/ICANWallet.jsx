@@ -3903,6 +3903,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       <style>{`
         /* CMMS classic skin: open page, gold hairlines, no rainbow boxes */
         .wallet-creative-skin { font-family: "Georgia", "Iowan Old Style", "Palatino Linotype", serif; }
+        /* Wallet pages on large and extra-large screens: the page width grows with the display
+           instead of stopping at a narrow centered column (header, every tab and the trade page). */
+        .wallet-creative-skin { --wallet-page-w: 76rem; }
+        @media (min-width: 1280px) { .wallet-creative-skin { --wallet-page-w: 90rem; } }
+        @media (min-width: 1536px) { .wallet-creative-skin { --wallet-page-w: 108rem; } }
+        @media (min-width: 1920px) { .wallet-creative-skin { --wallet-page-w: 128rem; } }
+        @media (min-width: 2560px) { .wallet-creative-skin { --wallet-page-w: 160rem; } }
+        @media (min-width: 3200px) { .wallet-creative-skin { --wallet-page-w: 200rem; } }
+        .wallet-creative-skin .wallet-wide { max-width: var(--wallet-page-w); }
         .wallet-creative-skin button, .wallet-creative-skin input,
         .wallet-creative-skin select, .wallet-creative-skin textarea, .wallet-creative-skin table {
           font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -3973,11 +3982,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         /* full-page tabs: no spare band above the header, the tab owns the screen */
         .wallet-creative-skin.cmms-fullpage { padding-top: max(0.5rem, env(safe-area-inset-top, 0px)) !important; }
 
-        /* web: one sticky top bar (Back, title, tabs, bell) and content centred at a readable width */
+        /* web: one sticky top bar (Back, title, tabs, bell) and content centred, as wide as the screen allows */
         @media (min-width: 768px) {
           .wallet-creative-skin.cmms-fullpage { padding-top: 0 !important; }
           .wallet-creative-skin.cmms-fullpage > :not(.fixed):not(style) {
-            width: 100%; max-width: 76rem; margin-left: auto; margin-right: auto;
+            width: 100%; max-width: var(--wallet-page-w, 76rem); margin-left: auto; margin-right: auto;
           }
           .wallet-creative-skin.cmms-fullpage .wallet-top-header {
             position: sticky; top: 0; z-index: 40;
@@ -7449,7 +7458,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       {/* TRADE TAB - Tabbed Interface with Chart, Buy, Sell, History */}
       {activeTab === 'trade' && (
         <div className="pt-4 md:pt-6">
-          <div className={`trade-page w-full ${activeTradeTab === 'chart' ? '' : 'max-w-6xl mx-auto'} flex flex-col`}>
+          <div className={`trade-page w-full ${activeTradeTab === 'chart' ? '' : 'wallet-wide mx-auto'} flex flex-col`}>
             {/* Classic page header — slims to a single line on the chart so the chart gets the page */}
             <div className={`flex items-center justify-between gap-3 ${activeTradeTab === 'chart' ? 'pb-1.5' : 'pb-4 mb-1'}`} style={{ borderBottom: '1px solid rgba(196,160,82,0.45)' }}>
               <div className="min-w-0">
