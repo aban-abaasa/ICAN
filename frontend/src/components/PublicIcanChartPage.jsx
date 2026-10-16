@@ -369,7 +369,7 @@ const PublicIcanChartPage = () => {
   };
 
   return (
-    <div className={`min-h-screen font-sans ${k.page}`}>
+    <div className={`ican-chart-page min-h-screen font-sans ${k.page}`}>
       <header className={`sticky top-0 z-30 border-b backdrop-blur ${k.bar}`}>
         <div className="flex h-12 items-center gap-2 px-3 sm:gap-3 sm:px-5">
           {view !== 'chart' && (
@@ -458,7 +458,7 @@ const PublicIcanChartPage = () => {
         )}
         </div>
 
-            <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+            <div className="ican-public-wide mx-auto px-4 py-6 sm:px-6 sm:py-10">
               <section className={`mt-10 flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between ${k.card}`}>
                 <h2 className={`text-lg font-bold sm:text-xl ${k.title}`}>Ready to trade icaneracoin?</h2>
                 <div className="flex flex-wrap gap-3">
@@ -475,7 +475,7 @@ const PublicIcanChartPage = () => {
         )}
 
         {view === 'analysis' && (
-          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+          <div className="ican-public-wide mx-auto px-4 py-6 sm:px-6 sm:py-10">
             <section id="analysis" aria-labelledby="chart-analysis-heading" className="scroll-mt-16">
               <div className="flex items-end justify-between gap-3">
                 <div>
@@ -502,7 +502,7 @@ const PublicIcanChartPage = () => {
         )}
 
         {view === 'sectors' && (
-          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+          <div className="ican-public-wide mx-auto px-4 py-6 sm:px-6 sm:py-10">
             <div className="-mt-10">
             <PublicSectorMarkets
               theme={theme}
@@ -517,7 +517,7 @@ const PublicIcanChartPage = () => {
         )}
 
         {view === 'tokens' && (
-          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+          <div className="ican-public-wide mx-auto px-4 py-6 sm:px-6 sm:py-10">
             <div className="-mt-10">
             <PublicStableCoin theme={theme} skin={k} onLearn={() => openLearn('tokens')} />
             <PublicOnChainTokens theme={theme} skin={k} priceUgx={priceUgx} onLearn={() => openLearn('tokens')} />
@@ -526,7 +526,7 @@ const PublicIcanChartPage = () => {
         )}
 
         {view === 'learn' && (
-          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
+          <div className="ican-public-wide mx-auto px-4 py-6 sm:px-6 sm:py-10">
             <div className="-mt-10">
             <section id="learn" aria-labelledby="learn-heading" className="mt-10 scroll-mt-16">
               <p className={`text-xs font-bold uppercase tracking-[0.16em] ${k.kicker}`}>Learn</p>

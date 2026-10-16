@@ -1198,7 +1198,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             until the visitor scrolled past BusinessHero -- which left the
             toggle/kebab pair floating with no business identity next to
             them at all. */}
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-3">
+        <div className="ican-public-wide mx-auto px-4 sm:px-6 py-2 sm:py-2.5 flex items-center gap-2 sm:gap-3">
           <TabLink tab={{ id: 'home' }} onNavigate={navigateTo} className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink sm:flex-shrink-0" ariaLabel={`${company.company_name} home`}>
             {company.logo_url ? (
               <img src={company.logo_url} alt="" className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl object-cover border nb-border shadow-sm flex-shrink-0" />
@@ -1319,7 +1319,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
       {/* pb clears the fixed BottomNav on mobile (its own height plus the
           safe-area inset it already pads itself with) -- sm:pb-7 drops that
           reservation the moment the bar itself disappears. */}
-      <main id="nb-main" tabIndex={-1} className="max-w-5xl mx-auto px-4 sm:px-6 pt-7 pb-12 sm:pb-12 outline-none">
+      <main id="nb-main" tabIndex={-1} className="ican-public-wide mx-auto px-4 sm:px-6 pt-7 pb-12 sm:pb-12 outline-none">
         <div key={activeSection} className="animate-fadeInUp" style={{ animationDuration: '0.35s' }}>
           {activeSection === 'home' && (
             // A wide screen leaves a single centered column mostly empty on
@@ -1327,7 +1327,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
             // Yelp-style info panel) instead. Sidebar is lg+ only; on
             // mobile/tablet everything in it is already reachable from the
             // hero's own action buttons above.
-            <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 lg:items-start">
+            <div className="lg:grid lg:grid-cols-[1fr_300px] min-[1920px]:grid-cols-[1fr_22rem] lg:gap-6 lg:items-start">
               <div className="min-w-0">
                 <SectionTiles tabs={navTabs.filter((tab) => tab.id !== 'home')} counts={{ notices: notices.length, careers: jobs.length, pitchin: pitches.length, opportunities: opportunities.length, library: libraryLinks.length }} getImages={tileImages} onNavigate={navigateTo} />
                 {company.about && <AboutCard company={company} />}
@@ -1896,7 +1896,7 @@ const SectionTiles = ({ tabs, counts, getImages, onNavigate }) => {
   const visible = tabs.filter((tab) => TILE_COPY[tab.id]);
   if (visible.length < 2) return null;
   return (
-    <section aria-label="Explore" className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+    <section aria-label="Explore" className="grid grid-cols-2 sm:grid-cols-3 min-[1920px]:grid-cols-4 gap-3 mb-6">
       {visible.map((tab, i) => {
         const count = tileCount(tab.id, counts[tab.id]);
         return (
@@ -1971,7 +1971,7 @@ const SiteFooter = ({ company, tabs, activeSection, onNavigate, onOpenApp }) => 
   const blurb = deriveHeroSubtitle(company);
   return (
     <footer className="nb-footer border-t nb-border">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1.3fr]">
+      <div className="ican-public-wide mx-auto px-4 sm:px-6 py-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1.3fr]">
         <div>
           <div className="flex items-center gap-3 mb-3">
             {company.logo_url ? (
@@ -2027,7 +2027,7 @@ const SiteFooter = ({ company, tabs, activeSection, onNavigate, onOpenApp }) => 
       </div>
 
       <div className="border-t nb-border">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 pb-24 sm:pb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs nb-text-faint">
+        <div className="ican-public-wide mx-auto px-4 sm:px-6 py-4 pb-24 sm:pb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs nb-text-faint">
           <p>
             &copy; {new Date().getFullYear()} {company.company_name} · Powered by{' '}
             <button onClick={onOpenApp} className="align-middle hover:opacity-80 transition-opacity"><IcanEraWordmark /></button>
@@ -2209,7 +2209,7 @@ const BusinessHero = ({ company, noticeCount = 0, jobCount = 0, pitchCount = 0, 
         )}
         <div className="absolute inset-0 nb-hero-overlay" />
       </div>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+      <div className="ican-public-wide mx-auto px-4 sm:px-6">
         <div className="flex items-end gap-4 -mt-12 sm:-mt-14 relative z-10">
           <div className="relative flex-shrink-0">
             {company.logo_url ? (
@@ -2377,7 +2377,7 @@ const ContactStrip = ({ company }) => {
   if (!hasContact) return null;
   return (
     <div className="nb-strip animate-fadeInDown">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5 overflow-x-auto">
+      <div className="ican-public-wide mx-auto px-4 sm:px-6 py-2.5 overflow-x-auto">
         <ContactActions company={company} size="compact" />
       </div>
     </div>
