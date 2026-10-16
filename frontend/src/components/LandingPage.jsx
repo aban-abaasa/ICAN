@@ -1080,12 +1080,28 @@ const LandingPage = ({ onGetStarted }) => {
         .ican-landing button.ican-search-btn:focus { background: transparent !important; box-shadow: none !important; }
         .ican-landing input.ican-search-input,
         .ican-landing input.ican-search-input:focus { background: transparent !important; border: 0 !important; box-shadow: none !important; outline: none !important; }
+        /* Large and extra-large screens: grow the whole landing page with the display
+           (rem-based sizes follow the root size) and let every section use the width. */
+        @media (min-width: 1920px) { html:has(.ican-landing) { font-size: 106.25%; } }
+        @media (min-width: 2200px) { html:has(.ican-landing) { font-size: 118.75%; } }
+        @media (min-width: 2560px) { html:has(.ican-landing) { font-size: 125%; } }
+        @media (min-width: 3200px) { html:has(.ican-landing) { font-size: 150%; } }
+        @media (min-width: 3840px) { html:has(.ican-landing) { font-size: 175%; } }
+        .ican-landing { --ican-wide: 80rem; --ican-nav-wide: 80rem; }
+        @media (min-width: 1536px) { .ican-landing { --ican-wide: 94rem; --ican-nav-wide: 100rem; } }
+        @media (min-width: 1920px) { .ican-landing { --ican-wide: 104rem; --ican-nav-wide: 108rem; } }
+        @media (min-width: 2560px) { .ican-landing { --ican-wide: 120rem; --ican-nav-wide: 126rem; } }
+        @media (min-width: 3200px) { .ican-landing { --ican-wide: 126rem; --ican-nav-wide: 132rem; } }
+        .ican-landing .ican-nav-wide { width: 100%; margin-inline: auto; max-width: var(--ican-nav-wide); }
+        @media (min-width: 1536px) {
+          .ican-landing :is(section, footer) div[class*="mx-auto"]:is([class*="max-w-6xl"], [class*="max-w-7xl"]) { max-width: var(--ican-wide); }
+        }
         /* scrollbar-friendly selection colour */
         .ican-landing ::selection { background: #14532d; color: #f7f3e8; }
       `}</style>
       {/* Navigation */}
       <nav className={`fixed top-0 w-full z-50 backdrop-blur-md border-b ${isDarkTheme ? 'bg-slate-950/80 border-amber-300/20' : 'bg-[#f7f3e8]/90 border-[#1f1a12]/30 border-b-2'}`}>
-        <div className="max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[1800px] mx-auto px-3 sm:px-6 lg:px-8 2xl:px-12 py-3 md:py-4 2xl:py-5 flex justify-between items-center gap-2">
+        <div className="ican-nav-wide px-3 sm:px-6 lg:px-8 2xl:px-12 py-3 md:py-4 2xl:py-5 flex justify-between items-center gap-2 xl:gap-4">
           <div className="flex items-center space-x-3">
             <div className="flex flex-col leading-none">
               <div
@@ -1103,7 +1119,7 @@ const LandingPage = ({ onGetStarted }) => {
               switcher, and auth buttons for the same row. Full pill row
               only returns at xl+, where the whole row actually fits
               without any of it wrapping. */}
-          <div className="hidden md:flex 2xl:hidden items-center gap-2">
+          <div className="hidden md:flex min-[2560px]:hidden items-center gap-2">
             <button
               onClick={() => scrollToSection('live-explore')}
               className={`px-3 py-2 ican-cove-tab border-2 text-sm font-bold whitespace-nowrap transition-all duration-300 ${isDarkTheme ? 'text-emerald-100 border-emerald-300/55 bg-emerald-900/25 hover:bg-emerald-800/35 hover:border-emerald-200/80' : 'text-emerald-900 border-emerald-400/55 bg-emerald-100 hover:bg-emerald-200/90 hover:border-emerald-500/75'}`}
@@ -1152,7 +1168,7 @@ const LandingPage = ({ onGetStarted }) => {
               )}
             </div>
           </div>
-          <div className="hidden 2xl:flex items-center gap-4 3xl:gap-9 font-serif">
+          <div className="hidden min-[2560px]:flex min-w-0 flex-1 items-center justify-center gap-3 min-[3200px]:gap-7 font-serif">
             {[
               { label: 'Features', go: () => scrollToSection('platforms') },
               { label: 'Platforms', go: () => scrollToSection('platforms') },
@@ -1167,7 +1183,7 @@ const LandingPage = ({ onGetStarted }) => {
               <button
                 key={item.label}
                 onClick={item.go}
-                className={`ican-nav-link group relative whitespace-nowrap px-1 py-1 text-base 3xl:text-lg font-semibold tracking-wide transition-colors ${isDarkTheme ? 'text-stone-200 hover:text-amber-300' : 'text-[#1f1a12] hover:text-emerald-900'}`}
+                className={`ican-nav-link group relative whitespace-nowrap px-1 py-1 text-sm min-[3200px]:text-base font-semibold tracking-wide transition-colors ${isDarkTheme ? 'text-stone-200 hover:text-amber-300' : 'text-[#1f1a12] hover:text-emerald-900'}`}
               >
                 {item.label}
                 <span className="absolute inset-x-0 -bottom-0.5 h-[2px] origin-center scale-x-0 bg-current transition-transform duration-300 group-hover:scale-x-100" />
@@ -1262,24 +1278,24 @@ const LandingPage = ({ onGetStarted }) => {
       </nav>
 
       {/* Hero Section — classic broadsheet front page */}
-      <section className={`relative isolate pt-24 sm:pt-28 md:pt-36 pb-12 sm:pb-16 md:pb-24 px-4 sm:px-8 lg:px-12 ${isDarkTheme ? 'bg-slate-950' : 'bg-[#f7f3e8]'}`}>
+      <section className={`relative isolate lg:min-h-screen lg:flex lg:flex-col lg:justify-center pt-24 sm:pt-28 md:pt-36 pb-12 sm:pb-16 md:pb-24 px-4 sm:px-8 lg:px-12 ${isDarkTheme ? 'bg-slate-950' : 'bg-[#f7f3e8]'}`}>
         <div className="absolute inset-0 -z-10 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(#3b2f1e 0.6px, transparent 0.6px)', backgroundSize: '14px 14px' }} />
-        <div className="max-w-7xl mx-auto">
+        <div className="w-full max-w-7xl mx-auto">
           <div className={`flex items-center justify-between gap-3 border-y-[3px] border-double py-2 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.22em] ${isDarkTheme ? 'border-amber-300/40 text-amber-200/80' : 'border-emerald-900/60 text-emerald-900'}`}>
             <span>Vol. I</span>
             <span className="hidden sm:inline">&#10086;&nbsp; Global money &amp; business &nbsp;&#10086;</span>
             <span>Est. on the blockchain</span>
           </div>
-          <div className="mt-10 lg:mt-14 grid lg:grid-cols-[0.95fr_1.05fr] gap-12 lg:gap-16 items-center">
-          <div className="max-w-2xl">
+          <div className="mt-10 lg:mt-14 grid lg:grid-cols-[0.95fr_1.05fr] gap-12 lg:gap-16 2xl:gap-24 items-center">
+          <div className="max-w-2xl 2xl:max-w-3xl">
             <div className={`inline-flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] ${isDarkTheme ? 'text-amber-300' : 'text-emerald-900'}`}>
               <span className="w-8 h-px bg-current" /> Run your business. Find your people. <span className="w-8 h-px bg-current" />
             </div>
-            <h1 className={`mt-5 sm:mt-6 font-serif text-4xl sm:text-5xl lg:text-6xl xl:text-7xl leading-[1.04] tracking-tight ${isDarkTheme ? 'text-stone-100' : 'text-[#1f1a12]'}`}>
+            <h1 className={`mt-5 sm:mt-6 font-serif text-4xl sm:text-5xl lg:text-6xl xl:text-7xl 2xl:text-8xl leading-[1.04] tracking-tight ${isDarkTheme ? 'text-stone-100' : 'text-[#1f1a12]'}`}>
               Your business, <span className={`italic ${isDarkTheme ? 'text-amber-300' : 'text-emerald-900'}`}>ready to grow.</span>
             </h1>
             <div className={`mt-6 flex items-center gap-3 ${isDarkTheme ? 'text-amber-300/70' : 'text-emerald-900/70'}`}><span className="h-px flex-1 bg-current" /><span aria-hidden="true">&#10070;</span><span className="h-px flex-1 bg-current" /></div>
-            <p className={`mt-5 max-w-xl font-serif text-base md:text-lg leading-7 md:leading-8 ${isDarkTheme ? 'text-slate-300' : 'text-[#4a4132]'}`}>
+            <p className={`mt-5 max-w-xl 2xl:max-w-2xl font-serif text-base md:text-lg 2xl:text-xl leading-7 md:leading-8 2xl:leading-9 ${isDarkTheme ? 'text-slate-300' : 'text-[#4a4132]'}`}>
               IcanEra is a blockchain application that supports transactions across the globe with icaneracoin. Manage business and personal finances, employment, hiring and your complete business website in one place.
             </p>
             <div className="mt-7 sm:mt-9 flex flex-row gap-2 sm:gap-3">
@@ -1295,7 +1311,7 @@ const LandingPage = ({ onGetStarted }) => {
               Global transactions · icaneracoin · Business and employment tools
             </div>
           </div>
-          <div className="relative mx-auto w-full max-w-xl">
+          <div className="relative mx-auto w-full max-w-xl 2xl:max-w-2xl">
             <div className={`absolute -inset-3 md:-inset-4 border ${isDarkTheme ? 'border-amber-300/30' : 'border-emerald-900/40'}`} />
             <div className={`relative border-[6px] p-2 shadow-[10px_10px_0_0_rgba(31,26,18,0.18)] ${isDarkTheme ? 'border-slate-700 bg-slate-900' : 'border-[#1f1a12] bg-[#fffdf6]'}`}>
               <div className={`flex items-center justify-between px-3 py-3 border-b-2 border-double ${isDarkTheme ? 'border-slate-600' : 'border-[#1f1a12]/70'}`}>
