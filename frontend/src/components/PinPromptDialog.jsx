@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Lock, Delete, X } from 'lucide-react';
 
 const PIN_MIN = 4;
@@ -25,8 +26,12 @@ const PinDialog = ({ request, onSubmit, onCancel }) => {
     if (canSubmit) onSubmit(pin);
   };
 
-  return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+  // Portaled to <body> and above z-[10000]: the Send / Receive sheets are portaled
+  // there at z-[10000], and a dialog left inside the wallet's page tree is painted
+  // underneath them — the PIN was asked for but nobody could see or answer it, so
+  // the send sat on "Processing…" forever.
+  return createPortal(
+    <div className="fixed inset-0 z-[10100] flex items-center justify-center bg-black/60 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
       <form
         onSubmit={submit}
         role="dialog"
@@ -83,7 +88,8 @@ const PinDialog = ({ request, onSubmit, onCancel }) => {
           <button type="submit" disabled={!canSubmit} className="flex-1 rounded-sm border-2 border-[#14532d] bg-[#14532d] py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Confirm</button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 };
 

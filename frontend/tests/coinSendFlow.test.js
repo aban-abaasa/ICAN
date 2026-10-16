@@ -258,3 +258,31 @@ test('describeSendError speaks plainly about an inactive business wallet and poi
   assert.equal(describeSendError(new Error('Insufficient ICAN balance')), 'Insufficient ICAN balance');
   assert.equal(describeSendError(null), 'Icaneracoin transfer failed');
 });
+
+// ─── balance is checked before any prompt ─────────────────────────────────
+
+test('a personal sender without enough coin is told so before any confirm or PIN (a UGX figure read as coins used to ask for a PIN, then fail)', async () => {
+  const h = harness();
+  const r = await send(h, { amount: '20000', getPersonalBalance: async () => 3.5 });
+  assert.equal(r.success, false);
+  assert.match(r.message, /You have 3\.5000 IcanEra, not enough to send 20000\.0000/);
+  assert.deepEqual(h.log.confirms, []);
+  assert.deepEqual(h.log.pins, []);
+  assert.deepEqual(moved(h.log.api), []);
+});
+
+test('with enough coin the send proceeds; an unreadable balance does not block it (the database still enforces it)', async () => {
+  const enough = harness();
+  assert.equal((await send(enough, { getPersonalBalance: async () => 10 })).success, true);
+
+  const unreadable = harness();
+  const r = await send(unreadable, { getPersonalBalance: async () => { throw new Error('offline'); } });
+  assert.equal(r.success, true);
+  assert.equal(moved(unreadable.log.api)[0][0], 'sendIcaneracoin');
+});
+
+test('a business sender is checked against the business wallet, not the personal balance', async () => {
+  const h = harness();
+  const r = await send(h, { sendFromBusiness: MY_BIZ, sendFromIsAdmin: true, amount: '5', getPersonalBalance: async () => 0 });
+  assert.equal(r.success, true);
+});

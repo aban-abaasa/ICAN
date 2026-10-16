@@ -46,7 +46,7 @@ import paymentMethodDetector from '../services/paymentMethodDetector';
 import agentService from '../services/agentService';
 import { walletAccountService, hashPIN, requestPinResetEmail } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
-import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFromBusinessWallet, isBusinessWalletAdmin, sendFiatToMobileMoney, sendFiatToBank, detectUgandaMobileNetwork } from '../services/icanWalletService';
+import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFromBusinessWallet, isBusinessWalletAdmin, getBalance as getIcanCoinBalance, sendFiatToMobileMoney, sendFiatToBank, detectUgandaMobileNetwork } from '../services/icanWalletService';
 import { classifyRecipient } from '../utils/walletRouting';
 import { resolveRecipientWallet as lookupRecipientWallet, runCoinSend, describeSendError } from '../services/coinSendFlow';
 import { listUgandaBanks } from '../services/digitalCardService';
@@ -138,6 +138,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [recipientAccountKind, setRecipientAccountKind] = useState('ican'); // 'ican' | 'biz' — explicit choice, replaces relying on the sender remembering to type a "BIZ-" prefix themselves
   const [sendFrom, setSendFrom] = useState('personal'); // 'personal' | a business profile id — which wallet the money leaves
   const [sendFromIsAdmin, setSendFromIsAdmin] = useState(null); // null until checked; only an administrator can approve a business-wallet payment
+  const [coinSwitchNotice, setCoinSwitchNotice] = useState(false); // the sheet switched itself to IcanEra Coin because a business wallet number was typed
   const [recipientPreview, setRecipientPreview] = useState(null); // { status: 'checking'|'found'|'notfound', name, accountType } for the recipient being typed
   const [sendBankCode, setSendBankCode] = useState('');
   const [sendBeneficiary, setSendBeneficiary] = useState('');
@@ -1709,6 +1710,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     setSendMethod('ican');
     setRecipientAccountKind('ican');
     setSendFrom('personal');
+    setCoinSwitchNotice(false);
     setSendNetwork(null);
     setSendBankCode('');
     setSendBeneficiary('');
@@ -1732,10 +1734,15 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         throw new Error('User not authenticated');
       }
 
-      // A business wallet number (leading digit 3) only holds IcanEra coin —
-      // the coin sender already knows how to pay one (verify, confirm, PIN).
+      // A business wallet number (leading digit 3) only holds IcanEra coin. This
+      // amount is money (e.g. UGX 20,000) — reading it as coins would be 20,000
+      // coins — so never forward it; the sheet switches to IcanEra Coin itself.
       if (classifyRecipient(recipientIdentifier).kind === 'business_wallet') {
-        await handleSendICANCoin(recipientIdentifier, amount, description);
+        setTransactionResult({
+          type: 'send',
+          success: false,
+          message: 'A business wallet number receives IcanEra coin. Choose "IcanEra Coin" under Send to, then enter the amount in coins.'
+        });
         return;
       }
 
@@ -1833,6 +1840,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         confirm: (message) => window.confirm(message),
         verifyUserPIN: (userId, pin) => walletAccountService.verifyUserPIN(userId, pin),
         verifyBusinessWalletPin: (businessId, pin) => walletAccountService.verifyBusinessWalletPin(businessId, pin),
+        getPersonalBalance: async () => (await getIcanCoinBalance(currentUserId)).ican,
         api: { sendIcaneracoin, sendICANToBusiness, sendFromBusinessWallet, isBusinessWalletAdmin },
       });
       if (outcome.cancelled) return;
@@ -6123,6 +6131,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             setSendMethod('ican');
             setRecipientAccountKind('ican');
             setSendFrom('personal');
+            setCoinSwitchNotice(false);
             setSendNetwork(null);
             setSendBankCode('');
             setSendBeneficiary('');
@@ -6283,7 +6292,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                             <button
                               key={key}
                               type="button"
-                              onClick={() => setSendMethod(key)}
+                              onClick={() => { setSendMethod(key); setCoinSwitchNotice(false); }}
                               aria-pressed={sendMethod === key}
                               className="flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl text-center transition-all active:scale-[0.98]"
                               style={pill(sendMethod === key)}
@@ -6294,6 +6303,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                             </button>
                           ))}
                         </div>
+                        {coinSwitchNotice && sendMethod === 'icaneracoin' && (
+                          <p className="mt-2 text-xs leading-relaxed font-medium" style={{ color: '#8a6a1f' }}>
+                            A business wallet receives IcanEra coin, so this is now an IcanEra Coin send. Enter the amount in coins.
+                          </p>
+                        )}
                       </div>
                       )}
 
@@ -6335,7 +6349,19 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                             autoComplete="off"
                             placeholder={isMobile ? '+256701234567' : isBankSend ? 'Bank account number' : isBiz ? '3002345678901234' : 'Account no., phone or email'}
                             value={sendForm.recipient}
-                            onChange={(e) => setSendForm({ ...sendForm, recipient: e.target.value })}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (!fromBiz && sendMethod === 'ican' && classifyRecipient(value).kind === 'business_wallet') {
+                                // A business wallet only holds coin, and an amount already typed
+                                // in money (UGX 20,000) would be read as 20,000 coins — so switch
+                                // and clear it rather than carry it over.
+                                setSendMethod('icaneracoin');
+                                setCoinSwitchNotice(true);
+                                setSendForm({ ...sendForm, recipient: value, amount: '' });
+                              } else {
+                                setSendForm({ ...sendForm, recipient: value });
+                              }
+                            }}
                             className="w-full pl-10 pr-3 py-3 text-base placeholder-gray-400 focus:outline-none"
                             style={field}
                           />
