@@ -121,7 +121,7 @@ const IcanPriceChartWidget = () => {
             </button>
           </div>
           <div className="min-h-0 flex-1">
-            {error ? failed : <IcanTradingChart rows={candles} loading={loading} theme={theme} feedState={status} />}
+            {error ? failed : <IcanTradingChart rows={candles} loading={loading} theme={theme} feedState={status} history />}
           </div>
         </div>,
         document.body,

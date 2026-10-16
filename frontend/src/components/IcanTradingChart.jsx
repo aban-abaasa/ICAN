@@ -10,6 +10,7 @@ import {
 } from 'lightweight-charts';
 import { TIMEFRAMES, toSeries, fillGaps, aggregateSeries, smaSeries, rsiSeries, trendChannel, channelValue } from '../utils/candleSeries';
 import DiamondChartBackdrop from './DiamondChartBackdrop';
+import { supabase } from '../lib/supabase/client';
 import { CHART_PALETTES as PALETTES } from './chartPalettes';
 import { LineStyleEditor } from './chartLineStyles';
 import { sanitizeLineStyles } from '../utils/lineStyles';
@@ -24,6 +25,14 @@ import { sanitizeLineStyles } from '../utils/lineStyles';
 
 const DASH = { solid: LineStyle.Solid, dashed: LineStyle.Dashed, dotted: LineStyle.Dotted, long: LineStyle.LargeDashed };
 const LINE_HIT_PX = 12; // how close a tap must be to a trading line to select it
+// History ranges: the period asked for and the candle size it is drawn in (about 100-400 candles each).
+const HISTORY_RANGES = [
+  { id: '1w', label: '1W', title: 'Last week, hourly candles', days: 7, bucket: 3600 },
+  { id: '1m', label: '1M', title: 'Last month, 4-hour candles', days: 30, bucket: 14400 },
+  { id: '1y', label: '1Y', title: 'Last year, daily candles', days: 365, bucket: 86400 },
+  { id: 'all', label: 'All', title: 'Everything, weekly candles', days: 3650, bucket: 604800 },
+];
+
 const LINE_EXTEND_BARS = 8; // the channel runs on past the last candle, like a hand-drawn trend line
 
 const localTick = (time, type) => {
@@ -124,6 +133,9 @@ const IcanTradingChart = ({
   symbol = 'ICAN / UGX',
   // The timeframe the chart opens on. A slow-moving series (ICEC-S, recorded every minute) reads best on 1h; the coin itself on 5m.
   initialTimeframe = '5m',
+  // Offer the 1W / 1M / 1Y / All history buttons. Only for the coin's own chart: they read the coin's stored
+  // candles, so a sector index or stable-coin chart leaves this off.
+  history = false,
   emptyNote = 'Candles appear as soon as icaneracoin moves — nothing here is simulated.',
 }) => {
   const looks = useMemo(() => sanitizeLineStyles(lineStyles), [lineStyles]);
@@ -155,13 +167,41 @@ const IcanTradingChart = ({
   // How many candles to frame: fewer on a phone so the bodies stay readable.
   const framedBars = () => {
     const narrow = (containerRef.current?.clientWidth || 1000) < 520;
+    if (range) return bars.length; // a history range shows the whole period
     return full ? (narrow ? 48 : 120) : (narrow ? 40 : 80);
   };
 
-  const tf = TIMEFRAMES.find((t) => t.id === tfId) || TIMEFRAMES[0];
+  // History range: 'live' is the normal chart (recent 5-minute candles rolled up by the timeframe buttons). A range
+  // (week / month / year / all) asks the server for the whole period already rolled into candles of a fitting size.
+  const [rangeId, setRangeId] = useState('live');
+  const [histRows, setHistRows] = useState([]);
+  const [histState, setHistState] = useState('idle'); // idle | loading | ready | failed
+  const range = history ? HISTORY_RANGES.find((r) => r.id === rangeId) : null;
+  useEffect(() => {
+    if (!range) { setHistState('idle'); return undefined; }
+    let alive = true;
+    setHistState('loading');
+    setHistRows([]);
+    supabase.rpc('ican_get_public_candle_history', { p_days: range.days, p_bucket_seconds: range.bucket })
+      .then(({ data, error }) => {
+        if (!alive) return;
+        if (error || !Array.isArray(data)) { setHistState('failed'); return; }
+        setHistRows(data);
+        setHistState('ready');
+      })
+      .catch(() => { if (alive) setHistState('failed'); });
+    return () => { alive = false; };
+  }, [range]);
+
+  const tfBase = TIMEFRAMES.find((t) => t.id === tfId) || TIMEFRAMES[0];
+  const tf = range ? { id: range.id, label: range.label, seconds: range.bucket } : tfBase;
   // A steady 5-minute grid: quiet windows (the feed only stores candles where the price ticked) become flat candles.
-  const base = useMemo(() => fillGaps(toSeries(rows)), [rows]);
-  const bars = useMemo(() => aggregateSeries(base, tf.seconds), [base, tf.seconds]);
+  const base = useMemo(() => (range ? [] : fillGaps(toSeries(rows))), [rows, range]);
+  const bars = useMemo(
+    () => (range ? toSeries(histRows) : aggregateSeries(base, tf.seconds)),
+    [base, tf.seconds, range, histRows],
+  );
+  const busy = range ? histState === 'loading' : loading;
   const last = bars.length ? bars[bars.length - 1] : null;
   const prev = bars.length > 1 ? bars[bars.length - 2] : null;
 
@@ -367,14 +407,14 @@ const IcanTradingChart = ({
       api.support.setData([]);
     }
 
-    const key = `${tfId}:${bars.length ? 'data' : 'empty'}`;
+    const key = `${range ? range.id : tfId}:${bars.length ? 'data' : 'empty'}`;
     if (bars.length && viewKeyRef.current !== key) {
       viewKeyRef.current = key;
       api.chart.timeScale().setVisibleLogicalRange({ from: Math.max(-2, bars.length - framedBars()), to: bars.length + LINE_EXTEND_BARS + 4 });
     }
     requestAnimationFrame(() => placeRef.current());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bars, tfId, full, tf.seconds, c]);
+  }, [bars, tfId, range, full, tf.seconds, c]);
 
   useEffect(() => {
     const api = apiRef.current;
@@ -455,15 +495,33 @@ const IcanTradingChart = ({
                 key={t.id}
                 type="button"
                 role="tab"
-                aria-selected={t.id === tfId}
-                onClick={() => setTfId(t.id)}
+                aria-selected={!range && t.id === tfId}
+                onClick={() => { setTfId(t.id); setRangeId('live'); }}
                 className="rounded px-2.5 py-1 font-semibold transition-colors"
-                style={t.id === tfId ? { background: c.tabOnBg, color: c.tabOnText } : { color: c.soft }}
+                style={!range && t.id === tfId ? { background: c.tabOnBg, color: c.tabOnText } : { color: c.soft }}
               >
                 {t.label}
               </button>
             ))}
           </div>
+          {history && (
+            <div className="flex shrink-0 items-center gap-0.5 rounded-md p-0.5" style={{ background: c.tabsBg }} role="tablist" aria-label="History range">
+              {HISTORY_RANGES.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={rangeId === r.id}
+                  title={r.title}
+                  onClick={() => setRangeId(r.id)}
+                  className="rounded px-2.5 py-1 font-semibold transition-colors"
+                  style={rangeId === r.id ? { background: c.tabOnBg, color: c.tabOnText } : { color: c.soft }}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
             <button type="button" aria-pressed={showMA} onClick={() => setShowMA((v) => !v)} className="rounded-md border px-2.5 py-1 font-semibold transition-colors" style={chip(showMA)}>
               <span style={{ color: c.ma20 }}>MA20</span> <span style={{ color: c.ma50 }}>MA50</span>
@@ -581,17 +639,17 @@ const IcanTradingChart = ({
           </div>
         )}
 
-        {(loading || bars.length === 0) && (
+        {(busy || bars.length === 0) && (
           <div className="absolute inset-0 z-[4] flex flex-col items-center justify-center gap-2 text-center" style={{ background: c.veil }}>
-            {loading ? (
+            {busy ? (
               <>
                 <div className="h-8 w-8 animate-spin rounded-full border-2" style={{ borderColor: c.spinTrack, borderTopColor: c.spinHead }} />
-                <p className="text-sm" style={{ color: c.soft }}>Connecting to the market feed…</p>
+                <p className="text-sm" style={{ color: c.soft }}>{range ? `Loading ${range.title.toLowerCase()}…` : 'Connecting to the market feed…'}</p>
               </>
             ) : (
               <>
-                <p className="text-sm font-semibold" style={{ color: c.fg }}>No trading activity yet</p>
-                <p className="max-w-xs text-xs" style={{ color: c.muted }}>{emptyNote}</p>
+                <p className="text-sm font-semibold" style={{ color: c.fg }}>{range ? (histState === 'failed' ? 'History could not be loaded' : 'No history for this range') : 'No trading activity yet'}</p>
+                <p className="max-w-xs text-xs" style={{ color: c.muted }}>{range ? (histState === 'failed' ? 'Try again in a moment, or switch back to a timeframe.' : 'Nothing was traded in this period.') : emptyNote}</p>
               </>
             )}
           </div>

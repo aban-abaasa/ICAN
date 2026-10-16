@@ -447,6 +447,7 @@ const PublicIcanChartPage = () => {
               onPickPrice={handlePickPrice}
               onLineSelect={handleLineSelect}
               feedState={status}
+              history
             />
           )}
         </section>
