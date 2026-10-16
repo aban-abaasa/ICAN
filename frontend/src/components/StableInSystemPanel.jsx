@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import IcanTradingChart from './IcanTradingChart';
+import { stableHistory } from '../services/chartHistorySources';
 import LearnTab from './LearnTab';
 import { getQuote, getHistory, getMyPosition, getMyFills, getMyWallets, getHomeCurrency, swapStable } from '../services/stableUnitService';
 import { makeRequestIdStore } from '../utils/tradeResult';
@@ -166,7 +167,7 @@ export default function StableInSystemPanel() {
         <p className="px-4 pt-3 text-sm text-slate-400">Value &amp; analysis</p>
         <div className="mt-2 h-[22rem] w-full sm:h-[26rem]">
           <IcanTradingChart rows={rows} loading={false} theme="dark" wheelZoom={false} feedState={quote.rates_stale ? 'delayed' : 'live'}
-            symbol="ICEC-S / UGX" initialTimeframe="1h" emptyNote="The value is recorded every minute from the live rates. Nothing here is simulated." />
+            symbol="ICEC-S / UGX" initialTimeframe="1h" history={stableHistory} emptyNote="The value is recorded every minute from the live rates. Nothing here is simulated." />
         </div>
       </section>
 
