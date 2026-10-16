@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import IcanDiamond from './IcanDiamond';
 import { BlockchainBackdrop, useIsDarkTheme as useIsDark } from './BlockchainBackdrop';
 import BlockLedger from './BlockLedger';
+import { PRODUCT_OF } from '../constants/brand';
 
 /**
  * Splash / loading screen -- classic edition with a rotating diamond.
@@ -124,6 +125,9 @@ const SplashArt = () => {
 
         <p style={{ margin: '2rem 0 0', fontSize: '0.68rem', letterSpacing: '0.12em', color: c.muted, opacity: 0.8 }}>
           © {year} IcanEra · Global money &amp; business
+        </p>
+        <p style={{ margin: '0.35rem 0 0', fontSize: '0.64rem', letterSpacing: '0.12em', color: c.muted, opacity: 0.7 }}>
+          {PRODUCT_OF}
         </p>
       </div>
     </div>

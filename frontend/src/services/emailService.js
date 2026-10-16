@@ -196,6 +196,7 @@ class EmailService {
               
               <div class="footer">
                 <p>&copy; 2026 IcanEra. All rights reserved.</p>
+                <p>A product of GODMINDERA ORGANISATION (U) LTD</p>
               </div>
             </div>
           </div>
@@ -281,6 +282,7 @@ class EmailService {
               <div class="footer">
                 <p>Request ID: ${requestId}</p>
                 <p>&copy; 2026 IcanEra. All rights reserved.</p>
+                <p>A product of GODMINDERA ORGANISATION (U) LTD</p>
               </div>
             </div>
           </div>
@@ -370,6 +372,7 @@ class EmailService {
               
               <div class="footer">
                 <p>&copy; 2026 IcanEra. All rights reserved.</p>
+                <p>A product of GODMINDERA ORGANISATION (U) LTD</p>
               </div>
             </div>
           </div>

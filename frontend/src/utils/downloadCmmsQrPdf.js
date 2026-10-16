@@ -55,5 +55,6 @@ export const downloadCmmsQrPdf = async ({ type, url, location, companyName, titl
   pdf.setFontSize(8);
   pdf.setTextColor(140);
   pdf.text('Powered by IcanEra', pageWidth / 2, 230 + dy, { align: 'center' });
+  pdf.text('A product of GODMINDERA ORGANISATION (U) LTD', pageWidth / 2, 235 + dy, { align: 'center' });
   pdf.save(filename || `ican-cmms-${type}-qr-${safeFilename(location)}.pdf`);
 };

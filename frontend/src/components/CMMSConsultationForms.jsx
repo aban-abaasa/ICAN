@@ -464,7 +464,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName,
             Submitted: ${escapeHtml(new Date(submission.created_at).toLocaleString())} (${submission.submitted_via === 'public_link' ? 'via public link' : 'recorded by staff'})`,
           qrDataUrl, qrCaption: qrDataUrl ? 'Record reference' : '', qrCode: qrDataUrl ? formatReferenceCode(code) : ''
         })}${fieldsHtml}${attachmentsHtml(attachments)}
-         <div class="meta">Printed ${escapeHtml(new Date().toLocaleString())} · Powered by IcanEra</div>`
+         <div class="meta">Printed ${escapeHtml(new Date().toLocaleString())} · Powered by IcanEra · A product of GODMINDERA ORGANISATION (U) LTD</div>`
       );
     } catch (err) {
       console.error('Unable to prepare the printable record:', err);

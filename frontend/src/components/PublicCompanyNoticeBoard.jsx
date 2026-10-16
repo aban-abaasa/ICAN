@@ -2031,6 +2031,7 @@ const SiteFooter = ({ company, tabs, activeSection, onNavigate, onOpenApp }) => 
           <p>
             &copy; {new Date().getFullYear()} {company.company_name} · Powered by{' '}
             <button onClick={onOpenApp} className="align-middle hover:opacity-80 transition-opacity"><IcanEraWordmark /></button>
+            {' · '}A product of GODMINDERA ORGANISATION (U) LTD
           </p>
           <button
             type="button"

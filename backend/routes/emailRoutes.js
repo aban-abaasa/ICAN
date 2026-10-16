@@ -113,6 +113,7 @@ router.post('/send-pin-reset', async (req, res) => {
                 <p>Request ID: ${requestId}</p>
                 <p>This is an automated message. Do not reply to this email.</p>
                 <p>&copy; 2026 ICAN. All rights reserved.</p>
+                <p>A product of GODMINDERA ORGANISATION (U) LTD</p>
               </div>
             </div>
           </div>
@@ -627,6 +628,7 @@ router.post('/send-account-unlocked', async (req, res) => {
               
               <div class="footer">
                 <p>&copy; 2026 ICAN. All rights reserved.</p>
+                <p>A product of GODMINDERA ORGANISATION (U) LTD</p>
               </div>
             </div>
           </div>
@@ -710,6 +712,7 @@ router.post('/send-unlock-request', async (req, res) => {
               
               <div class="footer">
                 <p>&copy; 2026 ICAN. All rights reserved.</p>
+                <p>A product of GODMINDERA ORGANISATION (U) LTD</p>
               </div>
             </div>
           </div>

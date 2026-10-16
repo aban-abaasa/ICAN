@@ -578,7 +578,7 @@ const PublicIcanChartPage = () => {
       </main>
 
       <footer className={`border-t px-4 pb-28 pt-6 text-center text-xs lg:pb-6 ${k.footBorder}`}>
-        © IcanEra · <a href="/" className={`underline ${k.footLink}`}>Home</a> · <a href="/pricing" className={`underline ${k.footLink}`}>Pricing</a>
+        © IcanEra · A product of GODMINDERA ORGANISATION (U) LTD · <a href="/" className={`underline ${k.footLink}`}>Home</a> · <a href="/pricing" className={`underline ${k.footLink}`}>Pricing</a>
       </footer>
 
       {/* Phone navigation: always within thumb reach, never hidden behind the chart. */}

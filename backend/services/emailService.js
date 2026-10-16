@@ -64,6 +64,7 @@ const emailService = {
                   <p>Request ID: ${requestId}</p>
                   <div class="footer">
                     <p>&copy; 2026 ICAN Wallet. All rights reserved.</p>
+                    <p>A product of GODMINDERA ORGANISATION (U) LTD</p>
                     <p>For support: ${supportEmail}</p>
                   </div>
                 </div>
@@ -116,6 +117,7 @@ const emailService = {
                   <p>If you have any questions or concerns, please contact our support team at ${supportEmail}.</p>
                   <div class="footer">
                     <p>&copy; 2026 ICAN Wallet. All rights reserved.</p>
+                    <p>A product of GODMINDERA ORGANISATION (U) LTD</p>
                   </div>
                 </div>
               </div>
@@ -168,6 +170,7 @@ const emailService = {
                   <p>If you have any questions, please contact our support team at ${supportEmail}.</p>
                   <div class="footer">
                     <p>&copy; 2026 ICAN Wallet. All rights reserved.</p>
+                    <p>A product of GODMINDERA ORGANISATION (U) LTD</p>
                   </div>
                 </div>
               </div>

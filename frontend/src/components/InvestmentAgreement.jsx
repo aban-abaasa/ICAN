@@ -526,6 +526,7 @@ Contract Hash: ${btoa(contractId + JSON.stringify(allSigners)).substring(0, 32)}
 ════════════════════════════════════════════════════════════════════════════════
             This document is legally binding once all parties have signed.
          IcanEra • Powered by Blockchain • ${new Date().getFullYear()}
+         A product of GODMINDERA ORGANISATION (U) LTD
 ════════════════════════════════════════════════════════════════════════════════
       `.trim();
       
