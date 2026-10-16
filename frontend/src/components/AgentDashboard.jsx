@@ -830,7 +830,7 @@ const AgentDashboard = () => {
 
   return (
     <div className="min-h-screen p-2 md:p-6" style={{ color: 'var(--color-text)' }}>
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl 2xl:max-w-[110rem] min-[2560px]:max-w-[150rem] mx-auto">
 
         {/* ============================================ */}
         {/* HEADER */}
