@@ -85,6 +85,7 @@ import PINRecoveryModal from './PINRecoveryModal';
 import WalletAccessModal from './WalletAccessModal';
 import BusinessWalletAccessModal from './BusinessWalletAccessModal';
 import { usePinPrompt } from './PinPromptDialog';
+import { confirmTradePin } from '../services/tradePinService';
 import SmartWithdrawPanel from './SmartWithdrawPanel';
 
 // Big balances (14,378,412 UGX) overflow the balance card, so the headline shows
@@ -705,6 +706,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
     try {
       setBookProcessing(true);
+      // a booked order fills later with nobody at the screen, so the wallet PIN is taken now, when it is placed
+      const pin = await confirmTradePin(askPin, `Book a ${bookOrderType} of ${icanAmt} IcanEra at UGX ${targetPrice.toLocaleString()}. It fills by itself when the price is reached.`);
+      if (!pin.ok) {
+        setBookError(pin.error);
+        return;
+      }
       await icanOrderService.createOrder({
         userId: currentUserId,
         orderType: bookOrderType,
@@ -798,6 +805,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
     try {
       setInstantProcessing(true);
+      // every buy and sell needs the wallet PIN; nothing is charged or sold until it is right
+      const pin = await confirmTradePin(askPin, `${instantSide === 'buy' ? 'Buy' : 'Sell'} ${amt} IcanEra at the live price.`);
+      if (!pin.ok) {
+        setInstantError(pin.error);
+        return;
+      }
       let result;
       if (instantSide === 'buy') {
         const priceData = await icanCoinBlockchainService.getCurrentPrice();
@@ -831,6 +844,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     setManageOrderError('');
     try {
       setManageOrderProcessing(true);
+      const pin = await confirmTradePin(askPin, `Fill your booked ${manageOrderTarget.order_type} of ${parseFloat(manageOrderTarget.ican_amount)} IcanEra now, at the live price.`);
+      if (!pin.ok) {
+        setManageOrderError(pin.error);
+        return;
+      }
       const result = await icanOrderService.fillOrderNow(manageOrderTarget, currentUserId);
       if (result?.success) {
         setManageOrderTarget(null);

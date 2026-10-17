@@ -10,6 +10,7 @@ import icanCoinBlockchainService from '../services/icanCoinBlockchainService';
 import { CountryService } from '../services/countryService';
 import { friendlyTradeError, orderCrossed, validateBooking, validateSell, validateWalletBuy } from '../utils/tradeRules';
 import { makeRequestIdStore } from '../utils/tradeResult';
+import useTradePin from './useTradePin';
 
 // Everything the public /icaneracoin trade panel does for a signed-in visitor. It invents no money logic: coins are
 // bought through the Flutterwave top-up (the server verifies the charge and credits the wallet at the live price),
@@ -44,6 +45,9 @@ export const usePublicTrading = (livePriceUgx) => {
   const backoff = useRef({}); // orderId -> do not retry before this time
   // One id per buy / sell ACTION: a double tap or a retry after a lost answer reuses it, so the server trades once.
   const requestIds = useRef(makeRequestIdStore('public')).current;
+  // Buying from the wallet, selling, booking and filling an order all need the wallet PIN (the screen renders `pinDialog`).
+  // Paying by card / Mobile Money is not a wallet debit: the payment provider's own check approves it.
+  const { confirmPin, pinDialog } = useTradePin();
 
   const say = useCallback((kind, text) => setNotice({ kind, text }), []);
 
@@ -197,6 +201,8 @@ export const usePublicTrading = (livePriceUgx) => {
   const buyWithWallet = (localAmount) => run(async () => {
     const check = validateWalletBuy(localAmount, cash?.balance);
     if (!check.ok) { say('err', check.error); return { success: false, error: check.error }; }
+    const pin = await confirmPin(`Buy ICAN with ${Number(check.amount).toLocaleString()} ${cash?.currency || CountryService.getCurrencyCode(country)} from your IcanEra wallet.`);
+    if (!pin.ok) { say('err', pin.error); return { success: false, error: pin.error }; }
     try {
       const result = await icanCoinService.buyIcanCoins(userId, check.amount, country, 'wallet_balance',
         { requestId: requestIds.idFor(`buy|${check.amount}|${country}`), expectedPriceUgx: priceRef.current });
@@ -221,6 +227,8 @@ export const usePublicTrading = (livePriceUgx) => {
   const sellCoins = (amount) => run(async () => {
     const check = validateSell(amount, wallet?.ican);
     if (!check.ok) { say('err', check.error); return { success: false, error: check.error }; }
+    const pin = await confirmPin(`Sell ${check.amount} ICAN at the live price.`);
+    if (!pin.ok) { say('err', pin.error); return { success: false, error: pin.error }; }
     try {
       const result = await icanCoinService.sellIcanCoins(userId, check.amount, country,
         { requestId: requestIds.idFor(`sell|${check.amount}|${country}`), expectedPriceUgx: priceRef.current });
@@ -238,6 +246,9 @@ export const usePublicTrading = (livePriceUgx) => {
   const bookOrder = ({ side, amount, price }) => run(async () => {
     const problem = validateBooking({ side, amount, price, balance: wallet?.ican });
     if (problem) { say('err', problem); return { success: false, error: problem }; }
+    // a booked order fills later with nobody at the screen, so the wallet PIN is taken now, when it is placed
+    const pin = await confirmPin(`Book a ${side === 'buy' ? 'buy' : 'sell'} of ${Number(amount)} ICAN at UGX ${Number(price).toLocaleString()}. It fills by itself when the price is reached.`);
+    if (!pin.ok) { say('err', pin.error); return { success: false, error: pin.error }; }
     try {
       await icanOrderService.createOrder({ userId, orderType: side, icanAmount: Number(amount), targetPriceUgx: Number(price), countryCode: country || 'UG' });
       say('ok', `Booked: ${side === 'buy' ? 'buy' : 'sell'} ${Number(amount)} ICAN at UGX ${Number(price).toLocaleString()}.`);
@@ -259,6 +270,8 @@ export const usePublicTrading = (livePriceUgx) => {
   });
 
   const fillOrderNow = (order) => run(async () => {
+    const pin = await confirmPin(`Fill your booked ${order.order_type} of ${parseFloat(order.ican_amount)} ICAN now, at the live price.`);
+    if (!pin.ok) { say('err', pin.error); return; }
     try {
       const result = await icanOrderService.fillOrderNow(order, userId);
       if (result?.success) {
@@ -293,7 +306,7 @@ export const usePublicTrading = (livePriceUgx) => {
   return {
     user, signedIn: !!userId, signOut, continueWithGoogle,
     wallet, quote, quoteError, country, orders, buyMarkers, sellMarkers, orderErrors, busy, notice, clearNotice: () => setNotice(null),
-    cash, buyCoins, buyWithWallet, sellCoins, bookOrder, cancelOrder, fillOrderNow, refreshWallet,
+    cash, buyCoins, buyWithWallet, sellCoins, bookOrder, cancelOrder, fillOrderNow, refreshWallet, pinDialog,
     currencyCode: CountryService.getCurrencyCode(country),
   };
 };

@@ -4,6 +4,7 @@ import { getBalance } from '../services/icanWalletService';
 import { tradeSector, getMyHoldings, getMyFills } from '../services/sectorMarketService';
 import { useSectorMarkets } from './useSectorMarkets';
 import { makeRequestIdStore } from '../utils/tradeResult';
+import useTradePin from './useTradePin';
 import {
   ICEC, quoteBuy, quoteSell, validateBuy, validateSell, sectorState, friendlySectorError,
   formatPrice, trim, floor8,
@@ -67,6 +68,7 @@ export const useSectorTicket = (board, userId = null) => {
   const [fills, setFills] = useState([]);
   const [money, reloadMoney] = useMoneyWallet(userId);
   const requestIds = useRef(makeRequestIdStore('sector')).current;
+  const { confirmPin, pinDialog } = useTradePin();
 
   const refreshMine = useCallback(async () => {
     if (!userId) { setIcec(null); setHoldings([]); setFills([]); return; }
@@ -120,6 +122,11 @@ export const useSectorTicket = (board, userId = null) => {
     if (!ready || busy) return;
     setBusy(true);
     setNotice(null);
+    // every buy and sell needs the wallet PIN; nothing is sent to the server until it is right
+    const pin = await confirmPin(mode === 'buy'
+      ? `Buy ${sel?.ticker || selected} for ${trim(num, 8)} ${payWith}.`
+      : `Sell ${trim(num, 8)} ${sel?.ticker || selected}.`);
+    if (!pin.ok) { setBusy(false); setNotice({ kind: 'err', text: pin.error }); return; }
     const requestId = requestIds.idFor(`${mode}|${selected}|${amount}|${payWith}`);
     const res = await tradeSector({ sector: selected, side: mode, amount: num, currency: payWith, requestId, expectedPrice: price, maxSlippagePct: 1 });
     setBusy(false);
@@ -147,7 +154,7 @@ export const useSectorTicket = (board, userId = null) => {
   return {
     userId, mode, setMode, amount, setAmount, setAmountRaw, payWith, setPayWith, reviewing, setReviewing, busy, notice,
     icec, holdings, fills, money, sel, state, price, held, num, inMoney, payIcec, balance, buyQuote, sellQuote, problem, ready,
-    feePct, proceedsIn, submit, startSell, refreshMine,
+    feePct, proceedsIn, submit, startSell, refreshMine, pinDialog,
   };
 };
 
