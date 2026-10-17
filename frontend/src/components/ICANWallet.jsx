@@ -47,7 +47,7 @@ import agentService from '../services/agentService';
 import { walletAccountService, hashPIN, requestPinResetEmail } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
 import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFromBusinessWallet, isBusinessWalletAdmin, getBalance as getIcanCoinBalance, getTradingInfo, buyCoinsFromWallet, sellCoinsToWallet, sendFiatToMobileMoney, sendFiatToBank, detectUgandaMobileNetwork } from '../services/icanWalletService';
-import { classifyRecipient, coinsForCurrency, currencyForCoins } from '../utils/walletRouting';
+import { classifyRecipient, coinsForCurrency, currencyForCoins, moneyDecimals, quickMoneyAmounts } from '../utils/walletRouting';
 import { describeSendQuote } from '../utils/sendQuote';
 import { resolveRecipientWallet as lookupRecipientWallet, runCoinSend, describeSendError } from '../services/coinSendFlow';
 import { runCurrencySend } from '../services/currencyPayFlow';
@@ -5995,17 +5995,33 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       {/* Withdraw Tab */}
       {activeTab === 'withdraw' && (
         <>
-        <SmartWithdrawPanel
-          userId={currentUserId}
-          ownPhone={userAccount?.phone_number || ''}
-          fiatUgx={realWalletBalances.UGX}
-          businesses={senderBusinessProfiles}
-          askPin={askPin}
-          onChanged={(info) => {
-            if (currentUserId) loadWalletBalances(currentUserId);
-            if (info?.business) loadBusinessAccountProfiles();
-          }}
-        />
+        {registeredCurrency === 'UGX' ? (
+          <SmartWithdrawPanel
+            userId={currentUserId}
+            ownPhone={userAccount?.phone_number || ''}
+            fiatUgx={realWalletBalances.UGX}
+            businesses={senderBusinessProfiles}
+            askPin={askPin}
+            onChanged={(info) => {
+              if (currentUserId) loadWalletBalances(currentUserId);
+              if (info?.business) loadBusinessAccountProfiles();
+            }}
+          />
+        ) : (
+          // The cash-out rails (Uganda mobile money and bank) pay out UGX only. Say so rather
+          // than showing a UGX form to a wallet that holds another currency.
+          <div className="glass-card p-6 mb-6">
+            <h3 className="text-lg font-semibold text-white mb-1 flex items-center gap-2">
+              <Upload className="w-5 h-5 text-orange-400" />
+              Withdraw to Mobile Money or Bank
+            </h3>
+            <p className="text-gray-400 text-sm">
+              Cash-out to mobile money and bank is available for Uganda wallets (UGX) for now. Your wallet is in {registeredCurrency}.
+              You can still convert between your {registeredCurrency} balance and IcanEra coin when you send — pay in {registeredCurrency} and
+              the recipient receives coin, or pay in coin and they receive {registeredCurrency}.
+            </p>
+          </div>
+        )}
         <div className="glass-card p-6">
           <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <ArrowUpRight className="w-5 h-5 text-orange-400" />
@@ -6272,18 +6288,22 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         const moneyCurrency = (isSend && tradingInfo?.currency) || selectedCurrency;
         const coinsTyped = isSend && isCoin && amountUnit === 'coin';
         const unit = coinsTyped ? 'ICAN' : moneyCurrency;
+        // Quick picks in your own currency scale with what a coin costs there (UGX 5,000 /
+        // 10,000 / 20,000 / 50,000, USD 1 / 2.5 / 5 / 10, ...); before the price loads, fall back.
         const quick = coinsTyped
           ? [1, 5, 10, 50]
-          : moneyCurrency === 'UGX'
-            ? [5000, 10000, 20000, 50000]
-            : [5, 10, 25, 50];
+          : (isSend && tradingInfo?.price && quickMoneyAmounts(tradingInfo.price, moneyCurrency).length)
+            ? quickMoneyAmounts(tradingInfo.price, moneyCurrency)
+            : moneyCurrency === 'UGX'
+              ? [5000, 10000, 20000, 50000]
+              : [5, 10, 25, 50];
         const switchAmountUnit = (next) => {
           if (next === amountUnit) return;
           const n = parseFloat(sendForm.amount);
           let converted = '';
           if (n > 0 && tradingInfo?.price) {
             converted = next === 'currency'
-              ? String(Math.round(currencyForCoins(n, tradingInfo.price)))
+              ? String(Number(currencyForCoins(n, tradingInfo.price).toFixed(moneyDecimals(moneyCurrency))))
               : String(Number(coinsForCurrency(n, tradingInfo.price).toFixed(4)));
           }
           setAmountUnit(next);

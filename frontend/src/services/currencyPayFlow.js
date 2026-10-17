@@ -19,7 +19,7 @@
  * moves, so cancelling a prompt never leaves money half-way.
  */
 
-import { coinsToSellFor, planCurrencyPayment, simulateSell, COIN_PAYOUT_FEE_RATE } from '../utils/walletRouting.js';
+import { coinsToSellFor, conversionMargin, formatMoney, planCurrencyPayment, simulateSell, COIN_PAYOUT_FEE_RATE } from '../utils/walletRouting.js';
 import { resolveRecipientWallet } from './coinSendFlow.js';
 
 const fmt4 = (n) => Number(n).toFixed(4);
@@ -79,7 +79,7 @@ export async function runCurrencySend({
   let trading;
   try { trading = await getTradingInfo(); } catch (error) { return fail(error.message); }
   const { currency, price } = trading;
-  const money = (n) => `${currency} ${Number(n).toLocaleString()}`;
+  const money = (n) => formatMoney(currency, n);
 
   const senderName = sendFromBusiness ? sendFromBusiness.business_name : 'your personal wallet';
   const recipientName = recipient.name || recipient.identifier;
@@ -94,7 +94,7 @@ export async function runCurrencySend({
     if (!isAdmin) {
       return fail("Only the business administrator can pay money from a business wallet. Send IcanEra coin instead, or ask the administrator.");
     }
-    sellCoins = coinsToSellFor(amountNum, price);
+    sellCoins = coinsToSellFor(amountNum, price, COIN_PAYOUT_FEE_RATE, conversionMargin(currency));
     const available = Number(sendFromBusiness.ican_wallet?.ican_balance || 0);
     if (sellCoins > available) {
       return fail(`${senderName} has ${fmt4(available)} IcanEra — paying ${money(amountNum)} needs ${fmt4(sellCoins)} (it includes the ${COIN_PAYOUT_FEE_RATE * 100}% conversion fee).`);

@@ -272,3 +272,14 @@ test('planPersonalCurrencyPayment reports whether a conversion is needed, for th
   const down = await planPersonalCurrencyPayment({ amount: 1000, getTradingInfo: async () => { throw new Error('price unavailable'); }, getPersonalBalance: async () => 1 });
   assert.deepEqual(down, { ok: false, error: 'price unavailable' });
 });
+
+test('a USD wallet: the shortfall is sold in USD, the payment is made in USD, and the wallet is never a cent short', async () => {
+  const w = world({ wallet: 0.5, coin: 12, price: 1.3 });
+  w.base.getTradingInfo = async () => ({ currency: 'USD', price: 1.3, walletBalance: w.state.wallet });
+  const r = await run(w, { amount: '10' });
+  assert.equal(r.success, true);
+  assert.equal(w.log.steps[2][0], 'sendFiat');
+  assert.deepEqual([w.log.steps[2][1].currency, w.log.steps[2][1].amount], ['USD', 10]);
+  assert.match(w.log.confirms[0], /converted to USD 9\.\d\d at USD 1\.30 per coin/);
+  assert.ok(w.state.wallet >= 0, 'never overdrawn');
+});

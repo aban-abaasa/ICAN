@@ -199,7 +199,28 @@ export function rememberDestination(list, dest, max = 5) {
 
 const round8 = (n) => Math.round(n * 1e8) / 1e8;
 const ceil8 = (n) => Math.ceil(n * 1e8 - 1e-6) / 1e8;
-const moneyText = (currency, n) => `${currency ? `${currency} ` : ''}${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
+// Every conversion is in the person's OWN currency (the country they chose at sign-up),
+// never a fixed one. Same rule as services/topUpCurrency.js: USD / EUR / GBP show cents,
+// the rest are whole units.
+const TWO_DECIMAL_CURRENCIES = new Set(['USD', 'EUR', 'GBP']);
+export const moneyDecimals = (currency) => (TWO_DECIMAL_CURRENCIES.has(String(currency || '').toUpperCase()) ? 2 : 0);
+
+/** "UGX 20,000" / "USD 1.30" — in the currency's own precision. */
+export function formatMoney(currency, n) {
+  const d = moneyDecimals(currency);
+  const text = Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+  return currency ? `${currency} ${text}` : text;
+}
+
+/**
+ * Selling coin for a non-UGX currency pays round2(gross × the 97% ratio) on the server,
+ * which can differ from our own rounding by one cent. A cent of headroom keeps a planned
+ * conversion from landing a cent short; the cent stays in the wallet.
+ */
+export const conversionMargin = (currency) => (moneyDecimals(currency) === 2 ? 0.01 : 0);
+
+const moneyText = formatMoney;
 
 /** Coins that `amount` of currency buys at `price` per coin, floored so the cost never exceeds the amount. */
 export function coinsForCurrency(amount, price) {
@@ -256,10 +277,10 @@ export function simulateSell(coins, price, feeRate = COIN_PAYOUT_FEE_RATE) {
 }
 
 /** Coins to sell so the wallet gains at least `needed` after the fee (nudged up past any rounding). */
-export function coinsToSellFor(needed, price, feeRate = COIN_PAYOUT_FEE_RATE) {
-  const n = Number(needed);
+export function coinsToSellFor(needed, price, feeRate = COIN_PAYOUT_FEE_RATE, margin = 0) {
+  const n = Number(needed) + (Number(margin) || 0);
   const p = Number(price);
-  if (!(n > 0) || !(p > 0)) return 0;
+  if (!(Number(needed) > 0) || !(p > 0)) return 0;
   const perCoin = p * (1 - feeRate);
   let coins = ceil8(n / perCoin);
   for (let i = 0; i < 10; i += 1) {
@@ -284,7 +305,7 @@ export function planCurrencyPayment({ amount, walletBalance = 0, coinBalance = 0
   if (shortfall <= 0) return { ok: true, convert: false };
 
   if (!(Number(price) > 0)) return { ok: false, error: 'The live coin price is not available right now. Try again in a moment.' };
-  const sellCoins = coinsToSellFor(shortfall, price, feeRate);
+  const sellCoins = coinsToSellFor(shortfall, price, feeRate, conversionMargin(currency));
   const have = Math.max(0, Number(coinBalance) || 0);
   if (sellCoins > have + 1e-9) {
     const reach = round2(wallet + simulateSell(have, price, feeRate).net);
@@ -295,4 +316,33 @@ export function planCurrencyPayment({ amount, walletBalance = 0, coinBalance = 0
   }
   const sold = simulateSell(sellCoins, price, feeRate);
   return { ok: true, convert: true, sellCoins, shortfall, proceeds: sold.net, fee: sold.fee };
+}
+
+// ─── Quick amounts in the person's own currency ────────────────────────────
+
+const NICE_STEPS = [1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10];
+/** The largest "friendly" figure (1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10 × a power of ten) not above x. */
+function niceFloor(x) {
+  if (!(x > 0)) return 0;
+  const mag = 10 ** Math.floor(Math.log10(x));
+  const n = x / mag;
+  const step = [...NICE_STEPS].reverse().find((v) => v <= n + 1e-9) || 1;
+  return Math.round(step * mag * 1e8) / 1e8;
+}
+
+/**
+ * Quick-pick amounts that scale with what one coin costs in this person's currency:
+ * 1, 2, 4 and 10 coins' worth, rounded down to a friendly figure. UGX at ~5,000 a coin
+ * gives 5,000 / 10,000 / 20,000 / 50,000; USD at 1.30 gives 1 / 2.5 / 5 / 10.
+ */
+export function quickMoneyAmounts(price, currency) {
+  const p = Number(price);
+  if (!(p > 0)) return [];
+  const floorAt = moneyDecimals(currency) === 0 ? 1 : 0.01;
+  const out = [];
+  for (const k of [1, 2, 4, 10]) {
+    const v = Math.max(floorAt, niceFloor(p * k));
+    if (!out.includes(v)) out.push(v);
+  }
+  return out;
 }

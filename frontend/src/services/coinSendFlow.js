@@ -16,6 +16,7 @@
 import {
   classifyRecipient,
   coinsForCurrency,
+  formatMoney,
   phoneLookupVariants,
   pickRecipientAccount,
   planCoinPayment,
@@ -224,7 +225,7 @@ export async function runCoinSend({
   // The recipient was looked up above, so this name is an actual account
   // holder, not just whatever the sender typed.
   const currency = trading?.currency;
-  const money = (n) => `${currency} ${Number(n).toLocaleString()}`;
+  const money = (n) => formatMoney(currency, n);
   const confirmed = confirm(
     `Send ${fmt(parsedAmount)} IcanEra from ${senderName} to ${recipientName} (${recipientKind} account)?\n\n` +
     `Verified IcanEra ${recipientKind} account: ${recipient.identifier}` +

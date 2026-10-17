@@ -71,3 +71,13 @@ test('a business paying a person in money: shows the coin it takes, including th
   assert.equal(over.ok, false);
   assert.match(texts(over)[0], /needs 61\.8557/);
 });
+
+test('quotes are in the person\'s own currency (USD with cents, KES whole)', () => {
+  const usd = describeSendQuote({ tile: 'coin', unit: 'currency', amount: '20', price: 1.3, currency: 'USD', coinBalance: 0, walletBalance: 100 });
+  assert.match(usd.lines[0].text, /≈ 15\.3846 IcanEra at USD 1\.30 per coin/);
+  assert.match(usd.lines[1].text, /Paid from your wallet \(USD 100\.00 available\)/);
+
+  const kes = describeSendQuote({ tile: 'money', amount: '5000', price: 160, currency: 'KES', coinBalance: 100, walletBalance: 1000 });
+  assert.equal(kes.ok, true);
+  assert.match(kes.lines[0].text, /Your wallet has KES 1,000 — .* IcanEra is converted for the rest \(3% fee: KES /);
+});

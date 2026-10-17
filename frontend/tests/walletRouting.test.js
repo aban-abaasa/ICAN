@@ -227,3 +227,52 @@ test('planCurrencyPayment refuses when wallet plus coin (after the fee) still fa
   assert.equal(planCurrencyPayment({ amount: 0 }).error, 'Enter an amount');
   assert.match(planCurrencyPayment({ amount: 5, walletBalance: 0, coinBalance: 1, price: 0 }).error, /live coin price/);
 });
+
+// ─── the person's OWN currency, not a fixed one ────────────────────────────
+
+import { formatMoney, moneyDecimals, conversionMargin, quickMoneyAmounts } from '../src/utils/walletRouting.js';
+
+test('money is shown in the currency\'s own precision: cents for USD/EUR/GBP, whole units otherwise', () => {
+  assert.equal(formatMoney('UGX', 20000), 'UGX 20,000');
+  assert.equal(formatMoney('KES', 1234.5), 'KES 1,235');
+  assert.equal(formatMoney('USD', 1.3), 'USD 1.30');
+  assert.equal(formatMoney('eur', 0), 'eur 0.00');
+  assert.equal(formatMoney('', 5), '5');
+  assert.deepEqual([moneyDecimals('GBP'), moneyDecimals('NGN'), moneyDecimals(undefined)], [2, 0, 0]);
+});
+
+test('a two-decimal currency gets a cent of headroom on coin sold for money, so a conversion never lands a cent short', () => {
+  assert.equal(conversionMargin('USD'), 0.01);
+  assert.equal(conversionMargin('UGX'), 0);
+  for (const needed of [10, 9.5, 123.45, 0.5]) {
+    const coins = coinsToSellFor(needed, 1.3, 0.03, conversionMargin('USD'));
+    assert.ok(simulateSell(coins, 1.3).net >= needed + 0.01 - 1e-9, `USD ${needed}`);
+  }
+  const plan = planCurrencyPayment({ amount: 10, walletBalance: 0.5, coinBalance: 12, price: 1.3, currency: 'USD' });
+  assert.equal(plan.ok, true);
+  assert.ok(plan.proceeds >= 9.51);
+});
+
+test('planner messages carry the currency and its precision', () => {
+  const buy = planCoinPayment({ coinsNeeded: 10, coinBalance: 0, walletBalance: 5, price: 1.3, mode: 'currency_only', currency: 'USD' });
+  assert.equal(buy.ok, false);
+  assert.match(buy.error, /costs USD 13\.00, you have USD 5\.00/);
+  const sell = planCurrencyPayment({ amount: 100, walletBalance: 1, coinBalance: 2, price: 1.3, currency: 'USD' });
+  assert.match(sell.error, /you have USD 1\.00 in your wallet/);
+});
+
+test('quick amounts scale with the coin price in each currency and stay friendly', () => {
+  assert.deepEqual(quickMoneyAmounts(5000, 'UGX'), [5000, 10000, 20000, 50000]);
+  assert.deepEqual(quickMoneyAmounts(6123.4, 'UGX'), [5000, 10000, 20000, 50000]);
+  assert.deepEqual(quickMoneyAmounts(1.3, 'USD'), [1, 2.5, 5, 10]);
+  assert.deepEqual(quickMoneyAmounts(160, 'KES'), [150, 300, 500, 1500]);
+  assert.deepEqual(quickMoneyAmounts(0, 'UGX'), []);
+  assert.ok(quickMoneyAmounts(0.4, 'KES').every((v) => v >= 1), 'a whole-unit currency never offers less than 1');
+});
+
+test('coin <-> money conversion works the same in a two-decimal currency', () => {
+  const coins = coinsForCurrency(20, 1.3);
+  assert.equal(coins, 15.38461538);
+  assert.ok(currencyForCoins(coins, 1.3) <= 20);
+  assert.equal(currencyForCoins(coins, 1.3), 20);
+});

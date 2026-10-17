@@ -9,13 +9,15 @@ import {
   COIN_PAYOUT_FEE_RATE,
   coinsForCurrency,
   coinsToSellFor,
+  conversionMargin,
   currencyForCoins,
+  formatMoney,
   planCoinPayment,
   planCurrencyPayment,
   simulateSell,
 } from './walletRouting.js';
 
-const money = (currency, n) => `${currency} ${Math.round(Number(n) || 0).toLocaleString()}`;
+const money = formatMoney;
 const coin = (n) => Number(n).toFixed(4);
 
 /**
@@ -68,7 +70,7 @@ export function describeSendQuote({ tile, unit = 'coin', amount, price, currency
 
   // The recipient receives normal currency.
   if (business) {
-    const sell = coinsToSellFor(a, price);
+    const sell = coinsToSellFor(a, price, COIN_PAYOUT_FEE_RATE, conversionMargin(currency));
     const fee = simulateSell(sell, price).fee;
     if (sell > business.coins + 1e-9) {
       add(`${business.name} has ${coin(business.coins)} IcanEra — paying ${money(currency, a)} needs ${coin(sell)} (it includes the ${feePct} conversion fee).`, 'error');

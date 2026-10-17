@@ -427,3 +427,14 @@ test('a business cannot send more than it holds, in either unit', async () => {
   assert.equal(r.success, false);
   assert.match(r.message, /has only 50\.0000 IcanEra/);
 });
+
+test('a USD wallet: money typed is converted at the USD price and the confirm and message say USD', async () => {
+  const h = converting({ trading: { currency: 'USD', price: 1.3, walletBalance: 100 } });
+  const r = await send(h, { recipientIdentifier: SHOP_WALLET.wallet_address, amount: '20', amountUnit: 'currency' });
+  assert.equal(r.success, true);
+  assert.equal(h.log.api[0][0], 'buyCoinsFromWallet');
+  assert.equal(h.log.api[0][1].icanAmount, 15.38461538);
+  assert.match(h.log.confirms[0], /USD 20\.00 becomes 15\.3846 IcanEra at USD 1\.30 per coin/);
+  assert.deepEqual(r.converted, { currency: 'USD', cost: 20, coins: 15.38461538 });
+  assert.match(r.message, /Converted USD 20\.00/);
+});
