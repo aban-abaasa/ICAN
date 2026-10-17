@@ -189,3 +189,110 @@ export function rememberDestination(list, dest, max = 5) {
   const rest = (list || []).filter((d) => destinationKey(d) !== key);
   return [{ ...dest, usedAt: dest.usedAt || Date.now() }, ...rest].slice(0, max);
 }
+
+// ─── Converting between currency and coin ───────────────────────────────────
+//
+// The server prices every conversion at the coin's live price in the person's own
+// currency (get_my_ican_trading_info). Currency → coin (buy_ican_coins_from_wallet)
+// has no fee; coin → currency (sell_ican_coins_to_wallet) keeps the flat 3%. The
+// helpers below only plan the maths — nothing here moves money.
+
+const round8 = (n) => Math.round(n * 1e8) / 1e8;
+const ceil8 = (n) => Math.ceil(n * 1e8 - 1e-6) / 1e8;
+const moneyText = (currency, n) => `${currency ? `${currency} ` : ''}${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
+/** Coins that `amount` of currency buys at `price` per coin, floored so the cost never exceeds the amount. */
+export function coinsForCurrency(amount, price) {
+  const a = Number(amount);
+  const p = Number(price);
+  if (!(a > 0) || !(p > 0)) return 0;
+  return floor8(a / p);
+}
+
+/** What `coins` are worth (or cost) at `price`, rounded to 2 dp the way the server does. */
+export function currencyForCoins(coins, price) {
+  const c = Number(coins);
+  const p = Number(price);
+  if (!(c > 0) || !(p > 0)) return 0;
+  return round2(c * p);
+}
+
+/**
+ * How a personal wallet pays `coinsNeeded` coins.
+ * - 'coins_first' (the amount was typed in coins): coins on hand are spent first and
+ *   only the shortfall is bought with money from the wallet — so "send 4 coins"
+ *   works with 1.5 coins and enough money.
+ * - 'currency_only' (the amount was typed in money): the coins are bought with
+ *   money and the coin balance is left alone — someone who typed UGX 20,000 did
+ *   not ask to spend their coins.
+ * @returns {{ok: true, fromCoins: number, buyCoins: number, cost: number, convert: boolean} | {ok: false, error: string}}
+ */
+export function planCoinPayment({ coinsNeeded, coinBalance = 0, walletBalance = 0, price, mode = 'coins_first', currency = '' }) {
+  const need = Number(coinsNeeded);
+  if (!(need > 0)) return { ok: false, error: 'Enter an amount' };
+  if (!(Number(price) > 0)) return { ok: false, error: 'The live coin price is not available right now. Try again in a moment.' };
+
+  const have = Math.max(0, Number(coinBalance) || 0);
+  const fromCoins = mode === 'currency_only' ? 0 : Math.min(have, need);
+  const buyCoins = round8(need - fromCoins);
+  const cost = currencyForCoins(buyCoins, price);
+
+  if (cost > (Number(walletBalance) || 0) + 1e-9) {
+    return {
+      ok: false,
+      error: buyCoins === need
+        ? `Not enough money in your wallet: ${need.toFixed(4)} IcanEra costs ${moneyText(currency, cost)}, you have ${moneyText(currency, Number(walletBalance) || 0)}.`
+        : `You have ${have.toFixed(4)} IcanEra, and converting the other ${buyCoins.toFixed(4)} costs ${moneyText(currency, cost)} — more than the ${moneyText(currency, Number(walletBalance) || 0)} in your wallet.`,
+    };
+  }
+  return { ok: true, fromCoins, buyCoins, cost, convert: buyCoins > 0 };
+}
+
+/** What selling `coins` pays — mirrors sell_ican_coins(): gross and fee each rounded to 2 dp. */
+export function simulateSell(coins, price, feeRate = COIN_PAYOUT_FEE_RATE) {
+  const gross = currencyForCoins(coins, price);
+  const fee = round2(gross * feeRate);
+  return { gross, fee, net: round2(gross - fee) };
+}
+
+/** Coins to sell so the wallet gains at least `needed` after the fee (nudged up past any rounding). */
+export function coinsToSellFor(needed, price, feeRate = COIN_PAYOUT_FEE_RATE) {
+  const n = Number(needed);
+  const p = Number(price);
+  if (!(n > 0) || !(p > 0)) return 0;
+  const perCoin = p * (1 - feeRate);
+  let coins = ceil8(n / perCoin);
+  for (let i = 0; i < 10; i += 1) {
+    const { net } = simulateSell(coins, p, feeRate);
+    if (net >= n) break;
+    coins = round8(coins + ceil8((n - net) / perCoin));
+  }
+  return coins;
+}
+
+/**
+ * How a personal wallet pays `amount` of currency. The wallet's own money is used
+ * first; if it falls short, just enough coin is sold (3% fee) to cover the
+ * difference. Never more coin than is held.
+ * @returns {{ok: true, convert: false} | {ok: true, convert: true, sellCoins: number, shortfall: number, proceeds: number, fee: number} | {ok: false, error: string}}
+ */
+export function planCurrencyPayment({ amount, walletBalance = 0, coinBalance = 0, price, feeRate = COIN_PAYOUT_FEE_RATE, currency = '' }) {
+  const a = Number(amount);
+  if (!(a > 0)) return { ok: false, error: 'Enter an amount' };
+  const wallet = Math.max(0, Number(walletBalance) || 0);
+  const shortfall = round2(a - wallet);
+  if (shortfall <= 0) return { ok: true, convert: false };
+
+  if (!(Number(price) > 0)) return { ok: false, error: 'The live coin price is not available right now. Try again in a moment.' };
+  const sellCoins = coinsToSellFor(shortfall, price, feeRate);
+  const have = Math.max(0, Number(coinBalance) || 0);
+  if (sellCoins > have + 1e-9) {
+    const reach = round2(wallet + simulateSell(have, price, feeRate).net);
+    return {
+      ok: false,
+      error: `Not enough: you have ${moneyText(currency, wallet)} in your wallet and ${have.toFixed(4)} IcanEra (about ${moneyText(currency, simulateSell(have, price, feeRate).net)} after the fee), which reaches ${moneyText(currency, reach)}.`,
+    };
+  }
+  const sold = simulateSell(sellCoins, price, feeRate);
+  return { ok: true, convert: true, sellCoins, shortfall, proceeds: sold.net, fee: sold.fee };
+}

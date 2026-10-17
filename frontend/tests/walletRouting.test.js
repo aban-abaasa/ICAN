@@ -157,3 +157,73 @@ test('rememberDestination keeps newest first, drops duplicates, and caps the lis
   assert.equal(list.length, 5);
   assert.equal(rememberDestination(list, { channel: 'mobile', account: '' }), list);
 });
+
+// ─── currency ⇄ coin conversion ────────────────────────────────────────────
+
+import { coinsForCurrency, currencyForCoins, planCoinPayment, simulateSell, coinsToSellFor, planCurrencyPayment } from '../src/utils/walletRouting.js';
+
+test('coinsForCurrency floors so the cost never exceeds what was typed; currencyForCoins is the 2dp value', () => {
+  assert.equal(coinsForCurrency(20000, 5000), 4);
+  assert.equal(coinsForCurrency(12345, 5000), 2.469);
+  assert.ok(currencyForCoins(coinsForCurrency(20001, 5300), 5300) <= 20001);
+  assert.equal(currencyForCoins(2.469, 5000), 12345);
+  assert.equal(coinsForCurrency(0, 5000), 0);
+  assert.equal(coinsForCurrency(100, 0), 0);
+  assert.equal(currencyForCoins(-1, 5000), 0);
+});
+
+test('planCoinPayment (typed in coins): coins on hand first, only the shortfall is bought from the wallet', () => {
+  const p = planCoinPayment({ coinsNeeded: 4, coinBalance: 1.5, walletBalance: 20000, price: 5000 });
+  assert.deepEqual(p, { ok: true, fromCoins: 1.5, buyCoins: 2.5, cost: 12500, convert: true });
+  const enough = planCoinPayment({ coinsNeeded: 1, coinBalance: 3.5, walletBalance: 0, price: 5000 });
+  assert.deepEqual(enough, { ok: true, fromCoins: 1, buyCoins: 0, cost: 0, convert: false });
+});
+
+test('planCoinPayment (typed in money): buys the coins from the wallet and leaves the coin balance alone', () => {
+  const p = planCoinPayment({ coinsNeeded: 4, coinBalance: 10, walletBalance: 25000, price: 5000, mode: 'currency_only' });
+  assert.deepEqual(p, { ok: true, fromCoins: 0, buyCoins: 4, cost: 20000, convert: true });
+});
+
+test('planCoinPayment explains a shortfall that the wallet cannot cover, and a missing price', () => {
+  const none = planCoinPayment({ coinsNeeded: 4, coinBalance: 0, walletBalance: 5000, price: 5000 });
+  assert.equal(none.ok, false);
+  assert.match(none.error, /Not enough money in your wallet/);
+  const partial = planCoinPayment({ coinsNeeded: 4, coinBalance: 1, walletBalance: 5000, price: 5000 });
+  assert.match(partial.error, /You have 1\.0000 IcanEra/);
+  assert.match(planCoinPayment({ coinsNeeded: 1, price: 0 }).error, /live coin price/);
+  assert.equal(planCoinPayment({ coinsNeeded: 0, price: 5000 }).error, 'Enter an amount');
+});
+
+test('simulateSell mirrors the server: gross and 3% fee each to 2dp', () => {
+  assert.deepEqual(simulateSell(10, 5000), { gross: 50000, fee: 1500, net: 48500 });
+  assert.deepEqual(simulateSell(2.469, 5000), { gross: 12345, fee: 370.35, net: 11974.65 });
+});
+
+test('coinsToSellFor sells just enough to net the wanted amount after the fee, never short', () => {
+  for (const [needed, price] of [[48500, 5000], [10000, 5000], [12345.67, 5321.4], [1, 5000], [250000, 6123.55]]) {
+    const coins = coinsToSellFor(needed, price);
+    assert.ok(simulateSell(coins, price).net >= needed, `${needed} @ ${price}`);
+    assert.ok(simulateSell(coins - 0.0001, price).net < needed + 1, 'and not wildly more than needed');
+  }
+  assert.equal(coinsToSellFor(48500, 5000), 10);
+  assert.equal(coinsToSellFor(0, 5000), 0);
+});
+
+test('planCurrencyPayment: wallet money first, then just enough coin for the shortfall', () => {
+  assert.deepEqual(planCurrencyPayment({ amount: 20000, walletBalance: 30000, coinBalance: 5, price: 5000 }), { ok: true, convert: false });
+  const p = planCurrencyPayment({ amount: 50000, walletBalance: 1500, coinBalance: 12, price: 5000 });
+  assert.equal(p.ok, true);
+  assert.equal(p.convert, true);
+  assert.equal(p.shortfall, 48500);
+  assert.equal(p.sellCoins, 10);
+  assert.equal(p.proceeds, 48500);
+  assert.equal(p.fee, 1500);
+});
+
+test('planCurrencyPayment refuses when wallet plus coin (after the fee) still falls short', () => {
+  const p = planCurrencyPayment({ amount: 100000, walletBalance: 10000, coinBalance: 2, price: 5000 });
+  assert.equal(p.ok, false);
+  assert.match(p.error, /Not enough/);
+  assert.equal(planCurrencyPayment({ amount: 0 }).error, 'Enter an amount');
+  assert.match(planCurrencyPayment({ amount: 5, walletBalance: 0, coinBalance: 1, price: 0 }).error, /live coin price/);
+});

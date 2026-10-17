@@ -286,3 +286,144 @@ test('a business sender is checked against the business wallet, not the personal
   const r = await send(h, { sendFromBusiness: MY_BIZ, sendFromIsAdmin: true, amount: '5', getPersonalBalance: async () => 0 });
   assert.equal(r.success, true);
 });
+
+// ─── automatic conversion: money → coin ────────────────────────────────────
+
+const TRADING = { currency: 'UGX', price: 5000, walletBalance: 100000 };
+function converting(over = {}) {
+  const h = harness(over);
+  const { trading = TRADING, buyFails = false, transferFails = false, tradingFails = false } = over;
+  h.base.getTradingInfo = async () => { if (tradingFails) throw new Error('The live coin price is unavailable right now.'); return trading; };
+  h.base.api.buyCoinsFromWallet = async (a) => {
+    h.log.api.push(['buyCoinsFromWallet', a]);
+    if (buyFails) throw new Error('Not enough money in your IcanEra Wallet.');
+    return { success: true };
+  };
+  if (transferFails) {
+    const fail = async () => { throw new Error('Transfer exploded'); };
+    h.base.api.sendICANToBusiness = fail;
+    h.base.api.sendIcaneracoin = fail;
+  }
+  return h;
+}
+
+test('UGX 20,000 to a business wallet: converted to 4 coins at the live price, bought from the wallet, then sent — one PIN', async () => {
+  const h = converting();
+  const r = await send(h, { recipientIdentifier: SHOP_WALLET.wallet_address, amount: '20000', amountUnit: 'currency' });
+  assert.equal(r.success, true);
+  assert.deepEqual(h.log.api.map(([n]) => n), ['buyCoinsFromWallet', 'sendICANToBusiness']);
+  assert.equal(h.log.api[0][1].icanAmount, 4);
+  assert.equal(h.log.api[1][1].amount, 4);
+  assert.equal(h.log.api[1][1].businessProfileId, 'biz-shop');
+  assert.deepEqual(h.log.pins, ['Confirm transfer']);
+  assert.match(h.log.confirms[0], /UGX 20,000 becomes 4\.0000 IcanEra at UGX 5,000 per coin/);
+  assert.match(h.log.confirms[0], /First UGX 20,000 from your wallet is converted into 4\.0000 IcanEra \(no fee\)/);
+  assert.match(r.message, /Sent 4\.0000 IcanEra/);
+  assert.match(r.message, /Converted UGX 20,000/);
+  assert.deepEqual(r.converted, { currency: 'UGX', cost: 20000, coins: 4 });
+});
+
+test('money typed leaves the coin balance alone, even when the coins on hand would cover it', async () => {
+  const h = converting();
+  const r = await send(h, { recipientIdentifier: SHOP_WALLET.wallet_address, amount: '20000', amountUnit: 'currency', getPersonalBalance: async () => 50 });
+  assert.equal(r.success, true);
+  assert.equal(h.log.api[0][0], 'buyCoinsFromWallet');
+});
+
+test('money typed but the wallet cannot cover it: refused before any confirm, PIN or conversion', async () => {
+  const h = converting({ trading: { ...TRADING, walletBalance: 5000 } });
+  const r = await send(h, { recipientIdentifier: SHOP_WALLET.wallet_address, amount: '20000', amountUnit: 'currency' });
+  assert.equal(r.success, false);
+  assert.match(r.message, /Not enough money in your wallet/);
+  assert.deepEqual(h.log.confirms, []);
+  assert.deepEqual(h.log.pins, []);
+  assert.deepEqual(h.log.api, []);
+});
+
+test('an unavailable live price stops a conversion before anything moves', async () => {
+  const h = converting({ tradingFails: true });
+  const r = await send(h, { recipientIdentifier: SHOP_WALLET.wallet_address, amount: '20000', amountUnit: 'currency' });
+  assert.equal(r.success, false);
+  assert.match(r.message, /live coin price is unavailable/);
+  assert.deepEqual(h.log.api, []);
+});
+
+test('an amount too small to buy any coin is refused', async () => {
+  const r = await send(converting(), { amount: '0.0001', amountUnit: 'currency' });
+  assert.equal(r.success, false);
+  assert.match(r.message, /too small/);
+});
+
+test('coins typed but short: only the shortfall is converted from wallet money, coins on hand are spent first', async () => {
+  const h = converting();
+  const r = await send(h, { amount: '4', getPersonalBalance: async () => 1.5 });
+  assert.equal(r.success, true);
+  assert.deepEqual(h.log.api.map(([n]) => n), ['buyCoinsFromWallet', 'sendIcaneracoin']);
+  assert.equal(h.log.api[0][1].icanAmount, 2.5);
+  assert.equal(h.log.api[1][1].amount, 4);
+  assert.match(h.log.confirms[0], /First UGX 12,500 from your wallet is converted into 2\.5000 IcanEra/);
+  assert.deepEqual(r.converted, { currency: 'UGX', cost: 12500, coins: 2.5 });
+});
+
+test('coins typed and held: no conversion happens', async () => {
+  const h = converting();
+  const r = await send(h, { amount: '1', getPersonalBalance: async () => 3.5 });
+  assert.equal(r.success, true);
+  assert.deepEqual(h.log.api.map(([n]) => n), ['sendIcaneracoin']);
+  assert.equal(r.converted, null);
+});
+
+test('coins typed, short, and the wallet cannot cover the rest: refused before any prompt', async () => {
+  const h = converting({ trading: { ...TRADING, walletBalance: 1000 } });
+  const r = await send(h, { amount: '4', getPersonalBalance: async () => 1.5 });
+  assert.equal(r.success, false);
+  assert.match(r.message, /You have 1\.5000 IcanEra/);
+  assert.deepEqual(h.log.pins, []);
+  assert.deepEqual(h.log.api, []);
+});
+
+test('cancelling the confirm, or a wrong PIN, converts nothing', async () => {
+  const noConfirm = converting({ confirmAnswer: false });
+  assert.deepEqual(await send(noConfirm, { amount: '20000', amountUnit: 'currency' }), { cancelled: true });
+  assert.deepEqual(noConfirm.log.api, []);
+
+  const wrongPin = converting({ userPinOk: false });
+  const r = await send(wrongPin, { amount: '20000', amountUnit: 'currency' });
+  assert.equal(r.success, false);
+  assert.deepEqual(wrongPin.log.api, []);
+});
+
+test('if the conversion itself fails, nothing is sent', async () => {
+  const h = converting({ buyFails: true });
+  await assert.rejects(send(h, { amount: '20000', amountUnit: 'currency' }), /Not enough money in your IcanEra Wallet/);
+  assert.deepEqual(h.log.api.map(([n]) => n), ['buyCoinsFromWallet']);
+});
+
+test('if the transfer fails AFTER the conversion, the error says the coins are safe in the balance', async () => {
+  const h = converting({ transferFails: true });
+  let caught;
+  try { await send(h, { amount: '20000', amountUnit: 'currency' }); } catch (e) { caught = e; }
+  assert.ok(caught, 'should throw');
+  assert.deepEqual(caught.converted, { currency: 'UGX', cost: 20000, coins: 4 });
+  const text = describeSendError(caught);
+  assert.match(text, /Transfer exploded/);
+  assert.match(text, /UGX 20,000 was already converted to 4\.0000 IcanEra — it is safe in your IcanEra balance/);
+});
+
+test('a business sender typing money just sends the coin equivalent — no conversion, business PIN', async () => {
+  const h = converting();
+  const r = await send(h, { sendFromBusiness: MY_BIZ, sendFromIsAdmin: true, amount: '20000', amountUnit: 'currency' });
+  assert.equal(r.success, true);
+  assert.deepEqual(h.log.api.map(([n]) => n), ['sendFromBusinessWallet']);
+  assert.equal(h.log.api[0][1].amount, 4);
+  assert.deepEqual(h.log.pins, ['Business wallet PIN']);
+  assert.equal(r.converted, null);
+  assert.match(r.message, /UGX 20,000 at UGX 5,000 per coin/);
+});
+
+test('a business cannot send more than it holds, in either unit', async () => {
+  const h = converting();
+  const r = await send(h, { sendFromBusiness: MY_BIZ, sendFromIsAdmin: true, amount: '1000000', amountUnit: 'currency' });
+  assert.equal(r.success, false);
+  assert.match(r.message, /has only 50\.0000 IcanEra/);
+});
