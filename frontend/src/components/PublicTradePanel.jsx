@@ -27,7 +27,7 @@ const PublicTradePanel = ({ trading, theme = 'dark', priceUgx, tab, setTab, draf
   const c = CHART_PALETTES[theme] || CHART_PALETTES.dark;
   const {
     user, signedIn, signOut, continueWithGoogle, wallet, quote, quoteError, country, orders, orderErrors, busy, notice,
-    clearNotice, cash, buyCoins, buyWithWallet, sellCoins, bookOrder, cancelOrder, fillOrderNow,
+    clearNotice, cash, buyCoins, buyWithWallet, sellCoins, bookOrder, cancelOrder, fillOrderNow, pinDialog,
   } = trading;
 
   const [buyAmount, setBuyAmount] = useState('');
@@ -145,6 +145,7 @@ const PublicTradePanel = ({ trading, theme = 'dark', priceUgx, tab, setTab, draf
 
   return (
     <div className="space-y-3 p-4">
+      {pinDialog}
       <div className="rounded-xl p-3" style={card}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">

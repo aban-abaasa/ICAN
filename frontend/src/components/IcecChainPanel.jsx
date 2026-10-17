@@ -7,6 +7,7 @@ import {
   cancelWithdrawal, communityContract, getChainOverview, newCreditId, requestLinkChallenge, requestWithdrawal, submitLink, unlinkAddress,
 } from '../services/chainService';
 import { makeRequestIdStore } from '../utils/tradeResult';
+import useTradePin from '../hooks/useTradePin';
 import {
   burnStatus, checkBurn, checkWithdraw, explorerLink, formatUnits, friendlyChainError, ICEC_C_DECIMALS, networkStatus, sameAddress, shortAddress, withdrawalStatus,
 } from '../utils/chainMath';
@@ -34,6 +35,7 @@ export default function IcecChainPanel({ cfg }) {
   const [reviewing, setReviewing] = useState(false);
   const alive = useRef(true);
   const requestIds = useRef(makeRequestIdStore('bridge')).current;
+  const { confirmPin, pinDialog } = useTradePin();
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   const configured = !!(cfg?.chain_id && cfg?.icec_community_address);
@@ -96,6 +98,9 @@ export default function IcecChainPanel({ cfg }) {
   const withdraw = async () => {
     if (!wcheck.ok || busy) return;
     setBusy('withdraw'); setNotice(null);
+    // moving ICEC out of IcanEra needs the wallet PIN; nothing is locked until it is right
+    const pin = await confirmPin(`Lock ${amount} ICEC in IcanEra and send ${amount} ICEC-C to ${shortAddress(toAddress)}.`);
+    if (!pin.ok) { setBusy(''); say('err', pin.error); return; }
     const res = await requestWithdrawal({ amount: Number(amount), address: toAddress, requestId: requestIds.idFor(`${amount}|${toAddress}`) });
     setBusy(''); setReviewing(false);
     if (res.success) { requestIds.clear(); setAmount(''); say('ok', res.duplicate ? 'That withdrawal was already started.' : `Started. ${amount} ICEC is locked in IcanEra and will appear in your wallet shortly.`); }
@@ -131,6 +136,7 @@ export default function IcecChainPanel({ cfg }) {
 
   return (
     <div className="space-y-4 text-slate-200" data-testid="community-panel">
+      {pinDialog}
       <div>
         <h3 className="text-xl font-bold text-white">ICEC-C <span className="text-sm font-normal text-slate-400">· the community form</span></h3>
       </div>

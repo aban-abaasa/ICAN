@@ -51,7 +51,7 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability,
   const t = useSectorTicket(board, userId);
   const {
     mode, setMode, amount, setAmount, setAmountRaw, payWith, setPayWith, reviewing, setReviewing, busy, notice, icec, holdings, fills,
-    money, sel, state, price, held, inMoney, buyQuote, sellQuote, problem, ready, feePct, proceedsIn, submit, startSell,
+    money, sel, state, price, held, inMoney, buyQuote, sellQuote, problem, ready, feePct, proceedsIn, submit, startSell, pinDialog,
   } = t;
 
   // 'ICAN' while the chart shows icaneracoin itself, null while it follows the selected sector
@@ -106,6 +106,7 @@ const PublicSectorMarkets = ({ theme = 'dark', skin: k, trading, onAvailability,
 
   return (
     <section id="sectors" ref={rootRef} aria-labelledby="sectors-heading" className="mt-10 scroll-mt-16" data-testid="public-sectors">
+      {pinDialog}
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className={`text-xs font-bold uppercase tracking-[0.16em] ${k.kicker}`}>Business data</p>

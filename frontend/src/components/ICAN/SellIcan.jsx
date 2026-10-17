@@ -9,6 +9,7 @@ import icanCoinService from '../../services/icanCoinService';
 import icanCoinBlockchainService from '../../services/icanCoinBlockchainService';
 import { CountryService } from '../../services/countryService';
 import { makeRequestIdStore } from '../../utils/tradeResult';
+import useTradePin from '../../hooks/useTradePin';
 import './IcanTrading.css';
 
 export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
@@ -19,6 +20,7 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
   const [marketPrice, setMarketPrice] = useState(5000);
   // One id per sell ACTION: a double tap or a retry after a lost answer reuses it, so the server sells once.
   const requestIds = useRef(makeRequestIdStore('sell')).current;
+  const { confirmPin, pinDialog } = useTradePin();
   const [country, setCountry] = useState(null);
   const [currency, setCurrency] = useState('UGX');
   const [currencySymbol, setCurrencySymbol] = useState('Sh');
@@ -131,6 +133,13 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
       setError('');
       setSuccess('');
 
+      // every sale needs the wallet PIN; nothing is sold until it is right
+      const pin = await confirmPin(`Sell ${parseFloat(icanAmount).toLocaleString(undefined, { maximumFractionDigits: 8 })} IcanEra for about ${currencySymbol}${Number(localAmount).toLocaleString()}.`);
+      if (!pin.ok) {
+        setError(pin.error);
+        return;
+      }
+
       const result = await icanCoinService.sellIcanCoins(
         resolvedUserId,
         parseFloat(icanAmount),
@@ -190,6 +199,7 @@ export default function SellIcan({ userId: propUserId, onSuccess } = {}) {
 
   return (
     <div className="ican-trading-container sell-ican">
+      {pinDialog}
       <div className="trading-card">
         {/* Title */}
         <div style={{ marginBottom: '24px', textAlign: 'center' }}>

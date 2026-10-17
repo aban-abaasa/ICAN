@@ -57,7 +57,7 @@ export default function SectorMarketsPanel() {
   const t = useSectorTicket(board, userId);
   const {
     mode, setMode, amount, setAmount, setAmountRaw, payWith, setPayWith, reviewing, setReviewing, busy, notice, icec, holdings, fills,
-    money, sel, state, price, held, num, inMoney, payIcec, buyQuote, sellQuote, problem, ready, feePct, proceedsIn, submit, startSell,
+    money, sel, state, price, held, num, inMoney, payIcec, buyQuote, sellQuote, problem, ready, feePct, proceedsIn, submit, startSell, pinDialog,
   } = t;
 
   const chartRows = useMemo(() => sectorChartRows(candles), [candles]);
@@ -74,6 +74,7 @@ export default function SectorMarketsPanel() {
 
   return (
     <div className="space-y-5 text-slate-200">
+      {pinDialog}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-xl font-bold text-white">Sector Markets</h3>

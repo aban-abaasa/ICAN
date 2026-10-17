@@ -9,6 +9,7 @@ import icanCoinService from '../../services/icanCoinService';
 import icanCoinBlockchainService from '../../services/icanCoinBlockchainService';
 import { CountryService } from '../../services/countryService';
 import { makeRequestIdStore } from '../../utils/tradeResult';
+import useTradePin from '../../hooks/useTradePin';
 import './IcanTrading.css';
 
 export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
@@ -29,6 +30,7 @@ export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
   const [percentageChange, setPercentageChange] = useState(0);
   // One id per buy ACTION: a double tap or a retry after a lost answer reuses it, so the server buys once.
   const requestIds = useRef(makeRequestIdStore('buy')).current;
+  const { confirmPin, pinDialog } = useTradePin();
 
   // Initialize user data and market price
   useEffect(() => {
@@ -112,6 +114,13 @@ export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
       setError('');
       setSuccess('');
 
+      // every buy needs the wallet PIN; nothing is charged until it is right
+      const pin = await confirmPin(`Buy IcanEra coins with ${currencySymbol}${parseFloat(localAmount).toLocaleString()} from your wallet.`);
+      if (!pin.ok) {
+        setError(pin.error);
+        return;
+      }
+
       const result = await icanCoinService.buyIcanCoins(
         resolvedUserId,
         parseFloat(localAmount),
@@ -190,6 +199,7 @@ export default function BuyIcan({ userId: propUserId, onSuccess } = {}) {
 
   return (
     <div className="ican-trading-container buy-ican">
+      {pinDialog}
       <div className="trading-card">
         {/* Title */}
         <div style={{ marginBottom: '24px', textAlign: 'center' }}>

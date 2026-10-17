@@ -6,6 +6,7 @@ import { stableHistory } from '../services/chartHistorySources';
 import LearnTab from './LearnTab';
 import { getQuote, getHistory, getMyPosition, getMyFills, getMyWallets, getHomeCurrency, swapStable } from '../services/stableUnitService';
 import { makeRequestIdStore } from '../utils/tradeResult';
+import useTradePin from '../hooks/useTradePin';
 import {
   trim, previewBuy, previewSell, validateBuy, validateSell, friendlyStableError, historyToRows, rateAge, currencyDecimals, fmtMoney, fmtUnits, rateToUgx, sellFeeBps,
 } from '../utils/stableUnitRules';
@@ -35,6 +36,7 @@ export default function StableInSystemPanel() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const requestIds = useRef(makeRequestIdStore('stable')).current;
+  const { confirmPin, pinDialog } = useTradePin();
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
@@ -100,6 +102,11 @@ export default function StableInSystemPanel() {
   const submit = async () => {
     if (!ready) return;
     setBusy(true); setNotice(null);
+    // every buy and sell needs the wallet PIN; nothing is sent to the server until it is right
+    const pin = await confirmPin(buy
+      ? `Buy about ${fmtUnits(preview.units)} ICEC-S for ${fmtMoney(preview.local, currency)}.`
+      : `Sell ${fmtUnits(num)} ICEC-S for about ${fmtMoney(preview.local, currency)}.`);
+    if (!pin.ok) { setBusy(false); say('err', pin.error); return; }
     const res = await swapStable({
       side: mode, amount: num, currency, expectedUnitUgx: Number(quote.unit_ugx),
       requestId: requestIds.idFor(`${mode}|${currency}|${amount}`),
@@ -274,6 +281,7 @@ export default function StableInSystemPanel() {
         </div>
       )}
       <button type="button" onClick={() => { loadMarket(); loadMine(); }} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-white"><RefreshCw className="h-3.5 w-3.5" /> Refresh</button>
+      {pinDialog}
     </div>
   );
 }
