@@ -348,6 +348,68 @@ export async function sellICAN({ userId, icanAmount, reference = null }) {
   return data;
 }
 
+// ─── Convert between the wallet's money and IcanEra coin ────────────────────
+
+/**
+ * The live coin price in the caller's OWN currency, and the money they hold in
+ * it (get_my_ican_trading_info). Every conversion below is priced from this.
+ * @returns {Promise<{currency: string, price: number, walletBalance: number}>}
+ */
+export async function getTradingInfo() {
+  const { data, error } = await supabase.rpc('get_my_ican_trading_info');
+  const price = Number(data?.price_per_ican);
+  if (error || !data?.currency || !(price > 0)) {
+    throw new Error('The live coin price is unavailable right now. Please try again in a moment.');
+  }
+  return { currency: String(data.currency).toUpperCase(), price, walletBalance: Number(data.wallet_balance) || 0 };
+}
+
+/** Live UGX price of one coin — what a cash-out (flutterwave-payout) pays at. Falls back to the 5,000 floor. */
+export async function getLiveUgxPrice() {
+  try {
+    const { data, error } = await supabase.rpc('ican_live_ugx_price');
+    const price = Number(data);
+    if (!error && price > 0) return price;
+  } catch {
+    // fall through to the floor
+  }
+  return ICAN_TO_UGX;
+}
+
+/**
+ * Money → coin: takes the money for `icanAmount` coins out of the caller's wallet at
+ * the live price (no fee) and credits the coins to their IcanEra balance, in one
+ * database transaction.
+ */
+export async function buyCoinsFromWallet({ userId, icanAmount, sourceApp = SOURCE_APP, reference = null }) {
+  const { data, error } = await supabase.rpc('buy_ican_coins_from_wallet', {
+    p_user_id: userId,
+    p_ican_amount: icanAmount,
+    p_source_app: sourceApp,
+    p_reference: reference,
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || 'Could not convert money to IcanEra');
+  return data;
+}
+
+/**
+ * Coin → money: sells `icanAmount` coins at the live price (3% fee) and credits the
+ * proceeds to the caller's wallet in their own currency. Returns { payout, gross,
+ * currency, price_per_ican, … }.
+ */
+export async function sellCoinsToWallet({ userId, icanAmount, sourceApp = SOURCE_APP, reference = null }) {
+  const { data, error } = await supabase.rpc('sell_ican_coins_to_wallet', {
+    p_user_id: userId,
+    p_ican_amount: icanAmount,
+    p_source_app: sourceApp,
+    p_reference: reference,
+  });
+  if (error) throw error;
+  if (!data?.success) throw new Error(data?.error || 'Could not convert IcanEra to money');
+  return data;
+}
+
 // ─── Send Out (cash out via Flutterwave) ────────────────────────────────────
 
 /**
@@ -505,6 +567,10 @@ export default {
   setBusinessWalletPin,
   getWallet,
   getBalance,
+  getTradingInfo,
+  getLiveUgxPrice,
+  buyCoinsFromWallet,
+  sellCoinsToWallet,
   getTransactions,
   sendICAN,
   buyICAN,

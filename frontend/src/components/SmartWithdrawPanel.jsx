@@ -4,6 +4,7 @@ import {
   ICAN_TO_UGX,
   detectUgandaMobileNetwork,
   getBalance,
+  getLiveUgxPrice,
   isBusinessWalletAdmin,
   requestIcanPayout,
   sendFiatToBank,
@@ -49,6 +50,10 @@ const writeSaved = (userId, list) => {
  */
 const SmartWithdrawPanel = ({ userId, ownPhone = '', fiatUgx = 0, businesses = [], askPin, onChanged }) => {
   const [coinIcan, setCoinIcan] = useState(0);
+  // A cash-out is paid at the coin's LIVE UGX price (never below the 5,000 floor), so
+  // the preview must use it too — the flat floor would under-quote what lands.
+  const [rate, setRate] = useState(ICAN_TO_UGX);
+  useEffect(() => { getLiveUgxPrice().then(setRate); }, []);
   const [sourceId, setSourceId] = useState('personal');
   const [admins, setAdmins] = useState({});
   const [channel, setChannel] = useState('mobile');
@@ -92,13 +97,13 @@ const SmartWithdrawPanel = ({ userId, ownPhone = '', fiatUgx = 0, businesses = [
 
   // What can pay this, and what lands.
   const plan = business
-    ? (businessIcan * ICAN_TO_UGX >= amountNum
-      ? { source: 'coin', maxUgx: businessIcan * ICAN_TO_UGX }
-      : { source: null, maxUgx: businessIcan * ICAN_TO_UGX, reason: `${business.business_name} has IcanEra ${businessIcan.toLocaleString(undefined, { maximumFractionDigits: 4 })} (about ${ugx(businessIcan * ICAN_TO_UGX)}).` })
-    : planWithdrawalSource({ amountUgx: amountNum, fiatUgx, coinIcan, rate: ICAN_TO_UGX });
+    ? (businessIcan * rate >= amountNum
+      ? { source: 'coin', maxUgx: businessIcan * rate }
+      : { source: null, maxUgx: businessIcan * rate, reason: `${business.business_name} has IcanEra ${businessIcan.toLocaleString(undefined, { maximumFractionDigits: 4 })} (about ${ugx(businessIcan * rate)}).` })
+    : planWithdrawalSource({ amountUgx: amountNum, fiatUgx, coinIcan, rate });
   const quote = useMemo(
-    () => quoteWithdrawal({ amountUgx: amountNum, source: plan.source || 'fiat', rate: ICAN_TO_UGX }),
-    [amountNum, plan.source],
+    () => quoteWithdrawal({ amountUgx: amountNum, source: plan.source || 'fiat', rate }),
+    [amountNum, plan.source, rate],
   );
 
   const destinationOk = channel === 'mobile'
@@ -249,7 +254,7 @@ const SmartWithdrawPanel = ({ userId, ownPhone = '', fiatUgx = 0, businesses = [
         <div className="p-3 rounded-lg bg-white/5 border border-white/10">
           <p className="text-xs text-gray-400 flex items-center gap-1"><Zap className="w-3 h-3" /> IcanEra coin</p>
           <p className="text-white font-semibold text-sm">{coinIcan.toLocaleString(undefined, { maximumFractionDigits: 4 })}</p>
-          <p className="text-[11px] text-gray-500">about {ugx(coinIcan * ICAN_TO_UGX)}</p>
+          <p className="text-[11px] text-gray-500">about {ugx(coinIcan * rate)}</p>
         </div>
       </div>
 

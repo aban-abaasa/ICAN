@@ -15,8 +15,11 @@
 
 import {
   classifyRecipient,
+  coinsForCurrency,
+  formatMoney,
   phoneLookupVariants,
   pickRecipientAccount,
+  planCoinPayment,
   planCoinTransfer,
 } from '../utils/walletRouting.js';
 
@@ -84,13 +87,17 @@ export async function resolveRecipientWallet(supabase, identifier, { countryCall
 /** A server error, in words the person can act on. */
 export function describeSendError(error) {
   const raw = error?.message || 'Icaneracoin transfer failed';
+  let message = raw;
   if (/business wallet not found or inactive/i.test(raw)) {
-    return "That business hasn't activated its IcanEra wallet yet, so it can't receive IcanEra coin.";
+    message = "That business hasn't activated its IcanEra wallet yet, so it can't receive IcanEra coin.";
+  } else if (error?.requestId) {
+    message = `${raw} (Payment request ${error.requestId} was created — see it in the business administrator's inbox.)`;
   }
-  if (error?.requestId) {
-    return `${raw} (Payment request ${error.requestId} was created — see it in the business administrator's inbox.)`;
+  // The money was already converted before the transfer failed: say where it is.
+  if (error?.converted) {
+    message += ` Your ${error.converted.currency} ${Number(error.converted.cost).toLocaleString()} was already converted to ${Number(error.converted.coins).toFixed(4)} IcanEra — it is safe in your IcanEra balance.`;
   }
-  return raw;
+  return message;
 }
 
 const fmt = (n) => Number(n).toFixed(4);
@@ -98,6 +105,12 @@ const fmt = (n) => Number(n).toFixed(4);
 /**
  * Run one coin send, start to finish: look the recipient up, work out the route,
  * check the balance, confirm, take the right PIN, move the money.
+ *
+ * Converting: the recipient always receives coin. A sender who types money
+ * (amountUnit 'currency') pays with money from their wallet, bought into coin at
+ * the live price first (no fee); the coin balance is left alone. A sender who types
+ * coins spends coins on hand first and only the shortfall is bought from the
+ * wallet. A business has only coin, so it just sends the coin equivalent.
  *
  * Authorising: a personal sender uses their wallet PIN. A business
  * administrator uses the business-wallet PIN, which submits AND approves in one
@@ -122,21 +135,36 @@ const fmt = (n) => Number(n).toFixed(4);
  * @param {(userId: string, pin: string) => Promise<{success: boolean, error?: string}>} p.verifyUserPIN
  * @param {(businessProfileId: string, pin: string) => Promise<{success: boolean, error?: string}>} p.verifyBusinessWalletPin
  * @param {() => Promise<number>} [p.getPersonalBalance] the sender's coin balance, checked before any PIN is asked
- * @param {{sendIcaneracoin: Function, sendICANToBusiness: Function, sendFromBusinessWallet: Function, isBusinessWalletAdmin: Function}} p.api
+ * @param {'coin'|'currency'} [p.amountUnit] what `amount` is in. 'currency' (e.g. UGX 20,000) is converted to coins at the live price.
+ * @param {() => Promise<{currency: string, price: number, walletBalance: number}>} [p.getTradingInfo] live price + wallet money; needed for any conversion
+ * @param {{sendIcaneracoin: Function, sendICANToBusiness: Function, sendFromBusinessWallet: Function, isBusinessWalletAdmin: Function, buyCoinsFromWallet?: Function}} p.api
  * @returns {Promise<{cancelled: true} | {success: false, message: string} | {success: true, message: string, transactionId: string, pendingApproval: boolean, touchesBusiness: boolean}>}
  */
 export async function runCoinSend({
   supabase, currentUserId, sendFromBusiness = null, sendFromIsAdmin = null,
   recipientIdentifier, amount, description = '', countryCallingCode = null,
-  askPin, confirm, verifyUserPIN, verifyBusinessWalletPin, getPersonalBalance = null, api,
+  askPin, confirm, verifyUserPIN, verifyBusinessWalletPin, getPersonalBalance = null,
+  amountUnit = 'coin', getTradingInfo = null, api,
 }) {
   const fail = (message) => ({ success: false, message });
+  const typedInCurrency = amountUnit === 'currency';
 
-  const parsedAmount = parseFloat(amount);
-  if (!(parsedAmount > 0)) return fail('Enter a valid IcanEra amount');
+  const typedAmount = parseFloat(amount);
+  if (!(typedAmount > 0)) return fail(typedInCurrency ? 'Enter a valid amount' : 'Enter a valid IcanEra amount');
 
   const recipient = await resolveRecipientWallet(supabase, recipientIdentifier, { countryCallingCode });
   if (recipient.error) return fail(recipient.error);
+
+  // Money typed in the person's own currency becomes coins at the live price.
+  let trading = null;
+  let parsedAmount = typedAmount; // the coins the recipient receives
+  if (typedInCurrency) {
+    if (!getTradingInfo) return fail('Converting from money is not available here.');
+    try { trading = await getTradingInfo(); } catch (error) { return fail(error.message); }
+    parsedAmount = coinsForCurrency(typedAmount, trading.price);
+    // The sheet shows coins to 4 places; anything smaller is dust, not a payment.
+    if (parsedAmount < 0.0001) return fail('That amount is too small to convert to IcanEra.');
+  }
 
   const fromWallet = sendFromBusiness
     ? { type: 'business', businessProfileId: sendFromBusiness.id }
@@ -158,14 +186,33 @@ export async function runCoinSend({
     }
   }
 
-  // Don't ask for a PIN just to be told there isn't enough. If the balance can't
-  // be read, carry on — the database enforces it anyway.
-  if (!sendFromBusiness && getPersonalBalance) {
-    let available = NaN;
-    try { available = Number(await getPersonalBalance()); } catch { /* ignore */ }
-    if (Number.isFinite(available) && parsedAmount > available) {
-      return fail(`You have ${fmt(available)} IcanEra, not enough to send ${fmt(parsedAmount)}.`);
+  // Don't ask for a PIN just to be told there isn't enough. A personal sender
+  // short of coins can cover the difference from their wallet's money (bought at
+  // the live price); money typed in is always paid from the wallet. If a balance
+  // can't be read, carry on — the database enforces it anyway.
+  let conversion = null; // { buyCoins, cost } — money converted into coin before sending
+  if (!sendFromBusiness) {
+    if (typedInCurrency) {
+      const plan2 = planCoinPayment({
+        coinsNeeded: parsedAmount, walletBalance: trading.walletBalance, price: trading.price, mode: 'currency_only', currency: trading.currency,
+      });
+      if (!plan2.ok) return fail(plan2.error);
+      conversion = plan2;
+    } else if (getPersonalBalance) {
+      let available = NaN;
+      try { available = Number(await getPersonalBalance()); } catch { /* ignore */ }
+      if (Number.isFinite(available) && parsedAmount > available) {
+        const shortMessage = `You have ${fmt(available)} IcanEra, not enough to send ${fmt(parsedAmount)}.`;
+        if (!getTradingInfo) return fail(shortMessage);
+        try { trading = await getTradingInfo(); } catch { return fail(shortMessage); }
+        const plan2 = planCoinPayment({
+          coinsNeeded: parsedAmount, coinBalance: available, walletBalance: trading.walletBalance, price: trading.price, mode: 'coins_first', currency: trading.currency,
+        });
+        if (!plan2.ok) return fail(plan2.error);
+        conversion = plan2;
+      }
     }
+    if (conversion && !conversion.convert) conversion = null;
   }
 
   const isAdmin = sendFromBusiness
@@ -177,9 +224,13 @@ export async function runCoinSend({
 
   // The recipient was looked up above, so this name is an actual account
   // holder, not just whatever the sender typed.
+  const currency = trading?.currency;
+  const money = (n) => formatMoney(currency, n);
   const confirmed = confirm(
     `Send ${fmt(parsedAmount)} IcanEra from ${senderName} to ${recipientName} (${recipientKind} account)?\n\n` +
     `Verified IcanEra ${recipientKind} account: ${recipient.identifier}` +
+    (typedInCurrency ? `\n\n${money(typedAmount)} becomes ${fmt(parsedAmount)} IcanEra at ${money(trading.price)} per coin — the recipient receives IcanEra.` : '') +
+    (conversion ? `\n\nFirst ${money(conversion.cost)} from your wallet is converted into ${fmt(conversion.buyCoins)} IcanEra (no fee).` : '') +
     (needsApproval ? "\n\nYou can't approve payments from this business, so this will be sent to its administrator as a request." : ''),
   );
   if (!confirmed) return { cancelled: true };
@@ -204,28 +255,45 @@ export async function runCoinSend({
   let transactionId;
   let pendingApproval = false;
 
-  if (plan.route === 'user_to_user') {
-    const result = await api.sendIcaneracoin({
-      fromUserId: currentUserId, toUserId: recipient.userId, amount: parsedAmount, note,
-    });
-    transactionId = result.tx_id;
-  } else if (plan.route === 'user_to_business') {
-    const result = await api.sendICANToBusiness({
-      fromUserId: currentUserId, businessProfileId: recipient.businessProfileId, amount: parsedAmount, note,
-    });
-    transactionId = result.out_tx_id;
-  } else {
-    const result = await api.sendFromBusinessWallet({
-      businessProfileId: sendFromBusiness.id,
-      recipientUserId: toWallet.type === 'personal' ? recipient.userId : null,
-      recipientBusinessProfileId: toWallet.type === 'business' ? recipient.businessProfileId : null,
-      amount: parsedAmount,
-      note,
-      pin,
-      isAdmin,
-    });
-    transactionId = result.transactionId;
-    pendingApproval = result.status !== 'completed';
+  // Money → coin first. If this fails nothing has moved; if the transfer below
+  // fails afterwards, the coin is safe in the sender's balance and the error says so.
+  if (conversion) {
+    await api.buyCoinsFromWallet({ userId: currentUserId, icanAmount: conversion.buyCoins });
+  }
+  try {
+    ({ transactionId, pendingApproval } = await transferCoins());
+  } catch (error) {
+    if (conversion) error.converted = { currency, cost: conversion.cost, coins: conversion.buyCoins };
+    throw error;
+  }
+
+  async function transferCoins() {
+    let txId;
+    let pending = false;
+    if (plan.route === 'user_to_user') {
+      const result = await api.sendIcaneracoin({
+        fromUserId: currentUserId, toUserId: recipient.userId, amount: parsedAmount, note,
+      });
+      txId = result.tx_id;
+    } else if (plan.route === 'user_to_business') {
+      const result = await api.sendICANToBusiness({
+        fromUserId: currentUserId, businessProfileId: recipient.businessProfileId, amount: parsedAmount, note,
+      });
+      txId = result.out_tx_id;
+    } else {
+      const result = await api.sendFromBusinessWallet({
+        businessProfileId: sendFromBusiness.id,
+        recipientUserId: toWallet.type === 'personal' ? recipient.userId : null,
+        recipientBusinessProfileId: toWallet.type === 'business' ? recipient.businessProfileId : null,
+        amount: parsedAmount,
+        note,
+        pin,
+        isAdmin,
+      });
+      txId = result.transactionId;
+      pending = result.status !== 'completed';
+    }
+    return { transactionId: txId, pendingApproval: pending };
   }
 
   return {
@@ -235,6 +303,9 @@ export async function runCoinSend({
     touchesBusiness: Boolean(sendFromBusiness) || toWallet.type === 'business',
     message: pendingApproval
       ? `📨 Request sent: ${fmt(parsedAmount)} IcanEra from ${senderName} to ${recipientName}. The business administrator must approve it with the business-wallet PIN before it is paid.`
-      : `✅ Sent ${fmt(parsedAmount)} IcanEra from ${senderName} to ${recipientName}. No fee — they receive the full amount.`,
+      : `✅ Sent ${fmt(parsedAmount)} IcanEra from ${senderName} to ${recipientName}. No fee — they receive the full amount.` +
+        (conversion ? ` Converted ${money(conversion.cost)} from your wallet to do it.` : '') +
+        (typedInCurrency && !conversion ? ` (${money(typedAmount)} at ${money(trading.price)} per coin.)` : ''),
+    converted: conversion ? { currency, cost: conversion.cost, coins: conversion.buyCoins } : null,
   };
 }
