@@ -6,7 +6,8 @@
    keys. Shared by the personal and business wallet access pages. */
 
 .wa-overlay {
-  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 1rem;
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
   background: radial-gradient(ellipse at center, rgba(24, 18, 8, 0.74), rgba(0, 0, 0, 0.88));
 }
 
@@ -22,7 +23,7 @@
   --wa-field-text: #f6f1e4;
   --wa-ink-on-gold: #1c1408;
   --wa-ok: #5fcf9f;
-  position: relative; display: flex; flex-direction: column; width: 100%; max-width: 30rem; max-height: 92vh; overflow: hidden;
+  position: relative; display: flex; flex-direction: column; width: 100%; max-width: 30rem; max-height: 92vh; max-height: 92dvh; overflow: hidden;
   color: var(--wa-text);
   font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
   background: linear-gradient(180deg, #1b170f, #0f0d08);
@@ -49,9 +50,9 @@
 }
 
 /* masthead */
-.wa-head { position: relative; flex: none; padding: 1.5rem 2.75rem 0.25rem; text-align: center; }
+.wa-head { position: relative; flex: none; padding: 1.5rem 3.25rem 0.25rem; text-align: center; }
 .wa-close {
-  position: absolute; top: 1.05rem; right: 1.05rem; z-index: 2; display: inline-flex; padding: 0.3rem; color: var(--wa-muted);
+  position: absolute; top: 0.55rem; right: 0.55rem; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0; color: var(--wa-muted);
   background: transparent; border: 1px solid transparent; border-radius: 3px; cursor: pointer; transition: color .15s ease, border-color .15s ease;
 }
 .wa-close:hover { color: var(--wa-gold-hi); border-color: var(--wa-gold-soft); }
@@ -62,14 +63,14 @@
 }
 .wa-eyebrow { margin: 0.8rem 0 0; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.26em; text-transform: uppercase; color: var(--wa-gold); }
 .wa-title { margin: 0.2rem 0 0; font-family: "Playfair Display", Georgia, serif; font-style: italic; font-weight: 600; font-size: 1.75rem; line-height: 1.15; color: var(--wa-title); }
-.wa-subtitle { margin: 0.25rem 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; font-style: italic; color: var(--wa-muted); }
+.wa-subtitle { margin: 0.25rem 0 0; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 0.85rem; line-height: 1.35; font-style: italic; color: var(--wa-muted); }
 .wa-rule { position: relative; height: 1px; margin: 1.1rem 0.5rem 0; background: linear-gradient(90deg, transparent, var(--wa-gold-line) 15%, var(--wa-gold-line) 85%, transparent); }
 .wa-rule::after { content: ''; position: absolute; left: 50%; top: -3px; width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg); background: var(--wa-gold); box-shadow: 0 0 0 3px #15110a; }
 
 /* index tabs */
 .wa-tabs { position: relative; z-index: 2; flex: none; display: flex; margin: 0 1.6rem; border-bottom: 1px solid var(--wa-gold-soft); }
 .wa-tab {
-  position: relative; flex: 1; display: flex; align-items: center; justify-content: center; min-height: 3.1rem; padding: 0.55rem 0.4rem; background: transparent; border: 0; cursor: pointer;
+  position: relative; flex: 1; display: flex; align-items: center; justify-content: center; min-height: 3.1rem; padding: 0.55rem 0.3rem; background: transparent; border: 0; cursor: pointer;
   font: inherit; font-size: 0.72rem; font-weight: 700; line-height: 1.25; letter-spacing: 0.12em; text-transform: uppercase; text-align: center; color: var(--wa-muted);
   transition: color .2s ease, background .2s ease;
 }
@@ -94,7 +95,7 @@
 
 /* fields */
 .wa-input {
-  width: 100%; padding: 0.7rem 0.8rem; font: inherit; font-size: 0.95rem; color: var(--wa-field-text); background: var(--wa-field-bg);
+  width: 100%; min-height: 2.75rem; padding: 0.7rem 0.8rem; font: inherit; font-size: 1rem; color: var(--wa-field-text); background: var(--wa-field-bg);
   border: 1px solid var(--wa-gold-line); border-radius: 4px; transition: border-color .15s ease, box-shadow .15s ease;
 }
 .wa-input::placeholder { color: var(--wa-muted); opacity: 0.7; font-style: italic; }
@@ -113,7 +114,7 @@
 
 /* buttons: gold leaf + engraved ghost */
 .wa-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.8rem 1rem; font: inherit; font-size: 0.74rem; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 2.75rem; padding: 0.8rem 1rem; font: inherit; font-size: 0.74rem; font-weight: 700;
   letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer; border-radius: 3px; transition: filter .15s ease, background .15s ease, border-color .15s ease, transform .1s ease;
 }
 .wa-btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -127,22 +128,22 @@
 .wa-btn-ghost { color: var(--wa-title); background: transparent; border: 1px solid var(--wa-gold-line); }
 .wa-btn-ghost:hover:not(:disabled) { background: rgba(196, 160, 82, 0.12); border-color: var(--wa-gold-hi); }
 .wa-btn:focus-visible, .wa-key:focus-visible, .wa-link:focus-visible { outline: 2px solid var(--wa-gold-hi); outline-offset: 2px; }
-.wa-link { padding: 0; font: inherit; font-size: 0.8rem; font-style: italic; color: var(--wa-gold-hi); background: none; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--wa-gold-soft); }
+.wa-link { display: inline-flex; align-items: center; justify-content: center; min-height: 2.75rem; padding: 0 0.25rem; font: inherit; font-size: 0.85rem; line-height: 1.3; font-style: italic; color: var(--wa-gold-hi); background: none; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--wa-gold-soft); }
 .wa-link:hover:not(:disabled) { color: var(--wa-title); text-decoration-color: var(--wa-gold-hi); }
 .wa-link:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* PIN: engraved boxes marked with diamonds, and a keypad of engraved keys */
 .wa-pinrow { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1.1rem; }
 .wa-pinbox {
-  display: flex; align-items: center; justify-content: center; width: 2.6rem; height: 3.1rem; font-size: 0.8rem; color: var(--wa-gold-hi);
+  display: flex; align-items: center; justify-content: center; flex: 0 1 2.6rem; min-width: 0; height: 3.1rem; font-size: 0.8rem; color: var(--wa-gold-hi);
   background: var(--wa-field-bg); border: 1px solid var(--wa-gold-line); border-radius: 3px; box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35);
   transition: border-color .15s ease, background .15s ease;
 }
 .wa-pinbox.is-filled { background: rgba(196, 160, 82, 0.16); border-color: var(--wa-gold-hi); }
 .wa-pinbox.is-optional { border-style: dashed; opacity: 0.5; }
-.wa-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.55rem; margin-top: 1.1rem; }
+.wa-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.55rem; touch-action: manipulation; margin-top: 1.1rem; }
 .wa-key {
-  height: 3rem; font-family: "Playfair Display", Georgia, serif; font-size: 1.3rem; font-weight: 600; color: #f3e6c4; cursor: pointer;
+  height: 3rem; min-width: 0; font-family: "Playfair Display", Georgia, serif; font-size: 1.3rem; font-weight: 600; color: #f3e6c4; cursor: pointer;
   background: linear-gradient(180deg, #241d11, #15110a); border: 1px solid rgba(196, 160, 82, 0.4); border-radius: 4px;
   box-shadow: inset 0 1px 0 rgba(255, 247, 224, 0.07), 0 3px 0 rgba(0, 0, 0, 0.5);
   transition: border-color .12s ease, color .12s ease, transform .08s ease;
@@ -170,9 +171,9 @@
 .wa-ledger dd { margin: 0; text-align: right; font-family: "Playfair Display", Georgia, serif; font-weight: 600; color: var(--wa-title); }
 
 /* biometric option rows */
-.wa-option { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.7rem; margin-top: 0.5rem; cursor: pointer; background: var(--wa-field-bg); border: 1px solid var(--wa-gold-soft); border-radius: 4px; transition: border-color .15s ease; }
+.wa-option { display: flex; align-items: center; gap: 0.75rem; min-height: 2.75rem; padding: 0.6rem 0.7rem; margin-top: 0.5rem; cursor: pointer; background: var(--wa-field-bg); border: 1px solid var(--wa-gold-soft); border-radius: 4px; transition: border-color .15s ease; }
 .wa-option:hover { border-color: var(--wa-gold-hi); }
-.wa-option input { width: 1.1rem; height: 1.1rem; accent-color: #c4a052; }
+.wa-option input { flex: none; width: 1.25rem; height: 1.25rem; accent-color: #c4a052; }
 
 /* ── Light themes: ivory stock, bronze-gold trim ──────────────────────────── */
 :root:is([data-theme="light"],[data-theme="siennaLight"],[data-theme="gold"],[data-theme="bronze"],[data-theme="violet"],[data-theme="sky"]) .wa-overlay { background: radial-gradient(ellipse at center, rgba(70, 52, 18, 0.5), rgba(30, 22, 8, 0.72)); }
@@ -214,18 +215,59 @@
   .wa-eyebrow { margin-top: 0.55rem; }
   .wa-title { font-size: 1.5rem; }
   .wa-rule { margin-top: 0.8rem; }
-  .wa-tab { min-height: 2.7rem; }
+  .wa-tab { min-height: 2.75rem; }
   .wa-body { padding-top: 0.9rem; }
   .wa-pinrow, .wa-keys { margin-top: 0.8rem; }
   .wa-pinbox { height: 2.6rem; }
   .wa-keys { gap: 0.4rem; }
-  .wa-key { height: 2.55rem; font-size: 1.15rem; }
+  .wa-key { height: 2.75rem; font-size: 1.15rem; }
   .wa-key.wa-key-fn { font-size: 0.66rem; }
 }
 
-@media (max-width: 420px) {
-  .wa-head { padding-left: 2.25rem; padding-right: 2.25rem; }
-  .wa-body { padding: 1rem 1.2rem 1.4rem; }
+/* phones: a bottom sheet (thumb reach, more room above the keyboard), padded for the notch and home bar */
+@media (max-width: 480px) {
+  .wa-overlay { align-items: flex-end; padding: env(safe-area-inset-top) 0 0; }
+  .wa-card { max-width: none; max-height: 94vh; max-height: 94dvh; border-radius: 16px 16px 0 0; border-bottom: 0; }
+  .wa-card::before, .wa-card::after { inset: 6px 6px 0; }
+  .wa-head { padding-left: 3.25rem; padding-right: 3.25rem; }
+  .wa-body { padding: 1rem 1.2rem calc(1.6rem + env(safe-area-inset-bottom)); }
   .wa-tabs { margin: 0 1rem; }
-  .wa-pinbox { width: 2.3rem; height: 2.9rem; }
+  .wa-pinrow { gap: 0.4rem; }
+  .wa-pinbox { height: 2.9rem; }
+  .wa-tab { letter-spacing: 0.08em; }
 }
+
+/* very small phones (iPhone SE / 320px Androids) */
+@media (max-width: 360px) {
+  .wa-title { font-size: 1.35rem; }
+  .wa-body { padding-left: 1rem; padding-right: 1rem; }
+  .wa-tab { font-size: 0.66rem; letter-spacing: 0.04em; }
+  .wa-pinrow { gap: 0.3rem; }
+  .wa-btn { letter-spacing: 0.08em; padding-left: 0.6rem; padding-right: 0.6rem; }
+  .wa-label { letter-spacing: 0.1em; }
+}
+
+/* short portrait phones (SE-class): shed the seal so the keypad fits without scrolling */
+@media (max-height: 640px) {
+  .wa-seal { display: none; }
+  .wa-head { padding-top: 0.9rem; }
+  .wa-eyebrow { margin-top: 0; }
+  .wa-rule { margin-top: 0.6rem; }
+  .wa-body { padding-top: 0.75rem; }
+  .wa-keys { gap: 0.35rem; margin-top: 0.6rem; }
+  .wa-pinrow { margin-top: 0.6rem; }
+}
+
+/* phone held sideways: drop the decoration so the form gets the screen */
+@media (max-height: 500px) {
+  .wa-overlay { padding: 0; }
+  .wa-card { max-height: 100vh; max-height: 100dvh; border-radius: 0; border-left: 0; border-right: 0; }
+  .wa-head { padding-top: 0.6rem; padding-bottom: 0; }
+  .wa-seal, .wa-eyebrow { display: none; }
+  .wa-title { margin-top: 0; font-size: 1.2rem; }
+  .wa-subtitle { margin-top: 0.1rem; -webkit-line-clamp: 1; }
+  .wa-rule { margin-top: 0.5rem; }
+  .wa-body { padding-top: 0.7rem; padding-bottom: 1.2rem; }
+}
+
+@media (max-width: 380px) and (hover: none) { .wa-key:hover:not(:disabled) { color: #f3e6c4; border-color: rgba(196, 160, 82, 0.4); } }

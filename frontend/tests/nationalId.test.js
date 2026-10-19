@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   checkNationalIdFormat, describeNationalIdRule, isMissingFunctionError, maskedNationalId,
-  nationalIdFormatMessage, normalizeNationalId
+  nationalIdFormatMessage, nationalIdInputMode, normalizeNationalId
 } from '../src/utils/nationalId.js';
 
 const UG = { label: 'National Identification Number (NIN)', hint: '14 characters, starting with CM or CF', pattern: '^C[MF][0-9A-Z]{12}$' };
@@ -63,6 +63,16 @@ describe('wording', () => {
     assert.equal(maskedNationalId('NIN', '90AB'), 'NIN ending 90AB');
     assert.equal(maskedNationalId(null, '1234'), 'ID ending 1234');
     assert.equal(maskedNationalId('NIN', ''), '');
+  });
+});
+
+describe('choosing the phone keyboard', () => {
+  it('opens the number pad only when the example ID is all digits', () => {
+    assert.equal(nationalIdInputMode({ example: '12345678' }), 'numeric');
+    assert.equal(nationalIdInputMode({ example: '1234 567 890' }), 'numeric');
+    assert.equal(nationalIdInputMode({ example: 'CM1234567890AB' }), 'text');
+    assert.equal(nationalIdInputMode(null), 'text');
+    assert.equal(nationalIdInputMode({}), 'text');
   });
 });
 

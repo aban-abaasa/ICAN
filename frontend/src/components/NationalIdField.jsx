@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CountryService } from '../services/countryService';
 import { getNationalIdRule } from '../services/nationalIdService';
-import { checkNationalIdFormat, nationalIdFormatMessage } from '../utils/nationalId';
+import { checkNationalIdFormat, nationalIdFormatMessage, nationalIdInputMode } from '../utils/nationalId';
 
 // Class names for the places this field appears. The default skin is the "Wallet Access" card
 // (wallet-access-classic.css); callers on other skins pass their own.
@@ -84,6 +84,8 @@ export default function NationalIdField({
           onBlur={() => setTouched(true)}
           placeholder={country ? (rule?.example || 'Enter your ID number') : 'Choose your country first'}
           autoComplete="off"
+          inputMode={nationalIdInputMode(rule)}
+          enterKeyHint="done"
           autoCapitalize="characters"
           spellCheck={false}
           aria-invalid={showError || undefined}

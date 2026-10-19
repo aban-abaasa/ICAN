@@ -3,6 +3,7 @@ import { ShieldCheck, X } from 'lucide-react';
 import NationalIdField from './NationalIdField';
 import useNationalIdStatus from '../hooks/useNationalIdStatus';
 import { saveNationalId } from '../services/nationalIdService';
+import { scrollFocusedIntoView } from '../utils/scrollFocus';
 import './wallet-access-classic.css';
 
 const REMINDER_DISMISSED_KEY = 'ican_national_id_reminder_dismissed';
@@ -69,12 +70,12 @@ export default function NationalIdGate({ countryHint = '', onSaved }) {
   return (
     <>
       {!enforced && !dismissed && (
-        <div role="status" className="fixed bottom-4 left-1/2 z-40 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-start justify-between gap-3 rounded-xl border border-amber-400/40 bg-slate-900/95 p-3 text-sm text-amber-100 shadow-xl backdrop-blur">
+        <div role="status" style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }} className="fixed left-1/2 z-40 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-start justify-between gap-3 rounded-xl border border-amber-400/40 bg-slate-900/95 p-3 text-sm text-amber-100 shadow-xl backdrop-blur">
           <p className="min-w-0">
             <b>Add your national ID to keep your wallet working.</b> Wallets without one will soon be unable to send or withdraw money.
-            {' '}<button type="button" onClick={() => setOpen(true)} className="underline font-semibold">Add it now</button>
+            {' '}<button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-[44px] items-center underline font-semibold">Add it now</button>
           </p>
-          <button type="button" onClick={dismissReminder} aria-label="Dismiss reminder" className="shrink-0 opacity-70 hover:opacity-100"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={dismissReminder} aria-label="Dismiss reminder" className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center opacity-70 hover:opacity-100"><X className="h-4 w-4" /></button>
         </div>
       )}
 
@@ -89,7 +90,7 @@ export default function NationalIdGate({ countryHint = '', onSaved }) {
               <p className="wa-subtitle">{enforced ? 'Required before you can send or withdraw money' : 'Keeps your wallet safe and private'}</p>
               <div className="wa-rule" aria-hidden="true" />
             </header>
-            <div className="wa-body">
+            <div className="wa-body" onFocus={scrollFocusedIntoView}>
               <p className="wa-p">
                 Every IcanEra wallet is tied to one national ID. It stops anyone opening a second wallet in your name and
                 makes it far harder for someone else to take over yours. You can still receive money meanwhile.

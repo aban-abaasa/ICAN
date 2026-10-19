@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { scrollFocusedIntoView } from '../utils/scrollFocus';
 import { Lock, X, Delete, Mail, KeyRound, CheckCircle2, Fingerprint, Smartphone } from 'lucide-react';
 import { walletAccountService } from '../services/walletAccountService';
 import NationalIdField from './NationalIdField';
@@ -41,7 +42,7 @@ export const AccessShell = ({ id, eyebrow, title, subtitle, onClose, z = 50, tab
           <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => onTab(key)} className="wa-tab">{text}</button>
         ))}
       </div>
-      <div className="wa-body">{children}</div>
+      <div className="wa-body" onFocus={scrollFocusedIntoView}>{children}</div>
     </div>
   </div>
 );
