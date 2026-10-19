@@ -259,6 +259,13 @@ test('describeSendError speaks plainly about an inactive business wallet and poi
   assert.equal(describeSendError(null), 'Icaneracoin transfer failed');
 });
 
+test('describeSendError turns the national-ID block into a clear instruction instead of a database message', () => {
+  const blocked = new Error('NATIONAL_ID_REQUIRED: add your national ID to your wallet before you send or withdraw money .');
+  const message = describeSendError(blocked);
+  assert.match(message, /Add your national ID to your wallet/);
+  assert.doesNotMatch(message, /NATIONAL_ID_REQUIRED/);
+});
+
 // ─── balance is checked before any prompt ─────────────────────────────────
 
 test('a personal sender without enough coin is told so before any confirm or PIN (a UGX figure read as coins used to ask for a PIN, then fail)', async () => {

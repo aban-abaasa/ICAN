@@ -56,6 +56,8 @@ import { payIcanRequest, parseIcanPayCode, getIcanPaymentRequest } from '../serv
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getUserTrustGroups } from '../services/trustService';
 import { CountryService } from '../services/countryService';
+import { ensureNationalId } from '../services/nationalIdService';
+import NationalIdGate from './NationalIdGate';
 import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { calculateLiveShareValue } from '../services/pitchinValuationService';
 import { createBusinessProfileFromCategory } from '../services/businessManagementService';
@@ -238,8 +240,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     pin: '',
     preferredCurrency: 'USD',
     fingerprintEnabled: false,
-    phonePhoneEnabled: false
+    phonePhoneEnabled: false,
+    // National ID (NIN in Uganda, each country's own ID elsewhere) — saved before the wallet is finished.
+    nationalId: '',
+    idCountry: ''
   });
+  // The country chosen at sign-up, or '' when the account has none — unlike userCountry below it
+  // never guesses, because the national ID has to come from the wallet's real country.
+  const [signupCountry, setSignupCountry] = useState('');
   // Email verification gate before a wallet PIN can be set for the first
   // time — mirrors the magic-mail PIN reset flow (backend/routes/emailRoutes.js
   // POST /request-account-otp, verified via verify_account_creation_otp()).
@@ -1524,7 +1532,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         const userMetadata = user.user_metadata || {};
         const userCountryValue = userMetadata.country || 'UG'; // Local variable for use in this effect
         setUserCountry(userCountryValue); // Set state for use in render
-        
+        setSignupCountry(String(userMetadata.country || '').toUpperCase());
+
         // Get currency for registered country
         const registeredCurrency = CountryService.getCurrencyCode(userCountryValue);
         setRegisteredCurrencyFromDB(registeredCurrency);
@@ -2543,6 +2552,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Your session expired — please sign in again.');
 
+      // The national ID goes on file first: a wallet is not finished without one.
+      const idResult = await ensureNationalId({ country: accountCreationForm.idCountry || signupCountry, value: accountCreationForm.nationalId });
+      if (!idResult.success) throw new Error(idResult.error);
+
       const result = await walletAccountService.sendPinSetupLink({
         userId: user.id,
         authEmail: user.email,
@@ -2742,6 +2755,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         return;
       }
 
+      // The national ID goes on file first: a wallet is not finished without one.
+      const idResult = await ensureNationalId({ country: accountCreationForm.idCountry || signupCountry, value: accountCreationForm.nationalId });
+      if (!idResult.success) {
+        setAccountMessage({ type: 'error', text: idResult.error });
+        setAccountCreationLoading(false);
+        return;
+      }
+
       // Create account
       const result = await walletAccountService.createUserAccount({
         userId: user.id,
@@ -2782,7 +2803,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         pin: '',
         preferredCurrency: registeredCurrency,
         fingerprintEnabled: false,
-        phonePhoneEnabled: false
+        phonePhoneEnabled: false,
+        nationalId: '',
+        idCountry: ''
       });
       setPersonalOtp({ sent: false, verified: false, code: '', loading: false, error: null });
 
@@ -7343,11 +7366,18 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         />
       )}
 
+      {/* 🪪 National ID for a wallet that already exists but has none on file: a reminder first,
+          a blocking dialog once enforcement is switched on (see backend/NATIONAL_ID_PER_COUNTRY.sql). */}
+      {currentUserId && userAccount?.pin_hash && !showAccountCreation && (
+        <NationalIdGate countryHint={signupCountry} />
+      )}
+
       {/* 🎯 WALLET ACCESS MODAL — enter your PIN, or get the setup link / set up the wallet */}
       {showAccountCreation && (
         <WalletAccessModal
           userId={currentUserId}
           userEmail={userEmail}
+          defaultCountry={signupCountry}
           localCurrencyLabel={localCurrencyLabel}
           accountMessage={accountMessage}
           form={accountCreationForm}

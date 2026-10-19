@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Lock, X, Delete, Mail, KeyRound, CheckCircle2, Fingerprint, Smartphone } from 'lucide-react';
 import { walletAccountService } from '../services/walletAccountService';
+import NationalIdField from './NationalIdField';
+import useNationalIdStatus from '../hooks/useNationalIdStatus';
 import './wallet-access-classic.css';
 
 const PIN_MIN = 4;
@@ -122,6 +124,7 @@ const LinkSent = ({ pinLink, onSendLink, onContinue, compact = false }) => (
 const WalletAccessModal = ({
   userId,
   userEmail,
+  defaultCountry = '',
   localCurrencyLabel,
   accountMessage,
   form,
@@ -168,6 +171,22 @@ const WalletAccessModal = ({
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  // A new wallet is not finished without a national ID (see backend/NATIONAL_ID_PER_COUNTRY.sql).
+  // Nothing is asked when that migration is not installed, or an ID is already on file.
+  const { status: idStatus } = useNationalIdStatus(!!userId);
+  const askForId = !!idStatus && idStatus.available && idStatus.authenticated !== false && !idStatus.exempt && !idStatus.hasId;
+  const walletCountry = idStatus?.accountCountry || account?.country_code || '';
+  const nationalIdField = askForId ? (
+    <NationalIdField
+      idPrefix="wa-nid"
+      country={walletCountry || form.idCountry || defaultCountry}
+      onCountryChange={(c) => setForm((prev) => ({ ...prev, idCountry: c }))}
+      countryLocked={!!walletCountry}
+      value={form.nationalId || ''}
+      onChange={(v) => setForm((prev) => ({ ...prev, nationalId: v }))}
+    />
+  ) : null;
 
   const hasPin = !!account?.pin_hash;
   const canUnlock = pin.length >= PIN_MIN && !unlocking;
@@ -242,6 +261,7 @@ const WalletAccessModal = ({
                     <label className={label} htmlFor="wa-phone">Phone number *</label>
                     <input id="wa-phone" type="tel" value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} placeholder="+256..." className={field} />
                   </div>
+                  {nationalIdField}
                 </div>
                 {pinLink.error && <p role="alert" className="wa-alert">{pinLink.error}</p>}
                 <button type="button" disabled={pinLink.loading} onClick={onSendLink} className={`${btnPrimary} mt-5`}>
@@ -268,6 +288,7 @@ const WalletAccessModal = ({
             <label className={label} htmlFor="ws-phone">Phone number *</label>
             <input id="ws-phone" type="tel" value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} placeholder="+256..." className={field} />
           </div>
+          {nationalIdField}
           <div>
             <label className={label} htmlFor="ws-email">Email address *</label>
             <input id="ws-email" type="email" value={form.email} disabled={otp.verified} onChange={(e) => onEmailChange(e.target.value)} placeholder="you@example.com" className={field} />
