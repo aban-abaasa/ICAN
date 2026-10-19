@@ -1053,6 +1053,9 @@ const AgentDashboard = () => {
             onClose={() => setShowPINRecovery(false)}
             userId={currentUserId}
             userEmail={currentUserEmail}
+            initialAccountType="personal"
+            lockedAccountType="personal"
+            contextNote="Your agent PIN is the PIN of your personal IcanEra wallet, so resetting it here works exactly like Forgot PIN in your wallet."
           />
         )}
 

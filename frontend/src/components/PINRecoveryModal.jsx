@@ -18,7 +18,7 @@ import { requestPinResetEmail } from '../services/walletAccountService';
  * Group wallet PINs (groupId set) only offer the developer-review path,
  * since a shared PIN's recovery shouldn't be a single member's call.
  */
-const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, groupName = null, initialAccountType = 'personal' }) => {
+const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, groupName = null, initialAccountType = 'personal', lockedAccountType = null, contextNote = null }) => {
   const [requestType, setRequestType] = useState('pin_reset'); // 'pin_reset' | 'account_unlock'
   const [reason, setReason] = useState('');
   const [step, setStep] = useState(groupId ? 'request' : 'choose'); // 'choose', 'request', 'pending', 'resolved', 'email_request', 'email_sent'
@@ -29,11 +29,11 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [emailSentTo, setEmailSentTo] = useState(null);
-  const [accountType, setAccountType] = useState(initialAccountType); // 'personal' | 'business' — ignored for group wallets
+  const [accountType, setAccountType] = useState(lockedAccountType || initialAccountType); // 'personal' | 'business' — ignored for group wallets
 
   useEffect(() => {
-    if (isOpen && !groupId) setAccountType(initialAccountType);
-  }, [isOpen, groupId, initialAccountType]);
+    if (isOpen && !groupId) setAccountType(lockedAccountType || initialAccountType);
+  }, [isOpen, groupId, initialAccountType, lockedAccountType]);
   const [businessAccounts, setBusinessAccounts] = useState([]); // [{ id, name, accountNumber }]
   const [businessAccountId, setBusinessAccountId] = useState('');
   const [businessLoading, setBusinessLoading] = useState(false);
@@ -241,6 +241,10 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
         {/* Step 0: Choose a recovery path (personal/business accounts only) */}
         {step === 'choose' && (
           <div className="space-y-4">
+            {contextNote && lockedAccountType && (
+              <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg p-3">{contextNote}</p>
+            )}
+            {!lockedAccountType && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Which account?</label>
               <div className="grid grid-cols-2 gap-2">
@@ -268,6 +272,7 @@ const PINRecoveryModal = ({ isOpen, onClose, userId, userEmail, groupId = null, 
                 </button>
               </div>
             </div>
+            )}
 
             {accountType === 'business' && (
               <div>
