@@ -12,16 +12,16 @@ const SKINS = {
   slate: {
     wrap: 'rounded-xl border border-emerald-700/40 bg-emerald-500/10 p-3 space-y-2.5',
     head: 'text-emerald-300', body: 'text-slate-300', faint: 'text-slate-500', err: 'text-xs text-red-400',
-    input: 'w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500',
+    input: 'w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 min-h-[44px] text-base sm:text-sm text-white placeholder-slate-500',
     btn: 'w-full min-h-[44px] py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-sm font-semibold transition flex items-center justify-center gap-2',
-    btn2: 'text-xs text-slate-300 underline hover:text-white',
+    btn2: 'inline-flex min-h-[44px] items-center text-xs text-slate-300 underline hover:text-white',
   },
   nb: {
     wrap: 'rounded-xl border nb-border nb-surface-alt p-3 space-y-2.5',
     head: 'nb-text', body: 'nb-text-muted', faint: 'nb-text-faint', err: 'nb-error-text text-xs',
-    input: 'w-full px-3 py-2 rounded-xl nb-input text-sm',
+    input: 'w-full px-3 py-2 min-h-[44px] rounded-xl nb-input text-base sm:text-sm',
     btn: 'w-full min-h-[44px] py-2.5 rounded-xl nb-btn-primary disabled:opacity-50 text-sm font-semibold transition flex items-center justify-center gap-2',
-    btn2: 'text-xs nb-link underline',
+    btn2: 'inline-flex min-h-[44px] items-center text-xs nb-link underline',
   },
 };
 

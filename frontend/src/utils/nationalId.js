@@ -44,6 +44,10 @@ export const isMissingFunctionError = (error) => {
   return /could not find the function|function .* does not exist/i.test(String(error.message || ''));
 };
 
+// Phone keyboard to open for the ID field: digits-only IDs (e.g. Kenya, Tanzania) get the number
+// pad; IDs with letters (Uganda's CM…/CF…) keep the full keyboard. Judged from the example value.
+export const nationalIdInputMode = (rule) => (rule?.example && /^[0-9\s.-]+$/.test(String(rule.example)) ? 'numeric' : 'text');
+
 // What to show for an ID already on file: "NIN ending 90AB".
 export const maskedNationalId = (idType, last4) => {
   if (!last4) return '';
