@@ -5106,6 +5106,40 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     <span className="text-gray-200">{tx.expense_classification.replace(/_/g, ' ')}</span>
                   </div>
                 )}
+                {tx.receipt_details && (
+                  <div className="mt-2 rounded-lg border border-white/10 bg-white/5 p-3 text-xs">
+                    <p className="mb-1 font-semibold text-white">
+                      🧾 Receipt {tx.receipt_details.receipt_number}
+                    </p>
+                    {tx.receipt_details.store_name && (
+                      <p className="text-gray-200">
+                        {tx.receipt_details.store_name}
+                        {tx.receipt_details.store_location ? ` · ${tx.receipt_details.store_location}` : ''}
+                      </p>
+                    )}
+                    <div className="mt-2 space-y-1">
+                      {(tx.receipt_details.items || []).map((item, index) => (
+                        <div key={`${item.product_id || index}-${index}`} className="flex justify-between gap-3">
+                          <span className="min-w-0 truncate text-gray-300">
+                            {item.product_name || item.name || 'Product'} × {item.quantity}
+                          </span>
+                          <span className="whitespace-nowrap text-gray-200">
+                            {Number(item.line_total || 0).toLocaleString()} {tx.receipt_details.currency || tx.currency}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex justify-between border-t border-white/10 pt-2 font-semibold text-gray-100">
+                      <span>Total</span>
+                      <span>{Number(tx.receipt_details.total || 0).toLocaleString()} {tx.receipt_details.currency || tx.currency}</span>
+                    </div>
+                    <p className={`mt-2 font-semibold ${tx.receipt_details.approval_status === 'approved' ? 'text-emerald-300' : 'text-amber-300'}`}>
+                      {tx.receipt_details.approval_status === 'approved'
+                        ? `✅ Approved by ${tx.receipt_details.approved_by_name || 'store staff'}`
+                        : '⏳ Awaiting staff approval'}
+                    </p>
+                  </div>
+                )}
                 {tx.id && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">ID</span>
