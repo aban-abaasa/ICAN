@@ -10,7 +10,8 @@ import {
   Clock,
   BarChart3,
   ArrowLeft,
-  Pencil
+  Pencil,
+  KeyRound
 } from 'lucide-react';
 import agentService, { hashPIN } from '../services/agentService';
 import { CountryService } from '../services/countryService';
@@ -18,6 +19,7 @@ import { getSupabaseClient } from '../lib/supabase/client';
 import { sendAgentFiatToBusiness } from '../services/icanWalletService';
 import { useIcanPrice } from '../hooks/useIcanPrice';
 import PINRecoveryModal from './PINRecoveryModal';
+import { cleanPin, isValidPin, PIN_MIN_LENGTH, PIN_MAX_LENGTH } from '../utils/pinInput';
 
 /**
  * 🏪 AGENT DASHBOARD
@@ -78,12 +80,10 @@ const AgentDashboard = () => {
     phoneNumber: '',
     locationCity: '',
     locationName: '',
-    pin: '',
     enableFingerprint: false
   });
   const [agentEditLoading, setAgentEditLoading] = useState(false);
   const [agentMessage, setAgentMessage] = useState(null);
-  const [showPinInput, setShowPinInput] = useState(false);
   const [showFingerprintSetup, setShowFingerprintSetup] = useState(false);
   const [showPINRecovery, setShowPINRecovery] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
@@ -173,7 +173,6 @@ const AgentDashboard = () => {
             phoneNumber: details.phone_number || '',
             locationCity: details.location_city || '',
             locationName: details.location_name || '',
-            pin: details.pin || '',
             enableFingerprint: details.enable_fingerprint || false
           });
         }
@@ -414,11 +413,11 @@ const AgentDashboard = () => {
 
     try {
       // Both regular cash-out and ICAN business transfers require the agent PIN.
-      if (!confirmationPin || !/^\d{4}$/.test(confirmationPin)) {
+      if (!isValidPin(confirmationPin)) {
         setNotification({
           type: 'error',
           title: '❌ PIN Required',
-          message: 'Please enter your 4-digit PIN'
+          message: `Please enter your ${PIN_MIN_LENGTH}–${PIN_MAX_LENGTH} digit PIN`
         });
         setLoading(false);
         return;
@@ -704,30 +703,43 @@ const AgentDashboard = () => {
             {/* PIN INPUT SECTION - Required for all cash-out transfers */}
             {!isCashIn && (
               <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-2 border-blue-400/50 rounded-xl p-4 sm:p-5 mt-4 sm:mt-6">
-                <label className="block text-blue-300 text-base sm:text-lg font-bold mb-3 flex items-center gap-2">
-                  🔐 Enter Customer PIN
+                <label htmlFor="agent-confirm-pin" className="block text-blue-300 text-base sm:text-lg font-bold mb-1 flex items-center gap-2">
+                  🔐 {confirmationData.isBusinessIcan ? 'Enter your wallet PIN' : 'Enter customer PIN'}
                 </label>
-                <p className="text-xs sm:text-sm text-gray-400 mb-3 text-center">
+                <p className="text-xs sm:text-sm text-gray-400 mb-3">
                   {confirmationData.isBusinessIcan
-                    ? 'Your 4-digit agent wallet PIN is required'
-                    : "The customer's 4-digit transaction PIN"}
+                    ? `Your ${PIN_MIN_LENGTH}–${PIN_MAX_LENGTH} digit agent wallet PIN`
+                    : `The customer's ${PIN_MIN_LENGTH}–${PIN_MAX_LENGTH} digit transaction PIN`}
                 </p>
                 <input
+                  id="agent-confirm-pin"
                   type="password"
-                  placeholder="• • • •"
-                  maxLength="4"
-                  value={confirmationPin}
-                  onChange={(e) => setConfirmationPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  className="w-full px-4 sm:px-5 py-3 sm:py-4 bg-white/10 border-2 border-blue-400/50 rounded-lg text-white placeholder-gray-500 text-center text-2xl sm:text-3xl tracking-widest font-bold focus:outline-none focus:border-blue-300 focus:bg-white/20 transition-all"
                   inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="off"
+                  enterKeyHint="done"
+                  placeholder="• • • •"
+                  maxLength={PIN_MAX_LENGTH}
+                  value={confirmationPin}
+                  onChange={(e) => setConfirmationPin(cleanPin(e.target.value))}
+                  className="w-full min-h-[52px] px-4 sm:px-5 py-3 sm:py-4 bg-white/10 border-2 border-blue-400/50 rounded-lg text-white placeholder-gray-500 text-center text-2xl sm:text-3xl tracking-widest font-bold focus:outline-none focus:border-blue-300 focus:bg-white/20 transition-all"
                 />
-                <p className="text-xs sm:text-sm text-gray-400 mt-2 text-center">
-                  {confirmationData.isBusinessIcan
-                    ? 'Your 4-digit agent wallet PIN is required'
-                    : "The customer's 4-digit transaction PIN"}
-                </p>
-                {confirmationPin.length === 4 && (
+                {isValidPin(confirmationPin) && (
                   <p className="text-xs sm:text-sm text-green-400 mt-2 text-center font-semibold">✓ PIN ready for approval</p>
+                )}
+                {confirmationData.isBusinessIcan ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowPINRecovery(true)}
+                    disabled={!currentUserId}
+                    className="mt-2 w-full min-h-[44px] text-sm text-blue-300 underline underline-offset-4 disabled:opacity-50"
+                  >
+                    Forgot your PIN? Reset it by email
+                  </button>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-3 text-center">
+                    Customer forgot their PIN? They can reset it from their own wallet (Forgot PIN), then try again.
+                  </p>
                 )}
               </div>
             )}
@@ -746,7 +758,7 @@ const AgentDashboard = () => {
           <div className="flex-shrink-0 border-t border-slate-700/50 bg-slate-800/50 px-4 sm:px-6 py-4 space-y-2 sm:space-y-3">
             <button
               onClick={isCashIn ? processCashInConfirmed : processCashOutConfirmed}
-              disabled={loading || (!isCashIn && confirmationPin.length !== 4)}
+              disabled={loading || (!isCashIn && !isValidPin(confirmationPin))}
               className={`w-full px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-r ${actionColor} text-white rounded-lg font-bold text-base sm:text-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {loading ? '⏳ Processing...' : actionButtonText}
@@ -793,7 +805,6 @@ const AgentDashboard = () => {
         phoneNumber: agentEditForm.phoneNumber,
         locationCity: agentEditForm.locationCity,
         locationName: agentEditForm.locationName,
-        pin: agentEditForm.pin,
         enableFingerprint: agentEditForm.enableFingerprint
       });
 
@@ -849,14 +860,29 @@ const AgentDashboard = () => {
                 Agent Terminal
               </h1>
             </div>
-            <button
-              onClick={() => setShowAgentEdit(true)}
-              className="shrink-0 inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold"
-              style={{ border: '1px solid rgba(196,160,82,0.6)', color: 'var(--color-text)', background: 'transparent' }}
-            >
-              <Pencil style={{ width: 14, height: 14, color: '#c4a052' }} />
-              Edit Profile
-            </button>
+            <div className="shrink-0 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPINRecovery(true)}
+                disabled={!currentUserId}
+                aria-label="PIN and security: reset your wallet PIN"
+                className="inline-flex min-h-[44px] items-center gap-2 px-3.5 rounded-lg text-sm font-semibold disabled:opacity-50"
+                style={{ border: '1px solid rgba(196,160,82,0.6)', color: 'var(--color-text)', background: 'transparent' }}
+              >
+                <KeyRound style={{ width: 14, height: 14, color: '#c4a052' }} />
+                <span className="hidden min-[420px]:inline">PIN</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAgentEdit(true)}
+                aria-label="Edit agent profile"
+                className="inline-flex min-h-[44px] items-center gap-2 px-3.5 rounded-lg text-sm font-semibold"
+                style={{ border: '1px solid rgba(196,160,82,0.6)', color: 'var(--color-text)', background: 'transparent' }}
+              >
+                <Pencil style={{ width: 14, height: 14, color: '#c4a052' }} />
+                <span className="hidden min-[420px]:inline">Edit Profile</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -948,43 +974,22 @@ const AgentDashboard = () => {
                       <h4 className="text-[11px] uppercase tracking-[0.16em] font-bold mb-3" style={{ color: '#c4a052' }}>
                         🔐 Security
                       </h4>
-                      <label className={labelCls} style={{ color: T2 }}>Transaction PIN (4–6 digits)</label>
-                      <div className="flex gap-2 items-center">
-                        <input
-                          type={showPinInput ? 'text' : 'password'}
-                          inputMode="numeric"
-                          value={agentEditForm.pin}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/\D/g, '');
-                            if (value.length <= 6) {
-                              setAgentEditForm({ ...agentEditForm, pin: value });
-                            }
-                          }}
-                          placeholder="Enter 4-6 digit PIN"
-                          maxLength="6"
-                          className={`flex-1 ${inputCls}`}
-                          style={fld}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPinInput(!showPinInput)}
-                          className="px-3 py-3 rounded-lg"
-                          style={{ border: '1px solid rgba(196,160,82,0.55)', color: T }}
-                          title={showPinInput ? 'Hide PIN' : 'Show PIN'}
-                        >
-                          {showPinInput ? '👁️' : '👁️‍🗨️'}
-                        </button>
-                      </div>
-                      <p className="text-xs mt-1.5" style={{ color: T2 }}>Used to authorize transactions</p>
+                      <p className="text-sm" style={{ color: T }}>Wallet PIN</p>
+                      <p className="text-xs mt-1 leading-relaxed" style={{ color: T2 }}>
+                        The same {PIN_MIN_LENGTH}–{PIN_MAX_LENGTH} digit PIN you use in your IcanEra wallet. It authorises transfers you make as an agent. For your safety it can only be changed through a link we email to you.
+                      </p>
                       <button
                         type="button"
                         onClick={() => setShowPINRecovery(true)}
                         disabled={!currentUserId}
-                        className="w-full flex items-center justify-between mt-3 px-3 py-2.5 rounded-lg disabled:opacity-50"
-                        style={{ border: '1px solid rgba(196,160,82,0.35)', color: T }}
+                        className="w-full flex items-center justify-between gap-3 mt-3 px-3.5 min-h-[48px] rounded-lg disabled:opacity-50"
+                        style={{ border: '1px solid rgba(196,160,82,0.55)', color: T }}
                       >
-                        <span className="text-sm">🆘 Forgot PIN / locked out?</span>
-                        <span className="text-xs" style={{ color: '#c4a052' }}>→</span>
+                        <span className="flex items-center gap-2 text-sm font-medium">
+                          <KeyRound style={{ width: 16, height: 16, color: '#c4a052' }} />
+                          Reset my PIN / locked out?
+                        </span>
+                        <span className="text-xs" style={{ color: '#c4a052' }}>Email me a link →</span>
                       </button>
 
                       <label className="flex items-center gap-3 cursor-pointer mt-4">
