@@ -90,6 +90,9 @@ export function describeSendError(error) {
   let message = raw;
   if (/business wallet not found or inactive/i.test(raw)) {
     message = "That business hasn't activated its IcanEra wallet yet, so it can't receive IcanEra coin.";
+  } else if (/NATIONAL_ID_REQUIRED/.test(raw)) {
+    // The database refuses to let money leave a wallet with no national ID on file.
+    message = 'Add your national ID to your wallet before you send or withdraw money. Open your wallet and enter it when asked.';
   } else if (error?.requestId) {
     message = `${raw} (Payment request ${error.requestId} was created — see it in the business administrator's inbox.)`;
   }

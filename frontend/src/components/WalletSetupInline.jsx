@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import { walletAccountService } from '../services/walletAccountService';
 import { CountryService } from '../services/countryService';
+import { ensureNationalId } from '../services/nationalIdService';
+import useNationalIdStatus from '../hooks/useNationalIdStatus';
+import NationalIdField from './NationalIdField';
 
 const SKINS = {
   slate: {
@@ -39,6 +42,11 @@ export default function WalletSetupInline({ skin = 'slate', defaultName = '', de
   const [name, setName] = useState(defaultName || user?.user_metadata?.full_name || user?.user_metadata?.name || '');
   const [phone, setPhone] = useState(defaultPhone || '');
   const [country, setCountry] = useState('');
+  const [nationalId, setNationalId] = useState('');
+  const { status: idStatus } = useNationalIdStatus(!!user?.id);
+  // A wallet is not finished without a national ID; nothing is asked when the migration is not
+  // installed yet or an ID is already on file.
+  const askForId = !!idStatus && idStatus.available && idStatus.authenticated !== false && !idStatus.exempt && !idStatus.hasId;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sentTo, setSentTo] = useState('');
@@ -65,12 +73,16 @@ export default function WalletSetupInline({ skin = 'slate', defaultName = '', de
     if (!name.trim()) { setError('Enter your name'); return; }
     if (phone.replace(/\D/g, '').length < 7) { setError('Enter a phone number we can reach you on'); return; }
     if (!country) { setError('Choose your country'); return; }
+    if (askForId && !nationalId.trim()) { setError('Enter your national ID'); return; }
     setBusy(true);
     try {
       const supabase = getSupabaseClient();
       // Same requirement as everywhere else in IcanEra: every user has a country.
       const { error: countryError } = await supabase.from('user_accounts').update({ country_code: country }).eq('user_id', user.id);
       if (countryError) throw countryError;
+      // The national ID goes on file before the PIN link is sent (it must come from the wallet's country).
+      const idResult = await ensureNationalId({ country, value: nationalId });
+      if (!idResult.success) throw new Error(idResult.error);
       const result = await walletAccountService.sendPinSetupLink({
         userId: user.id,
         authEmail: user.email,
@@ -125,6 +137,17 @@ export default function WalletSetupInline({ skin = 'slate', defaultName = '', de
         <option value="">Choose your country…</option>
         {countries.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
       </select>
+      {askForId && (
+        <NationalIdField
+          idPrefix="setup-nid"
+          country={country}
+          countryLocked
+          value={nationalId}
+          onChange={setNationalId}
+          disabled={busy}
+          classes={{ label: `block text-xs font-semibold mb-1 ${k.body}`, input: k.input, hint: `text-xs mt-1 ${k.faint}`, error: k.err, wrap: 'space-y-1' }}
+        />
+      )}
       <button type="button" onClick={create} disabled={busy} className={k.btn}>
         {busy ? <Loader className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
         {busy ? 'Creating your wallet…' : 'Create my wallet & set PIN'}
