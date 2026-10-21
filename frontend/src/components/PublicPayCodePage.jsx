@@ -3,11 +3,13 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { CLASSIC_PAY_CSS } from './publicPayTheme';
 import PayAnyAmountForm from './PayAnyAmountForm';
 import { getPayCodeInfo } from '../services/publicTransactionService';
+import { fetchSiteSlug } from '../services/businessSiteLinkService';
+import { businessSitePath } from '../utils/businessSiteUrl';
 
 /**
  * /p/<code> — the standing pay QR for a business that has NO public website page of its own.
  *
- * A business with a website (/notices/<company>) never shows this: the page hands the customer straight to
+ * A business with a website (icanera.space/<business-name>) never shows this: the page hands the customer straight to
  * that website's Pay tab, so a QR printed from an older link still lands on the business's own page. Without
  * a website it is a small classic page: type what you are paying for, continue, choose how to pay.
  */
@@ -22,7 +24,10 @@ export default function PublicPayCodePage({ code }) {
       .then((data) => {
         if (cancelled) return;
         if (data?.found && data.active && data.company_id) {
-          window.location.replace(`/notices/${data.company_id}?pay=1`);
+          // To the business's own address (icanera.space/<business-name>?pay=1); /notices/<id> if it has none yet.
+          fetchSiteSlug(data.company_id)
+            .catch(() => null)
+            .then((slug) => window.location.replace(`${businessSitePath({ slug, companyId: data.company_id })}?pay=1`));
           return;
         }
         setInfo(data?.found ? data : null);

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { PRODUCT_OF_HTML } from '../constants/brand';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Plus, Trash2, Share2, Printer, Copy, Check, Loader, FileText, Download,
@@ -464,7 +465,7 @@ export default function CMMSConsultationForms({ businessProfileId, businessName,
             Submitted: ${escapeHtml(new Date(submission.created_at).toLocaleString())} (${submission.submitted_via === 'public_link' ? 'via public link' : 'recorded by staff'})`,
           qrDataUrl, qrCaption: qrDataUrl ? 'Record reference' : '', qrCode: qrDataUrl ? formatReferenceCode(code) : ''
         })}${fieldsHtml}${attachmentsHtml(attachments)}
-         <div class="meta">Printed ${escapeHtml(new Date().toLocaleString())} · Powered by IcanEra · A product of GODMINDERA ORGANISATION (U) LTD</div>`
+         <div class="meta">Printed ${escapeHtml(new Date().toLocaleString())} · Powered by IcanEra · ${PRODUCT_OF_HTML}</div>`
       );
     } catch (err) {
       console.error('Unable to prepare the printable record:', err);

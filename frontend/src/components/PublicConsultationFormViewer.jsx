@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import ProductOfLink from './ProductOfLink';
 import { CheckCircle2, Download, FileWarning, Loader, Moon, Printer, Sun } from 'lucide-react';
 import { getPublicConsultationForm, submitPublicConsultationForm } from '../services/cmmsConsultationFormService';
 import { resolveAttachmentUrls } from '../services/cmmsConsultationAttachmentService';
@@ -438,7 +439,7 @@ const PublicConsultationFormViewer = ({ shareToken }) => {
         </form>
 
         <footer className="text-center text-xs cf-text-faint pt-10 pb-6">
-          Powered by <IcanEraWordmark /> · A product of GODMINDERA ORGANISATION (U) LTD
+          Powered by <IcanEraWordmark /> · <ProductOfLink />
         </footer>
       </div>
     </div>

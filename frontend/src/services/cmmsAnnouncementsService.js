@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase/client';
 import { resolveMediaValues, resolveMediaValue } from './r2StorageService';
 import { getBackendUrl } from '../lib/backendUrl';
 import { createStatus } from './statusService';
+import { buildBusinessSiteLink, prefetchSiteSlugs } from './businessSiteLinkService';
 
 const MEDIA_FIELDS = ['poster_url', 'document_url'];
 
@@ -399,17 +400,15 @@ export const uploadPublicResume = async (file) => {
   }
 };
 
-// Hardcoded like PublicPitchViewer's shareUrl -- a share link must always
-// point at the real production domain regardless of where the share action
-// itself was triggered from (a dev/staging build's window.location.origin
-// would otherwise produce a link nobody else could open).
-const PUBLIC_SITE_ORIGIN = 'https://icanera.space';
+// Share links are built by businessSiteLinkService: always the real production domain regardless of where the share action
+// itself was triggered from (a dev/staging build's window.location.origin would otherwise produce a link nobody else could open),
+// and in the business's own format, icanera.space/<business-name>.
 
 /** The one shareable URL for a specific post -- deep-links straight to it
  * via PublicCompanyNoticeBoard's ?post= handling, instead of just the
  * board's front page. */
 export const buildPublicNoticeLink = (companyId, noticeId) =>
-  `${PUBLIC_SITE_ORIGIN}/notices/${companyId}${noticeId ? `?post=${noticeId}` : ''}`;
+  buildBusinessSiteLink(companyId, { query: noticeId ? { post: noticeId } : undefined });
 
 /**
  * Cross-company feed for the marketing landing page -- every published
@@ -423,12 +422,13 @@ export const browsePublicNotices = async ({ postType = null, limit = 12, offset 
     p_offset: offset,
   });
   if (error) return { success: false, error: error.message, data: [] };
+  await prefetchSiteSlugs((data || []).map((row) => row.cmms_company_id)); // so each post's link is in the business's own format
   const resolved = await resolveMediaValues(data || [], ['poster_url', 'company_logo_url']);
   return { success: true, data: resolved };
 };
 
-/** A business's own IcanEra website (its public board). */
-export const buildPublicBusinessLink = (companyId) => `${PUBLIC_SITE_ORIGIN}/notices/${companyId}`;
+/** A business's own IcanEra website (its public board): icanera.space/<business-name>. */
+export const buildPublicBusinessLink = (companyId) => buildBusinessSiteLink(companyId);
 
 /**
  * Landing-page business directory: search every business on IcanEra by name
@@ -441,6 +441,7 @@ export const searchPublicBusinesses = async ({ query = '', limit = 12, offset = 
     p_offset: offset,
   });
   if (error) return { success: false, error: error.message, data: [] };
+  await prefetchSiteSlugs((data || []).map((row) => row.id)); // so each business's link is its own address
   const resolved = await resolveMediaValues(data || [], ['logo_url', 'cover_image_url']);
   return { success: true, data: resolved };
 };

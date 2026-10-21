@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import ProductOfLink from './ProductOfLink';
 import {
   Megaphone, Briefcase, MapPin, Calendar, Users, FileText, X, Loader,
   AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
@@ -14,6 +15,9 @@ import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunit
 import siteLibraryService from '../services/siteLibraryService';
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
 import useGuestCheckout from '../hooks/useGuestCheckout';
+import useBusinessSiteSlug from '../hooks/useBusinessSiteSlug';
+import { buildBusinessSiteLink } from '../services/businessSiteLinkService';
+import { buildBusinessSiteUrl, businessSitePath } from '../utils/businessSiteUrl';
 import InstallmentOffer from './InstallmentOffer';
 import ContinueWithGoogle from './ContinueWithGoogle';
 import WalletSetupInline from './WalletSetupInline';
@@ -150,7 +154,7 @@ const SOCIAL_LINKS = [
 // patched server-side per business by api/share-preview.js; this effect is
 // the client-side half of the same "let this business actually be found"
 // goal, and keeps the tab title correct for a human visitor too.)
-const useBusinessSeo = (company, companyId, pageLabel = null, canonicalQuery = '') => {
+const useBusinessSeo = (company, companyId, pageLabel = null, canonicalQuery = '', siteSlug = null) => {
   useEffect(() => {
     if (!company) return;
     const previousTitle = document.title;
@@ -166,7 +170,8 @@ const useBusinessSeo = (company, companyId, pageLabel = null, canonicalQuery = '
 
     // An open notice/job is its own indexable page (?post=<id>, same URL the server-side head and the
     // sitemap use); every other section canonicalises to the business's main page.
-    const canonicalUrl = `${window.location.origin}/notices/${companyId}${canonicalQuery}`;
+    // The business's own address (icanera.space/<business-name>) once known, else the always-valid /notices/<id>.
+    const canonicalUrl = buildBusinessSiteUrl({ slug: siteSlug, companyId, query: canonicalQuery });
     const description = (
       company.about?.trim()
       || company.tagline?.trim()
@@ -603,8 +608,10 @@ const NB_STYLES = `
  * (not gated behind a sign-in prompt) since the whole point is that
  * applicants never need an account.
  */
-const PublicCompanyNoticeBoard = ({ companyId }) => {
+const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
   const { user, loading: authLoading } = useAuth();
+  // The business's address (icanera.space/<business-name>). Also primes the link cache so every share link below uses it.
+  const siteSlug = useBusinessSiteSlug(companyId, slug);
 
   // Light/dark: defaults to whatever the visitor's OS is already set to on
   // first visit, then remembers an explicit choice from the header toggle
@@ -844,7 +851,17 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
 
   const pageLabel = selectedNotice?.title || selectedJob?.title || selectedOpportunity?.title || selectedPitch?.title || SECTION_TITLES[section] || null;
   const openPost = selectedNotice || selectedJob;
-  useBusinessSeo(company, companyId, pageLabel, openPost ? `?post=${openPost.id}` : '');
+  useBusinessSeo(company, companyId, pageLabel, openPost ? `?post=${openPost.id}` : '', siteSlug);
+
+  // An old /notices/<id> link (or a retired / differently-cased address) opens the same site; the address bar then moves to the
+  // business's current address, so what people copy from it is the readable one.
+  useEffect(() => {
+    if (!siteSlug || !company) return;
+    const wanted = businessSitePath({ slug: siteSlug, companyId });
+    if (window.location.pathname.replace(/\/+$/, '') !== wanted) {
+      window.history.replaceState(window.history.state, '', `${wanted}${window.location.search}${window.location.hash}`);
+    }
+  }, [siteSlug, company, companyId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1451,7 +1468,7 @@ const PublicCompanyNoticeBoard = ({ companyId }) => {
           pitch={selectedPitch}
           offer={liveOffer}
           onClose={closeDetail}
-          onShare={(item, onCopied) => handleShare(item, onCopied, (cId, pitchId) => `${window.location.origin}/notices/${cId}?pitch=${pitchId}`)}
+          onShare={(item, onCopied) => handleShare(item, onCopied, (cId, pitchId) => buildBusinessSiteLink(cId, { query: { pitch: pitchId } }))}
         />
       )}
     </div>
@@ -2031,7 +2048,7 @@ const SiteFooter = ({ company, tabs, activeSection, onNavigate, onOpenApp }) => 
           <p>
             &copy; {new Date().getFullYear()} {company.company_name} · Powered by{' '}
             <button onClick={onOpenApp} className="align-middle hover:opacity-80 transition-opacity"><IcanEraWordmark /></button>
-            {' · '}A product of GODMINDERA ORGANISATION (U) LTD
+            {' · '}<ProductOfLink />
           </p>
           <button
             type="button"

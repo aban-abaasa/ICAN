@@ -68,6 +68,9 @@ import AssetRegisterPanel from './CMMS/AssetRegisterPanel.jsx';
 import InventoryLedgerPanel from './CMMS/InventoryLedgerPanel.jsx';
 import BranchNetworkPanel from './CMMS/BranchNetworkPanel.jsx';
 import SupermarketLinkPanel from './CMMS/SupermarketLinkPanel.jsx';
+import BusinessSiteAddress from './BusinessSiteAddress.jsx';
+import useBusinessSiteSlug from '../hooks/useBusinessSiteSlug';
+import { buildBusinessSiteLink } from '../services/businessSiteLinkService';
 import { ITEM_KINDS, formatMoney, itemKindOf, netBookValue } from '../services/cmmsAssetLedgerService';
 import CMMSMySalaryPanel from './CMMSMySalaryPanel.jsx';
 import CMMSBookTransportPanel from './CMMSBookTransportPanelV2.jsx';
@@ -4831,6 +4834,8 @@ const CMMSModule = ({
     const [googleMapsUrlDraft, setGoogleMapsUrlDraft] = useState(cmmsData.companyProfile?.google_maps_url || '');
     const [savingGoogleMapsUrl, setSavingGoogleMapsUrl] = useState(false);
     const [googleMapsUrlError, setGoogleMapsUrlError] = useState('');
+    // The business's public address, icanera.space/<business-name> (kept above the access check below: hooks never sit after a return).
+    const siteSlug = useBusinessSiteSlug(cmmsData.companyProfile?.id, cmmsData.companyProfile?.site_slug);
 
     // Open create-company form whenever the header icon triggers it
     useEffect(() => {
@@ -5143,7 +5148,7 @@ const CMMSModule = ({
     // page here -- its own notice board (jobs, announcements, products).
     // Google's signup asks for a website either way, so this is what to
     // hand it when there's nothing else to give.
-    const boardLink = cmmsData.companyProfile?.id ? `${window.location.origin}/notices/${cmmsData.companyProfile.id}` : '';
+    const boardLink = cmmsData.companyProfile?.id ? buildBusinessSiteLink(cmmsData.companyProfile.id, { slug: siteSlug }) : '';
     const copyBoardLink = async () => {
       if (!boardLink) return;
       try {
@@ -5415,6 +5420,14 @@ const CMMSModule = ({
                 <dd className="break-all">{displayProfile.website || '—'}</dd>
               </div>
             </dl>
+
+            <div className="mb-6">
+              <BusinessSiteAddress
+                company={profile}
+                slug={siteSlug}
+                onSaved={(newSlug) => setCmmsData((prev) => ({ ...prev, companyProfile: { ...prev.companyProfile, site_slug: newSlug } }))}
+              />
+            </div>
 
             <div className="flex flex-col sm:flex-row gap-2">
               <button

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ProductOfLink from './ProductOfLink';
 import { Lock, Mail, ShieldCheck, Loader, FileWarning, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   getReportExportShareAccess,
@@ -453,7 +454,7 @@ const PublicReportExportViewer = ({ shareToken }) => {
         )}
 
         <footer className="text-center text-xs rs-text-faint pt-12 pb-6">
-          Powered by <IcanEraWordmark /> · A product of GODMINDERA ORGANISATION (U) LTD
+          Powered by <IcanEraWordmark /> · <ProductOfLink />
         </footer>
       </div>
     </div>

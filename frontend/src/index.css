@@ -348,6 +348,15 @@ html {
 :root[data-theme="ocean"] .cmms-classic-label,
 :root[data-theme="sienna"] .cmms-classic-label { color: #e6c980; }
 
+.cmms-classic-text {
+  color: #1e293b;
+}
+:root[data-theme="dark"] .cmms-classic-text,
+:root[data-theme="purple"] .cmms-classic-text,
+:root[data-theme="green"] .cmms-classic-text,
+:root[data-theme="ocean"] .cmms-classic-text,
+:root[data-theme="sienna"] .cmms-classic-text { color: var(--color-text); }
+
 .cmms-classic-muted {
   color: #64748b;
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ProductOfLink from '../ProductOfLink';
 import {
   Link2, Copy, Eye, Plus, Trash2, Edit2, RefreshCw, Upload, ShieldCheck,
   Briefcase, Award, GraduationCap, FolderKanban, Rocket, FlaskConical, Presentation,
@@ -902,7 +903,7 @@ export default function PortfolioTab() {
 
       <footer className="text-center pt-2">
         <div className="rz-rule" />
-        <p className="text-xs text-slate-500">Powered by <span className="rz-serif font-bold text-[color:var(--rz-gold-text)]">IcanEra</span> · A product of GODMINDERA ORGANISATION (U) LTD</p>
+        <p className="text-xs text-slate-500">Powered by <span className="rz-serif font-bold text-[color:var(--rz-gold-text)]">IcanEra</span> · <ProductOfLink /></p>
       </footer>
 
       {showPreview && handle && <PublicPortfolioPage handle={handle} onClose={() => setShowPreview(false)} />}

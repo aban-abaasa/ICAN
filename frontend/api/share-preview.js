@@ -24,6 +24,7 @@
  *   /shop        -> /api/share-preview?type=shop   (no id: the public product grid)
  *   /icaneracoin -> /api/share-preview?type=coin   (no id: the public icaneracoin price chart)
  *   /notices/:id -> /api/share-preview?type=notices&id=:id
+ *   /:slug       -> /api/share-preview?type=site&slug=:slug  (a business at its own address, icanera.space/<business-name>)
  *
  * Every other route still falls through to the plain SPA rewrite ("/(.*)"
  * -> "/"), which restores the deep-link fallback that /status and /pitchin
@@ -51,6 +52,7 @@
  * CMMS_PUBLIC_BUSINESS_WEBSITE_PROFILE.sql).
  */
 import { getDownloadUrl } from './_lib/r2Client.js';
+import { businessSitePath, hasSiteSlugShape, isAppRouteSlug } from '../src/utils/businessSiteUrl.js';
 
 const SITE_URL = 'https://icanera.space';
 const DEFAULT_IMAGE = `${SITE_URL}/icons/icon-512x512.png`;
@@ -417,7 +419,7 @@ const isJobOpen = (post) => {
 
 // Google for Jobs reads JobPosting structured data from the page itself, so every open job on a business's
 // board gets one -- this is what makes "<role> at <business>" searchable on Google, not just the business name.
-const buildJobPostingLd = ({ post, company, companyId, logo, sameAs }) => {
+const buildJobPostingLd = ({ post, company, basePath, logo, sameAs }) => {
   const posted = toIsoDate(post.published_at);
   const validThrough = post.application_deadline ? toIsoDate(`${post.application_deadline}T23:59:59Z`) : null;
   const employmentType = JOB_EMPLOYMENT_TYPES[post.employment_type];
@@ -427,7 +429,7 @@ const buildJobPostingLd = ({ post, company, companyId, logo, sameAs }) => {
     '@type': 'JobPosting',
     title: post.title,
     description: plainText(post.body || post.summary || post.title, 5000),
-    url: `${SITE_URL}/notices/${companyId}?post=${post.id}`,
+    url: `${SITE_URL}${basePath}?post=${post.id}`,
     directApply: true,
     ...(posted && { datePosted: posted }),
     ...(validThrough && { validThrough }),
@@ -444,18 +446,18 @@ const buildJobPostingLd = ({ post, company, companyId, logo, sameAs }) => {
 
 // What a crawler that never runs this app's JS (and any visitor with scripts off) sees inside #root: the
 // business's facts and real links to each public post, which is also how crawlers discover the post pages.
-const buildNoticeBodyHtml = ({ company, companyId, posts, activePost }) => {
+const buildNoticeBodyHtml = ({ company, basePath, posts, activePost }) => {
   const contact = [
     company.location && `<li>Location: ${escapeHtml(company.location)}</li>`,
     company.hours_text && `<li>Hours: ${escapeHtml(company.hours_text)}</li>`,
     company.phone && `<li>Phone: <a href="tel:${escapeAttr(company.phone.replace(/[^\d+]/g, ''))}">${escapeHtml(company.phone)}</a></li>`,
     company.email && `<li>Email: <a href="mailto:${escapeAttr(company.email)}">${escapeHtml(company.email)}</a></li>`,
   ].filter(Boolean).join('');
-  const postLink = (post) => `<li><a href="/notices/${escapeAttr(companyId)}?post=${escapeAttr(post.id)}">${escapeHtml(post.title)}</a>${post.summary ? ` — ${escapeHtml(plainText(post.summary, 160))}` : ''}</li>`;
+  const postLink = (post) => `<li><a href="${escapeAttr(basePath)}?post=${escapeAttr(post.id)}">${escapeHtml(post.title)}</a>${post.summary ? ` — ${escapeHtml(plainText(post.summary, 160))}` : ''}</li>`;
   const jobs = posts.filter((post) => post.post_type === 'job').slice(0, MAX_LINKED_POSTS_IN_BODY);
   const news = posts.filter((post) => post.post_type !== 'job').slice(0, MAX_LINKED_POSTS_IN_BODY);
   const activeBlock = activePost
-    ? `<article><h1>${escapeHtml(activePost.title)}</h1><p>${escapeHtml(company.company_name)}</p>${activePost.summary ? `<p>${escapeHtml(activePost.summary)}</p>` : ''}<p>${escapeHtml(plainText(activePost.body, 3000))}</p><p><a href="/notices/${escapeAttr(companyId)}">More from ${escapeHtml(company.company_name)}</a></p></article>`
+    ? `<article><h1>${escapeHtml(activePost.title)}</h1><p>${escapeHtml(company.company_name)}</p>${activePost.summary ? `<p>${escapeHtml(activePost.summary)}</p>` : ''}<p>${escapeHtml(plainText(activePost.body, 3000))}</p><p><a href="${escapeAttr(basePath)}">More from ${escapeHtml(company.company_name)}</a></p></article>`
     : `<h1>${escapeHtml(company.company_name)}</h1>${company.tagline ? `<p>${escapeHtml(company.tagline)}</p>` : ''}${company.about ? `<p>${escapeHtml(plainText(company.about, 1500))}</p>` : ''}`;
   return `<noscript><main>${activeBlock}${contact ? `<ul>${contact}</ul>` : ''}${news.length ? `<h2>News</h2><ul>${news.map(postLink).join('')}</ul>` : ''}${jobs.length ? `<h2>Careers</h2><ul>${jobs.map(postLink).join('')}</ul>` : ''}<p><a href="/">IcanEra</a></p></main></noscript>`;
 };
@@ -468,7 +470,7 @@ const buildNoticeBodyHtml = ({ company, companyId, posts, activePost }) => {
 // single-post RPC) does not count a view, so a crawler visit can't inflate a
 // post's view count. postId (?post=) turns the page into that one post's own
 // indexable page: its own title, description, canonical URL and JobPosting.
-const buildNoticeMeta = async ({ url, anonKey, id, postId }) => {
+const buildNoticeMeta = async ({ url, anonKey, id, postId, slug = null }) => {
   const rpc = async (fn, body) => {
     try {
       const res = await fetch(`${url}/rest/v1/rpc/${fn}`, {
@@ -482,16 +484,20 @@ const buildNoticeMeta = async ({ url, anonKey, id, postId }) => {
       return null;
     }
   };
-  const [headerRows, postRows] = await Promise.all([
+  const [headerRows, postRows, slugRows] = await Promise.all([
     rpc('fn_get_public_cmms_company_header', { p_company_id: id }),
     rpc('fn_get_public_cmms_notices', { p_company_id: id, p_post_type: null }),
+    // A visit by the old /notices/<id> link still learns the business's address, so its canonical URL is the readable one.
+    slug ? null : rpc('fn_get_public_site_slugs', { p_company_ids: [id] }),
   ]);
   const company = headerRows?.[0];
   if (!company) return null;
+  // /<business-name> when the business has an address (migration 20261105100000), otherwise the always-valid /notices/<id>.
+  const basePath = businessSitePath({ slug: slug || slugRows?.[0]?.site_slug, companyId: id });
   const posts = postRows || [];
   const activePost = postId ? posts.find((post) => post.id === postId) || null : null;
 
-  const canonicalPath = activePost ? `/notices/${id}?post=${activePost.id}` : `/notices/${id}`;
+  const canonicalPath = activePost ? `${basePath}?post=${activePost.id}` : basePath;
   const businessTitle = company.tagline
     ? `${company.company_name} — ${company.tagline} | IcanEra`
     : `${company.company_name}${company.industry ? ` — ${company.industry}` : ''} | IcanEra`;
@@ -520,7 +526,7 @@ const buildNoticeMeta = async ({ url, anonKey, id, postId }) => {
     name: company.company_name,
     description: plainText(company.about || company.tagline, 300) || description,
     image: resolvedCover || resolvedLogo || DEFAULT_IMAGE,
-    url: `${SITE_URL}/notices/${id}`,
+    url: `${SITE_URL}${basePath}`,
     ...(resolvedLogo && { logo: resolvedLogo }),
     ...(company.phone && { telephone: company.phone }),
     ...(company.email && { email: company.email }),
@@ -530,7 +536,7 @@ const buildNoticeMeta = async ({ url, anonKey, id, postId }) => {
     ...(sameAs.length > 0 && { sameAs }),
   };
 
-  const jobLd = (post) => buildJobPostingLd({ post, company, companyId: id, logo: resolvedLogo, sameAs });
+  const jobLd = (post) => buildJobPostingLd({ post, company, basePath, logo: resolvedLogo, sameAs });
   let structuredData;
   if (activePost) {
     const postLd = activePost.post_type === 'job'
@@ -560,7 +566,7 @@ const buildNoticeMeta = async ({ url, anonKey, id, postId }) => {
     video: null,
     ogType: activePost && activePost.post_type !== 'job' ? 'article' : 'business.business',
     structuredData,
-    bodyHtml: buildNoticeBodyHtml({ company, companyId: id, posts, activePost }),
+    bodyHtml: buildNoticeBodyHtml({ company, basePath, posts, activePost }),
   };
 };
 
@@ -602,10 +608,90 @@ const patchHead = (html, meta, canonicalUrl) => {
   return meta.bodyHtml ? patched.replace('<div id="root"></div>', () => `<div id="root">${meta.bodyHtml}</div>`) : patched;
 };
 
+// Self-fetch off the incoming request's own host (not the hardcoded SITE_URL) so this also works on Vercel preview deployments and
+// local `vercel dev` -- only the canonical/og:url should stay pinned to the production domain.
+const loadShell = async (req) => {
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const shellRes = await fetch(`${proto}://${req.headers.host}/index.html`);
+  return shellRes.text();
+};
+
+// Query parameters a business site understands; kept when a retired address is sent on to the current one.
+const SITE_QUERY_KEYS = ['post', 'tab', 'pay', 'opp', 'pitch'];
+
+/**
+ * /<slug> -> a business at its own address (icanera.space/<business-name>).
+ *
+ * Resolves the address through the same anon RPC the page uses. A business gets its real title, description, image and structured
+ * data (exactly what /notices/<id> serves); a retired address is sent on to the current one with a permanent redirect; anything
+ * that is not a business address -- a typo, or a page this app does not have -- gets the app exactly as the plain SPA rewrite
+ * always served it, so no other URL changes behaviour.
+ */
+const handleSiteRequest = async (req, res, { url, anonKey }) => {
+  const slug = typeof req.query.slug === 'string' ? req.query.slug.trim().toLowerCase() : '';
+
+  const serveApp = async () => {
+    try {
+      const shell = await loadShell(req);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+      return res.status(200).send(shell);
+    } catch (err) {
+      console.error('share-preview: failed to load app shell:', err);
+      return res.status(502).send('Temporarily unavailable.');
+    }
+  };
+
+  if (!url || !anonKey || !hasSiteSlugShape(slug) || isAppRouteSlug(slug)) return serveApp();
+
+  let site = null;
+  try {
+    const response = await fetch(`${url}/rest/v1/rpc/fn_resolve_public_site_slug`, {
+      method: 'POST',
+      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_slug: slug }),
+    });
+    const rows = response.ok ? await response.json() : null;
+    site = Array.isArray(rows) ? rows[0] : null;
+  } catch (err) {
+    console.error(`share-preview: failed to resolve site ${slug}:`, err);
+  }
+  if (!site?.company_id || !site.site_slug) return serveApp();
+
+  if (site.is_current === false) {
+    const params = new URLSearchParams();
+    SITE_QUERY_KEYS.forEach((key) => { if (typeof req.query[key] === 'string') params.set(key, req.query[key]); });
+    res.setHeader('Location', `/${site.site_slug}${params.toString() ? `?${params}` : ''}`);
+    res.setHeader('Cache-Control', 'public, s-maxage=300');
+    return res.status(301).end();
+  }
+
+  let meta = { title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION, image: DEFAULT_IMAGE, path: `/${site.site_slug}`, video: null };
+  try {
+    const postId = typeof req.query.post === 'string' && /^[0-9a-f-]{36}$/i.test(req.query.post) ? req.query.post.toLowerCase() : null;
+    const resolved = await buildNoticeMeta({ url, anonKey, id: site.company_id, postId, slug: site.site_slug });
+    if (resolved) meta = resolved;
+  } catch (err) {
+    console.error(`share-preview: failed to build the page for site ${slug}:`, err);
+  }
+
+  try {
+    const html = patchHead(await loadShell(req), meta, `${SITE_URL}${meta.path}`);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400');
+    return res.status(200).send(html);
+  } catch (err) {
+    console.error('share-preview: failed to load app shell:', err);
+    return res.status(502).send('Temporarily unavailable.'); // never a redirect to /<slug> itself: that would loop back here
+  }
+};
+
 export default async function handler(req, res) {
   const { type, id } = req.query;
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (type === 'site') return handleSiteRequest(req, res, { url, anonKey });
 
   // Falls back to the real /status/:id, /pitchin/:id, /store/:id or
   // /notices/:id route (never the rewritten /api/share-preview?... URL) so a
@@ -638,13 +724,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Self-fetch off the incoming request's own host (not the hardcoded
-    // SITE_URL) so this also works on Vercel preview deployments and local
-    // `vercel dev` -- only the canonical/og:url below should stay pinned to
-    // the production domain.
-    const proto = req.headers['x-forwarded-proto'] || 'https';
-    const shellRes = await fetch(`${proto}://${req.headers.host}/index.html`);
-    const shell = await shellRes.text();
+    const shell = await loadShell(req);
     const canonicalUrl = `${SITE_URL}${meta.path}`;
     const html = patchHead(shell, meta, canonicalUrl);
 

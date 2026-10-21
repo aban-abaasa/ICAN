@@ -14,6 +14,7 @@ import { I18nProvider } from './i18n/I18nProvider';
 import { captureReferralFromUrl } from './services/referralCapture';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 import { isCoinPath } from './utils/coinRoutes';
+import { siteSlugFromPathname } from './utils/businessSiteUrl';
 
 // A shared referral link (/?ref=CODE) can land on any page, signed in or not:
 // remember the code now, App redeems it once the visitor has an account.
@@ -83,6 +84,11 @@ const isMyInstallmentsPath = /^\/plans\/?$/.test(window.location.pathname);
 // stock Tailwind color class -- a hardcoded background this standalone,
 // bring-your-own-palette page must never inherit.
 const cmmsNoticeBoardMatch = window.location.pathname.match(/^\/notices\/([^/]+)/);
+// A business's website at its own readable address, icanera.space/<business-name> (see utils/businessSiteUrl.js and
+// supabase/migrations/20261105100000_business_site_slugs.sql). Any single path segment that is shaped like an address and is not a
+// page of the app is looked up; PublicBusinessSite shows the business, or -- when nothing has that address -- falls through to the
+// regular app below, so an unknown URL behaves exactly as it always did.
+const businessSiteSlug = siteSlugFromPathname(window.location.pathname);
 // The QR printed on any recorded transaction's receipt (/r/<code>, see
 // ADD_PUBLIC_TRANSACTION_QR.sql): the receipt for anyone, no account, plus payment when the
 // owner switched it on. Same reasoning as the notice board -- AuthProvider (a visitor may sign
@@ -147,6 +153,7 @@ const PublicIcanChartPage = lazyWithReloadOnChunkFailure(() => import('./compone
 const PublicInstallmentPlan = lazyWithReloadOnChunkFailure(() => import('./components/PublicInstallmentPlan'));
 const PublicMyInstallments = lazyWithReloadOnChunkFailure(() => import('./components/PublicMyInstallments'));
 const PublicCompanyNoticeBoard = lazyWithReloadOnChunkFailure(() => import('./components/PublicCompanyNoticeBoard'));
+const PublicBusinessSite = lazyWithReloadOnChunkFailure(() => import('./components/PublicBusinessSite'));
 const PublicTransactionPage = lazyWithReloadOnChunkFailure(() => import('./components/PublicTransactionPage'));
 const PublicPayCodePage = lazyWithReloadOnChunkFailure(() => import('./components/PublicPayCodePage'));
 const PublicReportViewer = lazyWithReloadOnChunkFailure(() => import('./components/PublicReportViewer'));
@@ -190,6 +197,27 @@ class AppErrorBoundary extends React.Component {
   }
 }
 
+// The regular app: the signed-in dashboard, the landing page, and every shared link that keeps the app's own look. Also what an
+// address that belongs to no business falls back to (PublicBusinessSite).
+const renderRegularApp = () => (
+  <ThemeProvider>
+    <AuthProvider>
+      <I18nProvider>
+      {pitchShareMatch ? <PublicShareFlow kind="pitch" id={pitchShareMatch[1]} />
+        : privateInviteMatch ? <PrivatePitchInviteViewer token={privateInviteMatch[1]} />
+        : statusShareMatch ? <PublicShareFlow kind="status" id={statusShareMatch[1]} />
+        : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
+        : installmentPlanMatch ? <PublicInstallmentPlan code={installmentPlanMatch[1].toUpperCase()} />
+        : isMyInstallmentsPath ? <PublicMyInstallments />
+        : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />
+        : <><App /><PhoneAlertsPrompt /></>}
+      {/* Not on a business's storefront or a person's portfolio: those keep their own look. */}
+      {!dropshipStoreMatch && !portfolioShareMatch && <AmbientBackdrop />}
+      </I18nProvider>
+    </AuthProvider>
+  </ThemeProvider>
+);
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AppErrorBoundary>
@@ -230,24 +258,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <AuthProvider>
               <CandidateDocumentViewer />
             </AuthProvider>
-          ) : (
-            <ThemeProvider>
-              <AuthProvider>
-                <I18nProvider>
-                {pitchShareMatch ? <PublicShareFlow kind="pitch" id={pitchShareMatch[1]} />
-                  : privateInviteMatch ? <PrivatePitchInviteViewer token={privateInviteMatch[1]} />
-                  : statusShareMatch ? <PublicShareFlow kind="status" id={statusShareMatch[1]} />
-                  : dropshipStoreMatch ? <PublicDropshipStorefront businessProfileId={dropshipStoreMatch[1]} />
-                  : installmentPlanMatch ? <PublicInstallmentPlan code={installmentPlanMatch[1].toUpperCase()} />
-                  : isMyInstallmentsPath ? <PublicMyInstallments />
-                  : portfolioShareMatch ? <PublicPortfolioPage handle={portfolioShareMatch[1]} />
-                  : <><App /><PhoneAlertsPrompt /></>}
-                {/* Not on a business's storefront or a person's portfolio: those keep their own look. */}
-                {!dropshipStoreMatch && !portfolioShareMatch && <AmbientBackdrop />}
-                </I18nProvider>
-              </AuthProvider>
-            </ThemeProvider>
-          )}
+          ) : businessSiteSlug ? (
+            <PublicBusinessSite slug={businessSiteSlug} renderFallback={renderRegularApp} />
+          ) : renderRegularApp()}
       </Suspense>
     </AppErrorBoundary>
   </React.StrictMode>,

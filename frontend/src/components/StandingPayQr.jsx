@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Check, ChevronDown, ChevronUp, Copy, Loader, Printer, QrCode } from 'lucide-react';
+import useBusinessSiteSlug from '../hooks/useBusinessSiteSlug';
 import { buildPayCodeLink, getMyPayCode, getReceiveSettings, updateMyPayCode, updateReceiveSettings } from '../services/publicTransactionService';
 
 /**
@@ -50,6 +51,7 @@ export default function StandingPayQr({ businessProfileId, businessName, needsBu
       .finally(() => setLoading(false));
   }, [open, businessProfileId, needsBusiness]);
 
+  useBusinessSiteSlug(paycode?.company_id); // re-renders this link as icanera.space/<business-name>?pay=1 once the address is known
   const link = paycode ? buildPayCodeLink(paycode) : '';
 
   const save = async (patch) => {

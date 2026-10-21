@@ -4,6 +4,8 @@ import {
   Pencil, Plus, RefreshCw, Star, Trash2, Users, X,
 } from 'lucide-react';
 import siteLibraryService, { LINK_KINDS, LOCK_LABELS } from '../services/siteLibraryService';
+import useBusinessSiteSlug from '../hooks/useBusinessSiteSlug';
+import { buildBusinessSiteUrl } from '../utils/businessSiteUrl';
 
 /**
  * Lives inside the Jobs & Announcements panel (CMMSAnnouncementsPanel.jsx) as its "Library" sub-tab: curates the
@@ -116,6 +118,7 @@ const LinkForm = ({ custom, hasPin, initial, busy, error, onSubmit, onCancel }) 
 };
 
 export default function CMMSSiteLibraryPanel({ companyId, onCountChange }) {
+  const siteSlug = useBusinessSiteSlug(companyId);
   const [listed, setListed] = useState([]);
   const [available, setAvailable] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -212,7 +215,7 @@ export default function CMMSSiteLibraryPanel({ companyId, onCountChange }) {
     }
   };
 
-  const siteUrl = `${window.location.origin}/notices/${companyId}?tab=library`;
+  const siteUrl = buildBusinessSiteUrl({ slug: siteSlug, companyId, query: { tab: 'library' } });
 
   return (
     <div className="space-y-4">
