@@ -11,3 +11,6 @@ export const PRODUCT_OWNER_URL = buildBusinessSiteUrl({ slug: PRODUCT_OWNER_SLUG
 
 // The same credit for places that build HTML by hand (emails, printable pages): the company name is a link to its website.
 export const PRODUCT_OF_HTML = `A product of <a href="${PRODUCT_OWNER_URL}" style="color:inherit">${PRODUCT_OWNER}</a>`;
+
+// The same credit as plain text (downloads, e-mail bodies): the name followed by its address, which readers turn into a link.
+export const PRODUCT_OF_TEXT = `A product of ${PRODUCT_OWNER} (${PRODUCT_OWNER_URL})`;
