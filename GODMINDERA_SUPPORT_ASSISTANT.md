@@ -38,7 +38,9 @@ replies from the Support Console). The assistant now answers first in that threa
 - **The team still sees every thread.** The customer's message already marks the thread unread for the team; the assistant's reply
   leaves it that way. When the assistant cannot settle something (an account problem, money, a complaint) it says it has passed
   it to the team.
-- **It never talks over a person.** If a team member wrote in the last 15 minutes it stays silent, it never answers a message that
+- **It never talks over a person.** If a team member wrote in the last 15 minutes it stays silent. Automatic notices (the franchise
+  code message, sent as "IcanEra Franchise Team") are not a person: a customer who replies to one is answered. Add any new automatic
+  sender to `NOTICE_SENDER_NAMES` in `supportChat.js`. It never answers a message that
   is already answered, it ignores "thanks" and "ok", and it is capped at 12 replies per thread per hour. A voice note or a photo
   without words gets a short "I can't play voice notes, the team has it" and no AI call.
 - **Works without AI** (no key, or the provider is down) from the knowledge alone; anything it does not cover goes to the team.
