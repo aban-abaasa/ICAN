@@ -102,6 +102,16 @@ export default function ICANWalletInbox() {
       setApprovalItem(item); setPin(''); setApprovalError('');
       return;
     }
+    // A store's "please pay" request (IcanEra Mobile / Card from a SupermartKera till): open its pay page. The link is
+    // built server-side from configuration, and only a plain https .../mobile-pay/<reference> address is ever opened.
+    if (item.notification_type === 'qr_pos_payment_request') {
+      const url = item.metadata?.pay_url;
+      if (typeof url === 'string' && /^https:\/\/[A-Za-z0-9.-]+(:\d+)?\/mobile-pay\/IMC-[A-Z0-9]{20}$/.test(url)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+      await read(item.id);
+      return;
+    }
     await read(item.id);
   };
   const approve = async () => {
@@ -130,7 +140,7 @@ export default function ICANWalletInbox() {
       </div>
       <button onClick={togglePhoneAlerts} className={`mb-3 rounded px-3 py-1.5 text-xs font-semibold text-white ${phoneAlertsEnabled ? 'bg-slate-700 hover:bg-slate-600' : 'bg-sky-600 hover:bg-sky-500'}`}>{phoneAlertsEnabled ? 'Disable phone alerts' : 'Enable phone alerts'}</button>
       {pushMessage && <p className="mb-2 text-xs text-sky-200">{pushMessage}</p>}
-      {items.length === 0 ? <p className="text-sm text-gray-400">No wallet notifications yet.</p> : <div className="max-h-96 space-y-2 overflow-auto">{items.slice(0, 30).map((item) => <div key={item.id} onClick={() => selectItem(item)} className={`group relative w-full cursor-pointer rounded-lg p-3 pr-8 text-left ${item.read_at ? 'bg-white/5' : 'bg-sky-500/15 border border-sky-300/30'}`}><button onClick={(event) => remove(item.id, event)} title="Delete" className="absolute right-2 top-2 rounded p-1 text-gray-500 opacity-0 hover:bg-white/10 hover:text-red-300 group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button><div className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 text-sky-300" /><div><p className="text-sm font-semibold text-white">{item.title}</p><p className="text-xs text-gray-300">{item.message}</p>{item.amount_ican != null && <p className="mt-1 text-xs text-emerald-300">{Number(item.amount_ican).toLocaleString()} IcanEra · {item.source_app}</p>}{item.notification_type === 'wallet_approval_required' && <p className="mt-1 text-xs font-semibold text-amber-300">Click to review and approve with PIN</p>}{isQrApproval(item.notification_type) && qrApproval?.item?.id !== item.id && <button type="button" onClick={(event) => { event.stopPropagation(); selectItem(item); }} className="mt-2 rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-bold text-slate-900 hover:bg-amber-300">Review &amp; approve</button>}</div></div>
+      {items.length === 0 ? <p className="text-sm text-gray-400">No wallet notifications yet.</p> : <div className="max-h-96 space-y-2 overflow-auto">{items.slice(0, 30).map((item) => <div key={item.id} onClick={() => selectItem(item)} className={`group relative w-full cursor-pointer rounded-lg p-3 pr-8 text-left ${item.read_at ? 'bg-white/5' : 'bg-sky-500/15 border border-sky-300/30'}`}><button onClick={(event) => remove(item.id, event)} title="Delete" className="absolute right-2 top-2 rounded p-1 text-gray-500 opacity-0 hover:bg-white/10 hover:text-red-300 group-hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button><div className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 text-sky-300" /><div><p className="text-sm font-semibold text-white">{item.title}</p><p className="text-xs text-gray-300">{item.message}</p>{item.amount_ican != null && <p className="mt-1 text-xs text-emerald-300">{Number(item.amount_ican).toLocaleString()} IcanEra · {item.source_app}</p>}{item.notification_type === 'wallet_approval_required' && <p className="mt-1 text-xs font-semibold text-amber-300">Click to review and approve with PIN</p>}{item.notification_type === 'qr_pos_payment_request' && item.metadata?.pay_url && <p className="mt-1 text-xs font-semibold text-amber-300">Tap to open the payment page</p>}{isQrApproval(item.notification_type) && qrApproval?.item?.id !== item.id && <button type="button" onClick={(event) => { event.stopPropagation(); selectItem(item); }} className="mt-2 rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-bold text-slate-900 hover:bg-amber-300">Review &amp; approve</button>}</div></div>
         {isQrApproval(item.notification_type) && qrApproval?.item?.id === item.id && <div className="mt-3" onClick={(event) => event.stopPropagation()}>
           {qrApproval.loading && <p className="text-xs text-sky-200">Opening payment…</p>}
           {qrApproval.error && <p className="text-xs text-red-300">{qrApproval.error}</p>}
