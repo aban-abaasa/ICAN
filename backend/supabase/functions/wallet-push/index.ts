@@ -96,11 +96,20 @@ Deno.serve(async (request) => {
     ? (allSubscriptions || []).filter((device) => device.application_id === defaults.app)
     : (allSubscriptions || []);
 
+  // A row may name the page its push opens inside the SupermartKera app (a cashier's "payment received" opens the till,
+  // not the admin page). Only a plain relative path is accepted - never a full URL, a query string or a protocol-relative
+  // address - and it only applies to devices registered by that app.
+  const appPath = typeof notification.metadata?.push_path === 'string' && /^\/(?![\/\\])[A-Za-z0-9\-_/]*$/.test(notification.metadata.push_path)
+    ? notification.metadata.push_path
+    : null;
+
   const payloadFor = (device: { application_id?: string }) => JSON.stringify({
     title: notification.title || defaults.title,
     body: notification.message || 'You have a new notification.',
     tag: notification.tag || `ican-${source}-${notification.id}`,
-    url: (device.application_id && APP_ROUTES[device.application_id]?.[source]) || defaults.url,
+    url: (device.application_id === 'digital-city-era' && appPath)
+      || (device.application_id && APP_ROUTES[device.application_id]?.[source])
+      || defaults.url,
     urgent: Boolean(defaults.urgent),
     data: {
       source,
