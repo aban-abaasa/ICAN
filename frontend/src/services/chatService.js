@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '../lib/supabase/client';
+import { getBackendUrl } from '../lib/backendUrl';
 
 const supabase = getSupabaseClient();
 
@@ -98,6 +99,29 @@ export const sendMessage = async (conversationId, { senderRole, senderName, send
     .single();
   if (error) throw error;
   return data;
+};
+
+// Asks the AI assistant (api/business-chat.js -> api/_lib/supportChat.js) to answer the customer's latest message in a support thread.
+// The server decides whether it needs answering (a team member who is already replying, "thanks", an answered message: no), writes the
+// reply into the thread as the assistant, and returns it. Never throws: the team still sees every thread, so a missing AI reply is
+// only a slower one. Resolves the message row that was written, or null.
+export const requestAssistantReply = async (conversationId, { timeoutMs = 30000 } = {}) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${getBackendUrl()}/api/business-chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ supportConversationId: conversationId }),
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => null);
+    return data?.replied === true && data.message?.id ? data.message : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 export const deleteMessage = async (messageId) => {
