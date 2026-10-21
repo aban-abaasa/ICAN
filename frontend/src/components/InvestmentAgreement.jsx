@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { PRODUCT_OF_TEXT } from '../constants/brand';
 import { 
   FileText, Fingerprint, Lock, Download, CheckCircle, AlertCircle, 
   Eye, EyeOff, Loader, Edit, Sparkles, Users, DollarSign, Briefcase,
@@ -526,7 +527,7 @@ Contract Hash: ${btoa(contractId + JSON.stringify(allSigners)).substring(0, 32)}
 ════════════════════════════════════════════════════════════════════════════════
             This document is legally binding once all parties have signed.
          IcanEra • Powered by Blockchain • ${new Date().getFullYear()}
-         A product of GODMINDERA ORGANISATION (U) LTD
+         ${PRODUCT_OF_TEXT}
 ════════════════════════════════════════════════════════════════════════════════
       `.trim();
       

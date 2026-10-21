@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { drawProductOf } from './pdfCredit';
 import { sectionDisplayLabel } from './consultationSubmissionUtils';
 import { attachmentKind, attachmentLine, formatReferenceCode, recordQrPayload, recordReferenceCode } from './consultationAttachments';
 import { fitWithin, imageUrlToDataUrl, loadLogoAsset, makeQrDataUrl } from './consultationBranding';
@@ -223,7 +224,8 @@ const renderConsultationPdf = ({ businessName, formName, subtitleLines, entries,
   if (footer) {
     pdf.setFontSize(8);
     pdf.setTextColor(120);
-    pdf.text(footer, MARGIN, pageHeight - 10);
+    // `footer` is the lead-in; the GODMINDERA credit follows it as a clickable link.
+    drawProductOf(pdf, MARGIN, pageHeight - 10, { lead: footer });
   }
 
   return pdf;
@@ -272,7 +274,7 @@ export const downloadBlankConsultationFormPdf = async ({ businessName, form, fie
     formName: form.name,
     subtitleLines: [form.description, 'Patient name: _______________________     Date: _______________'],
     entries,
-    footer: `Printed ${new Date().toLocaleString()} · Powered by IcanEra · A product of GODMINDERA ORGANISATION (U) LTD`,
+    footer: `Printed ${new Date().toLocaleString()} · Powered by IcanEra · `,
     logo,
     qr
   });
@@ -311,7 +313,7 @@ export const downloadConsultationSubmissionPdf = async ({ businessName, formName
       `Submitted: ${new Date(submission.created_at).toLocaleString()} (${submission.submitted_via === 'public_link' ? 'via public link' : 'recorded by staff'})`
     ],
     entries: pdfEntries,
-    footer: `Printed ${new Date().toLocaleString()} · Powered by IcanEra · A product of GODMINDERA ORGANISATION (U) LTD`,
+    footer: `Printed ${new Date().toLocaleString()} · Powered by IcanEra · `,
     logo,
     qr,
     attachments
@@ -353,7 +355,7 @@ export const downloadPublicConsultationSubmissionPdf = async ({ form, patient, r
     formName: form.formName,
     subtitleLines: [`Patient: ${patient.name}${contactLine ? ' · ' + contactLine : ''}`, patient.address ? `Address: ${patient.address}` : null, `Submitted: ${new Date().toLocaleString()}`],
     entries,
-    footer: 'Powered by IcanEra · A product of GODMINDERA ORGANISATION (U) LTD',
+    footer: 'Powered by IcanEra · ',
     logo,
     qr,
     attachments: preparedAttachments
