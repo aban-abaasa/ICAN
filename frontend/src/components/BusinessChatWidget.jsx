@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, X, Send, Loader, Sparkles, User, ArrowRight, CheckCircle2, Users } from 'lucide-react';
+import { MessageCircle, X, Send, Loader, Sparkles, User, ArrowRight, CheckCircle2, Users, ExternalLink } from 'lucide-react';
 import { askAssistant, startInquiry, sendInquiryMessage, getInquiry } from '../services/businessChatService';
+import { FAMILY_APPS, familyAppName } from '../constants/familyApps';
 
 /**
  * The floating "Ask us" bubble on a business's public website (rendered inside PublicCompanyNoticeBoard, so it
@@ -8,6 +9,8 @@ import { askAssistant, startInquiry, sendInquiryMessage, getInquiry } from '../s
  *
  *   Assistant  -- an AI that answers from the business's public facts (api/business-chat.js). Replies can carry
  *                 buttons that jump to a page of the site (Careers, Market, Pay...) and follow-up suggestions.
+ *   On the GODMINDERA website (`platformSupport`) the assistant is the front desk for every IcanEra app: it shows the apps,
+ *   tags which one an answer is about, opens vetted links to them, and tells the team which app a message is about.
  *   Team       -- a real conversation with the business's staff. Visitors leave a name and a phone/email (no
  *                 account) and keep a private token in this browser to read replies and write back; staff answer
  *                 from CMMS. A dot on the bubble says the team has replied.
@@ -39,7 +42,7 @@ const WIDGET_STYLES = `
 @media (prefers-reduced-motion: reduce) { .nb-chat-dot, .nb-chat-sheet { animation: none; } }
 `;
 
-export default function BusinessChatWidget({ company, companyId, availableTabs = [], onNavigate, jobCount = 0, noticeCount = 0, payOnline = false }) {
+export default function BusinessChatWidget({ company, companyId, availableTabs = [], onNavigate, jobCount = 0, noticeCount = 0, payOnline = false, platformSupport = false, askRequest = null }) {
   const tokenKey = `nb_inquiry_token_${companyId}`;
   const seenKey = `nb_inquiry_seen_${companyId}`;
   const chatKey = `nb_chat_${companyId}`;
@@ -55,30 +58,50 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
   const [threadError, setThreadError] = useState('');
   const [sending, setSending] = useState(false);
   const [unread, setUnread] = useState(false);
-  const [form, setForm] = useState(() => ({ name: '', contact: '', message: '', ...readJson(localStorage, visitorKey, {}) }));
+  const [form, setForm] = useState(() => ({ name: '', contact: '', message: '', app: '', ...readJson(localStorage, visitorKey, {}) }));
+  // GODMINDERA site: the app the conversation is about (from ?ask=<app>, or what the assistant last said it is about).
+  const [focusApp, setFocusApp] = useState(platformSupport ? askRequest?.app || null : null);
   const [formError, setFormError] = useState('');
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const openRef = useRef(open);
   openRef.current = open;
 
+  // GODMINDERA site: ?ask / ?ask=<app> (a "Need help?" link from one of the apps) opens the chat at once.
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (platformSupport && askRequest?.open && !autoOpened.current) { autoOpened.current = true; setOpen(true); }
+  }, [platformSupport, askRequest?.open]);
+
+  // The site may be recognised as GODMINDERA's a moment after the widget mounts (an old /notices/<id> link): pick the app up then.
+  useEffect(() => {
+    if (platformSupport && askRequest?.app) setFocusApp((current) => current || askRequest.app);
+  }, [platformSupport, askRequest?.app]);
+
   const tabIds = useMemo(() => new Set(availableTabs), [availableTabs]);
   const name = company.company_name;
 
   // ---- starter questions: only things this business can actually answer ----
-  const starters = useMemo(() => [
+  const starters = useMemo(() => platformSupport ? [
+    'What is IcanEra?',
+    'Which app is right for me?',
+    'Help with payments',
+    'How do I get started?',
+  ] : [
     company.hours_text && 'What are your opening hours?',
     jobCount > 0 && 'Are you hiring?',
     (company.location || company.google_maps_url) && 'Where are you located?',
     tabIds.has('shop') && 'What do you offer?',
     payOnline && 'How can I pay?',
     noticeCount > 0 && "What's new?",
-  ].filter(Boolean).slice(0, 4), [company.hours_text, company.location, company.google_maps_url, jobCount, noticeCount, payOnline, tabIds]);
+  ].filter(Boolean).slice(0, 4), [platformSupport, company.hours_text, company.location, company.google_maps_url, jobCount, noticeCount, payOnline, tabIds]);
 
   const greeting = useMemo(() => ({
     id: GREETING_ID, role: 'assistant', local: true,
-    text: `Hi! I'm the ${name} assistant. Ask me anything about us, or talk to the team directly.`,
-  }), [name]);
+    text: platformSupport
+      ? `Hi! I'm the ${name} assistant. I can help with ${FAMILY_APPS.map((a) => a.name).join(', ')}: signing in, payments, rides, orders, your business tools. Pick an app or just ask.`
+      : `Hi! I'm the ${name} assistant. Ask me anything about us, or talk to the team directly.`,
+  }), [name, platformSupport]);
   const shown = useMemo(() => [greeting, ...messages], [greeting, messages]);
 
   useEffect(() => { write(sessionStorage, chatKey, JSON.stringify(messages.slice(-30))); }, [messages, chatKey]);
@@ -139,7 +162,7 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
   }, [open, view, thread, seenKey]);
 
   // ---- assistant ----
-  const ask = async (rawText) => {
+  const ask = async (rawText, appOverride = null) => {
     const text = rawText.trim().slice(0, MAX_INPUT);
     if (!text || thinking) return;
     const userMessage = { id: `u${Date.now()}`, role: 'user', text };
@@ -149,8 +172,9 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
     setThinking(true);
     const history = next.filter((m) => !m.local && !m.error).map((m) => ({ role: m.role, text: m.text }));
     try {
-      const answer = await askAssistant(companyId, history);
-      setMessages((current) => [...current, { id: `a${Date.now()}`, role: 'assistant', text: answer.reply, needsHuman: answer.needsHuman, suggestions: answer.suggestions, actions: answer.actions.filter((a) => tabIds.has(a.tab)) }]);
+      const answer = await askAssistant(companyId, history, { app: platformSupport ? (appOverride || focusApp) : null });
+      if (platformSupport && answer.app) setFocusApp(answer.app);
+      setMessages((current) => [...current, { id: `a${Date.now()}`, role: 'assistant', text: answer.reply, needsHuman: answer.needsHuman, suggestions: answer.suggestions, actions: answer.actions.filter((a) => tabIds.has(a.tab)), links: platformSupport ? answer.links : [], app: platformSupport ? answer.app : null }]);
     } catch (err) {
       setMessages((current) => [...current, { id: `e${Date.now()}`, role: 'assistant', error: true, needsHuman: true, text: `${err.message} You can leave a message for the team instead.` }]);
     } finally {
@@ -166,7 +190,7 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
   // ---- hand off to the team ----
   const openHandoff = () => {
     const lastQuestion = [...messages].reverse().find((m) => m.role === 'user')?.text || '';
-    setForm((f) => ({ ...f, message: f.message || lastQuestion }));
+    setForm((f) => ({ ...f, message: f.message || lastQuestion, app: focusApp || f.app || '' }));
     setFormError('');
     setView(token ? 'thread' : 'handoff');
   };
@@ -182,7 +206,9 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
       // twice. Cut the transcript back to the turn before it, dropping the assistant's "ask the team" answer too.
       const sameAsLast = transcript.map((t) => t.role === 'user' && t.text.trim() === form.message.trim()).lastIndexOf(true);
       if (sameAsLast !== -1) transcript = transcript.slice(0, sameAsLast);
-      const newToken = await startInquiry({ companyId, name: form.name, contact: form.contact, message: form.message, transcript });
+      // The team sees which app this is about at the start of the message.
+      const tagged = platformSupport && form.app ? `[${familyAppName(form.app) || form.app}] ${form.message}` : form.message;
+      const newToken = await startInquiry({ companyId, name: form.name, contact: form.contact, message: tagged, transcript });
       write(localStorage, tokenKey, newToken);
       write(localStorage, visitorKey, JSON.stringify({ name: form.name, contact: form.contact }));
       setToken(newToken);
@@ -255,7 +281,7 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
               <div className="min-w-0 flex-1">
                 <p className="font-bold leading-tight truncate">{name}</p>
                 <p className="text-[11px] opacity-85 truncate">
-                  {view === 'thread' ? 'Chatting with the team' : 'AI assistant · the team follows up'}
+                  {view === 'thread' ? 'Chatting with the team' : platformSupport ? 'AI support · all IcanEra apps' : 'AI assistant · the team follows up'}
                 </p>
               </div>
               <button type="button" onClick={() => setOpen(false)} aria-label="Close chat" className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center">
@@ -280,15 +306,23 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
                 {shown.map((m, i) => (
                   <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className="max-w-[85%]">
+                      {m.role === 'assistant' && m.app && familyAppName(m.app) && (
+                        <p className="text-[10px] font-bold nb-text-faint mb-0.5 ml-1">About {familyAppName(m.app)}</p>
+                      )}
                       <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${m.role === 'user' ? 'nb-btn-primary rounded-br-md' : 'nb-surface-alt nb-text rounded-bl-md'}`}>
                         {m.text}
                       </div>
-                      {m.role === 'assistant' && !m.local && (m.actions?.length > 0 || m.needsHuman) && (
+                      {m.role === 'assistant' && !m.local && (m.actions?.length > 0 || m.links?.length > 0 || m.needsHuman) && (
                         <div className="flex flex-wrap gap-1.5 mt-1.5">
                           {m.actions?.map((a) => (
                             <button key={`${a.tab}-${a.label}`} type="button" onClick={() => goTo(a.tab)} className="nb-action-btn rounded-full px-3 py-1.5 text-xs font-bold inline-flex items-center gap-1">
                               {a.label} <ArrowRight className="w-3 h-3" />
                             </button>
+                          ))}
+                          {m.links?.map((l) => (
+                            <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer" className="nb-action-btn rounded-full px-3 py-1.5 text-xs font-bold inline-flex items-center gap-1">
+                              {l.label} <ExternalLink className="w-3 h-3" />
+                            </a>
                           ))}
                           {m.needsHuman && (
                             <button type="button" onClick={openHandoff} className="nb-btn-primary rounded-full px-3 py-1.5 text-xs font-bold inline-flex items-center gap-1">
@@ -299,6 +333,11 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
                       )}
                       {i === lastIndex && !thinking && (m.suggestions?.length > 0 || (m.local && starters.length > 0)) && (
                         <div className="flex flex-wrap gap-1.5 mt-2">
+                          {m.local && platformSupport && FAMILY_APPS.map((a) => (
+                            <button key={a.id} type="button" onClick={() => { setFocusApp(a.id); ask(`What can I do on ${a.name}?`, a.id); }} className="nb-action-btn rounded-full px-3 py-1.5 text-xs font-bold">
+                              {a.name}
+                            </button>
+                          ))}
                           {(m.local ? starters : m.suggestions).map((s) => (
                             <button key={s} type="button" onClick={() => ask(s)} className="nb-option rounded-full px-3 py-1.5 text-xs font-semibold">
                               {s}
@@ -338,6 +377,15 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
                   <span className="text-xs font-semibold nb-text-muted">Phone or email</span>
                   <input value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} maxLength={120} autoComplete="email" inputMode="email" placeholder="+256 7… or you@example.com" required className="nb-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm" />
                 </label>
+                {platformSupport && (
+                  <label className="block">
+                    <span className="text-xs font-semibold nb-text-muted">Which app is this about?</span>
+                    <select value={form.app || ''} onChange={(e) => setForm({ ...form, app: e.target.value })} className="nb-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm">
+                      <option value="">Not sure / the company</option>
+                      {FAMILY_APPS.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  </label>
+                )}
                 <label className="block">
                   <span className="text-xs font-semibold nb-text-muted">Your question</span>
                   <textarea value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} maxLength={2000} rows={4} required className="nb-input mt-1 w-full rounded-xl px-3 py-2.5 text-sm resize-none" />

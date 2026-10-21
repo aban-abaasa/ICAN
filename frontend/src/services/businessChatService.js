@@ -14,14 +14,18 @@ const rpcResult = (data, error, fallbackMessage) => {
   return data;
 };
 
-/** messages: [{ role: 'user' | 'assistant', text }], the last one the visitor's. */
-export const askAssistant = async (companyId, messages) => {
+/**
+ * messages: [{ role: 'user' | 'assistant', text }], the last one the visitor's.
+ * `app` (GODMINDERA site only): the IcanEra app the chat was opened from or is about, a hint for the assistant.
+ * Replies from the GODMINDERA site also carry `app` (the app the answer is about) and `links` (vetted pages to open).
+ */
+export const askAssistant = async (companyId, messages, { app = null } = {}) => {
   let response;
   try {
     response = await fetch(`${getBackendUrl()}/api/business-chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyId, messages }),
+      body: JSON.stringify({ companyId, messages, ...(app ? { app } : {}) }),
     });
   } catch {
     throw new Error('Could not reach the assistant. Check your connection.');
@@ -33,6 +37,9 @@ export const askAssistant = async (companyId, messages) => {
     needsHuman: data.needsHuman === true,
     suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
     actions: Array.isArray(data.actions) ? data.actions : [],
+    app: typeof data.app === 'string' ? data.app : null,
+    // Only https links the server vetted; anything else is dropped here as well.
+    links: (Array.isArray(data.links) ? data.links : []).filter((l) => l && typeof l.label === 'string' && /^https:\/\/[^\s]+$/.test(String(l.url || ''))).slice(0, 2),
   };
 };
 

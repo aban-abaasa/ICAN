@@ -9,8 +9,15 @@
  *
  * If no AI provider is configured or the provider fails, a rule-based answerer covers the common questions
  * (hours, contact, location, jobs, payments, news) so the bubble never goes dead.
+ *
+ * On the GODMINDERA ORGANISATION (U) LTD site (icanera.space/godmindera-organisation-u-ltd) the same bubble becomes the
+ * front desk for the whole IcanEra family -- IcanEra, SupermartKera, BodaGoEra, AgriBone: see familySupport.js, which adds
+ * curated app knowledge, the live coin price, vetted links and the app a question is about.
  */
 import { callAI } from './aiProvider.js';
+import {
+  buildPlatformPrompt, isPlatformSite, parseFocusApp, platformFallback, sanitizePlatformOutput, selectTopics,
+} from './familySupport.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -51,7 +58,8 @@ export const parseRequest = (body) => {
     .slice(-MAX_TURNS)
     .map((m) => ({ role: m.role, text: clip(m.text, MAX_TURN_CHARS) }));
   if (messages.length === 0 || messages[messages.length - 1].role !== 'user') return { error: 'Send the visitor\'s question as the last message' };
-  return { companyId: companyId.toLowerCase(), messages };
+  // The app the visitor opened the chat from (?ask=bodagoera on the GODMINDERA site); a hint, checked against the known apps.
+  return { companyId: companyId.toLowerCase(), messages, focusApp: parseFocusApp(body?.app) };
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -72,6 +80,17 @@ const rpc = async ({ url, anonKey }, fn, args) => {
   }
 };
 
+// A public table read (anon key, RLS decides): used for the few live values the GODMINDERA assistant quotes.
+const restSelect = async ({ url, anonKey }, path) => {
+  try {
+    const res = await fetch(`${url}/rest/v1/${path}`, { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } });
+    const rows = res.ok ? await res.json() : null;
+    return Array.isArray(rows) ? rows : null;
+  } catch {
+    return null;
+  }
+};
+
 const isJobOpen = (post) => {
   if (post.post_type !== 'job') return false;
   if (!post.application_deadline) return true;
@@ -82,13 +101,34 @@ export const loadKnowledge = async (supabase, companyId) => {
   const cached = knowledgeCache.get(companyId);
   if (cached && Date.now() - cached.at < KNOWLEDGE_TTL_MS) return cached.value;
 
-  const [headerRows, postRows, productData] = await Promise.all([
+  const [headerRows, postRows, productData, slugRows] = await Promise.all([
     rpc(supabase, 'fn_get_public_cmms_company_header', { p_company_id: companyId }),
     rpc(supabase, 'fn_get_public_cmms_notices', { p_company_id: companyId, p_post_type: null }),
     rpc(supabase, 'get_cmms_site_products', { p_company_id: companyId }),
+    // The business's address (icanera.space/<name>): how the GODMINDERA site is recognised. Unavailable before the
+    // site-address migration, in which case every business simply gets the ordinary assistant.
+    rpc(supabase, 'fn_get_public_site_slugs', { p_company_ids: [companyId] }),
   ]);
   const company = Array.isArray(headerRows) ? headerRows[0] : null;
   if (!company) return null;
+  const platform = isPlatformSite(Array.isArray(slugRows) ? slugRows[0]?.site_slug : null);
+  let live = null;
+  if (platform) {
+    // The public coin price, the same anon-callable snapshot the /icaneracoin page reads.
+    const [snapshot, charge] = await Promise.all([
+      rpc(supabase, 'ican_get_market_snapshot', {}),
+      // BodaGoEra's platform charge is set by the platform and can change, so it is read, never written into the knowledge.
+      restSelect(supabase, 'mbg_platform_settings?select=value&is_public=eq.true&key=eq.commission.icanera_platform_fee_percentage&limit=1'),
+    ]);
+    const row = Array.isArray(snapshot) ? snapshot[0] : snapshot;
+    const ridePct = Number(charge?.[0]?.value);
+    live = {
+      priceUgx: row && Number(row.price_ugx) > 0 ? Number(row.price_ugx) : null,
+      priceUsd: row ? Number(row.price_usd) : null,
+      rideChargePct: Number.isFinite(ridePct) && ridePct >= 0 && ridePct < 100 ? ridePct : null,
+    };
+    if (live.priceUgx === null && live.rideChargePct === null) live = null;
+  }
 
   let payOnline = false;
   if (company.business_profile_id) {
@@ -102,6 +142,8 @@ export const loadKnowledge = async (supabase, companyId) => {
     news: posts.filter((p) => p.post_type !== 'job'),
     products: Array.isArray(productData?.store_products) ? productData.store_products : [],
     payOnline,
+    platform,
+    live,
   };
   knowledgeCache.set(companyId, { at: Date.now(), value });
   if (knowledgeCache.size > 200) knowledgeCache.delete(knowledgeCache.keys().next().value);
@@ -174,10 +216,18 @@ ${buildFacts(k)}`;
 
 const stripJsonFence = (text) => String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
 
+export const parseModelJson = (content) => {
+  try {
+    const parsed = JSON.parse(stripJsonFence(content));
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
 export const sanitizeAiOutput = (content, tabs) => {
-  let parsed = null;
-  try { parsed = JSON.parse(stripJsonFence(content)); } catch { parsed = null; }
-  if (!parsed || typeof parsed !== 'object') {
+  const parsed = parseModelJson(content);
+  if (!parsed) {
     // The model ignored the format: still usable as a plain answer.
     const text = clip(content, 800);
     return text ? { reply: text, needsHuman: false, suggestions: [], actions: [] } : null;
@@ -195,18 +245,23 @@ export const sanitizeAiOutput = (content, tabs) => {
   };
 };
 
-export const askAi = async (k, messages) => {
+export const askAi = async (k, messages, { focusApp = null } = {}) => {
   const tabs = allowedTabs(k);
+  const platform = Boolean(k.platform);
+  const system = platform
+    ? buildPlatformPrompt({ businessFacts: buildFacts(k), topics: selectTopics({ messages, focusApp }), live: k.live, tabs, focusApp })
+    : buildSystemPrompt(k, tabs);
   const { content } = await callAI({
     messages: [
-      { role: 'system', content: buildSystemPrompt(k, tabs) },
+      { role: 'system', content: system },
       ...messages.map((m) => ({ role: m.role, content: m.text })),
     ],
     temperature: 0.3,
-    maxTokens: 450,
+    maxTokens: platform ? 700 : 450,
     jsonMode: true,
   });
-  return sanitizeAiOutput(content, tabs);
+  const answer = sanitizeAiOutput(content, tabs);
+  return platform ? sanitizePlatformOutput(answer, parseModelJson(content)) : answer;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -264,16 +319,21 @@ export const fallbackAnswer = (k, question) => {
 // ---------------------------------------------------------------------------------------------
 // Entry point shared by the HTTP handler and tests
 // ---------------------------------------------------------------------------------------------
-export const answerVisitor = async ({ supabase, companyId, messages }) => {
+export const answerVisitor = async ({ supabase, companyId, messages, focusApp = null }) => {
   const knowledge = await loadKnowledge(supabase, companyId);
   if (!knowledge) return { status: 404, body: { error: 'This business could not be found' } };
   const question = messages[messages.length - 1].text;
+  const platform = Boolean(knowledge.platform);
   try {
-    const ai = await askAi(knowledge, messages);
-    if (ai) return { status: 200, body: { ...ai, source: 'ai' } };
+    const ai = await askAi(knowledge, messages, { focusApp });
+    if (ai) return { status: 200, body: { ...ai, platform, source: 'ai' } };
   } catch (err) {
     // Not configured, quota, provider outage: fall through to the rule-based answerer.
     console.warn('business-chat: AI unavailable, using fallback:', err?.message);
   }
-  return { status: 200, body: { ...fallbackAnswer(knowledge, question), source: 'fallback' } };
+  if (platform) {
+    const fallback = platformFallback({ messages, focusApp, live: knowledge.live, businessFacts: buildFacts(knowledge), tabs: allowedTabs(knowledge) });
+    return { status: 200, body: { ...fallback, platform, source: 'fallback' } };
+  }
+  return { status: 200, body: { ...fallbackAnswer(knowledge, question), platform, source: 'fallback' } };
 };

@@ -5,8 +5,10 @@
  * limits keep the AI bill bounded.
  *
  * Route: POST /api/business-chat
- * Body:  { companyId: uuid, messages: [{ role: 'user' | 'assistant', text }] }  (last one is the visitor's)
- * Reply: { reply, needsHuman, suggestions: string[], actions: [{ label, tab }], source: 'ai' | 'fallback' }
+ * Body:  { companyId: uuid, messages: [{ role: 'user' | 'assistant', text }], app?: string }  (last message is the visitor's;
+ *         `app` = the IcanEra app the chat was opened from, used only on the GODMINDERA site)
+ * Reply: { reply, needsHuman, suggestions: string[], actions: [{ label, tab }], source: 'ai' | 'fallback',
+ *          platform: boolean, app?: string|null, links?: [{ id, label, url }] }  (app/links: GODMINDERA site only)
  *
  * Env: SUPABASE_URL + SUPABASE_ANON_KEY (same as share-preview), OPENAI_API_KEY and/or GEMINI_API_KEY
  * (optional -- without one the rule-based fallback answers).
@@ -34,7 +36,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await answerVisitor({ supabase: { url, anonKey }, companyId: parsed.companyId, messages: parsed.messages });
+    const result = await answerVisitor({ supabase: { url, anonKey }, companyId: parsed.companyId, messages: parsed.messages, focusApp: parsed.focusApp });
     return res.status(result.status).json(result.body);
   } catch (err) {
     console.error('business-chat failed:', err);
