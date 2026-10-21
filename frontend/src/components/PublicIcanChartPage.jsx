@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ProductOfLink from './ProductOfLink';
 import { ArrowLeft, ArrowLeftRight, ArrowRight, BarChart3, Database, HelpCircle, ShieldCheck, LineChart as LineChartIcon, Moon, RefreshCw, Sun, X } from 'lucide-react';
 import IcanTradingChart from './IcanTradingChart';
 import IcanAnalysisPanel from './IcanAnalysisPanel';
@@ -579,7 +580,7 @@ const PublicIcanChartPage = () => {
       </main>
 
       <footer className={`border-t px-4 pb-28 pt-6 text-center text-xs lg:pb-6 ${k.footBorder}`}>
-        © IcanEra · A product of GODMINDERA ORGANISATION (U) LTD · <a href="/" className={`underline ${k.footLink}`}>Home</a> · <a href="/pricing" className={`underline ${k.footLink}`}>Pricing</a>
+        © IcanEra · <ProductOfLink className={`underline ${k.footLink}`} /> · <a href="/" className={`underline ${k.footLink}`}>Home</a> · <a href="/pricing" className={`underline ${k.footLink}`}>Pricing</a>
       </footer>
 
       {/* Phone navigation: always within thumb reach, never hidden behind the chart. */}

@@ -13,7 +13,7 @@ import FranchiseSection from './landing/FranchiseSection';
 import InsurerSection from './landing/InsurerSection';
 import ProfessionalsCarousel from './landing/ProfessionalsCarousel';
 import LandingSearch from './landing/LandingSearch';
-import { PRODUCT_OF } from '../constants/brand';
+import ProductOfLink from './ProductOfLink';
 import { useTheme, isDarkFamilyTheme } from '../context/ThemeContext';
 import { getSupabaseClient } from '../lib/supabase/client';
 import {
@@ -2257,7 +2257,7 @@ const LandingPage = ({ onGetStarted }) => {
               </p>
               <p className={`${isDarkTheme ? 'text-gray-400' : 'text-slate-600'} text-xs`}>Transform Volatility to Global Capital</p>
               <p>&copy; 2026 IcanEra. All rights reserved.</p>
-              <p>{PRODUCT_OF}</p>
+              <p><ProductOfLink /></p>
             </div>
             <div className="flex flex-wrap justify-center md:justify-end gap-2 md:gap-3">
               <a href="https://twitter.com/icaneraera" target="_blank" rel="noopener noreferrer" className={`transition-all duration-300 flex items-center space-x-1 px-2.5 py-1.5 ican-cove-tab-sm border-2 ${isDarkTheme ? 'hover:text-white border-cyan-300/55 bg-cyan-900/20 hover:border-cyan-200/80 hover:bg-cyan-700/35' : 'text-cyan-900 border-cyan-400/55 bg-cyan-100 hover:bg-cyan-200/90 hover:border-cyan-500/75'}`}>

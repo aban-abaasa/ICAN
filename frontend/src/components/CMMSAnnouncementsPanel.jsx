@@ -20,6 +20,7 @@ import CMMSInquiriesPanel from './CMMSInquiriesPanel';
 import CMMSSiteLibraryPanel from './CMMSSiteLibraryPanel';
 import businessChatService from '../services/businessChatService';
 import siteLibraryService from '../services/siteLibraryService';
+import useBusinessSiteSlug from '../hooks/useBusinessSiteSlug';
 import LiveBoardroom from './LiveBoardroom';
 import CMMSInvestorPitchPanel from './CMMSInvestorPitchPanel';
 
@@ -176,6 +177,7 @@ const CMMSAnnouncementsPanel = ({
   canManageOpportunities = false,
   canViewOpportunityBids = false,
 }) => {
+  useBusinessSiteSlug(companyId); // primes the business's address so the links below read icanera.space/<business-name>
   // Visitor inquiries from the public page's chat bubble: how many are waiting, and whether the feature's SQL
   // is installed / this user may see them at all (null = still checking; the tab only hides on a definite no).
   const [inquiryUnread, setInquiryUnread] = useState(0);

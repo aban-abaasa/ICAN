@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { PRODUCT_OF_HTML } from '../constants/brand';
 import { ChevronDown, ChevronUp, Download, FileText, Loader, Paperclip, Printer, ScanLine, Search } from 'lucide-react';
 import { listAllConsultationSubmissions, listConsultationForms, listConsultationFields } from '../services/cmmsConsultationFormService';
 import { resolveAttachmentUrls } from '../services/cmmsConsultationAttachmentService';
@@ -123,7 +124,7 @@ export default function CMMSClinicalRecords({ businessProfileId, businessName, b
             Submitted: ${escapeHtml(new Date(record.created_at).toLocaleString())} (${record.submitted_via === 'public_link' ? 'via public link' : 'recorded by staff'})`,
           qrDataUrl, qrCaption: qrDataUrl ? 'Record reference' : '', qrCode: qrDataUrl ? formatReferenceCode(code) : ''
         })}${fieldsHtml}${attachmentsHtml(attachments)}
-         <div class="meta">Printed ${escapeHtml(new Date().toLocaleString())} · Powered by IcanEra · A product of GODMINDERA ORGANISATION (U) LTD</div>`
+         <div class="meta">Printed ${escapeHtml(new Date().toLocaleString())} · Powered by IcanEra · ${PRODUCT_OF_HTML}</div>`
       );
     } catch (err) {
       console.error('Unable to prepare the printable record:', err);

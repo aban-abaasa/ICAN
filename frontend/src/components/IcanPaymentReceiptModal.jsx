@@ -4,9 +4,11 @@ import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 import { QRCodeCanvas } from 'qrcode.react';
 import { getSupabaseClient } from '../lib/supabase/client';
+import { resolveBusinessSiteLink } from '../services/businessSiteLinkService';
+import { SITE_ORIGIN } from '../utils/businessSiteUrl';
 
 export default function IcanPaymentReceiptModal({ receipt, onClose }) {
-  const [storeWebsiteUrl, setStoreWebsiteUrl] = useState(typeof window !== 'undefined' ? window.location.origin : 'https://icanera.icanera.space');
+  const [storeWebsiteUrl, setStoreWebsiteUrl] = useState(SITE_ORIGIN); // the real domain, never localhost or a preview build: this goes on a printed QR
   useEffect(() => {
     let cancelled = false;
     const loadStoreWebsite = async () => {
@@ -18,9 +20,10 @@ export default function IcanPaymentReceiptModal({ receipt, onClose }) {
         if (!business?.id) return;
         const { data: cmmsCompany } = await supabase.from('cmms_company_profiles')
           .select('id, website').eq('pichin_business_profile_id', business.id).maybeSingle();
+        // The business's own site: icanera.space/<business-name>
         const website = cmmsCompany?.id
-          ? `${window.location.origin}/notices/${cmmsCompany.id}`
-          : business.website || window.location.origin;
+          ? await resolveBusinessSiteLink(cmmsCompany.id)
+          : business.website || SITE_ORIGIN;
         if (!cancelled) setStoreWebsiteUrl(/^https?:\/\//i.test(website) ? website : `https://${website}`);
       } catch (error) {
         console.warn('Could not resolve public business website for receipt QR:', error);

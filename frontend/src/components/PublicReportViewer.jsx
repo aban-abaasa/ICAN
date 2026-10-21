@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ProductOfLink from './ProductOfLink';
 import { Lock, Mail, ShieldCheck, Loader, FileWarning } from 'lucide-react';
 import LoadingPage from './LoadingPage';
 import {
@@ -282,7 +283,7 @@ const PublicReportViewer = ({ shareToken }) => {
         </p>
 
         <footer className="text-center text-xs rs-text-faint pt-12 pb-6">
-          Powered by <IcanEraWordmark /> · A product of GODMINDERA ORGANISATION (U) LTD
+          Powered by <IcanEraWordmark /> · <ProductOfLink />
         </footer>
       </div>
     </div>

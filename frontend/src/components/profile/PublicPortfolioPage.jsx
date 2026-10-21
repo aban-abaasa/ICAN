@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import ProductOfLink from '../ProductOfLink';
 import {
   X, ShieldCheck, Briefcase, Award, GraduationCap, FolderKanban, Rocket,
   FlaskConical, Presentation, Loader2, Sparkles, MapPin, Phone, Mail,
@@ -547,7 +548,7 @@ export default function PublicPortfolioPage({ handle: handleProp, onClose }) {
 
             <footer className="mt-10 text-center">
               <div className="rz-rule" />
-              <p className="text-xs text-slate-500">Powered by <span className="rz-serif font-bold text-[color:var(--rz-gold-text)]">IcanEra</span> · A product of GODMINDERA ORGANISATION (U) LTD</p>
+              <p className="text-xs text-slate-500">Powered by <span className="rz-serif font-bold text-[color:var(--rz-gold-text)]">IcanEra</span> · <ProductOfLink /></p>
             </footer>
           </>
         )}

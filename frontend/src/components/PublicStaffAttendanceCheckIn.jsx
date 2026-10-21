@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ProductOfLink from './ProductOfLink';
 import { CheckCircle2, Loader2, MapPin, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import { getCheckoutPayStatusByQr, findWalletPaymentForCheckoutByQr } from '../services/businessManagementService';
@@ -230,7 +231,7 @@ const PublicStaffAttendanceCheckIn = () => {
           </div>
         )}
 
-        <p className="mt-6 text-center text-[11px] uppercase tracking-widest text-slate-500">Powered by IcanEra · A product of GODMINDERA ORGANISATION (U) LTD</p>
+        <p className="mt-6 text-center text-[11px] uppercase tracking-widest text-slate-500">Powered by IcanEra · <ProductOfLink /></p>
       </section>
     </main>
   );

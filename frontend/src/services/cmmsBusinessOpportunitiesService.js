@@ -13,9 +13,9 @@
 
 import { supabase } from '../lib/supabase/client';
 import { resolveMediaValues } from './r2StorageService';
+import { buildBusinessSiteLink } from './businessSiteLinkService';
 
 const MEDIA_FIELDS = ['poster_url', 'document_url'];
-const PUBLIC_SITE_ORIGIN = 'https://icanera.space';
 
 // ============================================================
 // Posting company (staff, gated by the 'opportunities' tool's
@@ -179,7 +179,7 @@ export const getPublicOpportunity = async (opportunityId) => {
 };
 
 export const buildPublicOpportunityLink = (companyId, opportunityId) =>
-  `${PUBLIC_SITE_ORIGIN}/notices/${companyId}${opportunityId ? `?opp=${opportunityId}` : ''}`;
+  buildBusinessSiteLink(companyId, { query: opportunityId ? { opp: opportunityId } : undefined });
 
 // ============================================================
 // Public bidding -- no ICAN account needed (see

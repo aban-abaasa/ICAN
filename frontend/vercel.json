@@ -19,6 +19,7 @@
     { "source": "/notices/:id", "destination": "/api/share-preview?type=notices&id=:id" },
     { "source": "/developers", "destination": "/developers/index.html" },
     { "source": "/developers/", "destination": "/developers/index.html" },
+    { "source": "/:slug((?!about$|admin$|api$|app$|assets$|auth$|billing$|buy-ican$|callback$|candidate-document$|candidate-interview$|candidate-test$|card-pay$|careers$|checkout$|confirm-delete-account$|consultation-forms$|contact$|contract$|dashboard$|decoy-portal$|developers$|dist$|document$|drive$|edit$|explore$|favicon$|file$|forms$|health$|help$|home$|icaneracoin$|icons$|images$|index$|invest$|investments$|invite$|jobs$|js$|login$|logout$|manifest$|new$|notice$|notices$|notifications$|null$|official$|open$|pay$|pitch$|pitchin$|plan$|plans$|portfolio$|presentation$|pricing$|privacy$|public$|register$|report-exports$|reports$|reset-password$|reset-pin$|robots$|search$|sell-ican$|service-provider-contract$|settings$|share$|shop$|sign-in$|sign-up$|signin$|signup$|sitemap$|spreadsheets$|staff$|staff-attendance$|stake-ican$|static$|status$|store$|support$|support-console$|sw$|team$|terms$|test-share$|transfer-ican$|undefined$|verify-agreement$|verify-document$|visitor-check-in$|wallet$|www$)[a-z0-9][a-z0-9-]{1,58}[a-z0-9])", "destination": "/api/share-preview?type=site&slug=:slug" },
     { "source": "/((?!api/|developers/|js/|assets/|images/|icons/).*)", "destination": "/" }
   ],
   "headers": [

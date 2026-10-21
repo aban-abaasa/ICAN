@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Award, Briefcase, Check, Copy, FileText, Image as ImageIcon, Loader, Plus, Share2, Video, X } from 'lucide-react';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
+import useBusinessSiteSlug from '../hooks/useBusinessSiteSlug';
 import cmmsInterviewService from '../services/cmmsInterviewService';
 import cmmsServiceProviderContractsService from '../services/cmmsServiceProviderContractsService';
 import { uploadToR2 } from '../services/r2StorageService';
@@ -37,6 +38,7 @@ const bidStatusOptions = [
  *    backend/CMMS_BUSINESS_OPPORTUNITIES_AND_BIDS.sql's bidding policy.
  */
 const CMMSBusinessOpportunitiesPanel = ({ companyId, companyName, myCmmsUserId, companyStaff = [], canManage, canViewBids }) => {
+  useBusinessSiteSlug(companyId); // primes the business's address so shared opportunity links read icanera.space/<business-name>
   const [view, setView] = useState('mine');
   const [loading, setLoading] = useState(true);
 

@@ -3,6 +3,8 @@ import {
   AlertCircle, Banknote, CheckCircle2, Clock, Copy, Globe, Loader2, Printer, ShieldCheck, Share2, Smartphone, Wallet, X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import useBusinessSiteSlug from '../hooks/useBusinessSiteSlug';
+import { businessSitePath } from '../utils/businessSiteUrl';
 import { AuthPage } from './auth';
 import ContinueWithGoogle from './ContinueWithGoogle';
 import { CLASSIC_PAY_CSS } from './publicPayTheme';
@@ -66,6 +68,7 @@ const PublicTransactionPage = ({ code }) => {
   const [justPaid, setJustPaid] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
   const [copied, setCopied] = useState(false);
+  const businessSiteSlug = useBusinessSiteSlug(receipt?.company_id); // the business's own address, icanera.space/<business-name>
 
   useEffect(() => {
     if (window.location.search) window.history.replaceState(null, '', window.location.pathname);
@@ -284,7 +287,7 @@ const PublicTransactionPage = ({ code }) => {
         </div>
 
         {receipt.company_id && (
-          <a href={`/notices/${receipt.company_id}`} className="ptx-noprint ptx-link ptx-alt"
+          <a href={businessSitePath({ slug: businessSiteSlug, companyId: receipt.company_id })} className="ptx-noprint ptx-link ptx-alt"
              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 18px', fontSize: 14, borderTop: '1px solid var(--border)', minHeight: 48 }}>
             <Globe width={16} height={16} /> Visit {receipt.issuer_name}'s website
           </a>

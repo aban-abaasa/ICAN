@@ -13,6 +13,7 @@
 
 import { supabase } from '../lib/supabase/client';
 import { payWithFlutterwave } from './flutterwaveClient';
+import { buildBusinessSiteLink } from './businessSiteLinkService';
 
 // A printed QR must open the real site, whatever build the owner printed it from.
 const PUBLIC_SITE_ORIGIN = 'https://icanera.space';
@@ -315,7 +316,7 @@ export async function setTransactionPublicPay(transactionId, enable) {
  * otherwise the small standalone /p/<code> page. Pass the paycode object the owner API returns.
  */
 export const buildPayCodeLink = (paycode) => (paycode?.company_id
-  ? `${PUBLIC_SITE_ORIGIN}/notices/${paycode.company_id}?pay=1`
+  ? buildBusinessSiteLink(paycode.company_id, { query: { pay: 1 } })
   : `${PUBLIC_SITE_ORIGIN}/p/${paycode?.code}`);
 
 /** Website side: does this business take pay-any-amount payments? (decides whether the Pay tab shows) */

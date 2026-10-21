@@ -1,3 +1,5 @@
+import { businessSitePath } from '../src/utils/businessSiteUrl.js';
+
 const SITE_URL = 'https://icanera.space';
 const PAGE_SIZE = 50;
 const MAX_POSTS = 5000;
@@ -63,7 +65,30 @@ const fetchResellerIds = async (supabaseUrl, anonKey) => {
   }
 };
 
-// Every public notice and job as its own URL (/notices/<company>?post=<id>) -- the same address the page
+// Every business's own address (icanera.space/<business-name>), 200 ids per call. Optional like the lists around it: a business
+// without an address (or a project where the site-address migration has not been applied) is listed by its /notices/<id> URL.
+const SLUG_BATCH = 200;
+const fetchSiteSlugs = async (supabaseUrl, anonKey, companyIds) => {
+  const slugs = new Map();
+  const batches = [];
+  for (let index = 0; index < companyIds.length; index += SLUG_BATCH) batches.push(companyIds.slice(index, index + SLUG_BATCH));
+  await Promise.all(batches.map(async (batch) => {
+    try {
+      const response = await fetch(`${supabaseUrl}/rest/v1/rpc/fn_get_public_site_slugs`, {
+        method: 'POST',
+        headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_company_ids: batch }),
+      });
+      const rows = response.ok ? await response.json() : [];
+      if (Array.isArray(rows)) rows.forEach((row) => { if (row?.company_id && row?.site_slug) slugs.set(row.company_id, row.site_slug); });
+    } catch (error) {
+      console.warn('[sitemap] could not load business addresses:', error.message);
+    }
+  }));
+  return slugs;
+};
+
+// Every public notice and job as its own URL (<business address>?post=<id>) -- the same address the page
 // canonicalises to (api/share-preview.js), so each opening can show up in Google (and Google for Jobs) by name.
 // Optional like the reseller list: any failure just leaves the post URLs out of the sitemap.
 const MAX_POST_URLS = 2000;
@@ -129,13 +154,17 @@ export default async function handler(_req, res) {
       offset += offsets.length * PAGE_SIZE;
     }
 
+    const postEntries = await fetchPostEntries(supabaseUrl, anonKey);
+    const slugs = await fetchSiteSlugs(supabaseUrl, anonKey, Array.from(new Set([...companies.keys(), ...postEntries.map((entry) => entry.companyId)])));
+    const sitePath = (companyId) => businessSitePath({ slug: slugs.get(companyId), companyId });
+
     const companyUrls = Array.from(companies, ([companyId, lastModified]) => (
-      `<url><loc>${SITE_URL}/notices/${escapeXml(companyId)}</loc>${lastModified ? `<lastmod>${escapeXml(new Date(lastModified).toISOString())}</lastmod>` : ''}</url>`
+      `<url><loc>${SITE_URL}${escapeXml(sitePath(companyId))}</loc>${lastModified ? `<lastmod>${escapeXml(new Date(lastModified).toISOString())}</lastmod>` : ''}</url>`
     )).join('');
     const resellerUrls = (await fetchResellerIds(supabaseUrl, anonKey))
       .map((resellerId) => `<url><loc>${SITE_URL}/store/${escapeXml(resellerId)}</loc></url>`).join('');
-    const postUrls = (await fetchPostEntries(supabaseUrl, anonKey)).map((entry) => (
-      `<url><loc>${SITE_URL}/notices/${escapeXml(entry.companyId)}?post=${escapeXml(entry.postId)}</loc>${entry.publishedAt ? `<lastmod>${escapeXml(new Date(entry.publishedAt).toISOString())}</lastmod>` : ''}</url>`
+    const postUrls = postEntries.map((entry) => (
+      `<url><loc>${SITE_URL}${escapeXml(sitePath(entry.companyId))}?post=${escapeXml(entry.postId)}</loc>${entry.publishedAt ? `<lastmod>${escapeXml(new Date(entry.publishedAt).toISOString())}</lastmod>` : ''}</url>`
     )).join('');
     const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE_URL}/</loc></url><url><loc>${SITE_URL}/icaneracoin</loc><changefreq>hourly</changefreq></url><url><loc>${SITE_URL}/shop</loc><changefreq>daily</changefreq></url>${resellerUrls}${companyUrls}${postUrls}</urlset>`;
 
