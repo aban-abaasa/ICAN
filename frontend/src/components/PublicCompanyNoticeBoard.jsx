@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import ProductOfLink from './ProductOfLink';
+import { PRODUCT_OWNER_SLUG } from '../constants/brand';
+import { parseAskParam } from '../constants/familyApps';
 import {
   Megaphone, Briefcase, MapPin, Calendar, Users, FileText, X, Loader,
   AlertCircle, CheckCircle2, Search, Building2, ArrowLeft, Upload, Share2,
@@ -1450,6 +1452,8 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
         jobCount={jobs.length}
         noticeCount={notices.length}
         payOnline={Boolean(payInfo)}
+        platformSupport={siteSlug === PRODUCT_OWNER_SLUG}
+        askRequest={siteSlug === PRODUCT_OWNER_SLUG ? parseAskParam(window.location.search) : null}
       />
 
       {selectedNotice && <NoticeDetailModal notice={selectedNotice} onClose={closeDetail} onShare={handleShare} />}
