@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, X, Send, Headphones, Globe, ThumbsUp, Briefcase, Shield, ArrowLeft, Radio, Expand, Minimize, Mic, Square, Trash2, Loader2, Phone, Video, Image as ImageIcon } from 'lucide-react';
+import { MessageCircle, X, Send, Headphones, Globe, ThumbsUp, Briefcase, Shield, ArrowLeft, Radio, Expand, Minimize, Mic, Square, Trash2, Loader2, Phone, Video, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { syncManager } from '../lib/syncManager';
@@ -19,6 +19,7 @@ import { uploadVoiceNote, linkVoiceNoteMessages } from '../services/voiceNoteSer
 import { getAudioNotificationService } from '../services/audioNotificationService';
 import { getCustomRingtone, setCustomRingtone } from '../services/ringtoneService';
 import { Linkify } from '../utils/linkify';
+import { isAssistantMessage } from '../constants/supportAssistant';
 import { uploadChatImage } from '../services/chatAttachmentService';
 import ImageLightbox from './common/ImageLightbox';
 import { isR2Key, resolveMediaValue } from '../services/r2StorageService';
@@ -34,6 +35,7 @@ import {
   fetchLatestSupportConversation,
   fetchMessages,
   sendMessage,
+  requestAssistantReply,
   markConversationRead,
   subscribeToMessages,
   subscribeToConversation,
@@ -188,6 +190,8 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const [cmmsConversationLoading, setCmmsConversationLoading] = useState(false);
   const [cmmsComposeError, setCmmsComposeError] = useState('');
   const [supportComposeError, setSupportComposeError] = useState('');
+  // The AI answers first in Support (see requestAssistantReply): true while it is writing, so the thread shows "typing".
+  const [assistantTyping, setAssistantTyping] = useState(false);
 
   // Group ("call all members") calling opens the same full-mesh boardroom
   // engine as TrustSystem's "Boardroom" button (see LiveBoardroom.jsx),
@@ -252,10 +256,14 @@ const ChatWidget = ({ hasBottomNav = false }) => {
   const voicePreviewBlobRef = useRef(null);
   const identityRef = useRef(identity);
   const guestFormRef = useRef(guestForm);
+  const supportConvIdRef = useRef(null);
+  const assistantBusyRef = useRef(false);
+  const assistantAgainRef = useRef(false);
   useEffect(() => { openRef.current = open; }, [open]);
   useEffect(() => { channelRef.current = channel; }, [channel]);
   useEffect(() => { identityRef.current = identity; }, [identity]);
   useEffect(() => { guestFormRef.current = guestForm; }, [guestForm]);
+  useEffect(() => { supportConvIdRef.current = supportConvId; }, [supportConvId]);
   useEffect(() => () => {
     if (voiceTimerRef.current) clearInterval(voiceTimerRef.current);
     if (voiceStreamRef.current) voiceStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -494,7 +502,12 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     if (!supportConvId) return;
     return syncManager.onSyncStateChange((state) => {
       if (state.status === 'synced' && state.syncedCount > 0) {
-        fetchMessages(supportConvId).then(setSupportMessages);
+        fetchMessages(supportConvId).then((msgs) => {
+          setSupportMessages(msgs);
+          // A message typed offline has just reached the thread: the assistant answers it now (it ignores anything already answered).
+          const last = msgs[msgs.length - 1];
+          if (last && last.sender_role !== 'dev') askAssistantToReply(supportConvId);
+        });
       }
     });
   }, [supportConvId]);
@@ -774,7 +787,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     // CommunityLiveBanner) — scroll down to reveal one the instant it
     // appears (or disappears) instead of leaving it below the fold until
     // the visitor happens to scroll.
-  }, [supportMessages, communityThreads, cmmsConversation, trustMessages, communityLive.liveStreams]);
+  }, [supportMessages, assistantTyping, communityThreads, cmmsConversation, trustMessages, communityLive.liveStreams]);
 
   const markChannelRead = (ch) => {
     if (ch === 'support') {
@@ -883,6 +896,30 @@ const ChatWidget = ({ hasBottomNav = false }) => {
     }
   };
 
+  // Asks the AI to answer the customer's latest message in this support thread. The server decides whether it needs answering and
+  // writes the reply into the thread (it also reaches us through the realtime subscription; dedupe keeps one copy). One request at a
+  // time: a message sent while the AI is still writing makes it look again once it is done, so no message is left unanswered.
+  const askAssistantToReply = async (convId) => {
+    if (!convId) return;
+    if (assistantBusyRef.current) { assistantAgainRef.current = true; return; }
+    assistantBusyRef.current = true;
+    setAssistantTyping(true);
+    try {
+      do {
+        assistantAgainRef.current = false;
+        const message = await requestAssistantReply(convId);
+        // Ignore an answer for a thread that is no longer the one on screen.
+        if (message && supportConvIdRef.current === convId) {
+          isNearBottomRef.current = true;
+          setSupportMessages((prev) => dedupe(prev, message));
+        }
+      } while (assistantAgainRef.current);
+    } finally {
+      assistantBusyRef.current = false;
+      setAssistantTyping(false);
+    }
+  };
+
   // Shared per-channel routing for both a typed message and a recorded voice
   // note (sent as VOICE_NOTE_PREFIX + url) — the two compose paths differ
   // only in how `body` is produced.
@@ -985,6 +1022,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
 
         const msg = await sendMessage(convId, { senderRole, senderName: who.name, senderAvatarUrl, body, attachment });
         setSupportMessages((prev) => dedupe(prev, msg));
+        askAssistantToReply(convId); // not awaited: the customer's message is sent; the AI's answer arrives when it is written
         return msg?.id ? [{ table: 'chat_messages', id: msg.id }] : [];
       }
   };
@@ -1262,7 +1300,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
             <div className="min-w-0 flex-1">
               <p className="ican-title truncate">{channel === 'community' ? 'Community' : channel === 'cmms' ? 'CMMS' : channel === 'trust' ? (trustGroupName || 'Trust & SACCO') : 'IcanEra Support'}</p>
               {channel !== 'cmms' && channel !== 'trust' && <p className="ican-sub">
-                {channel === 'community' ? 'Public Q&A — everyone can read this' : 'We usually reply within a few minutes'}
+                {channel === 'community' ? 'Public Q&A — everyone can read this' : 'AI answers right away · the team follows up'}
               </p>}
             </div>
             <div className="flex items-center gap-1">
@@ -1694,14 +1732,17 @@ const ChatWidget = ({ hasBottomNav = false }) => {
               <>
                 {supportMessages.length === 0 && (
                   <p className={`mt-6 text-center text-xs ${dark ? 'text-slate-500' : 'text-slate-400'}`}>
-                    Send us a message — a real person from the team will reply here.
+                    Ask us anything — our AI assistant answers right away, and a real person from the team can step in.
                   </p>
                 )}
                 {supportMessages.map((m) => {
                   const isMe = m.sender_role !== 'dev';
+                  const fromAssistant = isAssistantMessage(m);
                   return (
                     <div key={m.id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      {!isMe && <ContactAvatar id="team" name="Team" url={m.sender_avatar_url} size="h-6 w-6 text-[9px]" />}
+                      {!isMe && (fromAssistant
+                        ? <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white" aria-hidden="true"><Sparkles className="h-3 w-3" /></span>
+                        : <ContactAvatar id="team" name="Team" url={m.sender_avatar_url} size="h-6 w-6 text-[9px]" />)}
                       <div
                         className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
                           isMe
@@ -1709,7 +1750,7 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                             : dark ? 'bg-white/5 text-slate-100' : 'bg-white text-slate-800 border border-slate-200'
                         }`}
                       >
-                        {!isMe && <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400">Team</p>}
+                        {!isMe && <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400">{fromAssistant ? 'Assistant · AI' : 'Team'}</p>}
                         {m.attachment_url && (
                           <img
                             src={m.attachment_url}
@@ -1728,6 +1769,16 @@ const ChatWidget = ({ hasBottomNav = false }) => {
                     </div>
                   );
                 })}
+                {assistantTyping && (
+                  <div className="flex items-end gap-2 justify-start" role="status" aria-label="The assistant is writing">
+                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white" aria-hidden="true"><Sparkles className="h-3 w-3" /></span>
+                    <div className={`flex items-center gap-1 rounded-2xl px-3 py-2.5 ${dark ? 'bg-white/5' : 'bg-white border border-slate-200'}`}>
+                      {[0, 1, 2].map((i) => (
+                        <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-indigo-400" style={{ animationDelay: `${i * 0.15}s` }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

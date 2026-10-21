@@ -10,11 +10,16 @@
  * Reply: { reply, needsHuman, suggestions: string[], actions: [{ label, tab }], source: 'ai' | 'fallback',
  *          platform: boolean, app?: string|null, links?: [{ id, label, url }] }  (app/links: GODMINDERA site only)
  *
+ * The same endpoint also answers first in the Support chat inside the IcanEra app (see api/_lib/supportChat.js):
+ * Body:  { supportConversationId: uuid }   (the customer's message is already in the thread)
+ * Reply: { replied: boolean, reason?: string, source?: 'ai' | 'fallback' | 'fixed', message?: <the chat_messages row written> }
+ *
  * Env: SUPABASE_URL + SUPABASE_ANON_KEY (same as share-preview), OPENAI_API_KEY and/or GEMINI_API_KEY
  * (optional -- without one the rule-based fallback answers).
  */
 import { applyCors } from './_lib/cors.js';
 import { answerVisitor, checkRate, parseRequest } from './_lib/businessChat.js';
+import { answerSupportThread, parseSupportRequest } from './_lib/supportChat.js';
 
 export default async function handler(req, res) {
   if (applyCors(req, res)) return;
@@ -27,10 +32,27 @@ export default async function handler(req, res) {
 
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = null; } }
+
+  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+
+  // The same AI also answers first in the Support chat inside the IcanEra app (api/_lib/supportChat.js). It lives here because
+  // Vercel's Hobby plan allows 12 functions and api/ is at the limit (tests/apiFunctionCount.test.js).
+  if (body && typeof body === 'object' && 'supportConversationId' in body) {
+    const support = parseSupportRequest(body);
+    if (support.error) return res.status(400).json({ error: support.error });
+    if (checkRate({ ip, companyId: support.conversationId })) return res.status(429).json({ error: 'You are sending messages too quickly. Please wait a moment.' });
+    try {
+      const result = await answerSupportThread({ supabase: { url, anonKey }, conversationId: support.conversationId });
+      return res.status(result.status).json(result.body);
+    } catch (err) {
+      console.error('support-chat failed:', err);
+      return res.status(500).json({ replied: false, error: 'Something went wrong. Please try again.' });
+    }
+  }
+
   const parsed = parseRequest(body);
   if (parsed.error) return res.status(400).json({ error: parsed.error });
 
-  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
   if (checkRate({ ip, companyId: parsed.companyId })) {
     return res.status(429).json({ error: 'You are sending messages too quickly. Please wait a moment.' });
   }

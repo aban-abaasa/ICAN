@@ -19,6 +19,7 @@ import ICANStableDevTab from './ICANStableDevTab';
 import ICANChainDevTab from './ICANChainDevTab';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { Linkify } from '../utils/linkify';
+import { isAssistantMessage } from '../constants/supportAssistant';
 import {
   devListAllLandingMessages,
   devDeleteLandingMessage,
@@ -434,7 +435,7 @@ export const MessagesTab = () => {
     if (!prev || dayLabel(prev.created_at) !== dayLabel(m.created_at)) {
       timeline.push({ type: 'day', key: `day-${m.id}`, label: dayLabel(m.created_at) });
     }
-    timeline.push({ type: 'msg', key: m.id, m, first: !prev || prev.sender_role !== m.sender_role || timeline[timeline.length - 1].type === 'day' });
+    timeline.push({ type: 'msg', key: m.id, m, first: !prev || prev.sender_role !== m.sender_role || isAssistantMessage(prev) !== isAssistantMessage(m) || timeline[timeline.length - 1].type === 'day' });
   });
 
   return (
@@ -563,12 +564,18 @@ export const MessagesTab = () => {
                 }
                 const { m, first } = row;
                 const fromDev = m.sender_role === 'dev';
+                const fromAssistant = isAssistantMessage(m); // written by the AI assistant, not by a person on the team
                 return (
                   <div key={row.key} className={`flex ${fromDev ? 'justify-end' : 'justify-start'} ${first ? 'mt-3' : 'mt-0.5'}`}>
                     <div className={`max-w-[85%] sm:max-w-[70%] px-3 py-2 text-sm shadow-sm ${fromDev ? 'rounded-2xl rounded-br-md' : 'rounded-2xl rounded-bl-md border'}`}
-                      style={fromDev
-                        ? { background:'linear-gradient(135deg,#14b8a6,#0f766e)', color:'#fff' }
-                        : { background:'var(--dp-card)', borderColor:'var(--dp-card-bd)', color:'var(--dp-txt)' }}>
+                      style={fromAssistant
+                        ? { background:'linear-gradient(135deg,#6366f1,#7c3aed)', color:'#fff' }
+                        : fromDev
+                          ? { background:'linear-gradient(135deg,#14b8a6,#0f766e)', color:'#fff' }
+                          : { background:'var(--dp-card)', borderColor:'var(--dp-card-bd)', color:'var(--dp-txt)' }}>
+                      {fromAssistant && first && (
+                        <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ color:'rgba(255,255,255,0.8)' }}>AI assistant</p>
+                      )}
                       {!fromDev && first && (
                         <p className="mb-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ color:'#14b8a6' }}>
                           {m.sender_name || selected.role}
