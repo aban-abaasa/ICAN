@@ -115,12 +115,19 @@ export const topicText = (topic) => `[${topic.title}] ${topic.answer}${topic.fac
 
 const money = (value, max = 2) => Number(value).toLocaleString('en-US', { maximumFractionDigits: max });
 
-/** One line of live data for the prompt, or '' when the price could not be read. */
+/** The live-data lines for the prompt (what could be read just now), or '' when there is none. */
 export const liveDataLine = (live) => {
+  const lines = [];
   const ugx = Number(live?.priceUgx);
-  if (!Number.isFinite(ugx) || ugx <= 0) return '';
-  const usd = Number(live?.priceUsd);
-  return `LIVE DATA (read just now): the IcanEra coin (icaneracoin, ICAN) is UGX ${money(ugx)}${Number.isFinite(usd) && usd > 0 ? ` (about USD ${money(usd, 4)})` : ''}. You may quote it; never predict it or tell anyone to buy or sell.`;
+  if (Number.isFinite(ugx) && ugx > 0) {
+    const usd = Number(live?.priceUsd);
+    lines.push(`the IcanEra coin (icaneracoin, ICAN) is UGX ${money(ugx)}${Number.isFinite(usd) && usd > 0 ? ` (about USD ${money(usd, 4)})` : ''}. You may quote it; never predict it or tell anyone to buy or sell.`);
+  }
+  const ride = Number(live?.rideChargePct);
+  if (live?.rideChargePct !== null && live?.rideChargePct !== undefined && Number.isFinite(ride)) {
+    lines.push(`BodaGoEra's platform charge is currently ${money(ride)}% added on top of the exact fare of every ride and delivery (the rider always receives the exact fare). The platform can change it, so quote this current value.`);
+  }
+  return lines.length ? `LIVE DATA (read just now): ${lines.join(' ')}` : '';
 };
 
 const directoryText = () => APPS.map((app) => `- ${app.id}: ${app.name}${app.url ? ` (${app.url})` : ''}. ${app.summary}`).join('\n');
@@ -193,7 +200,7 @@ export const platformFallback = ({ messages, focusApp, live, businessFacts, tabs
   const wantsPerson = ACCOUNT_SPECIFIC.some((phrase) => q.includes(phrase));
 
   // The live price, when that is what was asked.
-  if (/\b(price|rate|worth|how much is (an? )?(ican|coin))\b/.test(q) && /\b(ican|coin|icaneracoin)\b/.test(q) && liveDataLine(live)) {
+  if (/\b(price|rate|worth|how much is (an? )?(ican|coin))\b/.test(q) && /\b(ican|coin|icaneracoin)\b/.test(q) && Number(live?.priceUgx) > 0) {
     return out(`The IcanEra coin is UGX ${money(live.priceUgx)}${Number(live.priceUsd) > 0 ? ` (about USD ${money(live.priceUsd, 4)})` : ''} right now. I can't predict where it goes next.`, {
       app: 'icanera', links: resolveLinks(['coin']),
     });
@@ -204,7 +211,7 @@ export const platformFallback = ({ messages, focusApp, live, businessFacts, tabs
     return out(clip(topic.answer, 700), {
       app: topic.app || null,
       links: resolveLinks(topic.links),
-      needsHuman: wantsPerson,
+      needsHuman: wantsPerson || topic.handoff === true,
       suggestions: (topic.followUps || []).slice(0, 3),
     });
   }

@@ -80,6 +80,17 @@ const rpc = async ({ url, anonKey }, fn, args) => {
   }
 };
 
+// A public table read (anon key, RLS decides): used for the few live values the GODMINDERA assistant quotes.
+const restSelect = async ({ url, anonKey }, path) => {
+  try {
+    const res = await fetch(`${url}/rest/v1/${path}`, { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } });
+    const rows = res.ok ? await res.json() : null;
+    return Array.isArray(rows) ? rows : null;
+  } catch {
+    return null;
+  }
+};
+
 const isJobOpen = (post) => {
   if (post.post_type !== 'job') return false;
   if (!post.application_deadline) return true;
@@ -104,9 +115,19 @@ export const loadKnowledge = async (supabase, companyId) => {
   let live = null;
   if (platform) {
     // The public coin price, the same anon-callable snapshot the /icaneracoin page reads.
-    const snapshot = await rpc(supabase, 'ican_get_market_snapshot', {});
+    const [snapshot, charge] = await Promise.all([
+      rpc(supabase, 'ican_get_market_snapshot', {}),
+      // BodaGoEra's platform charge is set by the platform and can change, so it is read, never written into the knowledge.
+      restSelect(supabase, 'mbg_platform_settings?select=value&is_public=eq.true&key=eq.commission.icanera_platform_fee_percentage&limit=1'),
+    ]);
     const row = Array.isArray(snapshot) ? snapshot[0] : snapshot;
-    if (row && Number(row.price_ugx) > 0) live = { priceUgx: Number(row.price_ugx), priceUsd: Number(row.price_usd) };
+    const ridePct = Number(charge?.[0]?.value);
+    live = {
+      priceUgx: row && Number(row.price_ugx) > 0 ? Number(row.price_ugx) : null,
+      priceUsd: row ? Number(row.price_usd) : null,
+      rideChargePct: Number.isFinite(ridePct) && ridePct >= 0 && ridePct < 100 ? ridePct : null,
+    };
+    if (live.priceUgx === null && live.rideChargePct === null) live = null;
   }
 
   let payOnline = false;
