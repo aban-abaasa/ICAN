@@ -51,7 +51,14 @@ export const parseSupportRequest = (body) => {
 const isVoiceNote = (text) => typeof text === 'string' && text.startsWith(VOICE_NOTE_PREFIX);
 const isTeamSide = (row) => row.sender_role === 'dev'; // same rule as the app and the database trigger: "dev" is the team, anything else is the customer
 const isAssistant = (row) => isTeamSide(row) && row.sender_name === SUPPORT_ASSISTANT_NAME;
-const isHuman = (row) => isTeamSide(row) && row.sender_name !== SUPPORT_ASSISTANT_NAME;
+/**
+ * Messages the system writes into a thread on the team's behalf (the franchise code, and what HQ sends from the franchise tab through
+ * the same function). They are team-side, but nobody is at the keyboard: the customer who answers one ("I forgot my PIN") still needs
+ * an answer, so a notice must never switch the assistant off. Names as the database writes them (migration 20261007200000).
+ */
+export const NOTICE_SENDER_NAMES = ['IcanEra Franchise Team'];
+const isNotice = (row) => isTeamSide(row) && NOTICE_SENDER_NAMES.includes(row.sender_name);
+const isHuman = (row) => isTeamSide(row) && !isAssistant(row) && !isNotice(row);
 const time = (row) => Date.parse(row.created_at) || 0;
 
 const ACK_WORDS = new Set('ok okay k thanks thank thx ty you cool great nice alright noted got it much so a lot very good fine perfect'.split(' '));
@@ -98,7 +105,8 @@ export const toModelTurns = (rows) => {
     if (isVoiceNote(text)) text = '[voice note]';
     if (row.attachment_url) text = text ? `${text} [photo attached]` : '[photo attached]';
     if (isHuman(row)) text = `(team member) ${text}`;
-    else if (!isTeamSide(row)) text = text.replace(/^\(team member\)\s*/i, ''); // a customer cannot pass as the team
+    else if (isNotice(row)) text = `(automatic notice from the team) ${text}`;
+    else if (!isTeamSide(row)) text = text.replace(/^\((?:team member|automatic notice from the team)\)\s*/i, ''); // a customer cannot pass as the team
     return { role: isTeamSide(row) ? 'assistant' : 'user', text: clip(text, MAX_TURN_CHARS) };
   }).filter((t) => t.text);
   const recent = turns.slice(-MAX_TURNS);
