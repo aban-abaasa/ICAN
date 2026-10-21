@@ -401,6 +401,11 @@ verify_jwt = false
 [functions.card-qr-pay]
 verify_jwt = false
 
+# SupermartKera (digital-city-era) POS sale paid with Mobile Money / card by a customer with no
+# IcanEra account: no session (the till polls it), verifies the payment with Flutterwave itself.
+[functions.icanera-mobile-card-pay]
+verify_jwt = false
+
 # Called by Flutterwave (no Supabase JWT); checks its own verif-hash header.
 [functions.flutterwave-transfer-webhook]
 verify_jwt = false
