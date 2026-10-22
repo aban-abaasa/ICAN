@@ -74,6 +74,7 @@ import { buildBusinessSiteLink } from '../services/businessSiteLinkService';
 import { ITEM_KINDS, formatMoney, itemKindOf, netBookValue } from '../services/cmmsAssetLedgerService';
 import CMMSMySalaryPanel from './CMMSMySalaryPanel.jsx';
 import CMMSBookTransportPanel from './CMMSBookTransportPanelV2.jsx';
+import CMMSZoneAccessPanel from './CMMSZoneAccessPanel.jsx';
 import CMSSupplierPurchasePanel from './CMSSupplierPurchasePanel.jsx';
 import SupplierOrderPaymentApprovals from './CMMS/SupplierOrderPaymentApprovals.jsx';
 import { createBusinessProfileFromCategory, findPichinShareholderBusinesses, searchGlobalSuppliers, getBusinessModules, setBusinessModule } from '../services/businessManagementService';
@@ -9245,7 +9246,8 @@ const CMMSModule = ({
             />
         )}
         {activeTab === 'transport' && getTabs().includes('transport') && (
-          getToolScope('transport') === 'company' ? (
+          <>
+          {getToolScope('transport') === 'company' ? (
             <CMMSBookTransportPanel
               companyProfile={cmmsData.companyProfile}
               canCreate={hasToolAction('transport', 'create')}
@@ -9266,7 +9268,13 @@ const CMMSModule = ({
             // get the safe self-service screen -- it shows only the caller's
             // own plan usage and ride history, never other employees' records.
             <CMMSEmployeeSelfService companyProfile={cmmsData.companyProfile} mode="transport" />
-          )
+          )}
+          {/* Restricted zones: approved vehicles, the gate desk and the gate log. What each person can do is decided by the
+              database from their role's Transport actions (edit / assign / gate / view), not by this screen. */}
+          {(hasToolAction('transport', 'view') || hasToolAction('transport', 'edit') || hasToolAction('transport', 'assign') || hasToolAction('transport', 'gate')) && (
+            <CMMSZoneAccessPanel companyProfile={cmmsData.companyProfile} />
+          )}
+          </>
         )}
         {activeTab === 'requisitions' && getTabs().includes('requisitions') && (
           <>

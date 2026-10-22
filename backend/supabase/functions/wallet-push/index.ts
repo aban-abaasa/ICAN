@@ -12,7 +12,8 @@
 //     broadcast starts (see ICAN_COMMUNITY_LIVE_PUSH_SETUP.sql)
 //   - BodaGoEra ride requests / ride updates / chat messages / incoming calls
 //     (bodagoera_ride, bodagoera_message, bodagoera_call) from triggers and an
-//     RPC in mybodaguy/backend/database/ADD_BODAGOERA_PUSH_NOTIFICATIONS.sql
+//     RPC in mybodaguy/backend/database/ADD_BODAGOERA_PUSH_NOTIFICATIONS.sql, plus
+//     bodagoera_gate (a restricted-zone gate asking a rider to approve a fee)
 // All three share this one relay and the one ican_wallet_push_subscriptions
 // table of registered devices - a signed-in user who has enabled phone
 // alerts gets push for any source without a separate opt-in. The first two
@@ -49,6 +50,8 @@ const SOURCE_DEFAULTS: Record<string, { title: string; url: string; app?: string
   bodagoera_ride: { title: 'BodaGoEra', url: '/', app: 'mybodaguy', urgent: true, ttl: 60 * 10 },
   bodagoera_message: { title: 'BodaGoEra message', url: '/', app: 'mybodaguy', ttl: 60 * 60 },
   bodagoera_call: { title: 'Incoming call', url: '/', app: 'mybodaguy', urgent: true, ttl: 45 },
+  // a restricted-zone gate asks the rider to approve an entry or exit fee (mybodaguy: mbg_zone_notify_rider)
+  bodagoera_gate: { title: 'BodaGoEra gate', url: '/', app: 'mybodaguy', urgent: true, ttl: 60 * 10 },
 };
 
 // Where a tapped notification lands, for devices registered by a sibling app.

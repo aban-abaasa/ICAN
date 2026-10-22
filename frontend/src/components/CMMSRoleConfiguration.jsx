@@ -49,7 +49,12 @@ export const CMMS_TOOL_OPTIONS = [
   { id: 'quality', label: 'Quality control', permission: 'canManageQuality', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
   { id: 'clinical', label: 'Clinical operations', permission: 'canManageClinical', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
   { id: 'pharmacy', label: 'Pharmacy and supplies', permission: 'canManagePharmacy', actions: ['view', 'create', 'edit', 'approve'], scopes: true },
-  { id: 'transport', label: 'Transport', permission: 'canManageTransport', actions: ['view', 'create', 'edit', 'approve', 'assign'], scopes: true },
+  // Restricted zones (estate, campus, port...) live under Transport. Read server-side by mbg_zone_staff_can() in
+  // supabase/migrations/20261110100000_restricted_zone_access.sql -- keep the action keys in sync if you rename them.
+  // edit: create and change zones, their fees and rules.   assign: approve / suspend / remove vehicles on a zone's list.
+  // gate: run the gate desk (scan vehicles in and out, collect cash) -- give it to security staff together with 'view'
+  //       so the Transport tab shows.   view: read who is inside, the gate log and the numbers.
+  { id: 'transport', label: 'Transport', permission: 'canManageTransport', actions: ['view', 'create', 'edit', 'approve', 'assign', 'gate'], scopes: true },
   { id: 'requisitions', label: 'Requisitions and supplier orders', permission: 'canViewRequisitions', actions: ['view', 'create', 'edit', 'purchase', 'approve', 'assign'], scopes: true },
   { id: 'approvals', label: 'Approvals', permission: 'canApproveRequisitions', actions: ['view', 'approve', 'reject'], scopes: true },
   { id: 'reports', label: 'Reports', permission: 'canViewReports', actions: ['view', 'create', 'export'], scopes: true },
