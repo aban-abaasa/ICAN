@@ -153,7 +153,10 @@ CREATE TABLE public.sales_transaction_items (
 CREATE TABLE public.receipts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), receipt_number TEXT, transaction_id TEXT, cashier_id UUID, cashier_name TEXT,
   customer_name TEXT, subtotal NUMERIC, tax_amount NUMERIC, total_amount NUMERIC, amount_paid NUMERIC, payment_method TEXT,
-  items_json JSONB, status TEXT, register_id TEXT, store_location TEXT, created_at TIMESTAMPTZ);
+  items_json JSONB, status TEXT, register_id TEXT, store_location TEXT, created_at TIMESTAMPTZ,
+  supermarket_id UUID, store_name TEXT);   -- the last two are set by the deployed shop checkout, not by the repo copy
+-- shop loyalty points (FIX_SELF_CHECKOUT_POINTS_AND_ADMIN_HISTORY.sql): the deployed shop checkout calls it, nothing to check here
+CREATE FUNCTION public.dce_award_shop_points(p_customer UUID, p_total NUMERIC, p_receipt TEXT, p_store UUID, p_tx UUID) RETURNS VOID LANGUAGE sql AS $$ SELECT $$;
 CREATE TABLE public.stub_delivery_receipts (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), reference_id UUID, amount_ican NUMERIC, settlement_legs JSONB);
 CREATE FUNCTION public.icanera_create_delivery_receipt(
   p_source_app TEXT, p_reference_type TEXT, p_reference_id UUID, p_customer UUID, p_store_owner UUID, p_rider UUID,

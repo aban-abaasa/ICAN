@@ -268,9 +268,13 @@ $r$'reseller_margin_total', v_margin_total,
       $r$\1v_store_ican - v_platform_fee_ican\2$r$,
       'customer_self_checkout: amount the store receives');
 
+    -- the same amount in shillings for the wallet history: the newer checkout converts at v_price_per_ican and passes
+    -- v_currency, the one deployed before it hard-codes 5000 and 'UGX' - both are handled
     v_store := pg_temp.ican_patch_rx(v_store,
-      $r$(v_tx_record_id,\s*)v_net_total(\s*,\s*v_currency\s*,)$r$,
-      $r$\1ROUND((v_store_ican - v_platform_fee_ican) * v_price_per_ican, 2)\2$r$,
+      $r$(v_tx_record_id,\s*)v_net_total(\s*,\s*(?:v_currency|'UGX')\s*,)$r$,
+      $r$\1ROUND((v_store_ican - v_platform_fee_ican) * $r$
+        || CASE WHEN position('v_price_per_ican' IN v_store) > 0 THEN 'v_price_per_ican' ELSE '5000' END
+        || $r$, 2)\2$r$,
       'customer_self_checkout: local amount the store receives');
 
     -- wording only: say in the store's wallet and the customer's history why it is 1% less / what the fee row is

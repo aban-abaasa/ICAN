@@ -1,7 +1,7 @@
 \set ON_ERROR_STOP on
 -- The shop, the reseller, the platform-fee business and a rider, plus helpers that run ONE sale and report what moved.
 --
---   product      UGX 10,000 shelf price, 18% VAT inside it, 1,000,000 in stock
+--   dropship product  UGX 10,000 shelf price, 18% VAT, 1,000,000 in stock;  shop product  UGX 10,000, no tax
 --   store        t.u(100), owner t.u(101), business wallet t.u(110)
 --   reseller     business t.u(120), owner t.u(121)
 --   ICANera      business t.u(130) = the fee recipient
@@ -17,6 +17,11 @@ INSERT INTO public.supermarkets (id, owner_user_id, name, address, pichin_busine
 INSERT INTO public.products (id, supermarket_id, name, sku, barcode, selling_price, tax_rate)
   VALUES (t.u(201), t.u(100), 'Rice 5kg', 'RICE5', '123', 10000, 18);
 INSERT INTO public.inventory (product_id, supermarket_id, current_stock) VALUES (t.u(201), t.u(100), 1000000);
+-- the shop sales use a product with NO tax, so a shop sale totals UGX 10,000 x qty whichever way the deployed checkout prices
+-- tax (inside the shelf price, as the repo's copy does, or on top of it, as the older deployed one does) - tax is not what is tested
+INSERT INTO public.products (id, supermarket_id, name, sku, barcode, selling_price, tax_rate)
+  VALUES (t.u(202), t.u(100), 'Sugar 1kg', 'SUGAR1', '456', 10000, 0);
+INSERT INTO public.inventory (product_id, supermarket_id, current_stock) VALUES (t.u(202), t.u(100), 1000000);
 INSERT INTO public.mbg_riders (id, user_id, status, is_available) VALUES (t.u(141), t.u(140), 'active', true);
 INSERT INTO public.mbg_stages (is_active, location_lat, location_lng) VALUES (true, 0.3, 32.5);
 INSERT INTO public.ican_user_wallets (user_id, ican_balance) VALUES (t.u(101), 0), (t.u(121), 0), (t.u(140), 0);
@@ -92,7 +97,7 @@ BEGIN
   v_store_before := t.userbal(t.u(101));
   v_plat_before := t.bizbal(t.u(130));
   BEGIN   -- the sale itself: if it raises, everything inside is rolled back, as a real checkout would be
-    v_res := public.customer_self_checkout(jsonb_build_array(jsonb_build_object('product_id', t.u(201), 'quantity', p_qty)),
+    v_res := public.customer_self_checkout(jsonb_build_array(jsonb_build_object('product_id', t.u(202), 'quantity', p_qty)),
                                            CASE WHEN p_ican THEN 'ican' ELSE 'cash' END, p_ican, 'Main');
     v_bal := t.userbal(t.u(1000 + p_n));
     RETURN jsonb_build_object('ok', true, 'res', v_res, 'debit', p_fund - v_bal,

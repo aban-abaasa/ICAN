@@ -47,23 +47,30 @@ step_refused() { # step_refused <file> <text the refusal must contain>: it MUST 
   echo "PASS the migration refused an unknown shop checkout: $(echo "$out" | sed -n 's/.*ERROR:  \(.*\) - this is not the version.*/\1/p' | head -1 | cut -c1-150)"
 }
 
-step "$HERE/00_stub.sql"
-step "$WORK/fee_rates_core.sql"
-step "$HERE/01_world.sql"
-step "$WORK/dropship_checkout.sql"
-step "$WORK/customer_self_checkout.sql"
-step "$HERE/02_before.sql"
-step "$HERE/04_unknown_shape.sql"
-step_refused "$MIG" 'NOTHING was changed'
-step "$HERE/05_after_refusal.sql"
-step "$MIG"
-step "$HERE/03_after.sql"
-step "$HERE/06_prepare_rerun.sql"
-step "$MIG"                          # a second run: no second patch, keeps the rates a developer set
-step "$HERE/07_after_rerun.sql"
-step "$ROLLBACK"
-step "$ROLLBACK"                     # the rollback is safe to run twice
-step "$HERE/08_after_rollback.sql"
-step "$MIG"                          # and the migration works again after a rollback
-step "$HERE/09_after_roundtrip.sql"
+run_suite() { # run_suite <label> <sql file that creates the deployed customer_self_checkout>
+  echo "=== shop checkout shape: $1"
+  psql -X -q -d postgres -c "DROP DATABASE IF EXISTS \"$DB\"" -c "CREATE DATABASE \"$DB\"" >/dev/null
+  step "$HERE/00_stub.sql"
+  step "$WORK/fee_rates_core.sql"
+  step "$HERE/01_world.sql"
+  step "$WORK/dropship_checkout.sql"
+  step "$2"
+  step "$HERE/02_before.sql"
+  step "$HERE/04_unknown_shape.sql"
+  step_refused "$MIG" 'NOTHING was changed'
+  step "$HERE/05_after_refusal.sql"
+  step "$MIG"
+  step "$HERE/03_after.sql"
+  step "$HERE/06_prepare_rerun.sql"
+  step "$MIG"                          # a second run: no second patch, keeps the rates a developer set
+  step "$HERE/07_after_rerun.sql"
+  step "$ROLLBACK"
+  step "$ROLLBACK"                     # the rollback is safe to run twice
+  step "$HERE/08_after_rollback.sql"
+  step "$MIG"                          # and the migration works again after a rollback
+  step "$HERE/09_after_roundtrip.sql"
+}
+
+run_suite "the repo's copy (FIX_CUSTOMER_SELF_CHECKOUT_TAX_INCLUSIVE.sql)" "$WORK/customer_self_checkout.sql"
+run_suite "the one deployed live (older: 'UGX' and 5000 written in, CRLF line endings)" "$HERE/fixtures/live_customer_self_checkout.sql"
 echo "All sale-fee database checks passed."
