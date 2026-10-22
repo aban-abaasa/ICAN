@@ -406,6 +406,11 @@ verify_jwt = false
 [functions.icanera-mobile-card-pay]
 verify_jwt = false
 
+# SupermartKera POS sale paid with the customer's IcanEra digital card (card QR + wallet PIN, typed
+# on the till). Checks the cashier's own session and the card holder's PIN inside the function.
+[functions.icanera-card-pos-pay]
+verify_jwt = false
+
 # Called by Flutterwave (no Supabase JWT); checks its own verif-hash header.
 [functions.flutterwave-transfer-webhook]
 verify_jwt = false
