@@ -20,6 +20,7 @@ import {
   quoteWithdrawal,
   rememberDestination,
 } from '../utils/walletRouting';
+import { UNLOADED_FEE_RATES, describeRate, feeRateKey, rateFor } from '../utils/feeRates';
 
 const inputCls = 'w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:border-orange-400 focus:outline-none transition-all';
 const chipCls = (on) => `px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${on ? 'bg-orange-500/30 border-orange-400 text-orange-200' : 'bg-white/5 border-white/20 text-gray-300 hover:border-orange-400/60'}`;
@@ -38,9 +39,11 @@ const writeSaved = (userId, list) => {
  * Cash out of the IcanEra wallet to mobile money or a bank account.
  *
  * "Smart" because the person only says how much and where: the panel picks the
- * balance that pays it with the lowest fee (wallet balance, free, before IcanEra
- * coin, 3%), detects MTN/Airtel from the number, offers the destinations they
- * have used before, and shows exactly what lands before any PIN is asked for.
+ * balance that pays it with the lowest fee (wallet money or IcanEra coin - both
+ * 3% unless a developer has changed the rates in public.ican_fee_rates, and the
+ * wallet balance wins a tie), detects MTN/Airtel from the number, offers the
+ * destinations they have used before, and shows exactly what lands before any
+ * PIN is asked for.
  *
  * A business withdraws too: its administrator moves the coin into their own
  * wallet (business-wallet PIN) and it is cashed out straight away (wallet PIN).
@@ -48,7 +51,7 @@ const writeSaved = (userId, list) => {
  * prompt never leaves funds half-moved. If the cash-out step then fails, the
  * coin is safe in the personal IcanEra balance and the message says so.
  */
-const SmartWithdrawPanel = ({ userId, ownPhone = '', fiatUgx = 0, businesses = [], askPin, onChanged }) => {
+const SmartWithdrawPanel = ({ userId, ownPhone = '', fiatUgx = 0, businesses = [], feeRates = UNLOADED_FEE_RATES, askPin, onChanged }) => {
   const [coinIcan, setCoinIcan] = useState(0);
   // A cash-out is paid at the coin's LIVE UGX price (never below the 5,000 floor), so
   // the preview must use it too — the flat floor would under-quote what lands.
@@ -95,16 +98,25 @@ const SmartWithdrawPanel = ({ userId, ownPhone = '', fiatUgx = 0, businesses = [
   const detectedNetwork = channel === 'mobile' && account.trim() ? detectUgandaMobileNetwork(account) : null;
   const network = detectedNetwork || pickedNetwork;
 
+  // What the wallet-money route charges. The server decides which rate from what it can verify - a bank account
+  // is always the bank rate, your own registered number the withdrawal rate, any other number the mobile-money
+  // send rate - and so does this (utils/feeRates.js). The coin route pays the coin cash-out rate, which
+  // COIN_PAYOUT_FEE_RATE follows once the rates are read.
+  const toOwnNumber = channel === 'mobile' && !!ownPhone && account.trim() === ownPhone;
+  const fiatFeeRate = rateFor(feeRates, feeRateKey({ isBank: channel === 'bank', toOwnNumber }));
+
   // What can pay this, and what lands.
   const plan = business
     ? (businessIcan * rate >= amountNum
       ? { source: 'coin', maxUgx: businessIcan * rate }
       : { source: null, maxUgx: businessIcan * rate, reason: `${business.business_name} has IcanEra ${businessIcan.toLocaleString(undefined, { maximumFractionDigits: 4 })} (about ${ugx(businessIcan * rate)}).` })
-    : planWithdrawalSource({ amountUgx: amountNum, fiatUgx, coinIcan, rate });
+    : planWithdrawalSource({ amountUgx: amountNum, fiatUgx, coinIcan, rate, fiatFeeRate });
   const quote = useMemo(
-    () => quoteWithdrawal({ amountUgx: amountNum, source: plan.source || 'fiat', rate }),
-    [amountNum, plan.source, rate],
+    () => quoteWithdrawal({ amountUgx: amountNum, source: plan.source || 'fiat', rate, fiatFeeRate }),
+    [amountNum, plan.source, rate, fiatFeeRate, COIN_PAYOUT_FEE_RATE],
   );
+
+  const appliedRate = plan.source === 'coin' ? COIN_PAYOUT_FEE_RATE : fiatFeeRate;
 
   const destinationOk = channel === 'mobile'
     ? account.replace(/\D/g, '').length >= 9 && !!network
@@ -154,7 +166,7 @@ const SmartWithdrawPanel = ({ userId, ownPhone = '', fiatUgx = 0, businesses = [
       }
       const pin = await askPin({
         title: 'Confirm withdrawal',
-        message: `Withdraw ${ugx(quote.gross)} to ${destLabel}.${quote.fee > 0 ? ` After the ${COIN_PAYOUT_FEE_RATE * 100}% fee you receive ${ugx(quote.net)}.` : ''}`,
+        message: `Withdraw ${ugx(quote.gross)} to ${destLabel}.${quote.fee > 0 ? ` After the ${describeRate(appliedRate)} fee you receive ${ugx(quote.net)}.` : ''}`,
       });
       if (pin === null) return;
       const pinCheck = await walletAccountService.verifyUserPIN(userId, pin);
@@ -235,7 +247,9 @@ const SmartWithdrawPanel = ({ userId, ownPhone = '', fiatUgx = 0, businesses = [
   };
 
   const personalSourceNote = !business && plan.source
-    ? (plan.source === 'fiat' ? 'Paid from your wallet balance — no fee.' : `Paid from your IcanEra coin — ${COIN_PAYOUT_FEE_RATE * 100}% cash-out fee.`)
+    ? (plan.source === 'fiat'
+      ? (fiatFeeRate > 0 ? `Paid from your wallet balance — ${describeRate(fiatFeeRate)} fee, taken out of the amount.` : 'Paid from your wallet balance — no fee.')
+      : `Paid from your IcanEra coin — ${describeRate(COIN_PAYOUT_FEE_RATE)} cash-out fee.`)
     : null;
 
   return (
@@ -273,7 +287,7 @@ const SmartWithdrawPanel = ({ userId, ownPhone = '', fiatUgx = 0, businesses = [
             <p className="mt-2 text-xs text-gray-400">
               {blockedForBusiness
                 ? 'Only the business administrator can withdraw from a business wallet. Ask them to withdraw, or send a payment request from Send.'
-                : `Paid from ${business.business_name}'s IcanEra coin (${COIN_PAYOUT_FEE_RATE * 100}% cash-out fee). It moves into your wallet first, then out to your destination.`}
+                : `Paid from ${business.business_name}'s IcanEra coin (${describeRate(COIN_PAYOUT_FEE_RATE)} cash-out fee). It moves into your wallet first, then out to your destination.`}
             </p>
           )}
         </div>
@@ -369,7 +383,7 @@ const SmartWithdrawPanel = ({ userId, ownPhone = '', fiatUgx = 0, businesses = [
           {plan.source ? (
             <>
               <div className="flex justify-between"><span>You withdraw</span><span>{ugx(quote.gross)}</span></div>
-              {quote.fee > 0 && <div className="flex justify-between"><span>Fee ({COIN_PAYOUT_FEE_RATE * 100}%)</span><span>− {ugx(quote.fee)}</span></div>}
+              {quote.fee > 0 && <div className="flex justify-between"><span>Fee ({describeRate(appliedRate)})</span><span>− {ugx(quote.fee)}</span></div>}
               <div className="flex justify-between font-semibold"><span>You receive</span><span>{ugx(quote.net)}</span></div>
               {plan.source === 'coin' && <div className="flex justify-between text-xs opacity-80"><span>IcanEra coin used</span><span>{quote.icanDebit.toLocaleString(undefined, { maximumFractionDigits: 8 })}</span></div>}
               {personalSourceNote && <p className="mt-2 text-xs opacity-80">{personalSourceNote}</p>}

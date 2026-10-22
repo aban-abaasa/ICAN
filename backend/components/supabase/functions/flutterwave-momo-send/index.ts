@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { flwCreateTransfer } from "../_shared/flwTransfer.ts";
+import { feeFor, feeRateKey, loadFeeRate } from "../_shared/fees.js";
 
 // Sends real money from a user's IcanEra fiat wallet balance (wallet_accounts,
 // distinct from the ICAN-coin balance) straight to someone else's mobile
@@ -164,6 +165,25 @@ serve(async (req) => {
     }
     const accountBank = match.code;
 
+    // The fee. The rate is read from public.ican_fee_rates (a developer changes it
+    // there - no redeploy) and TAKEN OUT of the amount: the wallet is debited
+    // `amount`, the recipient receives amount - fee, and a failed transfer refunds
+    // the whole `amount`. Which rate applies is decided from what we can verify
+    // (bank / the caller's own number / someone else's number), never from the
+    // `purpose` the caller claims - see _shared/fees.js. If the rates table does
+    // not exist yet (the SQL has not been run) there is simply no fee, exactly as
+    // before; if it exists but cannot be read, refuse rather than guess a price.
+    const rateKey = feeRateKey({ isBank, toOwnNumber: sendsToOwnNumber });
+    const rateResult = await loadFeeRate(adminClient, rateKey);
+    if (!rateResult.ok) {
+      console.error("flutterwave-momo-send: fee rate unavailable:", rateKey, rateResult.error);
+      return jsonResponse({ success: false, error: "Could not work out the transfer fee right now. Please try again in a moment." }, 503);
+    }
+    const feeAmount = feeFor(amount, rateResult.rate);
+    if (feeAmount >= Number(amount)) {
+      return jsonResponse({ success: false, error: "That amount is too small: the transfer fee would be as much as the amount." }, 400);
+    }
+
     // Debit the sender's fiat wallet and open the send-request row. Nothing
     // has been sent to Flutterwave yet.
     const { data: requestResult, error: requestError } = isBank
@@ -174,6 +194,8 @@ serve(async (req) => {
         p_bank_code: match.code,
         p_beneficiary: String(beneficiary_name).trim(),
         p_note: note || null,
+        // only sent when there is a fee, so an older database without p_fee keeps working
+        ...(feeAmount > 0 ? { p_fee: feeAmount } : {}),
       })
       : await adminClient.rpc("request_fiat_momo_send", {
         p_user_id: currentUser.id,
@@ -182,6 +204,7 @@ serve(async (req) => {
         p_recipient_phone: normalizedPhone,
         p_recipient_network: recipient_network,
         p_note: note || null,
+        p_fee: feeAmount,
       });
 
     if (requestError || !requestResult?.success) {
@@ -233,6 +256,7 @@ serve(async (req) => {
       status: "processing",
       amount: requestResult.amount,
       fee: requestResult.fee,
+      fee_rate: rateResult.rate,
       net_amount: requestResult.net_amount,
       message: "Transfer submitted. It will confirm shortly — if it fails, you'll be refunded automatically.",
     });

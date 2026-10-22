@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Lock, X, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import universalTransactionService from '../services/universalTransactionService';
 import PINRecoveryModal from './PINRecoveryModal';
+import { splitAttemptsMessage } from '../utils/pinAttempts';
 import './UnifiedApprovalModal.css';
 
 /**
@@ -44,6 +45,13 @@ const UnifiedApprovalModal = ({
   // rendered (localError || error, below) and the lock check must agree.
   const displayedError = localError || error;
   const isAccountLocked = displayedError && displayedError.toLowerCase().includes('account locked');
+  // The server's wrong-PIN message already says how many tries are left
+  // ("… Attempts remaining: 2"). Show that count once, taken from the message itself —
+  // not a second, different count from the attemptsRemaining prop — and none at all
+  // for errors that have nothing to do with the PIN.
+  const { text: errorText, attempts: attemptsInMessage } = splitAttemptsMessage(displayedError);
+  const shownAttempts = attemptsInMessage ?? (!localError && error ? attemptsRemaining : null);
+  const money = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
   // Load saved PIN from localStorage on mount
   useEffect(() => {
@@ -198,6 +206,14 @@ const UnifiedApprovalModal = ({
                 <span className="uam-value">{recipient}</span>
               </div>
             )}
+            {transactionType === 'send' && (
+              <div className="uam-row">
+                <span className="uam-label">Fee</span>
+                <span className="uam-value">
+                  {Number(metadata.fee) > 0 ? `${money(metadata.fee)} ${currency}` : 'No fee'}
+                </span>
+              </div>
+            )}
             {description && (
               <div className="uam-row">
                 <span className="uam-label">Note</span>
@@ -248,9 +264,9 @@ const UnifiedApprovalModal = ({
             <div className="uam-error">
               <AlertCircle size={16} />
               <div>
-                <p>{localError || error}</p>
-                {attemptsRemaining && (
-                  <p className="uam-attempts">Attempts remaining: {attemptsRemaining}</p>
+                <p>{errorText}</p>
+                {shownAttempts !== null && (
+                  <p className="uam-attempts">Attempts remaining: {shownAttempts}</p>
                 )}
               </div>
             </div>
