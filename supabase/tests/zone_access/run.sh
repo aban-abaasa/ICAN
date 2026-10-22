@@ -16,8 +16,10 @@ ROOT="$(cd "$HERE/../../.." && pwd)"
 DB="${DB_NAME:-ican_zone_test}"
 MIG="${MIG:-$ROOT/supabase/migrations/20261110100000_restricted_zone_access.sql}"
 MIG2="${MIG2:-$ROOT/supabase/migrations/20261111100000_zone_gate_from_card_page.sql}"
+MIG3="${MIG3:-$ROOT/supabase/migrations/20261112100000_zone_forced_entry_record.sql}"
 ROLLBACK="$ROOT/supabase/rollback/20261110_rollback_restricted_zone_access.sql"
 ROLLBACK2="$ROOT/supabase/rollback/20261111_rollback_zone_gate_from_card_page.sql"
+ROLLBACK3="$ROOT/supabase/rollback/20261112_rollback_zone_forced_entry_record.sql"
 WORK="$(mktemp -d)"
 trap '[ "${KEEP_DB:-0}" = "1" ] || psql -X -q -d postgres -c "DROP DATABASE IF EXISTS \"$DB\"" >/dev/null 2>&1; rm -rf "$WORK"' EXIT
 
@@ -43,9 +45,18 @@ step "$HERE/02c_customer_pays.sql"
 step "$HERE/02b_dev_changes_rate.sql"
 step "$MIG2"                                 # the rider card page's gate: two read-only functions on top of the above
 step "$HERE/06_card_page.sql"
+step "$MIG3"                                 # forced entries and leaving without paying are kept on the rider's public record
+step "$HERE/07_forced_entry.sql"
 step "$MIG"                                  # a second run changes nothing and keeps the rate a developer set
 step "$MIG2"
+step "$MIG3"
 step "$HERE/03_after_rerun.sql"
+if [ -f "$ROLLBACK3" ]; then
+  step "$ROLLBACK3"                          # takes the record's functions away, keeps the records
+  step "$ROLLBACK3"
+  step "$HERE/04c_after_record_rollback.sql"
+  step "$MIG3"
+fi
 if [ -f "$ROLLBACK2" ]; then
   step "$ROLLBACK2"                          # takes the card page's gate away and nothing else
   step "$ROLLBACK2"
@@ -58,6 +69,7 @@ if [ -f "$ROLLBACK" ]; then
   step "$HERE/04_after_rollback.sql"
   step "$MIG"                                # and the migration works again after a rollback
   step "$MIG2"
+  step "$MIG3"
   step "$HERE/05_after_roundtrip.sql"
 fi
 echo "All restricted-zone database checks passed."

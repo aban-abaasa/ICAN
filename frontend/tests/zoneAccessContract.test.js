@@ -8,8 +8,9 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-// the zone functions live in two migrations: the zones themselves, and the two read-only functions the rider card page adds on top
-const migration = ['20261110100000_restricted_zone_access.sql', '20261111100000_zone_gate_from_card_page.sql']
+// the zone functions live in three migrations: the zones themselves, the two read-only functions the rider card page adds on top, and the
+// public record of a rider who went in by force
+const migration = ['20261110100000_restricted_zone_access.sql', '20261111100000_zone_gate_from_card_page.sql', '20261112100000_zone_forced_entry_record.sql']
   .map((file) => readFileSync(path.join(root, 'supabase/migrations', file), 'utf8')).join('\n');
 const service = readFileSync(path.join(root, 'frontend/src/services/cmmsZoneAccessService.js'), 'utf8');
 // The rider's side lives in the mybodaguy repo; it is checked when that repo sits next to this one, and skipped when it does not.

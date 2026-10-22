@@ -62,6 +62,31 @@ Two read-only functions make this possible (`20261111100000_zone_gate_from_card_
 signed-in person may run, and `mbg_zone_gate_peek(zone, code)` previews a scan without writing anything. A test runs every preview
 against the real scan so the two cannot drift apart. The CMMS gate desk still works exactly as before.
 
+## A rider who goes in by force keeps it on his record, publicly
+
+A restricted area can only ask. A vehicle that drives past the gate without checking in or paying, or that is let in and leaves
+owing money, cannot be stopped by software, so it is **put on the record**, where everyone who checks that rider's card can see it.
+
+The gate (Transport → gate, the owner, or a CMMS admin) reports it from the rider's card page, behind a small
+*"It went in by force? Report it"* link (and *"It already left without paying UGX 3,000? Report it"* for a vehicle that is
+inside and owes money). The page says plainly that this is public and asks for a private note. Two kinds of line:
+
+| Kind | Meaning | Also |
+|---|---|---|
+| **Went in by force** | went in without checking in or paying (ignored the gate, or refused and drove on) | a fee request that was waiting is closed; a refused drive-in is logged |
+| **Left without paying** | was inside, owed money (an overstay, an unpaid balance) and left without checking out | the visit is closed at once, so the vehicle is not "inside" for ever and can be checked in again |
+
+**Who sees what.** Everyone, on the public card page: a red *Gate record* block under the verdict (*"On record: 2 times this rider went in
+by force or left without paying"*) listing each line's date, area, organisation and *Settled / Not settled*. Every gate that scans that card,
+in any zone, gets the same line as a **warning** (on the card page and in the CMMS gate desk). The rider is **told at once** by phone alert.
+The business alone sees who recorded it, the private note and the fee that was avoided; the public never does.
+
+**Fairness.** An approved vehicle cannot be reported for forced entry (it was let in), nor one that is checked in; a vehicle that owes nothing
+cannot be reported for leaving without paying; the same report twice within 30 minutes is one line. **Settled** (the gate collected what
+was owed; any gate role can mark it) stays on the record, marked settled: paying makes it right, it does not make it disappear. Only a
+**manager** (Transport → assign, the owner or an admin) can **withdraw** a line that was recorded in error, with a reason; it leaves the
+public record but the row is kept in the business's audit trail, and the rider is told. A rider who disputes a line asks the organisation named on it.
+
 ## IcanEra's cut: 3%
 
 IcanEra keeps **3% of every fee a business sets** (`ican_fee_rates.zone_access_fee`). The rider always pays
@@ -94,8 +119,12 @@ UPDATE public.ican_fee_rates SET rate = 0.025 WHERE key = 'zone_access_fee';
    Staff sign in on the BodaGoEra site, so Google sign-in must be allowed there (it already is for shop receipt approval). If Google
    sends them back to the site root, the page returns to the card they scanned by itself.
 
-Roll back with `supabase/rollback/20261110_rollback_restricted_zone_access.sql` (keeps the visit history), or only the card page's gate
-with `supabase/rollback/20261111_rollback_zone_gate_from_card_page.sql` (the CMMS gate desk keeps working).
+7. **Gate record:** run **`ZONE_FORCED_ENTRY_RECORD_PASTE_INTO_SUPABASE.sql`** (same as `supabase/migrations/20261112100000_zone_forced_entry_record.sql`)
+   after step 2 and deploy the BodaGoEra frontend. Safe to run twice. Without it the card page shows no record and offers no report link.
+
+Roll back with `supabase/rollback/20261110_rollback_restricted_zone_access.sql` (keeps the visit history), only the card page's gate
+with `supabase/rollback/20261111_rollback_zone_gate_from_card_page.sql` (the CMMS gate desk keeps working), or only the public record with
+`supabase/rollback/20261112_rollback_zone_forced_entry_record.sql` (the records themselves are kept and come back when the migration is run again).
 
 ## Using it
 
@@ -126,5 +155,8 @@ with `supabase/rollback/20261111_rollback_zone_gate_from_card_page.sql` (the CMM
   line on the ride screens and in the wallet history.
 * Ride matching is by the pickup and drop-off coordinates and the zone's circle; a zone that is not on the map cannot warn customers.
 * The developer panel does not list the new rate; change it with the SQL above.
+* A gate record is reported by a person at the gate and is not detected automatically. There is no dispute screen for the rider yet: a
+  rider who thinks a line is wrong asks the organisation named on it to withdraw it. Paying the fee that was avoided is settled by the gate
+  (cash, then *Mark settled*); the rider cannot pay it from the app yet.
 * In *Auto* mode a vehicle that left without being scanned out is seen as "inside" and the next scan checks it out; use
   separate *Check in* / *Check out* lanes where that can happen.

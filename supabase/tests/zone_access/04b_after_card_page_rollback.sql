@@ -5,7 +5,7 @@ DO $$ BEGIN
   PERFORM t.check('...and nothing else is: the gate desk still scans and the rider can still pay',
     to_regprocedure('public.mbg_zone_gate_scan(uuid,text,text,text,text)') IS NOT NULL AND to_regprocedure('public.mbg_rider_pay_gate_fee(uuid)') IS NOT NULL
     AND to_regprocedure('public.mbg_zone_gate_check_in(uuid,text,text,text)') IS NOT NULL);
-  PERFORM t.check('...and the history is kept', (SELECT count(*) FROM public.mbg_access_zones) = 7 AND (SELECT count(*) FROM public.mbg_access_visits) > 20);
+  PERFORM t.check('...and the history is kept', (SELECT count(*) FROM public.mbg_access_zones) = 8 AND (SELECT count(*) FROM public.mbg_access_visits) > 20);
 END $$;
 SELECT t.login(2, 'guard@x.test');
 DO $$ DECLARE r JSONB; BEGIN
