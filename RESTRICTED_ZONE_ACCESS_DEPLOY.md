@@ -40,6 +40,28 @@ the gate and press *Use my location* in the zone editor) and:
 One entry per ride per zone: a second entry on the same ride is free. Overstay is always the rider's. The customer is notified when
 a fee is added to their ride, and both the customer's and the rider's ride screens show it.
 
+## The gate runs from the rider's card page (no gate desk needed)
+
+The QR on a rider's ID card opens the public page `https://bodagoera.icanera.space/rider-card/<code>`. Gate staff scan it with an
+ordinary phone camera, **sign in once** (Google, or an e-mail link; the phone stays signed in), and the page itself runs the gate:
+
+| What the page shows staff | One tap |
+|---|---|
+| **Approved staff · enters free** (or *no fee for this vehicle*, *day pass already paid*, *ride already paid*) | Check in · free |
+| **Not approved · entry fee UGX 2,000**, and who pays: the rider alone, the customer on the ride (they were warned), or the rider now and passed on to the customer | Check in · ask for UGX 2,000. The page then waits and updates **by itself** the moment the rider approves it in BodaGoEra (or the gate takes cash, if the zone allows it, or withdraws the request) |
+| **Inside · check out** (what is still due, if anything) | Check out: clears only when everything is paid; an overstay is paid the same way |
+| **Not allowed in**, with the reason (card cancelled / unpaid / expired, rider suspended, vehicle type not accepted, zone closed…) | *Log this refusal* |
+
+The page stays public: anyone else sees exactly the check they always saw, plus a quiet *Gate staff? Sign in*. A signed-in customer or
+rider sees one muted line ("no gate access on this account"). Only a person whose CMMS role has **Transport → gate** (or the business
+owner / a CMMS administrator) gets the panel, and the database checks that on every call, not the page. Staff who work for several
+businesses choose the zone; the choice and the gate name are remembered on that phone. The typed plate is compared with the card **before**
+anything happens, so someone else's card is flagged first. After a check-in or check-out the buttons go away so a second tap cannot undo it.
+
+Two read-only functions make this possible (`20261111100000_zone_gate_from_card_page.sql`): `mbg_my_gate_zones()` lists the zones the
+signed-in person may run, and `mbg_zone_gate_peek(zone, code)` previews a scan without writing anything. A test runs every preview
+against the real scan so the two cannot drift apart. The CMMS gate desk still works exactly as before.
+
 ## IcanEra's cut: 3%
 
 IcanEra keeps **3% of every fee a business sets** (`ican_fee_rates.zone_access_fee`). The rider always pays
@@ -67,7 +89,13 @@ UPDATE public.ican_fee_rates SET rate = 0.025 WHERE key = 'zone_access_fee';
    `edit` (create zones, set fees), `assign` (approve/suspend vehicles), `gate` (run the gate desk: give security staff
    `view` + `gate`), `view` (read the log). The business owner and CMMS administrators can do everything.
 
-Roll back with `supabase/rollback/20261110_rollback_restricted_zone_access.sql` (keeps the visit history).
+6. **Card page gate:** run **`ZONE_GATE_FROM_CARD_PAGE_PASTE_INTO_SUPABASE.sql`** (same as
+   `supabase/migrations/20261111100000_zone_gate_from_card_page.sql`) after step 2 and deploy the BodaGoEra frontend. Safe to run twice.
+   Staff sign in on the BodaGoEra site, so Google sign-in must be allowed there (it already is for shop receipt approval). If Google
+   sends them back to the site root, the page returns to the card they scanned by itself.
+
+Roll back with `supabase/rollback/20261110_rollback_restricted_zone_access.sql` (keeps the visit history), or only the card page's gate
+with `supabase/rollback/20261111_rollback_zone_gate_from_card_page.sql` (the CMMS gate desk keeps working).
 
 ## Using it
 
@@ -75,7 +103,8 @@ Roll back with `supabase/rollback/20261110_rollback_restricted_zone_access.sql` 
   (0 = free for that type, unticked = refused), cash yes/no, optional time limit and overstay fee. Then
   *Approved vehicles* → search by plate or card number (or scan the card into the box) → *Approve*, optionally with an end
   date or allowed hours.
-* **Gate:** open *Gate desk*, put the cursor in the box and scan the rider's card with a USB/Bluetooth scanner (or paste the link
+* **Gate, from a phone:** scan the card with the phone camera, sign in the first time, tap the one big button (see above).
+* **Gate, from a desk:** open *Gate desk*, put the cursor in the box and scan the rider's card with a USB/Bluetooth scanner (or paste the link
   from any phone QR app). *Auto* checks a vehicle that is inside out and any other in; use *Check in* / *Check out* for
   separate lanes. Optionally type the plate you see: a mismatch with the card is flagged.
 * **Customer:** nothing to do: the booking screen warns them, and the fee shows on their ride. (A zone that is not on the map cannot
@@ -86,7 +115,7 @@ Roll back with `supabase/rollback/20261110_rollback_restricted_zone_access.sql` 
 ## Tests
 
 * Database (real migration on a throwaway Postgres): `supabase/tests/zone_access/run.sh`
-* UI ↔ database contract (function and argument names): `cd frontend && npm test`
+* UI ↔ database contract (function and argument names, including the BodaGoEra card page's service): `cd frontend && npm test`
 
 ## Known limits
 

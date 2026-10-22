@@ -7,5 +7,5 @@ DO $$ BEGIN
   PERFORM t.check('rolled back: the rate row is gone', NOT EXISTS (SELECT 1 FROM public.ican_fee_rates WHERE key = 'zone_access_fee'));
   PERFORM t.check('rolled back: an unknown zone rate is free again, the others are untouched',
     public.ican_fee_rate('zone_access_fee') = 0 AND public.ican_fee_rate('send_bank') = 0.03 AND public.ican_fee_rate('dropship_sale') = 0.02);
-  PERFORM t.check('rolled back: the money history is kept', (SELECT count(*) FROM public.mbg_access_visits) > 20 AND (SELECT count(*) FROM public.mbg_access_zones) = 6);
+  PERFORM t.check('rolled back: the money history is kept', (SELECT count(*) FROM public.mbg_access_visits) > 20 AND (SELECT count(*) FROM public.mbg_access_zones) = 7);
 END $$;

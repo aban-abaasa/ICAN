@@ -1,6 +1,7 @@
 -- Rolls back 20261110100000_restricted_zone_access.sql
 --
---   * every restricted-zone function is dropped (the staff API, the gate desk and the rider's pass / pay functions), so nothing
+--   * every restricted-zone function is dropped (the staff API, the gate desk, the rider's pass / pay functions and the card-page
+--     gate of 20261111100000_zone_gate_from_card_page.sql), so nothing
 --     can check a vehicle in or charge a fee any more
 --   * the 'zone_access_fee' rate row is removed and ican_fee_rate() loses its fallback
 --
@@ -19,7 +20,7 @@ BEGIN
     SELECT p.oid::regprocedure AS sig
       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
      WHERE n.nspname = 'public'
-       AND (p.proname LIKE 'mbg\_zone\_%' OR p.proname IN ('mbg_my_gate_passes', 'mbg_rider_pay_gate_fee', 'mbg_rider_decline_gate_fee', 'mbg_ack_ride_zone_charges', 'mbg_ride_zone_charges'))
+       AND (p.proname LIKE 'mbg\_zone\_%' OR p.proname IN ('mbg_my_gate_passes', 'mbg_my_gate_zones', 'mbg_rider_pay_gate_fee', 'mbg_rider_decline_gate_fee', 'mbg_ack_ride_zone_charges', 'mbg_ride_zone_charges'))
   LOOP
     EXECUTE format('DROP FUNCTION %s', v_fn.sig);
   END LOOP;
