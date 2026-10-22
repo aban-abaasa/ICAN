@@ -11,6 +11,7 @@
  */
 
 import { supabase } from '../lib/supabase/client';
+import { describeFunctionFailure } from '../utils/functionErrors';
 
 export const ICAN_TO_UGX = 5000;
 export const SOURCE_APP = 'ican';
@@ -33,6 +34,14 @@ async function functionErrorMessage(error, fallback) {
   }
   return error?.message || fallback;
 }
+
+// Money that leaves the app (mobile money, bank): the error also says whether the server ANSWERED. An answer is a final
+// refusal; no answer (connection lost, timeout) means the transfer may still have been carried out. See utils/functionErrors.js.
+async function sendOutError(error, fallback) {
+  const failure = await describeFunctionFailure(error, fallback);
+  return Object.assign(new Error(failure.message), { answered: failure.answered });
+}
+const answeredError = (message) => Object.assign(new Error(message), { answered: true });
 
 const BUSINESS_PAYMENT_HINTS = /\b(store|shop|market|supermarket|restaurant|cafe|business|supplier|vendor|school|hospital|hotel|fuel station)\b/i;
 
@@ -476,8 +485,8 @@ export async function sendFiatToMobileMoney({
       purpose,
     },
   });
-  if (error) throw new Error(await functionErrorMessage(error, 'Transfer failed'));
-  if (!data?.success) throw new Error(data?.error ?? 'Transfer failed');
+  if (error) throw await sendOutError(error, 'Transfer failed');
+  if (!data?.success) throw answeredError(data?.error ?? 'Transfer failed');
   return data;
 }
 
@@ -507,8 +516,8 @@ export async function sendFiatToBank({
       note,
     },
   });
-  if (error) throw new Error(await functionErrorMessage(error, 'Transfer failed'));
-  if (!data?.success) throw new Error(data?.error ?? 'Transfer failed');
+  if (error) throw await sendOutError(error, 'Transfer failed');
+  if (!data?.success) throw answeredError(data?.error ?? 'Transfer failed');
   return data;
 }
 

@@ -47,8 +47,10 @@ import agentService from '../services/agentService';
 import { walletAccountService, hashPIN, requestPinResetEmail } from '../services/walletAccountService';
 import universalTransactionService from '../services/universalTransactionService';
 import { sendICAN as sendIcaneracoin, sendICANToBusiness, sendFromBusinessWallet, isBusinessWalletAdmin, getBalance as getIcanCoinBalance, getTradingInfo, buyCoinsFromWallet, sellCoinsToWallet, sendFiatToMobileMoney, sendFiatToBank, detectUgandaMobileNetwork } from '../services/icanWalletService';
-import { classifyRecipient, coinsForCurrency, currencyForCoins, moneyDecimals, quickMoneyAmounts } from '../utils/walletRouting';
+import { classifyRecipient, coinsForCurrency, currencyForCoins, formatMoney, moneyDecimals, quickMoneyAmounts } from '../utils/walletRouting';
 import { describeSendQuote } from '../utils/sendQuote';
+import { FEE_KEYS, UNLOADED_FEE_RATES, describeRate, quoteTransfer, rateFor } from '../utils/feeRates';
+import { getFeeRates } from '../services/feeRatesService';
 import { resolveRecipientWallet as lookupRecipientWallet, runCoinSend, describeSendError } from '../services/coinSendFlow';
 import { runCurrencySend } from '../services/currencyPayFlow';
 import { listUgandaBanks } from '../services/digitalCardService';
@@ -109,6 +111,10 @@ const formatCompactBalance = (value) => {
   return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 };
 
+// Added to a mobile-money / bank send error once the request has left the device: a lost
+// response looks just like a failure, and these transfers cannot be taken back.
+const SEND_MAY_HAVE_GONE_THROUGH = ' If your connection dropped, check your balance and history before sending again — the transfer may have gone through.';
+
 const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = null, onTabChange = null }) => {
   const { askPin, pinDialog } = usePinPrompt();
   const [showBalance, setShowBalance] = useState(true);
@@ -156,6 +162,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const [detectedPaymentMethod, setDetectedPaymentMethod] = useState(null);
   const [transactionInProgress, setTransactionInProgress] = useState(false);
   const [transactionResult, setTransactionResult] = useState(null);
+  // What a transfer or withdrawal costs: the rates a developer sets in public.ican_fee_rates (see utils/feeRates.js). The
+  // server charges from the same table; this only shows the fee before you pay.
+  const [feeRates, setFeeRates] = useState(UNLOADED_FEE_RATES);
+  const sendResultRef = useRef(null); // the result banner in the Send sheet, scrolled into view when it appears
+  const sendCloseTimerRef = useRef(null); // auto-close after a successful send; cleared if the sheet is closed or reused first
 
   // Lets the phone's hardware/gesture back button (and the in-modal back
   // arrow) close the Top Up modal instead of navigating the whole app away
@@ -1686,7 +1697,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         if (cancelled) return;
         setRecipientPreview(found.error
           ? { status: 'notfound' }
-          : { status: 'found', name: found.name, accountType: found.accountType });
+          : { status: 'found', name: found.name, accountType: found.accountType, userId: found.userId });
       } catch {
         if (!cancelled) setRecipientPreview(null);
       }
@@ -1699,53 +1710,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   const resolveRecipientWallet = (supabase, identifier) =>
     lookupRecipientWallet(supabase, identifier, { countryCallingCode: userCountry === 'UG' ? '256' : null });
 
-  const handleSendMoney = async (e) => {
-    e.preventDefault();
-    if (!sendForm.recipient || !sendForm.amount) {
-      alert('Please fill in recipient and amount');
-      return;
-    }
-
-    setTransactionInProgress(true);
-
-    try {
-      if (sendFromBusiness) {
-        // A business wallet holds IcanEra coin. "IcanEra Account" pays the recipient in
-        // money (the coin is converted for them); "IcanEra Coin" sends coin as it is.
-        if (sendMethod === 'ican') await handleSendCurrency(sendForm.recipient, sendForm.amount, sendForm.description);
-        else await handleSendICANCoin(sendForm.recipient, sendForm.amount, sendForm.description);
-      } else if (sendMethod === 'mobile') {
-        // Network is auto-detected from the phone number (see
-        // detectUgandaMobileNetwork) — sendNetwork only holds a value when
-        // detection failed and the fallback picker in the form set it.
-        const network = sendNetwork || detectUgandaMobileNetwork(sendForm.recipient);
-        if (!network) {
-          setTransactionResult({ type: 'send', success: false, message: 'Could not tell MTN from Airtel for this number — pick the network below.' });
-          setTransactionInProgress(false);
-          return;
-        }
-        await handleSendViaMOMO(sendForm.recipient, sendForm.amount, sendForm.description, network);
-      } else if (sendMethod === 'bank') {
-        await handleSendViaBank(sendForm.recipient, sendForm.amount, sendForm.description);
-      } else if (sendMethod === 'icaneracoin') {
-        // Send icaneracoin (ICAN coin) — separate balance from local currency
-        const recipient = normalizeRecipientForKind(sendForm.recipient, recipientAccountKind);
-        await handleSendICANCoin(recipient, sendForm.amount, sendForm.description);
-      } else {
-        // Send to ICAN Wallet User (account number, phone, or email lookup)
-        const recipient = normalizeRecipientForKind(sendForm.recipient, recipientAccountKind);
-        await handleSendToICANUser(recipient, sendForm.amount, sendForm.description);
-      }
-    } catch (error) {
-      console.error('❌ Send error:', error);
-      setTransactionResult({
-        type: 'send',
-        success: false,
-        message: 'An error occurred during transfer.',
-        error: error.message
-      });
-    }
-
+  // Back to an empty Send form with the default "from" and "send to" choices.
+  const resetSendForm = () => {
     setSendForm({ recipient: '', amount: '', description: '' });
     setSendMethod('ican');
     setRecipientAccountKind('ican');
@@ -1755,13 +1721,120 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
     setSendNetwork(null);
     setSendBankCode('');
     setSendBeneficiary('');
-    setTransactionInProgress(false);
+  };
 
-    // Auto close after 3 seconds
-    setTimeout(() => {
-      setActiveModal(null);
-      setTransactionResult(null);
-    }, 3000);
+  const clearSendCloseTimer = () => {
+    clearTimeout(sendCloseTimerRef.current);
+    sendCloseTimerRef.current = null;
+  };
+  useEffect(() => () => clearTimeout(sendCloseTimerRef.current), []);
+
+  // Leave a send's confirmation up long enough to read (the Done button closes it
+  // sooner), unless the sheet was closed or the person moved on to another sheet meanwhile.
+  const scheduleSendSheetClose = () => {
+    clearSendCloseTimer();
+    sendCloseTimerRef.current = setTimeout(() => {
+      sendCloseTimerRef.current = null;
+      setActiveModal((open) => (open === 'send' ? null : open));
+      setTransactionResult((r) => (r?.type === 'send' ? null : r));
+    }, 8000);
+  };
+
+  // Starting another send while the last confirmation is still showing: the sheet must
+  // not close under their typing, and the old "sent" message has done its job. (The form
+  // is empty right after a send, so the reset itself never trips this.)
+  useEffect(() => {
+    if (!sendForm.recipient && !sendForm.amount && !sendForm.description) return;
+    clearSendCloseTimer();
+    setTransactionResult((r) => (r?.type === 'send' && r.success ? null : r));
+  }, [sendForm]);
+
+  // Load the fee rates when the wallet opens, and again whenever Send or the Withdraw tab is opened (the service
+  // answers from a one-minute cache, so this is cheap and a changed rate shows up within a minute).
+  useEffect(() => {
+    let cancelled = false;
+    getFeeRates().then((state) => { if (!cancelled) setFeeRates(state); });
+    return () => { cancelled = true; };
+  }, [activeModal, activeTab]);
+
+  // A result from the last Send/Receive sheet must not greet the next one.
+  useEffect(() => {
+    if (!activeModal) setTransactionResult((r) => (r && (r.type === 'send' || r.type === 'receive') ? null : r));
+  }, [activeModal]);
+
+  // A send's reason for failing sits below the form: bring it into view.
+  useEffect(() => {
+    if (transactionResult?.type === 'send') sendResultRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+  }, [transactionResult]);
+
+  // Every send handler below reports how it ended, so this form only clears after a
+  // real success — a failed or backed-out send keeps what was typed, so it can be
+  // fixed or retried instead of typed again:
+  //   'success'   the money moved (or a business payment request was sent)
+  //   'failed'    nothing moved; the reason is already on screen
+  //   'uncertain' a mobile-money / bank request was sent but NO answer came back (connection lost, timeout), so it
+  //               may have gone through: the form is cleared so a retry has to be deliberate. If the server
+  //               answered with a refusal, that is 'failed': it is final and the form is kept.
+  //   'cancelled' the person backed out of the confirmation / PIN
+  //   'approval'  handed to the PIN approval sheet (see handleTransactionApproval)
+  const handleSendMoney = async (e) => {
+    e.preventDefault();
+    if (transactionInProgress) return;
+    if (!sendForm.recipient.trim() || !(parseFloat(sendForm.amount) > 0)) {
+      setTransactionResult({ type: 'send', success: false, message: 'Enter who to send to and an amount above zero.' });
+      return;
+    }
+
+    clearSendCloseTimer();
+    setTransactionResult(null);
+    setTransactionInProgress(true);
+
+    let outcome = 'failed';
+    try {
+      if (sendFromBusiness) {
+        // A business wallet holds IcanEra coin. "IcanEra Account" pays the recipient in
+        // money (the coin is converted for them); "IcanEra Coin" sends coin as it is.
+        if (sendMethod === 'ican') outcome = await handleSendCurrency(sendForm.recipient, sendForm.amount, sendForm.description);
+        else outcome = await handleSendICANCoin(sendForm.recipient, sendForm.amount, sendForm.description);
+      } else if (sendMethod === 'mobile') {
+        // Network is auto-detected from the phone number (see
+        // detectUgandaMobileNetwork) — sendNetwork only holds a value when
+        // detection failed and the fallback picker in the form set it.
+        const network = sendNetwork || detectUgandaMobileNetwork(sendForm.recipient);
+        if (!network) {
+          setTransactionResult({ type: 'send', success: false, message: 'Could not tell MTN from Airtel for this number — pick the network below.' });
+          return;
+        }
+        outcome = await handleSendViaMOMO(sendForm.recipient, sendForm.amount, sendForm.description, network);
+      } else if (sendMethod === 'bank') {
+        outcome = await handleSendViaBank(sendForm.recipient, sendForm.amount, sendForm.description);
+      } else if (sendMethod === 'icaneracoin') {
+        // Send icaneracoin (ICAN coin) — separate balance from local currency
+        const recipient = normalizeRecipientForKind(sendForm.recipient, recipientAccountKind);
+        outcome = await handleSendICANCoin(recipient, sendForm.amount, sendForm.description);
+      } else {
+        // Send to ICAN Wallet User (account number, phone, or email lookup)
+        const recipient = normalizeRecipientForKind(sendForm.recipient, recipientAccountKind);
+        outcome = await handleSendToICANUser(recipient, sendForm.amount, sendForm.description);
+      }
+    } catch (error) {
+      console.error('❌ Send error:', error);
+      outcome = 'failed';
+      setTransactionResult({
+        type: 'send',
+        success: false,
+        message: error?.message ? `The transfer could not be completed: ${error.message}` : 'An error occurred during transfer.',
+      });
+    } finally {
+      setTransactionInProgress(false);
+    }
+
+    if (outcome === 'success') {
+      resetSendForm();
+      scheduleSendSheetClose();
+    } else if (outcome === 'uncertain') {
+      resetSendForm(); // the message stays up (no auto-close) until the person has read it
+    }
   };
 
   // 💳 Send to ICAN Wallet User
@@ -1779,14 +1852,13 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       // is money (e.g. UGX 20,000), so it is converted to coins at the live price and
       // the wallet's money pays for them — never read as 20,000 coins.
       if (classifyRecipient(recipientIdentifier).kind === 'business_wallet') {
-        await handleSendICANCoin(recipientIdentifier, amount, description, 'currency');
-        return;
+        return await handleSendICANCoin(recipientIdentifier, amount, description, 'currency');
       }
 
       const recipientUser = await resolveRecipientWallet(supabase, recipientIdentifier);
       if (recipientUser.error) {
         setTransactionResult({ type: 'send', success: false, message: recipientUser.error });
-        return;
+        return 'failed';
       }
 
       // Prevent self-transfer
@@ -1796,42 +1868,43 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           success: false,
           message: 'Cannot send money to yourself'
         });
-        return;
+        return 'failed';
       }
 
       const parsedAmount = parseFloat(amount);
       if (!(parsedAmount > 0)) {
         setTransactionResult({ type: 'send', success: false, message: 'Enter a valid amount' });
-        return;
+        return 'failed';
       }
 
-      // Optional: Add small transaction fee (0.5% for ICAN transfers)
-      const transactionFee = parsedAmount * 0.005;
-      const totalDeduction = parsedAmount + transactionFee;
+      // Sending to another IcanEra account is free: the wallet is debited exactly the amount
+      // and the recipient receives all of it. (Fees apply only to mobile-money / bank sends
+      // and withdrawals - see utils/feeRates.js.)
 
       // Wallet short? Instead of refusing, cover the difference by converting just
       // enough IcanEra coin (3% fee) — one confirmation, one PIN. If the wallet
       // already holds the payment itself, this is "direct" and the normal flow
-      // below carries on (and still reports a fee-margin shortfall as before).
-      if (totalDeduction > parseFloat(currentWallet.balance)) {
+      // below carries on.
+      if (parsedAmount > parseFloat(currentWallet.balance)) {
         const outcome = await payInCurrency(recipientIdentifier, amount, description);
         if (!outcome.direct) {
-          applyCurrencyOutcome(outcome);
-          return;
+          return applyCurrencyOutcome(outcome);
         }
       }
 
       // Check sender's balance
-      if (totalDeduction > parseFloat(currentWallet.balance)) {
+      if (parsedAmount > parseFloat(currentWallet.balance)) {
         setTransactionResult({
           type: 'send',
           success: false,
-          message: `Insufficient balance. You have ${currentWallet.balance} ${currentWallet.currency}, need ${totalDeduction.toFixed(2)}`
+          message: `Insufficient balance. You have ${currentWallet.balance} ${currentWallet.currency}, need ${parsedAmount}.`
         });
-        return;
+        return 'failed';
       }
 
-      // ✅ SHOW APPROVAL MODAL INSTEAD OF PROCESSING IMMEDIATELY
+      // ✅ SHOW APPROVAL MODAL INSTEAD OF PROCESSING IMMEDIATELY.
+      // The form is kept as typed: cancelling the PIN sheet brings the Send sheet back
+      // with it (see the approval modal's onCancel); a completed send clears it.
       setPendingTransaction({
         type: 'send',
         recipientId: recipientUser.userId,
@@ -1839,14 +1912,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         amount: parsedAmount,
         currency: selectedCurrency,
         description: description || `Transfer to ${recipientUser.name}`,
-        fee: transactionFee,
-        totalDeduction,
+        fee: 0,
+        totalDeduction: parsedAmount,
         senderWalletId: null  // Will be set when processing
       });
 
       setShowApprovalModal(true);
       setActiveModal(null);  // Close send modal
-      setSendForm({ recipient: '', amount: '', description: '' });  // Clear form
+      return 'approval';
 
     } catch (error) {
       console.error('❌ ICAN transfer failed:', error);
@@ -1855,6 +1928,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         success: false,
         message: error.message || 'Transfer failed'
       });
+      return 'failed';
     }
   };
 
@@ -1889,8 +1963,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       },
     });
 
+  // Puts a conversion-payment outcome on screen; returns how it ended for handleSendMoney.
   const applyCurrencyOutcome = (outcome) => {
-    if (outcome.cancelled) return;
+    if (outcome.cancelled) return 'cancelled';
     setTransactionResult({ type: 'send', success: Boolean(outcome.success), message: outcome.message });
     // Even a failed attempt may have moved coin or money part-way: show the real balances.
     if (outcome.success || outcome.touched) {
@@ -1901,6 +1976,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       refreshTradingInfo();
       if (outcome.touchesBusiness || outcome.touched) loadBusinessAccountProfiles();
     }
+    return outcome.success ? 'success' : 'failed';
   };
 
   // A business paying a person (or its owner's wallet) in money.
@@ -1909,10 +1985,11 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       const supabase = getSupabaseClient();
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
       if (authError || !authUser) throw new Error('User not authenticated');
-      applyCurrencyOutcome(await payInCurrency(recipientIdentifier, amount, description));
+      return applyCurrencyOutcome(await payInCurrency(recipientIdentifier, amount, description));
     } catch (error) {
       console.error('❌ Money payment failed:', error);
       setTransactionResult({ type: 'send', success: false, message: error.message || 'Payment failed' });
+      return 'failed';
     }
   };
 
@@ -1952,7 +2029,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         getTradingInfo,
         api: { sendIcaneracoin, sendICANToBusiness, sendFromBusinessWallet, isBusinessWalletAdmin, buyCoinsFromWallet },
       });
-      if (outcome.cancelled) return;
+      if (outcome.cancelled) return 'cancelled';
 
       setTransactionResult({
         type: 'send',
@@ -1971,6 +2048,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         refreshTradingInfo();
         if (outcome.touchesBusiness) loadBusinessAccountProfiles();
       }
+      return outcome.success ? 'success' : 'failed';
     } catch (error) {
       console.error('❌ Icaneracoin transfer failed:', error);
       setTransactionResult({ type: 'send', success: false, message: describeSendError(error) });
@@ -1980,6 +2058,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         loadWalletBalances(currentUserId);
         refreshTradingInfo();
       }
+      return 'failed';
     }
   };
 
@@ -2013,12 +2092,21 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         setTransactionResult({
           type: pendingTransaction.type,
           success: true,
-          message: `✅ Successfully sent ${pendingTransaction.amount} ${pendingTransaction.currency} to ${pendingTransaction.recipientName}${pendingTransaction.fee > 0 ? ` (Fee: ${pendingTransaction.fee.toFixed(2)})` : ''}`,
+          message: `✅ Successfully sent ${pendingTransaction.amount} ${pendingTransaction.currency} to ${pendingTransaction.recipientName}${pendingTransaction.fee > 0 ? ` (Fee: ${pendingTransaction.fee.toFixed(2)})` : (pendingTransaction.type === 'send' ? ' — no fee' : '')}`,
           amount: pendingTransaction.amount,
           recipient: pendingTransaction.recipientName,
-          fee: pendingTransaction.fee
+          fee: pendingTransaction.fee,
+          ...(result.transactionId ? { transactionId: result.transactionId } : {})
         });
-        
+
+        // A send made its sheet go away to ask for the PIN: bring the Send sheet back,
+        // empty, so the confirmation (and its reference) is actually seen.
+        if (pendingTransaction.type === 'send') {
+          resetSendForm();
+          setActiveModal('send');
+          scheduleSendSheetClose();
+        }
+
         // Close modal and reset
         setShowApprovalModal(false);
         setPendingTransaction(null);
@@ -2044,21 +2132,22 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // accept/reject plus the webhook-confirmed final outcome (with automatic
   // refund on failure) is the real verification available for this rail.
   const handleSendViaMOMO = async (phoneNumber, amount, description, network) => {
+    let dispatched = false; // true once the request has left this device: from then on a failure may still have gone through
     try {
       const trimmedPhone = String(phoneNumber || '').trim();
       if (!trimmedPhone) {
         setTransactionResult({ type: 'send', success: false, message: 'Enter a recipient phone number' });
-        return;
+        return 'failed';
       }
       if (selectedCurrency !== 'UGX') {
         setTransactionResult({ type: 'send', success: false, message: 'Mobile money sends currently only support UGX.' });
-        return;
+        return 'failed';
       }
 
       const parsedAmount = parseFloat(amount);
       if (!(parsedAmount > 0)) {
         setTransactionResult({ type: 'send', success: false, message: 'Enter a valid amount' });
-        return;
+        return 'failed';
       }
 
       // Check sender's balance first
@@ -2068,7 +2157,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           success: false,
           message: `Insufficient balance. You have ${currentWallet.balance} ${currentWallet.currency}`
         });
-        return;
+        return 'failed';
       }
 
       // No separate confirm dialog — the phone number, amount, and detected
@@ -2076,17 +2165,22 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       // (mirrors topup: fill the form, then authorize). The PIN prompt below
       // is the actual authorization gate, same as every other real-money
       // send path in this component.
-      const pin = await askPin({ title: 'Confirm transfer', message: `Send ${parsedAmount} ${selectedCurrency} to ${trimmedPhone} (${network})?` });
-      if (pin === null) return;
+      const quote = quoteTransfer({ amount: parsedAmount, rate: rateFor(feeRates, FEE_KEYS.SEND_MOBILE) });
+      const feeNote = quote.fee > 0
+        ? ` Fee ${describeRate(quote.rate)} (${formatMoney(selectedCurrency, quote.fee)}) is taken out: they receive ${formatMoney(selectedCurrency, quote.net)}.`
+        : ' No fee.';
+      const pin = await askPin({ title: 'Confirm transfer', message: `Send ${formatMoney(selectedCurrency, parsedAmount)} to ${trimmedPhone} (${network})?${feeNote}` });
+      if (pin === null) return 'cancelled';
       const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
       if (!pinCheck?.success) {
         setTransactionResult({ type: 'send', success: false, message: pinCheck?.error || 'Incorrect transaction PIN. Transfer cancelled.' });
-        return;
+        return 'failed';
       }
 
       // flutterwave-momo-send debits the wallet atomically and submits the
       // transfer to Flutterwave itself — no client-side debit/refund logic
       // needed here, the Edge Function + webhook own that end-to-end.
+      dispatched = true;
       const result = await sendFiatToMobileMoney({
         amount: parsedAmount,
         currency: selectedCurrency,
@@ -2095,27 +2189,35 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         note: description || `Send to ${trimmedPhone}`,
       });
 
+      // The transfer is submitted; a failure to refresh the balance must not turn it into an error.
       if (currentUserId) {
-        await loadWalletBalances(currentUserId);
+        try { await loadWalletBalances(currentUserId); } catch { /* shown on the next refresh */ }
       }
 
+      // The fee actually charged comes back from the server (it reads the same rates table).
+      const chargedFee = Number(result.fee) || 0;
       setTransactionResult({
         type: 'send',
         success: true,
-        message: `✅ Submitted: ${parsedAmount} ${selectedCurrency} to ${trimmedPhone} via ${network}. Confirming with Flutterwave now — you'll be refunded automatically if it fails.`,
+        message: `✅ Submitted: ${formatMoney(selectedCurrency, parsedAmount)} to ${trimmedPhone} via ${network}${chargedFee > 0 ? ` (fee ${formatMoney(selectedCurrency, chargedFee)}, they receive ${formatMoney(selectedCurrency, Number(result.net_amount ?? parsedAmount - chargedFee))})` : ' (no fee)'}. Confirming with Flutterwave now — you'll be refunded automatically if it fails.`,
         amount: parsedAmount,
         recipient: trimmedPhone,
         transactionId: result.reference
       });
 
       console.log('💸 Mobile money transfer submitted:', result.reference);
+      return 'success';
     } catch (error) {
       console.error('❌ Mobile money transfer failed:', error);
+      // Only a missing answer is ambiguous: when the server answered, its refusal is final (it refunded anything it had debited).
+      const maybeSent = dispatched && !error?.answered;
       setTransactionResult({
         type: 'send',
         success: false,
-        message: error.message || 'An error occurred during the mobile money transfer.',
+        message: `${error.message || 'An error occurred during the mobile money transfer.'}${maybeSent ? SEND_MAY_HAVE_GONE_THROUGH : ''}`,
       });
+      if (dispatched && currentUserId) loadWalletBalances(currentUserId);
+      return maybeSent ? 'uncertain' : 'failed';
     }
   };
 
@@ -2125,46 +2227,52 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
   // account name beforehand, so the PIN prompt spells out bank, number and
   // name for the sender to double-check.
   const handleSendViaBank = async (accountNumber, amount, description) => {
+    let dispatched = false; // see handleSendViaMOMO
     try {
       const acct = String(accountNumber || '').replace(/\s/g, '');
       const bank = bankList.find((b) => b.code === sendBankCode);
       if (!/^\d{5,20}$/.test(acct)) {
         setTransactionResult({ type: 'send', success: false, message: 'Enter a valid bank account number' });
-        return;
+        return 'failed';
       }
       if (!bank) {
         setTransactionResult({ type: 'send', success: false, message: 'Choose the bank' });
-        return;
+        return 'failed';
       }
       if (sendBeneficiary.trim().length < 2) {
         setTransactionResult({ type: 'send', success: false, message: "Enter the account holder's name" });
-        return;
+        return 'failed';
       }
       if (selectedCurrency !== 'UGX') {
         setTransactionResult({ type: 'send', success: false, message: 'Bank sends currently only support UGX.' });
-        return;
+        return 'failed';
       }
       const parsedAmount = parseFloat(amount);
       if (!(parsedAmount > 0)) {
         setTransactionResult({ type: 'send', success: false, message: 'Enter a valid amount' });
-        return;
+        return 'failed';
       }
       if (parsedAmount > parseFloat(currentWallet.balance)) {
         setTransactionResult({ type: 'send', success: false, message: `Insufficient balance. You have ${currentWallet.balance} ${currentWallet.currency}` });
-        return;
+        return 'failed';
       }
 
+      const quote = quoteTransfer({ amount: parsedAmount, rate: rateFor(feeRates, FEE_KEYS.SEND_BANK) });
+      const feeNote = quote.fee > 0
+        ? ` Fee ${describeRate(quote.rate)} (${formatMoney(selectedCurrency, quote.fee)}) is taken out: they receive ${formatMoney(selectedCurrency, quote.net)}.`
+        : ' No fee.';
       const pin = await askPin({
         title: 'Confirm bank transfer',
-        message: `Send ${parsedAmount} ${selectedCurrency} to ${sendBeneficiary.trim()}, ${bank.name}, account ${acct}? Bank account names cannot be checked in advance.`,
+        message: `Send ${formatMoney(selectedCurrency, parsedAmount)} to ${sendBeneficiary.trim()}, ${bank.name}, account ${acct}?${feeNote} Bank account names cannot be checked in advance.`,
       });
-      if (pin === null) return;
+      if (pin === null) return 'cancelled';
       const pinCheck = await walletAccountService.verifyUserPIN(currentUserId, pin);
       if (!pinCheck?.success) {
         setTransactionResult({ type: 'send', success: false, message: pinCheck?.error || 'Incorrect transaction PIN. Transfer cancelled.' });
-        return;
+        return 'failed';
       }
 
+      dispatched = true;
       const result = await sendFiatToBank({
         amount: parsedAmount,
         currency: selectedCurrency,
@@ -2174,25 +2282,31 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         note: description || `Send to ${sendBeneficiary.trim()}`,
       });
 
+      // The transfer is submitted; a failure to refresh the balance must not turn it into an error.
       if (currentUserId) {
-        await loadWalletBalances(currentUserId);
+        try { await loadWalletBalances(currentUserId); } catch { /* shown on the next refresh */ }
       }
 
+      const chargedFee = Number(result.fee) || 0; // the fee actually charged comes back from the server
       setTransactionResult({
         type: 'send',
         success: true,
-        message: `✅ Submitted: ${parsedAmount} ${selectedCurrency} to ${sendBeneficiary.trim()} (${bank.name}). Confirming with the bank network now — you'll be refunded automatically if it fails.`,
+        message: `✅ Submitted: ${formatMoney(selectedCurrency, parsedAmount)} to ${sendBeneficiary.trim()} (${bank.name})${chargedFee > 0 ? `, fee ${formatMoney(selectedCurrency, chargedFee)}, they receive ${formatMoney(selectedCurrency, Number(result.net_amount ?? parsedAmount - chargedFee))}` : ', no fee'}. Confirming with the bank network now — you'll be refunded automatically if it fails.`,
         amount: parsedAmount,
         recipient: sendBeneficiary.trim(),
         transactionId: result.reference
       });
+      return 'success';
     } catch (error) {
       console.error('❌ Bank transfer failed:', error);
+      const maybeSent = dispatched && !error?.answered; // see handleSendViaMOMO
       setTransactionResult({
         type: 'send',
         success: false,
-        message: error.message || 'An error occurred during the bank transfer.',
+        message: `${error.message || 'An error occurred during the bank transfer.'}${maybeSent ? SEND_MAY_HAVE_GONE_THROUGH : ''}`,
       });
+      if (dispatched && currentUserId) loadWalletBalances(currentUserId);
+      return maybeSent ? 'uncertain' : 'failed';
     }
   };
 
@@ -6076,6 +6190,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
             ownPhone={userAccount?.phone_number || ''}
             fiatUgx={realWalletBalances.UGX}
             businesses={senderBusinessProfiles}
+            feeRates={feeRates}
             askPin={askPin}
             onChanged={(info) => {
               if (currentUserId) loadWalletBalances(currentUserId);
@@ -6309,19 +6424,10 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         const T = 'var(--color-text)';
         const T2 = 'var(--color-textSecondary)';
         const closeSheet = () => {
+          clearSendCloseTimer();
           setActiveModal(null);
-          if (isSend) {
-            setSendForm({ recipient: '', amount: '', description: '' });
-            setSendMethod('ican');
-            setRecipientAccountKind('ican');
-            setSendFrom('personal');
-            setCoinSwitchNotice(false);
-            setSendNetwork(null);
-            setSendBankCode('');
-            setSendBeneficiary('');
-          } else {
-            setReceiveForm({ amount: '', description: '' });
-          }
+          if (isSend) resetSendForm();
+          else setReceiveForm({ amount: '', description: '' });
         };
         const labelCls = 'block text-[11px] uppercase tracking-[0.16em] font-semibold mb-2';
         const field = {
@@ -6412,6 +6518,17 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         const result = transactionResult && transactionResult.type === (isSend ? 'send' : 'receive')
           ? transactionResult
           : null;
+        // What the transfer costs, said before any PIN. IcanEra account sends and IcanEra coin sends are free.
+        // A mobile-money or bank send pays the rate a developer sets in public.ican_fee_rates, TAKEN OUT of the
+        // amount (the recipient receives less, your wallet is debited what you typed). See utils/feeRates.js.
+        const transferRateKey = isMobile ? FEE_KEYS.SEND_MOBILE : isBankSend ? FEE_KEYS.SEND_BANK : null;
+        const transferRate = transferRateKey ? rateFor(feeRates, transferRateKey) : 0;
+        const transferQuote = transferRateKey ? quoteTransfer({ amount: amountNum, rate: transferRate }) : null;
+        // Paying yourself is refused on every route: say so before the PIN, not after.
+        const previewIsSelf = recipientPreview?.status === 'found'
+          && recipientPreview.userId === currentUserId
+          && recipientPreview.accountType === 'personal'
+          && !fromBiz;
 
         return createPortal(
           <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:p-4">
@@ -6603,11 +6720,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                         {recipientPreview && !isMobile && !isBankSend && (
                           <p
                             className="mt-1.5 text-xs font-medium"
-                            style={{ color: recipientPreview.status === 'found' ? '#2f9e72' : recipientPreview.status === 'notfound' ? '#b91c1c' : T2 }}
+                            style={{ color: previewIsSelf ? '#8a6a1f' : recipientPreview.status === 'found' ? '#2f9e72' : recipientPreview.status === 'notfound' ? '#b91c1c' : T2 }}
                           >
                             {recipientPreview.status === 'checking' && 'Checking…'}
                             {recipientPreview.status === 'notfound' && 'No IcanEra account found for this.'}
-                            {recipientPreview.status === 'found' && `● ${recipientPreview.name || 'Account found'} · ${recipientPreview.accountType === 'business' ? 'Business' : 'Personal'} account`}
+                            {recipientPreview.status === 'found' && !previewIsSelf && `● ${recipientPreview.name || 'Account found'} · ${recipientPreview.accountType === 'business' ? 'Business' : 'Personal'} account`}
+                            {previewIsSelf && "That's your own account — you can't send to yourself."}
                           </p>
                         )}
                         {detectedNetwork && (
@@ -6682,7 +6800,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                       <input
                         type="number"
                         inputMode="decimal"
-                        step={coinsTyped ? '0.0001' : undefined}
+                        step={coinsTyped ? '0.0001' : moneyDecimals(moneyCurrency) === 2 ? '0.01' : '1'}
                         placeholder={coinsTyped ? '0.0000' : '0.00'}
                         value={amountStr}
                         onChange={(e) => setAmount(e.target.value)}
@@ -6723,7 +6841,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                       <p className="mt-1.5 text-xs" style={{ color: T2 }}>
                         {isCoin
                           ? `${coinsTyped ? 'Amount in IcanEra coins' : `Amount in ${moneyCurrency}, converted to IcanEra at the live price`} — no fee on the send, the recipient receives the full amount. Available: ${formatIcanValue(coinAvailable)}`
-                          : `Amount in ${moneyCurrency} (${userCountry}).`}
+                          : `Amount in ${moneyCurrency} (${userCountry}).${sendMethod === 'ican' && !fromBiz ? ' No fee.' : ''}`}
+                      </p>
+                    )}
+                    {isSend && transferQuote && (
+                      <p className="mt-1.5 text-xs font-medium leading-relaxed" style={{ color: '#8a6a1f' }}>
+                        {transferRate > 0
+                          ? `Fee ${describeRate(transferRate)}${amountNum > 0 ? `: ${formatMoney(selectedCurrency, transferQuote.fee)} — they receive ${formatMoney(selectedCurrency, transferQuote.net)}` : ', taken out of the amount'}. You are charged ${amountNum > 0 ? formatMoney(selectedCurrency, amountNum) : 'the amount you type'}.`
+                          : 'No fee on this transfer.'}
                       </p>
                     )}
                     {quote.lines.map((line, i) => (
@@ -6756,6 +6881,8 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
 
                   {result && (
                     <div
+                      ref={isSend ? sendResultRef : undefined}
+                      role={result.success ? 'status' : 'alert'}
                       className="p-3.5 rounded-xl"
                       style={{
                         background: result.success ? 'rgba(47,158,114,0.12)' : 'rgba(220,38,38,0.10)',
@@ -6788,7 +6915,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                     className="flex-1 py-3 rounded-xl font-medium"
                     style={{ border: '1px solid rgba(196,160,82,0.55)', color: T, background: 'transparent' }}
                   >
-                    Cancel
+                    {result?.success ? 'Done' : 'Cancel'}
                   </button>
                   <button
                     type="submit"
@@ -7455,9 +7582,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         }}
         onApprove={handleTransactionApproval}
         onCancel={() => {
+          const cancelledSend = pendingTransaction?.type === 'send';
           setShowApprovalModal(false);
           setPendingTransaction(null);
           setApprovalError(null);
+          // Backing out of the PIN sheet returns to the Send sheet with everything still typed in.
+          if (cancelledSend) setActiveModal('send');
         }}
         isLoading={isApproving}
         error={

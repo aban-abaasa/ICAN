@@ -12,6 +12,8 @@
  * from a phone.
  */
 
+import { feeFor, isValidFeeRate } from './feeRates.js';
+
 export const BUSINESS_WALLET_ADDRESS_RE = /^3\d{15}$/;
 
 /**
@@ -115,21 +117,32 @@ export function planCoinTransfer({ from, to }) {
 
 // ─── Withdraw ───────────────────────────────────────────────────────────────
 
-/** sell_ican_coins() takes a flat 3% off every coin → cash payout. */
-export const COIN_PAYOUT_FEE_RATE = 0.03;
+/**
+ * The fee on selling IcanEra coin for money (cash-out, payouts, conversions): 3% unless a developer has changed
+ * coin_cash_out in public.ican_fee_rates. A live binding: services/feeRatesService.js updates it once the table has been read,
+ * and every importer - including the `feeRate = COIN_PAYOUT_FEE_RATE` defaults below, which are read at call time - follows.
+ * Until then it is the 3% the database functions used before the table existed.
+ */
+export let COIN_PAYOUT_FEE_RATE = 0.03;
+
+/** Follow the coin_cash_out rate. Anything that is not a usable rate (0 up to, not including, 1) is ignored. */
+export function setCoinPayoutFeeRate(rate) {
+  if (isValidFeeRate(rate)) COIN_PAYOUT_FEE_RATE = Number(rate);
+}
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 const floor8 = (n) => Math.floor(n * 1e8 + 1e-6) / 1e8;
 
 /**
  * What a withdrawal of `amountUgx` costs and pays, per balance it can come from.
- * - 'fiat': the wallet balance → mobile money / bank, no wallet fee.
- * - 'coin': IcanEra coin sold at `rate` UGX per coin, minus the flat payout fee —
- *   mirrors sell_ican_coins() (gross = coins × rate, fee = gross × 3%, both
+ * - 'fiat': the wallet balance → mobile money / bank. `fiatFeeRate` is the fee, TAKEN OUT of the
+ *   amount (you withdraw 10,000 at 3%: 300 fee, 9,700 lands) - what flutterwave-momo-send charges.
+ * - 'coin': IcanEra coin sold at `rate` UGX per coin, minus the payout fee —
+ *   mirrors sell_ican_coins() (gross = coins × rate, fee = gross × the coin_cash_out rate, both
  *   rounded to 2 dp) so the preview matches what the server pays.
  * @returns {{icanDebit: number, gross: number, fee: number, net: number}}
  */
-export function quoteWithdrawal({ amountUgx, source, rate, feeRate = COIN_PAYOUT_FEE_RATE }) {
+export function quoteWithdrawal({ amountUgx, source, rate, feeRate = COIN_PAYOUT_FEE_RATE, fiatFeeRate = 0 }) {
   const amount = Number(amountUgx);
   if (!(amount > 0)) return { icanDebit: 0, gross: 0, fee: 0, net: 0 };
   if (source === 'coin') {
@@ -138,22 +151,26 @@ export function quoteWithdrawal({ amountUgx, source, rate, feeRate = COIN_PAYOUT
     const fee = round2(gross * feeRate);
     return { icanDebit, gross, fee, net: round2(gross - fee) };
   }
-  return { icanDebit: 0, gross: round2(amount), fee: 0, net: round2(amount) };
+  const gross = round2(amount);
+  const fee = feeFor(gross, fiatFeeRate);
+  return { icanDebit: 0, gross, fee, net: round2(gross - fee) };
 }
 
 /**
- * Pick the balance a cash-out should come from. The wallet balance wins when it
- * covers the amount (no fee); otherwise the coin balance does; otherwise there's
- * a shortfall. A cash-out never silently splits across two balances.
+ * Pick the balance a cash-out should come from: the one that pays it with the lower fee rate
+ * (the wallet balance on a tie). If only one balance covers the amount, that one. Otherwise
+ * there's a shortfall. A cash-out never silently splits across two balances.
+ * `feeRate` is the coin cash-out rate, `fiatFeeRate` the wallet-money one.
  * @returns {{source: 'fiat'|'coin'|null, reason?: string, shortfall?: number, maxUgx: number}}
  */
-export function planWithdrawalSource({ amountUgx, fiatUgx = 0, coinIcan = 0, rate, feeRate = COIN_PAYOUT_FEE_RATE }) {
+export function planWithdrawalSource({ amountUgx, fiatUgx = 0, coinIcan = 0, rate, feeRate = COIN_PAYOUT_FEE_RATE, fiatFeeRate = 0 }) {
   const fiat = Math.max(0, Number(fiatUgx) || 0);
   const coinUgx = Math.max(0, (Number(coinIcan) || 0) * rate);
   const maxUgx = Math.max(fiat, coinUgx);
   const amount = Number(amountUgx);
 
   if (!(amount > 0)) return { source: null, reason: 'Enter an amount', maxUgx };
+  if (fiat >= amount && coinUgx >= amount) return { source: feeRate < fiatFeeRate ? 'coin' : 'fiat', maxUgx };
   if (fiat >= amount) return { source: 'fiat', maxUgx };
   if (coinUgx >= amount) return { source: 'coin', maxUgx };
   return {
