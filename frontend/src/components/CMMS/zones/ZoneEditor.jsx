@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Check, Loader, LocateFixed, MapPin, Plus } from 'lucide-react';
+import { Check, Loader, Plus } from 'lucide-react';
 import { cmmsZoneAccessService } from '../../../services/cmmsZoneAccessService';
 import { VEHICLE_TYPES, ZONE_KINDS, ugx } from './zoneLabels';
+import ZoneLocation from './ZoneLocation.jsx';
 
 // Create or change a restricted zone: who may enter free (the approved list), what everybody else pays, and the rules.
 const blankZone = {
@@ -22,7 +23,7 @@ const fromZone = (zone) => ({
   radius_m: zone.radius_m ?? 200,
 });
 
-export default function ZoneEditor({ businessProfileId, zone, platformFeeRate = 0.03, canEdit, onSaved, onCancel }) {
+export default function ZoneEditor({ businessProfileId, companyProfile, zone, platformFeeRate = 0.03, canEdit, onSaved, onCancel }) {
   const [form, setForm] = useState(() => (zone ? fromZone(zone) : blankZone));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -33,17 +34,6 @@ export default function ZoneEditor({ businessProfileId, zone, platformFeeRate = 
     return { ...f, fees };
   });
 
-  const [locating, setLocating] = useState(false);
-  const useMyLocation = () => {
-    if (!navigator.geolocation) { setError('This browser cannot find your location. Type the latitude and longitude instead.'); return; }
-    setLocating(true); setError('');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => { set({ latitude: +pos.coords.latitude.toFixed(6), longitude: +pos.coords.longitude.toFixed(6) }); setLocating(false); },
-      () => { setLocating(false); setError('Could not get your location. Allow location access, or type the latitude and longitude.'); },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
-  };
-  const onMap = form.latitude !== '' && form.longitude !== '';
   const pct = `${+(platformFeeRate * 100).toFixed(2)}%`;
   const example = Object.values(form.fees).find((v) => v > 0);
 
@@ -61,51 +51,22 @@ export default function ZoneEditor({ businessProfileId, zone, platformFeeRate = 
   const paid = form.entry_mode === 'paid_entry';
 
   return (
-    <form onSubmit={submit} className="grid gap-3 md:grid-cols-2">
+    <form onSubmit={submit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {error && <p className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm cmms-tone-bad md:col-span-2">{error}</p>}
 
-      <label className="text-sm text-slate-300 md:col-span-2">Name of the area
+      <label className="min-w-0 text-sm text-slate-300">Name of the area
         <input required value={form.name} maxLength={120} onChange={(e) => set({ name: e.target.value })} placeholder="Kololo Heights Estate" className={input} />
       </label>
-      <label className="text-sm text-slate-300">Type of area
+      <label className="min-w-0 text-sm text-slate-300">Type of area
         <select value={form.kind} onChange={(e) => set({ kind: e.target.value })} className={input}>
           {ZONE_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
         </select>
       </label>
-      <label className="text-sm text-slate-300">Where it is
-        <input value={form.location} onChange={(e) => set({ location: e.target.value })} placeholder="Plot 12, Kololo" className={input} />
-      </label>
-
-      <div className="space-y-2 rounded-xl border p-3 md:col-span-2" style={{ borderColor: 'var(--color-border)' }}>
-        <p className="flex items-center gap-1.5 text-sm font-medium cmms-classic-heading"><MapPin size={14} aria-hidden="true" /> Where it is on the map</p>
-        <p className="text-xs cmms-classic-muted">
-          Stand at the gate and press the button. Customers who book a trip to or from this area are then told about the entry fee
-          before they book, and when a rider arrives with a customer the fee is charged to the customer, not the rider.
-        </p>
-        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_8rem]">
-          <label className="text-sm text-slate-300">Latitude
-            <input type="number" step="any" value={form.latitude} onChange={(e) => set({ latitude: e.target.value })} placeholder="0.3300" className={input} />
-          </label>
-          <label className="text-sm text-slate-300">Longitude
-            <input type="number" step="any" value={form.longitude} onChange={(e) => set({ longitude: e.target.value })} placeholder="32.5900" className={input} />
-          </label>
-          <label className="text-sm text-slate-300">Radius (m)
-            <input type="number" min="20" max="5000" value={form.radius_m} onChange={(e) => set({ radius_m: e.target.value })} className={input} />
-          </label>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={useMyLocation} disabled={locating} className="cmms-classic-btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs">
-            {locating ? <Loader size={13} className="animate-spin" /> : <LocateFixed size={13} />} Use my location
-          </button>
-          {onMap
-            ? <span className="text-xs cmms-tone-ok">On the map: trips within {form.radius_m || 200} m of this point are covered.</span>
-            : <span className="text-xs cmms-tone-warn">Not on the map: customers will not be warned about the fee, so riders would pay it alone.</span>}
-        </div>
-      </div>
+      <ZoneLocation businessProfileId={businessProfileId} companyProfile={companyProfile} form={form} set={set} inputClass={input} />
 
       <fieldset className="md:col-span-2">
         <legend className="text-sm text-slate-300">Vehicles that are not on the approved list</legend>
-        <div className="mt-1 grid gap-2 sm:grid-cols-2">
+        <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {[
             { id: 'paid_entry', title: 'Must pay to enter', text: 'Approved vehicles are free. Everyone else pays the fee for their vehicle type, then gets in.' },
             { id: 'members_only', title: 'Refused', text: 'Only approved vehicles get in. No fee can buy entry.' },
@@ -123,16 +84,16 @@ export default function ZoneEditor({ businessProfileId, zone, platformFeeRate = 
         <div className="space-y-2 rounded-xl border p-3 md:col-span-2" style={{ borderColor: 'var(--color-border)' }}>
           <p className="text-sm font-medium cmms-classic-heading">Entry fee by vehicle type</p>
           <p className="text-xs cmms-classic-muted">Tick the vehicle types that may buy entry. 0 lets that type in free. A type left unticked is refused.</p>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {VEHICLE_TYPES.map((v) => {
               const on = form.fees[v.id] !== undefined;
               return (
                 <div key={v.id} className="flex items-center gap-2">
                   <input id={`fee-${v.id}`} type="checkbox" checked={on} onChange={(e) => setFee(v.id, e.target.checked ? 0 : null)} />
-                  <label htmlFor={`fee-${v.id}`} className="w-36 text-sm text-slate-300">{v.label}</label>
+                  <label htmlFor={`fee-${v.id}`} className="min-w-0 flex-1 text-sm text-slate-300">{v.label}</label>
                   <input type="number" min="0" step="100" disabled={!on} value={on ? form.fees[v.id] : ''} placeholder="UGX"
                     onChange={(e) => setFee(v.id, e.target.value === '' ? 0 : Number(e.target.value))}
-                    className="w-28 rounded-lg border border-slate-400 border-opacity-50 bg-white bg-opacity-10 px-2 py-1.5 text-white disabled:opacity-40" aria-label={`${v.label} fee in UGX`} />
+                    className="w-28 shrink-0 rounded-lg border border-slate-400 border-opacity-50 bg-white bg-opacity-10 px-2 py-1.5 text-white disabled:opacity-40" aria-label={`${v.label} fee in UGX`} />
                 </div>
               );
             })}

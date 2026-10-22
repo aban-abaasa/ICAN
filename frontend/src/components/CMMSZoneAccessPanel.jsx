@@ -5,6 +5,7 @@ import CmmsFold from './CmmsFold.jsx';
 import GateDesk from './CMMS/zones/GateDesk.jsx';
 import ApprovedList from './CMMS/zones/ApprovedList.jsx';
 import ZoneEditor from './CMMS/zones/ZoneEditor.jsx';
+import ZoneEditorPage from './CMMS/zones/ZoneEditorPage.jsx';
 import OnSite from './CMMS/zones/OnSite.jsx';
 import { cmmsZoneAccessService } from '../services/cmmsZoneAccessService';
 import { ZONE_KINDS, vehicleLabel, ugx } from './CMMS/zones/zoneLabels';
@@ -51,6 +52,7 @@ export default function CMMSZoneAccessPanel({ companyProfile }) {
   ];
 
   return (
+    <>
     <CmmsPageShell
       title="Restricted zones"
       subtitle={zone ? `${zone.name} · ${zone.entry_mode === 'paid_entry' ? 'others pay to enter' : 'approved vehicles only'}` : 'Control which vehicles may enter your area'}
@@ -90,20 +92,6 @@ export default function CMMSZoneAccessPanel({ companyProfile }) {
         </div>
       )}
 
-      {editing && (
-        <CmmsFold title={editing === 'new' ? 'New restricted zone' : `Edit ${editing.name}`} icon={<Pencil className="h-4 w-4" aria-hidden="true" />} accent="gold" defaultOpen>
-          <ZoneEditor
-            key={editing === 'new' ? 'new' : editing.id}
-            businessProfileId={businessProfileId}
-            zone={editing === 'new' ? null : editing}
-            platformFeeRate={platformRate}
-            canEdit={caps.edit}
-            onCancel={() => setEditing(null)}
-            onSaved={async (savedId) => { setEditing(null); await load(false); setZoneId(savedId); }}
-          />
-        </CmmsFold>
-      )}
-
       {zone && !editing && (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs cmms-classic-muted">
@@ -129,7 +117,7 @@ export default function CMMSZoneAccessPanel({ companyProfile }) {
           {zone.entry_mode === 'paid_entry' && zone.latitude == null && caps.edit && (
             <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs cmms-tone-warn">
               This zone is not on the map yet. Customers who book a trip here are not told about the entry fee, so riders would pay it alone.{' '}
-              <button type="button" onClick={() => setEditing(zone)} className="underline decoration-dotted">Add its location</button>
+              <button type="button" onClick={() => setEditing(zone)} className="underline decoration-dotted">Place it from my business profile</button>
             </p>
           )}
 
@@ -153,5 +141,25 @@ export default function CMMSZoneAccessPanel({ companyProfile }) {
         </>
       )}
     </CmmsPageShell>
+
+    {editing && (
+      <ZoneEditorPage
+        title={editing === 'new' ? 'New restricted zone' : `Edit ${editing.name}`}
+        subtitle="Transport · Restricted zones"
+        onClose={() => setEditing(null)}
+      >
+        <ZoneEditor
+          key={editing === 'new' ? 'new' : editing.id}
+          businessProfileId={businessProfileId}
+          companyProfile={companyProfile}
+          zone={editing === 'new' ? null : editing}
+          platformFeeRate={platformRate}
+          canEdit={caps.edit}
+          onCancel={() => setEditing(null)}
+          onSaved={async (savedId) => { setEditing(null); await load(false); setZoneId(savedId); }}
+        />
+      </ZoneEditorPage>
+    )}
+    </>
   );
 }
