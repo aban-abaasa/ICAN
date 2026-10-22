@@ -5,7 +5,7 @@ import {
   Lock, Database, Hash, CreditCard, ToggleLeft, ToggleRight,
   CheckCircle, Copy, Activity, Layers, Clock, AlertTriangle,
   Network, Wallet, ArrowUp, ArrowDown, Eye, EyeOff, ShieldCheck,
-  MessageCircle, Globe, Trash2, Send, Mail, Phone, Video, ChevronLeft,
+  MessageCircle, Globe, Trash2, Send, Mail, Phone, Video, ChevronLeft, Percent,
 } from 'lucide-react';
 import { getSupabaseClient } from '../lib/supabase/client';
 import CallDock from './calls/CallDock';
@@ -16,6 +16,7 @@ import ICANEraApiDevTab from './ICANEraApiDevTab';
 import ICANInsuranceDevTab from './ICANInsuranceDevTab';
 import ICANSectorDevTab from './ICANSectorDevTab';
 import ICANStableDevTab from './ICANStableDevTab';
+import ICANFeesDevTab from './ICANFeesDevTab';
 import ICANChainDevTab from './ICANChainDevTab';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { Linkify } from '../utils/linkify';
@@ -135,6 +136,7 @@ const TABS = [
   { id: 'referrals',  label: 'Referrals',    Icon: Gift,        color: '#84cc16' },
   { id: 'franchise',  label: 'Franchise',    Icon: Network,     color: '#f59e0b' },
   { id: 'stable',     label: 'ICEC-S',         Icon: ShieldCheck, color: '#34d399' },
+  { id: 'fees',       label: 'Sale fees',      Icon: Percent,     color: '#f472b6' },
   { id: 'sectors',    label: 'Sector Markets', Icon: TrendingUp, color: '#fbbf24' },
   { id: 'onchain',    label: 'On-chain',       Icon: TrendingUp, color: '#38bdf8' },
   { id: 'api',        label: 'API',          Icon: Zap,         color: '#38bdf8' },
@@ -625,8 +627,8 @@ const SupportTeamTab = () => {
   const [newEmails,   setNewEmails]   = useState('');
   const [newAllowedTabs, setNewAllowedTabs] = useState(['messages', 'board']);
   // never let a link grant the tab that manages links/PIN itself, nor the franchise tab (partner approvals and payouts),
-  // nor the API tab (it approves outside developers and can switch the whole API off)
-  const shareableTabs = TABS.filter(t => t.id !== 'support' && t.id !== 'franchise' && t.id !== 'api' && t.id !== 'sectors' && t.id !== 'stable' && t.id !== 'onchain');
+  // nor the API tab (it approves outside developers and can switch the whole API off), nor the sale-fees tab (it changes what ICANera takes)
+  const shareableTabs = TABS.filter(t => t.id !== 'support' && t.id !== 'franchise' && t.id !== 'api' && t.id !== 'sectors' && t.id !== 'stable' && t.id !== 'fees' && t.id !== 'onchain');
   const [creating,   setCreating]   = useState(false);
   const [createError, setCreateError] = useState('');
   const [justCreated, setJustCreated] = useState(null); // { token, label }
@@ -2747,6 +2749,9 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
 
         {/* ══ ICEC-S, the stable form inside IcanEra (switch, live value, vault, settings; the panel's dev token) ══ */}
         {tab==='stable' && <ICANStableDevTab devToken={DEV_TOKEN}/>}
+
+        {/* ══ SALE FEES (what ICANera takes from a dropship sale and a store sale; the panel's dev token AND the operator account) ══ */}
+        {tab==='fees' && <ICANFeesDevTab devToken={DEV_TOKEN}/>}
 
         {/* ══ SECTOR MARKETS (kill switch, vault, sectors, settings; the panel's dev token) ══ */}
         {tab==='sectors' && <ICANSectorDevTab devToken={DEV_TOKEN}/>}

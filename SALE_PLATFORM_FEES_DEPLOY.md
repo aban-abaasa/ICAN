@@ -27,12 +27,24 @@ added an **8% surcharge on top of the customer's total**. That is gone for shop 
 | Store receives | 6 | **5.94** |
 | ICANera | 0.48 (from the customer) | **0.06** (from the store) |
 
-## Change a rate (one line, no redeploy)
+## Change a rate
+
+**From the developer panel** (no SQL, no redeploy): open the Dev Console, tab **Sale fees**, type the new percentage (up to four
+decimals, `0` switches it off) and Save. It asks you to confirm, and asks twice above 10% so a typo like 20 for 2 does not go through
+on one click. The change applies from the next sale and is written to a record (`ican_fee_rate_changes`: which fee, old → new, who,
+when), which the tab shows. Needs `SALE_FEES_DEV_PANEL_PASTE_INTO_SUPABASE.sql` (run after the fees SQL) and a website deploy.
+
+Only the two sale fees can be changed there. The wallet fees (sending money out, cashing out) stay a SQL-editor change.
+It works only from the **allowlisted developer account** (`ican_dev_operators`): the dev token alone is not enough, because a
+support-console link hands its visitor that token. The tab is never offered to a support link either.
+
+**Or in SQL**, as before:
 
 ```sql
 UPDATE public.ican_fee_rates SET rate = 0.025 WHERE key = 'dropship_sale';   -- 2.5%
 UPDATE public.ican_fee_rates SET rate = 0     WHERE key = 'store_sale';      -- free
 ```
+(A change made in SQL does not appear in the panel's record.)
 
 Takes effect on the next sale. A rate is a fraction from 0 up to (not including) 1; the table refuses anything else. A deleted
 row falls back to the default (2% / 1%), never to "free".
@@ -65,7 +77,8 @@ promises "the store receives the full sale amount"). If those should carry the 1
    `ROUTE_PLATFORM_FEES_TO_IWOS_BUSINESS.sql`, `ADD_DROPSHIP_SMART_TRANSPORT.sql`, `DCE_CUSTOMER_SELFCHECKOUT.sql`.
 2. Run **`SALE_PLATFORM_FEES_PASTE_INTO_SUPABASE.sql`** (same file as `supabase/migrations/20261107100000_sale_platform_fees.sql`)
    in the SQL editor. Safe to run twice; it never overwrites a rate you have changed.
-3. Deploy the website (only for the reseller's Sales tab, which now shows "after the 2% ICANera fee"). No Edge Function changes.
+3. Deploy the website (the reseller's Sales tab shows "after the 2% ICANera fee", and the Dev Console gets its **Sale fees** tab).
+   To change the rates from the panel also run `SALE_FEES_DEV_PANEL_PASTE_INTO_SUPABASE.sql` (see above). No Edge Function changes.
 
 It **patches `dropship_checkout` and `customer_self_checkout` in place** from whatever is deployed (the way
 `FIX_SELF_CHECKOUT_POINTS_AND_ADMIN_HISTORY.sql` already does), so it keeps whatever later changes those functions have. Every piece
@@ -98,7 +111,8 @@ returns with it), removes the two rates and the helper, and keeps the `platform_
 
 ## Tests
 
-`supabase/tests/sale_fees/run.sh` — a throwaway Postgres (`psql`, nothing touches Supabase). It loads the **real** `dropship_checkout`
+`supabase/tests/sale_fees_panel/run.sh` covers the panel's two functions (a change reaches both real checkouts, a wrong caller is refused);
+`frontend/tests/saleFees.test.js` covers the percentage handling. `supabase/tests/sale_fees/run.sh` — a throwaway Postgres (`psql`, nothing touches Supabase). It loads the **real** `dropship_checkout`
 and `customer_self_checkout` text out of the backend files (and the older shape deployed live, saved as `fixtures/live_customer_self_checkout.sql`) and runs sales through them before and after the migration: the customer's
 total is unchanged, every coin lands somewhere, the cap, the subsidy, 0%, a changed rate, no recipient, an unknown function shape
 (refused, nothing changed), running twice, rollback and rollback → migrate again. Only the wallet / shop / rider tables are stand-ins.
