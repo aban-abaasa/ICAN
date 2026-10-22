@@ -231,8 +231,8 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut, business = null }) => {
       {!bizId && <button onClick={togglePinPay} className="w-full px-3 py-2 text-xs bg-white/10 rounded text-white text-left">
         PIN approval at scan: <b>{card.pin_pay_enabled ? 'ON' : 'OFF'}</b>
         <span className="block text-gray-400">{card.pin_pay_enabled
-          ? 'Whoever scans your QR can pay out right there if your transaction PIN is entered. No phone needed. Tap to turn off.'
-          : 'Scans only send you a request to confirm in this wallet. Tap to turn on PIN approval at scan.'}</span>
+          ? 'Whoever scans your QR can pay out right there if your transaction PIN is entered. No phone needed. This is also how you pay at a SupermartKera till: show this card, the cashier scans it and you type your PIN on their screen. Tap to turn off.'
+          : 'Scans only send you a request to confirm in this wallet, and this card cannot pay at a SupermartKera till. Tap to turn on PIN approval at scan.'}</span>
       </button>}
 
       {msg && (
