@@ -355,7 +355,14 @@ const DropshipResellerDashboard = ({ businessProfileId }) => {
                     <p className="text-sm" style={{ color: 'var(--color-text)' }}>{order.customer_receipt_number}</p>
                     <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{new Date(order.created_at).toLocaleString()} · delivery {order.transport_status}</p>
                   </div>
-                  <p className="text-emerald-400 font-semibold">+{formatUGX(order.reseller_margin_amount)}</p>
+                  <div className="text-right">
+                    <p className="text-emerald-400 font-semibold">+{formatUGX(order.reseller_margin_amount)}</p>
+                    {Number(order.platform_fee_amount) > 0 && (
+                      <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>
+                        after the {Number((Number(order.platform_fee_rate) * 100).toFixed(2))}% ICANera fee ({formatUGX(order.platform_fee_amount)})
+                      </p>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
