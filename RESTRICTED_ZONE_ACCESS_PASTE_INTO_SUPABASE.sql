@@ -20,6 +20,22 @@
 --     4. at the way OUT the gate scans the same card. The vehicle must have been checked in, and must have CLEARED
 --        everything (entry fee paid, overstay paid) - "Cleared to leave". Anything unpaid holds the vehicle.
 --
+-- WHEN A CUSTOMER IS ON THE RIDE, THE CUSTOMER PAYS (the rider is never left to face it alone)
+--   A zone can be placed on the map (latitude, longitude, radius). When a customer books a trip that starts or ends inside a
+--   zone that sells entry, the booking screen warns them first ("entry fee UGX 2,000 at X, added to your ride; you pay it,
+--   not your rider; free if your rider is approved there") and the warning is recorded against the ride the moment it is
+--   booked (mbg_ack_ride_zone_charges). When that rider then arrives at the gate on that live ride:
+--     rider approved ............ free, nobody is charged
+--     wallet ride ............... the entry fee is charged straight to the CUSTOMER's wallet: the rider pays nothing
+--     cash ride / short wallet .. the customer pays the gate in cash (zones that take cash); if the zone takes no cash, the
+--                                 rider fronts it and is told to recover it from the customer
+--     customer was NOT warned (or the fee is now higher than they were shown) ... the rider pays at the gate so nothing is held
+--                                 up, and the platform then passes the WHOLE fee on to the customer at once: taken from their
+--                                 wallet and paid back to the rider (cash ride or short wallet: the rider collects it, and
+--                                 both screens say so). The customer is notified either way.
+--     no live ride to this zone ... the rider is alone, so the rider pays, as before
+--   One entry per ride per zone: a second entry on the same ride is free. Overstay is always the rider's.
+--
 -- WHAT ICANERA TAKES
 --   3% of every fee a business sets (ican_fee_rates.zone_access_fee, default 0.03). The rider always pays exactly the fee the
 --   zone published - nothing is added on top. The business receives 97%. A developer changes the rate the same way as the
@@ -41,14 +57,16 @@
 --   credited in the same transaction - if any step fails nothing moves.
 --
 -- WHAT THIS MIGRATION ADDS
---   tables      mbg_access_zones, mbg_access_zone_fees, mbg_access_zone_members, mbg_access_visits (no direct API access:
---               everything goes through the functions below)
+--   tables      mbg_access_zones, mbg_access_zone_fees, mbg_access_zone_members, mbg_access_visits, mbg_ride_zone_notices
+--               (no direct API access: everything goes through the functions below)
 --   rate        ican_fee_rates 'zone_access_fee' = 3%  (ican_fee_rate() learns its fallback)
 --   staff API   mbg_zone_upsert, mbg_zone_list, mbg_zone_search_riders, mbg_zone_member_add, mbg_zone_member_set_status,
 --               mbg_zone_members, mbg_zone_gate_scan (one scan: in, out or auto), mbg_zone_gate_check_in,
 --               mbg_zone_gate_check_out, mbg_zone_gate_collect_cash,
 --               mbg_zone_gate_cancel, mbg_zone_visits, mbg_zone_visit_status, mbg_zone_report, mbg_zone_settle_owed
 --   rider API   mbg_my_gate_passes, mbg_rider_pay_gate_fee, mbg_rider_decline_gate_fee
+--   customer    mbg_zone_charges_for_trip (the warning before booking), mbg_ack_ride_zone_charges (recorded when booked),
+--               mbg_ride_zone_charges (what a ride was charged, for the customer's and the rider's ride screen)
 --
 -- Run after: ADD_RIDER_ID_CARDS.sql + ADD_RIDER_CARD_EXPIRY_AND_KIN.sql (mybodaguy), FEE_RATES + SALE_PLATFORM_FEES,
 -- ROUTE_PLATFORM_FEES_TO_IWOS_BUSINESS.sql, the CMMS schema, SHARED_CORPORATE_TRANSPORT_AND_MONTHLY_RIDERS.sql.
@@ -73,6 +91,12 @@ BEGIN
   IF to_regprocedure('public.mbg_debit_journey_fare(uuid,numeric,text,text)') IS NULL
      AND to_regprocedure('public.mbg_debit_journey_fare(uuid,numeric,text,text,text)') IS NULL THEN
     RAISE EXCEPTION 'Run ICAN/backend/CREATE_JOURNEY_ESCROW_FUNCTION.sql first - it creates mbg_debit_journey_fare, the rider wallet debit.';
+  END IF;
+  IF to_regprocedure('public.mbg_credit_ride_earning(uuid,numeric,text,text,text)') IS NULL THEN
+    RAISE EXCEPTION 'Run ICAN/backend/ADD_RIDE_EARNING_CREDIT_FUNCTION.sql first - it creates mbg_credit_ride_earning, used to pay a rider back what a customer owes.';
+  END IF;
+  IF to_regclass('public.mbg_rides') IS NULL OR to_regclass('public.mbg_customers') IS NULL THEN
+    RAISE EXCEPTION 'Run the BodaGoEra setup (COMPLETE_MYBODAGUY_SETUP.sql) first - a zone fee on a ride is tied to the ride and its customer.';
   END IF;
   IF to_regclass('public.cmms_users') IS NULL OR to_regclass('public.cmms_company_profiles') IS NULL THEN
     RAISE EXCEPTION 'Run the CMMS schema first - zones are managed from CMMS.';
@@ -130,10 +154,20 @@ CREATE TABLE IF NOT EXISTS public.mbg_access_zones (
   overstay_fee_ugx_per_hour NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (overstay_fee_ugx_per_hour >= 0),
   payment_window_minutes    INTEGER NOT NULL DEFAULT 10 CHECK (payment_window_minutes BETWEEN 1 AND 120),
   timezone                  TEXT NOT NULL DEFAULT 'Africa/Kampala',
+  -- Where the zone is on the map. Without it, customers cannot be warned about the fee when they book a trip to or from here.
+  latitude                  NUMERIC(10, 7) CHECK (latitude IS NULL OR latitude BETWEEN -90 AND 90),
+  longitude                 NUMERIC(10, 7) CHECK (longitude IS NULL OR longitude BETWEEN -180 AND 180),
+  radius_m                  INTEGER CHECK (radius_m IS NULL OR radius_m BETWEEN 20 AND 5000),
   created_by                UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK ((latitude IS NULL) = (longitude IS NULL) AND (latitude IS NULL) = (radius_m IS NULL))
 );
+-- (for a database that already ran the first version of this file)
+ALTER TABLE public.mbg_access_zones
+  ADD COLUMN IF NOT EXISTS latitude  NUMERIC(10, 7) CHECK (latitude IS NULL OR latitude BETWEEN -90 AND 90),
+  ADD COLUMN IF NOT EXISTS longitude NUMERIC(10, 7) CHECK (longitude IS NULL OR longitude BETWEEN -180 AND 180),
+  ADD COLUMN IF NOT EXISTS radius_m  INTEGER CHECK (radius_m IS NULL OR radius_m BETWEEN 20 AND 5000);
 CREATE UNIQUE INDEX IF NOT EXISTS mbg_access_zones_name_uq
   ON public.mbg_access_zones (business_profile_id, lower(btrim(name)));
 
@@ -180,7 +214,14 @@ CREATE TABLE IF NOT EXISTS public.mbg_access_visits (
   rider_name                TEXT,
   plate_number              TEXT,
   vehicle_type              TEXT,
-  access_basis              TEXT CHECK (access_basis IN ('member', 'paid', 'day_pass', 'open')),
+  access_basis              TEXT CHECK (access_basis IN ('member', 'paid', 'day_pass', 'open', 'ride_pass')),
+  -- Who the fee is charged to. 'customer' = the passenger of a live ride that goes to or from this zone (ride_id).
+  payer                     TEXT NOT NULL DEFAULT 'rider' CHECK (payer IN ('rider', 'customer')),
+  ride_id                   UUID REFERENCES public.mbg_rides(id) ON DELETE SET NULL,
+  payer_user_id             UUID,
+  -- A fee the rider fronted for a customer's ride, passed on to the customer's wallet (and paid back to the rider).
+  passed_on_ugx             NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (passed_on_ugx >= 0),
+  passed_on_at              TIMESTAMPTZ,
   status                    TEXT NOT NULL CHECK (status IN ('awaiting_payment', 'inside', 'exited', 'denied', 'cancelled')),
   reason                    TEXT,
   entry_fee_ugx             NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (entry_fee_ugx >= 0),
@@ -206,6 +247,16 @@ CREATE TABLE IF NOT EXISTS public.mbg_access_visits (
   created_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (fee_paid_ugx <= fee_due_ugx OR status IN ('denied', 'cancelled'))
 );
+-- (for a database that already ran the first version of this file)
+ALTER TABLE public.mbg_access_visits
+  ADD COLUMN IF NOT EXISTS payer         TEXT NOT NULL DEFAULT 'rider' CHECK (payer IN ('rider', 'customer')),
+  ADD COLUMN IF NOT EXISTS ride_id       UUID REFERENCES public.mbg_rides(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS payer_user_id UUID,
+  ADD COLUMN IF NOT EXISTS passed_on_ugx NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (passed_on_ugx >= 0),
+  ADD COLUMN IF NOT EXISTS passed_on_at  TIMESTAMPTZ;
+ALTER TABLE public.mbg_access_visits DROP CONSTRAINT IF EXISTS mbg_access_visits_access_basis_check;
+ALTER TABLE public.mbg_access_visits ADD CONSTRAINT mbg_access_visits_access_basis_check
+  CHECK (access_basis IN ('member', 'paid', 'day_pass', 'open', 'ride_pass'));
 -- A vehicle is in a zone once: a second scan finds the first visit instead of making another.
 CREATE UNIQUE INDEX IF NOT EXISTS mbg_access_visits_one_open
   ON public.mbg_access_visits (zone_id, rider_id)
@@ -213,6 +264,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS mbg_access_visits_one_open
 CREATE INDEX IF NOT EXISTS mbg_access_visits_zone_idx     ON public.mbg_access_visits (zone_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS mbg_access_visits_business_idx ON public.mbg_access_visits (business_profile_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS mbg_access_visits_rider_idx    ON public.mbg_access_visits (rider_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS mbg_access_visits_ride_idx     ON public.mbg_access_visits (ride_id) WHERE ride_id IS NOT NULL;
+
+-- The warning a customer was shown when booking: this ride goes to or from this zone, and may carry an entry fee of up to
+-- max_fee_ugx. The gate charges the customer only for what is recorded here, and never more than was shown.
+CREATE TABLE IF NOT EXISTS public.mbg_ride_zone_notices (
+  ride_id         UUID NOT NULL REFERENCES public.mbg_rides(id) ON DELETE CASCADE,
+  zone_id         UUID NOT NULL REFERENCES public.mbg_access_zones(id) ON DELETE CASCADE,
+  max_fee_ugx     NUMERIC(12, 2) NOT NULL CHECK (max_fee_ugx >= 0),
+  acknowledged_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (ride_id, zone_id)
+);
 
 -- No policies and no grants: the API roles reach these tables only through the functions below (which run as their owner and
 -- check who is asking), so a signed-in user can never read another business's list or a rider's trips directly.
@@ -220,7 +282,9 @@ ALTER TABLE public.mbg_access_zones        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mbg_access_zone_fees    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mbg_access_zone_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mbg_access_visits       ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.mbg_access_zones, public.mbg_access_zone_fees, public.mbg_access_zone_members, public.mbg_access_visits
+ALTER TABLE public.mbg_ride_zone_notices   ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.mbg_access_zones, public.mbg_access_zone_fees, public.mbg_access_zone_members, public.mbg_access_visits,
+              public.mbg_ride_zone_notices
   FROM PUBLIC, anon, authenticated;
 
 
@@ -415,6 +479,10 @@ LANGUAGE sql STABLE SET search_path = public AS $$
     'fee_paid_ugx',     p_visit.fee_paid_ugx,
     'balance_ugx',      GREATEST(p_visit.fee_due_ugx - p_visit.fee_paid_ugx, 0),
     'payment_method',   p_visit.payment_method,
+    'payer',            p_visit.payer,
+    'ride_id',          p_visit.ride_id,
+    'passed_on_ugx',    p_visit.passed_on_ugx,
+    'passed_on_at',     p_visit.passed_on_at,
     'platform_fee_ugx', p_visit.platform_fee_ugx,
     'platform_fee_owed_ugx', GREATEST(p_visit.platform_fee_ugx - p_visit.platform_fee_settled_ugx, 0),
     'warnings',         p_visit.warnings,
@@ -438,6 +506,191 @@ BEGIN
     USING p_user_id, 'bodagoera_gate', p_title, p_message, p_visit_id, 'mbg-gate-' || p_visit_id::TEXT;
 EXCEPTION WHEN OTHERS THEN
   RAISE NOTICE 'Gate push failed - %', SQLERRM;
+END;
+$$;
+
+-- Metres between two points on the map.
+CREATE OR REPLACE FUNCTION public.mbg_zone_dist_m(p_lat1 NUMERIC, p_lng1 NUMERIC, p_lat2 NUMERIC, p_lng2 NUMERIC) RETURNS NUMERIC
+LANGUAGE sql IMMUTABLE SET search_path = public AS $$
+  SELECT 2 * 6371000 * asin(LEAST(1, sqrt(
+           power(sin(radians((p_lat2 - p_lat1) / 2)), 2)
+           + cos(radians(p_lat1)) * cos(radians(p_lat2)) * power(sin(radians((p_lng2 - p_lng1) / 2)), 2))))
+$$;
+
+-- Is the point inside the zone's circle? False when the zone has no position or the point is unknown.
+CREATE OR REPLACE FUNCTION public.mbg_zone_touches(p_zone public.mbg_access_zones, p_lat NUMERIC, p_lng NUMERIC) RETURNS BOOLEAN
+LANGUAGE sql IMMUTABLE SET search_path = public AS $$
+  SELECT COALESCE(p_zone.latitude IS NOT NULL AND p_lat IS NOT NULL AND p_lng IS NOT NULL
+                  AND public.mbg_zone_dist_m(p_zone.latitude, p_zone.longitude, p_lat, p_lng) <= p_zone.radius_m, false)
+$$;
+
+-- The entry fees a trip would meet: every zone that sells entry, is on the map, and is where the trip starts or ends.
+-- p_vehicle_type NULL = any vehicle (a range). p_rider_id: when the rider is already known, a rider who is approved at
+-- the zone is waived (nothing to pay). A zone that lets this vehicle type in free is left out: there is nothing to warn about.
+CREATE OR REPLACE FUNCTION public.mbg_zone_trip_charges(
+  p_pickup_lat NUMERIC, p_pickup_lng NUMERIC, p_dropoff_lat NUMERIC, p_dropoff_lng NUMERIC, p_vehicle_type TEXT, p_rider_id UUID
+) RETURNS JSONB
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT COALESCE(jsonb_agg(x.c ORDER BY x.c ->> 'zone_name'), '[]'::JSONB) FROM (
+    SELECT jsonb_build_object(
+      'zone_id', z.id, 'zone_name', z.name, 'organisation', bp.business_name, 'location', z.location,
+      'applies_at', CASE WHEN t.at_pickup AND t.at_dropoff THEN 'both' WHEN t.at_pickup THEN 'pickup' ELSE 'dropoff' END,
+      'vehicle_type', p_vehicle_type,
+      'fee_ugx', (SELECT f.fee_ugx FROM public.mbg_access_zone_fees f WHERE f.zone_id = z.id AND f.vehicle_type = p_vehicle_type),
+      'fee_min_ugx', (SELECT min(f.fee_ugx) FROM public.mbg_access_zone_fees f WHERE f.zone_id = z.id),
+      'fee_max_ugx', (SELECT max(f.fee_ugx) FROM public.mbg_access_zone_fees f WHERE f.zone_id = z.id),
+      'waived', p_rider_id IS NOT NULL AND EXISTS (
+                  SELECT 1 FROM public.mbg_access_zone_members m
+                   WHERE m.zone_id = z.id AND m.rider_id = p_rider_id AND public.mbg_zone_member_state(m, z.timezone) = 'ok'),
+      'accepts_cash', z.accept_cash) AS c
+      FROM public.mbg_access_zones z
+      JOIN public.business_profiles bp ON bp.id = z.business_profile_id
+      CROSS JOIN LATERAL (SELECT public.mbg_zone_touches(z, p_pickup_lat, p_pickup_lng) AS at_pickup,
+                                 public.mbg_zone_touches(z, p_dropoff_lat, p_dropoff_lng) AS at_dropoff) t
+     WHERE z.status = 'active' AND z.entry_mode = 'paid_entry' AND z.latitude IS NOT NULL AND (t.at_pickup OR t.at_dropoff)
+       AND COALESCE(CASE WHEN p_vehicle_type IS NOT NULL
+                         THEN (SELECT f.fee_ugx FROM public.mbg_access_zone_fees f WHERE f.zone_id = z.id AND f.vehicle_type = p_vehicle_type)
+                         ELSE (SELECT max(f.fee_ugx) FROM public.mbg_access_zone_fees f WHERE f.zone_id = z.id) END, 0) > 0
+  ) x
+$$;
+
+-- Pay what is due on a visit from p_payer's ICAN wallet: debits the payer, pays the business its share and IcanEra's cut,
+-- all in one transaction (a failed debit changes nothing). The payer is the rider for their own fees and the customer for a
+-- fee carried by a ride. Used by the rider's "approve and pay" and by the gate when it charges the customer's wallet.
+CREATE OR REPLACE FUNCTION public.mbg_zone_collect_wallet(p_visit_id UUID, p_payer UUID) RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v          public.mbg_access_visits;
+  z          public.mbg_access_zones;
+  v_amount   NUMERIC;
+  v_ican     NUMERIC;
+  v_rate     NUMERIC;
+  v_platform_ugx  NUMERIC;
+  v_platform_ican NUMERIC;
+  v_business_ican NUMERIC;
+  v_owner    UUID;
+  v_ref      TEXT;
+  v_debit    JSONB;
+  v_credit   JSONB;
+  v_platform_ok BOOLEAN := false;
+  v_entry    BOOLEAN;
+BEGIN
+  SELECT * INTO v FROM public.mbg_access_visits WHERE id = p_visit_id FOR UPDATE;
+  IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Request not found'); END IF;
+  IF v.status = 'inside' THEN v := public.mbg_zone_refresh_balance(v.id); END IF;
+  IF v.status NOT IN ('awaiting_payment', 'inside') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Nothing to pay on this visit');
+  END IF;
+  SELECT * INTO z FROM public.mbg_access_zones WHERE id = v.zone_id;
+  IF v.status = 'awaiting_payment' AND z.status <> 'active' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'This zone is not accepting vehicles right now');
+  END IF;
+
+  v_amount := v.fee_due_ugx - v.fee_paid_ugx;
+  IF v_amount <= 0 THEN
+    RETURN jsonb_build_object('success', true, 'already_paid', true, 'visit', public.mbg_zone_visit_json(v));
+  END IF;
+  v_entry := v.status = 'awaiting_payment';
+
+  v_rate := COALESCE(v.platform_fee_rate, public.ican_fee_rate('zone_access_fee'));
+  v_ican := ROUND(v_amount / public.mbg_zone_ugx_per_ican(), 8);
+  IF v_ican <= 0 THEN RETURN jsonb_build_object('success', false, 'error', 'The amount is too small to pay'); END IF;
+  v_platform_ugx  := ROUND(v_amount * v_rate, 2);
+  v_platform_ican := ROUND(v_ican * v_rate, 8);
+  v_business_ican := v_ican - v_platform_ican;
+
+  -- keyed on how much has been paid so far, so a double tap finds the first payment already counted and stops at "already paid"
+  v_ref := 'gate_fee:' || v.id::TEXT || ':' || round(v.fee_paid_ugx * 100)::TEXT;
+  v_debit := public.mbg_debit_journey_fare(p_payer, v_ican, 'mybodaguy', v_ref);
+  IF NOT COALESCE((v_debit ->> 'success')::BOOLEAN, false) THEN
+    RETURN jsonb_build_object('success', false, 'error', COALESCE(v_debit ->> 'error', 'Wallet payment failed'));
+  END IF;
+
+  SELECT bp.user_id INTO v_owner FROM public.business_profiles bp WHERE bp.id = v.business_profile_id;
+
+  -- The business gets the fee minus IcanEra's cut. If IcanEra's side cannot be credited (platform business not set up), the
+  -- business keeps that part for now and it stays "owed" on the visit, so no money disappears and the payer is not blocked.
+  v_credit := public.fn_credit_platform_fee_to_business(
+    v_platform_ican, 'mybodaguy', v_ref, 'zone_access_fee', v_owner, 'Restricted-zone fee: ' || z.name,
+    jsonb_build_object('visit_id', v.id, 'zone_id', z.id));
+  v_platform_ok := COALESCE((v_credit ->> 'success')::BOOLEAN, false);
+  IF NOT v_platform_ok THEN
+    v_business_ican := v_ican;
+  END IF;
+
+  INSERT INTO public.ican_business_wallets (business_profile_id, created_by)
+  SELECT bp.id, bp.user_id FROM public.business_profiles bp WHERE bp.id = v.business_profile_id
+  ON CONFLICT (business_profile_id) DO NOTHING;
+  UPDATE public.ican_business_wallets
+     SET ican_balance = ican_balance + v_business_ican, total_earned = total_earned + v_business_ican, updated_at = now()
+   WHERE business_profile_id = v.business_profile_id;
+  INSERT INTO public.ican_business_wallet_transactions
+    (business_profile_id, initiated_by, amount_ican, note, reference_id, status, executed_at, direction, source_app, operation_type, metadata)
+  VALUES
+    (v.business_profile_id, p_payer, v_business_ican,
+     CASE WHEN v_entry THEN 'Restricted-zone entry fee: ' ELSE 'Restricted-zone exit fee: ' END || z.name,
+     v_ref, 'completed', now(), 'in', 'mybodaguy', 'zone_access_fee',
+     jsonb_build_object('visit_id', v.id, 'zone_id', z.id, 'plate', v.plate_number, 'gross_ugx', v_amount, 'platform_fee_ugx', v_platform_ugx,
+                        'paid_by', CASE WHEN p_payer = v.rider_user_id THEN 'rider' ELSE 'customer' END, 'ride_id', v.ride_id));
+
+  UPDATE public.mbg_access_visits SET
+    fee_paid_ugx = fee_due_ugx, payment_method = 'wallet', payment_tx_id = NULLIF(v_debit ->> 'tx_id', '')::UUID,
+    platform_fee_rate = v_rate,
+    platform_fee_ugx = platform_fee_ugx + v_platform_ugx,
+    platform_fee_settled_ugx = platform_fee_settled_ugx + CASE WHEN v_platform_ok THEN v_platform_ugx ELSE 0 END,
+    balance_paid_at = CASE WHEN status = 'inside' THEN now() ELSE balance_paid_at END,
+    status = 'inside', entered_at = COALESCE(entered_at, now())
+  WHERE id = v.id
+  RETURNING * INTO v;
+
+  RETURN jsonb_build_object('success', true, 'visit', public.mbg_zone_visit_json(v), 'paid_ugx', v_amount, 'paid_ican', v_ican);
+END;
+$$;
+
+-- A fee the rider fronted for a customer's ride goes to the customer, in full: the customer's wallet is debited and the
+-- rider is paid back, so a rider carrying a customer is never out of pocket. A cash ride, or a wallet that cannot cover it,
+-- changes nothing here: the rider collects it from the customer (both screens say so). Safe to call twice. Never fails the
+-- payment that triggered it: if anything goes wrong the rider simply collects it.
+CREATE OR REPLACE FUNCTION public.mbg_zone_pass_on_to_customer(p_visit_id UUID) RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v      public.mbg_access_visits;
+  r      RECORD;
+  v_ican NUMERIC;
+  v_ref  TEXT;
+  v_zone TEXT;
+BEGIN
+  SELECT * INTO v FROM public.mbg_access_visits WHERE id = p_visit_id FOR UPDATE;
+  IF NOT FOUND OR v.payer <> 'rider' OR v.ride_id IS NULL OR v.passed_on_at IS NOT NULL
+     OR v.entry_fee_ugx <= 0 OR v.fee_paid_ugx < v.entry_fee_ugx THEN
+    RETURN jsonb_build_object('passed_on', false);
+  END IF;
+  SELECT ride.payment_method::TEXT AS pay_method, cu.user_id AS customer_user INTO r
+    FROM public.mbg_rides ride JOIN public.mbg_customers cu ON cu.id = ride.customer_id WHERE ride.id = v.ride_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('passed_on', false); END IF;
+  SELECT z.name INTO v_zone FROM public.mbg_access_zones z WHERE z.id = v.zone_id;
+
+  BEGIN   -- a block with a handler is a savepoint: a failure here must not undo the rider's payment
+    IF r.pay_method = 'wallet' THEN
+      v_ican := ROUND(v.entry_fee_ugx / public.mbg_zone_ugx_per_ican(), 8);
+      v_ref  := 'gate_fee_passon:' || v.id::TEXT;
+      IF COALESCE((public.mbg_debit_journey_fare(r.customer_user, v_ican, 'mybodaguy', v_ref) ->> 'success')::BOOLEAN, false) THEN
+        PERFORM public.mbg_credit_ride_earning(v.rider_user_id, v_ican, 'mybodaguy', v_ref,
+                                               'Entry fee at ' || v_zone || ' paid back by your customer');
+        UPDATE public.mbg_access_visits SET passed_on_ugx = entry_fee_ugx, passed_on_at = now(), payer_user_id = r.customer_user WHERE id = v.id;
+        PERFORM public.mbg_zone_notify_rider(r.customer_user, 'Entry fee added to your ride',
+          'UGX ' || to_char(v.entry_fee_ugx, 'FM999,999,999') || ' for entering ' || v_zone || ' was added to your ride and taken from your wallet. Your rider paid the gate and has been paid back.', v.id);
+        RETURN jsonb_build_object('passed_on', true, 'amount_ugx', v.entry_fee_ugx);
+      END IF;
+    END IF;
+    -- cash ride / short wallet: tell the customer what they owe their rider
+    PERFORM public.mbg_zone_notify_rider(r.customer_user, 'Entry fee on your ride',
+      'Your rider paid UGX ' || to_char(v.entry_fee_ugx, 'FM999,999,999') || ' to enter ' || v_zone || '. Please pay it back along with your fare.', v.id);
+    UPDATE public.mbg_access_visits SET payer_user_id = r.customer_user WHERE id = v.id;
+    RETURN jsonb_build_object('passed_on', false, 'recover_from_customer', true);
+  EXCEPTION WHEN OTHERS THEN
+    RETURN jsonb_build_object('passed_on', false, 'recover_from_customer', true);
+  END;
 END;
 $$;
 
@@ -507,12 +760,17 @@ REVOKE ALL ON FUNCTION public.mbg_zone_settle_platform_fee(UUID)                
 -- ─── 4. Staff: zones, fees, rules ────────────────────────────────────────────
 
 -- Create (p_zone_id NULL) or change a zone. p_fees is {"motorcycle": 2000, "car": 5000, ...}: the vehicle classes that may buy
--- entry and what each pays (0 = free). It replaces the old fee list. Needs 'edit'.
+-- entry and what each pays (0 = free). It replaces the old fee list. p_latitude / p_longitude / p_radius_m put the zone on the
+-- map (all three or none): that is what lets customers be warned about the fee when they book a trip to or from it. Needs 'edit'.
+-- (the first version of this function had no map position)
+DROP FUNCTION IF EXISTS public.mbg_zone_upsert(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN, INTEGER, NUMERIC, INTEGER, TEXT, JSONB);
+
 CREATE OR REPLACE FUNCTION public.mbg_zone_upsert(
   p_business_profile_id UUID, p_zone_id UUID, p_name TEXT, p_kind TEXT, p_location TEXT, p_status TEXT,
   p_entry_mode TEXT, p_fee_basis TEXT, p_accept_cash BOOLEAN, p_require_valid_permit BOOLEAN,
   p_max_stay_minutes INTEGER, p_overstay_fee_per_hour NUMERIC, p_payment_window_minutes INTEGER,
-  p_timezone TEXT, p_fees JSONB
+  p_timezone TEXT, p_fees JSONB,
+  p_latitude NUMERIC DEFAULT NULL, p_longitude NUMERIC DEFAULT NULL, p_radius_m INTEGER DEFAULT NULL
 ) RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -541,6 +799,15 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_timezone_names WHERE name = v_tz) THEN
     RETURN jsonb_build_object('success', false, 'error', 'Unknown time zone');
   END IF;
+  IF (p_latitude IS NULL) <> (p_longitude IS NULL) OR (p_latitude IS NULL) <> (p_radius_m IS NULL) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Give the latitude, the longitude and the radius, or none of them');
+  END IF;
+  IF p_latitude IS NOT NULL AND (p_latitude NOT BETWEEN -90 AND 90 OR p_longitude NOT BETWEEN -180 AND 180) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'That is not a place on the map');
+  END IF;
+  IF p_radius_m IS NOT NULL AND p_radius_m NOT BETWEEN 20 AND 5000 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'The radius must be between 20 and 5000 metres');
+  END IF;
   IF p_fees IS NOT NULL AND jsonb_typeof(p_fees) <> 'object' THEN
     RETURN jsonb_build_object('success', false, 'error', 'Fees must be a list of vehicle types and amounts');
   END IF;
@@ -562,12 +829,12 @@ BEGIN
     IF p_zone_id IS NULL THEN
       INSERT INTO public.mbg_access_zones
         (business_profile_id, name, kind, location, status, entry_mode, fee_basis, accept_cash, require_valid_permit,
-         max_stay_minutes, overstay_fee_ugx_per_hour, payment_window_minutes, timezone, created_by)
+         max_stay_minutes, overstay_fee_ugx_per_hour, payment_window_minutes, timezone, latitude, longitude, radius_m, created_by)
       VALUES
         (p_business_profile_id, btrim(p_name), COALESCE(p_kind, 'other'), NULLIF(btrim(p_location), ''),
          COALESCE(p_status, 'active'), COALESCE(p_entry_mode, 'members_only'), COALESCE(p_fee_basis, 'per_entry'),
          COALESCE(p_accept_cash, false), COALESCE(p_require_valid_permit, false), p_max_stay_minutes,
-         COALESCE(p_overstay_fee_per_hour, 0), COALESCE(p_payment_window_minutes, 10), v_tz, auth.uid())
+         COALESCE(p_overstay_fee_per_hour, 0), COALESCE(p_payment_window_minutes, 10), v_tz, p_latitude, p_longitude, p_radius_m, auth.uid())
       RETURNING id INTO v_id;
     ELSE
       UPDATE public.mbg_access_zones SET
@@ -577,7 +844,7 @@ BEGIN
         require_valid_permit = COALESCE(p_require_valid_permit, require_valid_permit),
         max_stay_minutes = p_max_stay_minutes, overstay_fee_ugx_per_hour = COALESCE(p_overstay_fee_per_hour, 0),
         payment_window_minutes = COALESCE(p_payment_window_minutes, payment_window_minutes),
-        timezone = v_tz, updated_at = now()
+        timezone = v_tz, latitude = p_latitude, longitude = p_longitude, radius_m = p_radius_m, updated_at = now()
       WHERE id = p_zone_id
       RETURNING id INTO v_id;
     END IF;
@@ -623,7 +890,7 @@ BEGIN
         'entry_mode', z.entry_mode, 'fee_basis', z.fee_basis, 'accept_cash', z.accept_cash,
         'require_valid_permit', z.require_valid_permit, 'max_stay_minutes', z.max_stay_minutes,
         'overstay_fee_ugx_per_hour', z.overstay_fee_ugx_per_hour, 'payment_window_minutes', z.payment_window_minutes,
-        'timezone', z.timezone,
+        'timezone', z.timezone, 'latitude', z.latitude, 'longitude', z.longitude, 'radius_m', z.radius_m,
         'fees', COALESCE((SELECT jsonb_object_agg(f.vehicle_type, f.fee_ugx) FROM public.mbg_access_zone_fees f WHERE f.zone_id = z.id), '{}'::JSONB),
         'members_count',  (SELECT count(*) FROM public.mbg_access_zone_members m WHERE m.zone_id = z.id AND m.status = 'active'),
         'inside_count',   (SELECT count(*) FROM public.mbg_access_visits v WHERE v.zone_id = z.id AND v.status = 'inside'),
@@ -871,6 +1138,8 @@ DECLARE
   v_rate    NUMERIC;
   v_gate    TEXT := NULLIF(btrim(COALESCE(p_gate, '')), '');
   v_rider   JSONB;
+  v_ride    RECORD;
+  v_pay     JSONB;
 BEGIN
   IF auth.uid() IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'Please sign in'); END IF;
   SELECT * INTO v_zone FROM public.mbg_access_zones WHERE id = p_zone_id;
@@ -990,7 +1259,129 @@ BEGIN
           'rider', v_rider, 'warnings', v_warn, 'message', 'Access granted - today''s pass is already paid.');
       END IF;
 
-      -- ask the rider for the fee
+      -- A live ride that goes to or from this zone, whose customer was warned of the fee when booking, carries it: the
+      -- rider is not alone, so the customer pays. (No such ride, or no warning: the rider is alone and pays.)
+      SELECT r.id AS ride_id, cu.user_id AS customer_user, r.payment_method::TEXT AS pay_method,
+             COALESCE(n.max_fee_ugx >= v_fee, false) AS warned INTO v_ride
+        FROM public.mbg_rides r
+        JOIN public.mbg_customers cu ON cu.id = r.customer_id
+        LEFT JOIN public.mbg_ride_zone_notices n ON n.ride_id = r.id AND n.zone_id = v_zone.id
+       WHERE r.rider_id = (v_card ->> 'rider_id')::UUID
+         AND r.status::TEXT IN ('accepted', 'in_progress')
+         AND (public.mbg_zone_touches(v_zone, r.pickup_lat, r.pickup_lng) OR public.mbg_zone_touches(v_zone, r.dropoff_lat, r.dropoff_lng))
+       ORDER BY COALESCE(n.max_fee_ugx >= v_fee, false) DESC, (r.status::TEXT = 'in_progress') DESC, r.requested_at DESC
+       LIMIT 1;
+
+      -- The customer was not warned (or the fee is higher than they were shown): the rider pays at the gate so nothing is
+      -- held up, and the fee is passed on to the customer in full as soon as it is paid (mbg_zone_pass_on_to_customer).
+      IF FOUND AND NOT v_ride.warned THEN
+        v_rate := public.ican_fee_rate('zone_access_fee');
+        BEGIN
+          INSERT INTO public.mbg_access_visits
+            (zone_id, business_profile_id, rider_id, rider_user_id, card_id, card_number, rider_name, plate_number, vehicle_type,
+             access_basis, payer, ride_id, payer_user_id, status, reason, entry_fee_ugx, fee_due_ugx, platform_fee_rate,
+             gate_in, checked_in_by, plate_seen, warnings, pay_by)
+          VALUES
+            (v_zone.id, v_zone.business_profile_id, (v_card ->> 'rider_id')::UUID, (v_card ->> 'rider_user_id')::UUID,
+             (v_card ->> 'card_id')::UUID, v_card ->> 'card_number', v_p ->> 'full_name', v_p ->> 'plate_number', v_type,
+             'paid', 'rider', v_ride.ride_id, v_ride.customer_user, 'awaiting_payment',
+             CASE WHEN v_mstate = 'not_on_list' THEN NULL ELSE public.mbg_zone_deny_message(v_mstate, v_type) END,
+             v_fee, v_fee, v_rate, v_gate, auth.uid(), NULLIF(btrim(p_plate_seen), ''), v_warn,
+             now() + make_interval(mins => v_zone.payment_window_minutes))
+          RETURNING * INTO v_visit;
+        EXCEPTION WHEN unique_violation THEN
+          SELECT * INTO v_visit FROM public.mbg_access_visits
+           WHERE zone_id = v_zone.id AND rider_id = (v_card ->> 'rider_id')::UUID AND status IN ('awaiting_payment', 'inside');
+          RETURN jsonb_build_object('success', true, 'verdict', CASE WHEN v_visit.status = 'inside' THEN 'already_inside' ELSE 'pay_required' END,
+            'visit', public.mbg_zone_visit_json(v_visit), 'rider', v_rider, 'can_collect_cash', v_zone.accept_cash, 'warnings', v_warn,
+            'message', 'Already being handled for this ride.');
+        END;
+        PERFORM public.mbg_zone_notify_rider(
+          (v_card ->> 'rider_user_id')::UUID, v_zone.name || ' entry fee',
+          'Approve UGX ' || to_char(v_fee, 'FM999,999,999') || ' to enter ' || v_zone.name || '. It is passed on to your customer straight after. Open BodaGoEra > Gate passes.', v_visit.id);
+        RETURN jsonb_build_object('success', true, 'verdict', 'pay_required', 'payer', 'rider', 'recover_from_customer', true,
+          'visit', public.mbg_zone_visit_json(v_visit), 'rider', v_rider, 'can_collect_cash', v_zone.accept_cash, 'warnings', v_warn,
+          'fee_ugx', v_fee, 'fee_ican', ROUND(v_fee / public.mbg_zone_ugx_per_ican(), 8),
+          'message', 'A customer is on this ride. The rider pays the gate now and UGX ' || to_char(v_fee, 'FM999,999,999') || ' is passed on to the customer straight after.');
+      END IF;
+
+      IF FOUND THEN
+        -- one entry per ride per zone: coming back in on the same ride costs nothing more
+        IF EXISTS (SELECT 1 FROM public.mbg_access_visits pv
+                    WHERE pv.zone_id = v_zone.id AND pv.ride_id = v_ride.ride_id
+                      AND pv.entry_fee_ugx > 0 AND pv.fee_paid_ugx >= pv.entry_fee_ugx) THEN
+          INSERT INTO public.mbg_access_visits
+            (zone_id, business_profile_id, rider_id, rider_user_id, card_id, card_number, rider_name, plate_number, vehicle_type,
+             access_basis, payer, ride_id, payer_user_id, status, gate_in, checked_in_by, plate_seen, warnings, entered_at)
+          VALUES
+            (v_zone.id, v_zone.business_profile_id, (v_card ->> 'rider_id')::UUID, (v_card ->> 'rider_user_id')::UUID,
+             (v_card ->> 'card_id')::UUID, v_card ->> 'card_number', v_p ->> 'full_name', v_p ->> 'plate_number', v_type,
+             'ride_pass', 'customer', v_ride.ride_id, v_ride.customer_user, 'inside', v_gate, auth.uid(), NULLIF(btrim(p_plate_seen), ''), v_warn, now())
+          ON CONFLICT DO NOTHING
+          RETURNING * INTO v_visit;
+          IF v_visit.id IS NULL THEN
+            SELECT * INTO v_visit FROM public.mbg_access_visits
+             WHERE zone_id = v_zone.id AND rider_id = (v_card ->> 'rider_id')::UUID AND status IN ('awaiting_payment', 'inside');
+          END IF;
+          RETURN jsonb_build_object('success', true, 'verdict', 'granted', 'basis', 'ride_pass', 'visit', public.mbg_zone_visit_json(v_visit),
+            'rider', v_rider, 'warnings', v_warn, 'message', 'Access granted - the entry fee for this ride was already paid.');
+        END IF;
+
+        v_rate := public.ican_fee_rate('zone_access_fee');
+        BEGIN
+          INSERT INTO public.mbg_access_visits
+            (zone_id, business_profile_id, rider_id, rider_user_id, card_id, card_number, rider_name, plate_number, vehicle_type,
+             access_basis, payer, ride_id, payer_user_id, status, reason, entry_fee_ugx, fee_due_ugx, platform_fee_rate,
+             gate_in, checked_in_by, plate_seen, warnings, pay_by)
+          VALUES
+            (v_zone.id, v_zone.business_profile_id, (v_card ->> 'rider_id')::UUID, (v_card ->> 'rider_user_id')::UUID,
+             (v_card ->> 'card_id')::UUID, v_card ->> 'card_number', v_p ->> 'full_name', v_p ->> 'plate_number', v_type,
+             'paid', 'customer', v_ride.ride_id, v_ride.customer_user, 'awaiting_payment',
+             CASE WHEN v_mstate = 'not_on_list' THEN NULL ELSE public.mbg_zone_deny_message(v_mstate, v_type) END,
+             v_fee, v_fee, v_rate, v_gate, auth.uid(), NULLIF(btrim(p_plate_seen), ''), v_warn,
+             now() + make_interval(mins => v_zone.payment_window_minutes))
+          RETURNING * INTO v_visit;
+        EXCEPTION WHEN unique_violation THEN
+          SELECT * INTO v_visit FROM public.mbg_access_visits
+           WHERE zone_id = v_zone.id AND rider_id = (v_card ->> 'rider_id')::UUID AND status IN ('awaiting_payment', 'inside');
+          RETURN jsonb_build_object('success', true, 'verdict', CASE WHEN v_visit.status = 'inside' THEN 'already_inside' ELSE 'pay_required' END,
+            'visit', public.mbg_zone_visit_json(v_visit), 'rider', v_rider, 'can_collect_cash', v_zone.accept_cash, 'warnings', v_warn,
+            'message', 'Already being handled for this ride.');
+        END;
+
+        -- a wallet ride: the fee goes straight onto the customer's wallet (they were warned and booked anyway)
+        IF v_ride.pay_method = 'wallet' THEN
+          v_pay := public.mbg_zone_collect_wallet(v_visit.id, v_ride.customer_user);
+          IF COALESCE((v_pay ->> 'success')::BOOLEAN, false) THEN
+            SELECT * INTO v_visit FROM public.mbg_access_visits WHERE id = v_visit.id;
+            PERFORM public.mbg_zone_notify_rider(v_ride.customer_user, 'Entry fee added to your ride',
+              'UGX ' || to_char(v_fee, 'FM999,999,999') || ' to enter ' || v_zone.name || ', as shown when you booked.', v_visit.id);
+            RETURN jsonb_build_object('success', true, 'verdict', 'granted', 'basis', 'paid', 'payer', 'customer', 'visit', public.mbg_zone_visit_json(v_visit),
+              'rider', v_rider, 'warnings', v_warn,
+              'message', 'Access granted - UGX ' || to_char(v_fee, 'FM999,999,999') || ' was charged to the customer''s wallet as part of their ride. The rider pays nothing.');
+          END IF;
+        END IF;
+
+        -- cash ride, or the customer's wallet could not cover it: the customer pays the gate in cash, if the zone takes cash
+        IF v_zone.accept_cash THEN
+          RETURN jsonb_build_object('success', true, 'verdict', 'pay_required', 'payer', 'customer', 'visit', public.mbg_zone_visit_json(v_visit),
+            'rider', v_rider, 'can_collect_cash', true, 'warnings', v_warn,
+            'fee_ugx', v_fee, 'fee_ican', ROUND(v_fee / public.mbg_zone_ugx_per_ican(), 8),
+            'message', 'A customer is on this ride, so the CUSTOMER pays, not the rider. Take UGX ' || to_char(v_fee, 'FM999,999,999') || ' in cash from the passenger.');
+        END IF;
+
+        -- nobody can take the customer's money here, so the rider fronts it (and is told to recover it from the customer)
+        UPDATE public.mbg_access_visits SET payer = 'rider', payer_user_id = NULL WHERE id = v_visit.id RETURNING * INTO v_visit;
+        PERFORM public.mbg_zone_notify_rider(
+          (v_card ->> 'rider_user_id')::UUID, v_zone.name || ' entry fee',
+          'Approve UGX ' || to_char(v_fee, 'FM999,999,999') || ' to enter ' || v_zone.name || ', then collect it from your customer. Open BodaGoEra > Gate passes.', v_visit.id);
+        RETURN jsonb_build_object('success', true, 'verdict', 'pay_required', 'payer', 'rider', 'recover_from_customer', true,
+          'visit', public.mbg_zone_visit_json(v_visit), 'rider', v_rider, 'can_collect_cash', false, 'warnings', v_warn,
+          'fee_ugx', v_fee, 'fee_ican', ROUND(v_fee / public.mbg_zone_ugx_per_ican(), 8),
+          'message', 'Entry fee UGX ' || to_char(v_fee, 'FM999,999,999') || ' - the customer''s wallet could not take it and this zone takes no cash, so the rider approves it in BodaGoEra and it is passed on to the customer straight after.');
+      END IF;
+
+      -- the rider is alone: ask the rider for the fee
       v_rate := public.ican_fee_rate('zone_access_fee');
       BEGIN
         INSERT INTO public.mbg_access_visits
@@ -1172,6 +1563,8 @@ BEGIN
          balance_paid_at = CASE WHEN v.status = 'inside' THEN now() ELSE balance_paid_at END
    WHERE id = v.id;
   v_settled := public.mbg_zone_settle_platform_fee(v.id);
+  -- cash the rider handed the gate for a customer's ride is passed on to the customer too
+  PERFORM public.mbg_zone_pass_on_to_customer(v.id);
   SELECT * INTO v FROM public.mbg_access_visits WHERE id = v.id;
   RETURN jsonb_build_object('success', true, 'visit', public.mbg_zone_visit_json(v), 'platform_fee_settled', v_settled);
 END;
@@ -1338,13 +1731,22 @@ BEGIN
       JOIN public.business_profiles bp ON bp.id = z.business_profile_id
       JOIN public.mbg_riders r ON r.id = m.rider_id
       WHERE m.rider_user_id = v_uid AND m.status <> 'revoked'), '[]'::JSONB),
+    -- what the rider has to pay: their own entry fees, and any balance owed to leave. (An entry fee carried by a customer's
+    -- ride is the customer's to pay, so it is not a request to the rider; it is listed under customer_pays.)
     'requests', COALESCE((
       SELECT jsonb_agg(public.mbg_zone_visit_json(v) || jsonb_build_object(
                'zone_name', z.name, 'fee_ican', ROUND((v.fee_due_ugx - v.fee_paid_ugx) / public.mbg_zone_ugx_per_ican(), 8),
-               'kind', CASE WHEN v.status = 'awaiting_payment' THEN 'entry' ELSE 'balance' END) ORDER BY v.requested_at DESC)
+               'kind', CASE WHEN v.status = 'awaiting_payment' THEN 'entry' ELSE 'balance' END,
+               -- the rider fronts it, but a customer's ride carries it: collect it from them
+               'recover_from_customer', v.status = 'awaiting_payment' AND v.payer = 'rider' AND v.ride_id IS NOT NULL AND v.passed_on_at IS NULL) ORDER BY v.requested_at DESC)
       FROM public.mbg_access_visits v JOIN public.mbg_access_zones z ON z.id = v.zone_id
       WHERE v.rider_user_id = v_uid AND v.fee_due_ugx > v.fee_paid_ugx AND v.status IN ('awaiting_payment', 'inside')
+        AND (v.status = 'inside' OR v.payer = 'rider')
         AND NOT (v.status = 'awaiting_payment' AND v.pay_by < now())), '[]'::JSONB),
+    'customer_pays', COALESCE((
+      SELECT jsonb_agg(public.mbg_zone_visit_json(v) || jsonb_build_object('zone_name', z.name) ORDER BY v.requested_at DESC)
+      FROM public.mbg_access_visits v JOIN public.mbg_access_zones z ON z.id = v.zone_id
+      WHERE v.rider_user_id = v_uid AND v.status = 'awaiting_payment' AND v.payer = 'customer' AND v.pay_by >= now()), '[]'::JSONB),
     'inside', COALESCE((
       SELECT jsonb_agg(public.mbg_zone_visit_json(v) || jsonb_build_object(
                'zone_name', z.name, 'max_stay_minutes', z.max_stay_minutes,
@@ -1362,22 +1764,12 @@ $$;
 
 -- The rider approves and pays what a gate asked for: the entry fee, or the balance they owe to leave.
 -- Debits the rider's ICAN wallet, pays the business its share and IcanEra's cut, all in one transaction.
+-- (An entry fee carried by a customer's ride is the customer's to pay, not the rider's.)
 CREATE OR REPLACE FUNCTION public.mbg_rider_pay_gate_fee(p_visit_id UUID) RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  v          public.mbg_access_visits;
-  z          public.mbg_access_zones;
-  v_amount   NUMERIC;
-  v_ican     NUMERIC;
-  v_rate     NUMERIC;
-  v_platform_ugx  NUMERIC;
-  v_platform_ican NUMERIC;
-  v_business_ican NUMERIC;
-  v_owner    UUID;
-  v_ref      TEXT;
-  v_debit    JSONB;
-  v_credit   JSONB;
-  v_platform_ok BOOLEAN := false;
+  v     public.mbg_access_visits;
+  v_pay JSONB;
 BEGIN
   IF auth.uid() IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'Please sign in'); END IF;
   PERFORM public.mbg_zone_expire_stale();
@@ -1388,71 +1780,15 @@ BEGIN
   IF v.status = 'cancelled' THEN
     RETURN jsonb_build_object('success', false, 'error', 'This request has expired or was withdrawn. Ask the gate to scan your card again.');
   END IF;
-  IF v.status = 'inside' THEN v := public.mbg_zone_refresh_balance(v.id); END IF;
-  IF v.status NOT IN ('awaiting_payment', 'inside') THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Nothing to pay on this visit');
+  IF v.status = 'awaiting_payment' AND v.payer = 'customer' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Your customer pays this entry fee, not you. The gate will take it from them.');
   END IF;
-  SELECT * INTO z FROM public.mbg_access_zones WHERE id = v.zone_id;
-  IF v.status = 'awaiting_payment' AND z.status <> 'active' THEN
-    RETURN jsonb_build_object('success', false, 'error', 'This zone is not accepting vehicles right now');
+  v_pay := public.mbg_zone_collect_wallet(v.id, auth.uid());
+  -- a fee the rider fronted for a customer's ride goes to the customer, in full
+  IF COALESCE((v_pay ->> 'success')::BOOLEAN, false) AND NOT COALESCE((v_pay ->> 'already_paid')::BOOLEAN, false) AND v.status = 'awaiting_payment' THEN
+    v_pay := v_pay || public.mbg_zone_pass_on_to_customer(v.id);
   END IF;
-
-  v_amount := v.fee_due_ugx - v.fee_paid_ugx;
-  IF v_amount <= 0 THEN
-    RETURN jsonb_build_object('success', true, 'already_paid', true, 'visit', public.mbg_zone_visit_json(v));
-  END IF;
-
-  v_rate := COALESCE(v.platform_fee_rate, public.ican_fee_rate('zone_access_fee'));
-  v_ican := ROUND(v_amount / public.mbg_zone_ugx_per_ican(), 8);
-  IF v_ican <= 0 THEN RETURN jsonb_build_object('success', false, 'error', 'The amount is too small to pay'); END IF;
-  v_platform_ugx  := ROUND(v_amount * v_rate, 2);
-  v_platform_ican := ROUND(v_ican * v_rate, 8);
-  v_business_ican := v_ican - v_platform_ican;
-
-  -- keyed on how much has been paid so far, so a double tap finds the first payment already counted and stops at "already paid"
-  v_ref := 'gate_fee:' || v.id::TEXT || ':' || round(v.fee_paid_ugx * 100)::TEXT;
-  v_debit := public.mbg_debit_journey_fare(auth.uid(), v_ican, 'mybodaguy', v_ref);
-  IF NOT COALESCE((v_debit ->> 'success')::BOOLEAN, false) THEN
-    RETURN jsonb_build_object('success', false, 'error', COALESCE(v_debit ->> 'error', 'Wallet payment failed'));
-  END IF;
-
-  SELECT bp.user_id INTO v_owner FROM public.business_profiles bp WHERE bp.id = v.business_profile_id;
-
-  -- The business gets the fee minus IcanEra's cut. If IcanEra's side cannot be credited (platform business not set up), the
-  -- business keeps that part for now and it stays "owed" on the visit, so no money disappears and the rider is not blocked.
-  v_credit := public.fn_credit_platform_fee_to_business(
-    v_platform_ican, 'mybodaguy', v_ref, 'zone_access_fee', v_owner, 'Restricted-zone fee: ' || z.name,
-    jsonb_build_object('visit_id', v.id, 'zone_id', z.id));
-  v_platform_ok := COALESCE((v_credit ->> 'success')::BOOLEAN, false);
-  IF NOT v_platform_ok THEN
-    v_business_ican := v_ican;
-  END IF;
-
-  INSERT INTO public.ican_business_wallets (business_profile_id, created_by)
-  SELECT bp.id, bp.user_id FROM public.business_profiles bp WHERE bp.id = v.business_profile_id
-  ON CONFLICT (business_profile_id) DO NOTHING;
-  UPDATE public.ican_business_wallets
-     SET ican_balance = ican_balance + v_business_ican, total_earned = total_earned + v_business_ican, updated_at = now()
-   WHERE business_profile_id = v.business_profile_id;
-  INSERT INTO public.ican_business_wallet_transactions
-    (business_profile_id, initiated_by, amount_ican, note, reference_id, status, executed_at, direction, source_app, operation_type, metadata)
-  VALUES
-    (v.business_profile_id, auth.uid(), v_business_ican,
-     CASE WHEN v.status = 'awaiting_payment' THEN 'Restricted-zone entry fee: ' ELSE 'Restricted-zone exit fee: ' END || z.name,
-     v_ref, 'completed', now(), 'in', 'mybodaguy', 'zone_access_fee',
-     jsonb_build_object('visit_id', v.id, 'zone_id', z.id, 'plate', v.plate_number, 'gross_ugx', v_amount, 'platform_fee_ugx', v_platform_ugx));
-
-  UPDATE public.mbg_access_visits SET
-    fee_paid_ugx = fee_due_ugx, payment_method = 'wallet', payment_tx_id = NULLIF(v_debit ->> 'tx_id', '')::UUID,
-    platform_fee_rate = v_rate,
-    platform_fee_ugx = platform_fee_ugx + v_platform_ugx,
-    platform_fee_settled_ugx = platform_fee_settled_ugx + CASE WHEN v_platform_ok THEN v_platform_ugx ELSE 0 END,
-    balance_paid_at = CASE WHEN status = 'inside' THEN now() ELSE balance_paid_at END,
-    status = 'inside', entered_at = COALESCE(entered_at, now())
-  WHERE id = v.id
-  RETURNING * INTO v;
-
-  RETURN jsonb_build_object('success', true, 'visit', public.mbg_zone_visit_json(v), 'paid_ugx', v_amount, 'paid_ican', v_ican);
+  RETURN v_pay;
 END;
 $$;
 
@@ -1476,10 +1812,125 @@ END;
 $$;
 
 
+
+-- ─── 8b. The customer: told before booking, charged with the ride ───────────
+
+-- The warning shown while booking: the entry fees a trip would meet, where it starts or ends inside a zone that sells entry.
+-- p_vehicle_type: the type the customer chose ('any' or NULL = every type, so a range). p_rider_id: a rider already chosen
+-- (an approved rider is waived). Returns {charges: [...], total_ugx, total_max_ugx}; empty charges = nothing to warn about.
+CREATE OR REPLACE FUNCTION public.mbg_zone_charges_for_trip(
+  p_pickup_lat NUMERIC, p_pickup_lng NUMERIC, p_dropoff_lat NUMERIC, p_dropoff_lng NUMERIC,
+  p_vehicle_type TEXT DEFAULT NULL, p_rider_id UUID DEFAULT NULL
+) RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_type    TEXT := NULLIF(lower(btrim(COALESCE(p_vehicle_type, ''))), '');
+  v_charges JSONB;
+BEGIN
+  IF auth.uid() IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'Please sign in'); END IF;
+  IF v_type = 'any' THEN v_type := NULL; END IF;
+  IF v_type IS NOT NULL AND v_type NOT IN ('motorcycle', 'bicycle', 'tuktuk', 'car', 'van', 'truck') THEN
+    RETURN jsonb_build_object('success', true, 'charges', '[]'::JSONB, 'total_ugx', 0, 'total_max_ugx', 0);
+  END IF;
+  v_charges := public.mbg_zone_trip_charges(p_pickup_lat, p_pickup_lng, p_dropoff_lat, p_dropoff_lng, v_type, p_rider_id);
+  RETURN jsonb_build_object(
+    'success', true, 'charges', v_charges,
+    -- what it adds up to for the chosen vehicle, and the most it could be if the vehicle is not known yet
+    'total_ugx', COALESCE((SELECT sum((c ->> 'fee_ugx')::NUMERIC) FROM jsonb_array_elements(v_charges) c WHERE NOT (c ->> 'waived')::BOOLEAN), 0),
+    'total_max_ugx', COALESCE((SELECT sum(COALESCE((c ->> 'fee_ugx')::NUMERIC, (c ->> 'fee_max_ugx')::NUMERIC))
+                                 FROM jsonb_array_elements(v_charges) c WHERE NOT (c ->> 'waived')::BOOLEAN), 0));
+END;
+$$;
+
+-- Called by the booking screen right after the ride is created: records that the customer was shown these fees, and what
+-- the most each could be. The gate charges the customer only for zones recorded here and never more than was shown.
+CREATE OR REPLACE FUNCTION public.mbg_ack_ride_zone_charges(p_ride_id UUID, p_vehicle_type TEXT DEFAULT NULL) RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  r         RECORD;
+  v_type    TEXT := NULLIF(lower(btrim(COALESCE(p_vehicle_type, ''))), '');
+  v_charges JSONB;
+  c         JSONB;
+BEGIN
+  IF auth.uid() IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'Please sign in'); END IF;
+  SELECT ride.id, ride.pickup_lat, ride.pickup_lng, ride.dropoff_lat, ride.dropoff_lng, ride.rider_id, cu.user_id AS customer_user,
+         rd.vehicle_type::TEXT AS rider_type
+    INTO r
+    FROM public.mbg_rides ride
+    JOIN public.mbg_customers cu ON cu.id = ride.customer_id
+    LEFT JOIN public.mbg_riders rd ON rd.id = ride.rider_id
+   WHERE ride.id = p_ride_id;
+  IF NOT FOUND OR r.customer_user IS DISTINCT FROM auth.uid() THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Ride not found');
+  END IF;
+  IF v_type = 'any' THEN v_type := NULL; END IF;
+  IF v_type IS NOT NULL AND v_type NOT IN ('motorcycle', 'bicycle', 'tuktuk', 'car', 'van', 'truck') THEN v_type := NULL; END IF;
+  -- the type the customer chose when booking; else the vehicle of the rider asked; else any (the most it could be)
+  v_charges := public.mbg_zone_trip_charges(r.pickup_lat, r.pickup_lng, r.dropoff_lat, r.dropoff_lng, COALESCE(v_type, r.rider_type), NULL);
+  FOR c IN SELECT * FROM jsonb_array_elements(v_charges) LOOP
+    INSERT INTO public.mbg_ride_zone_notices (ride_id, zone_id, max_fee_ugx)
+    VALUES (p_ride_id, (c ->> 'zone_id')::UUID,
+            COALESCE((c ->> 'fee_ugx')::NUMERIC, (c ->> 'fee_max_ugx')::NUMERIC))
+    ON CONFLICT (ride_id, zone_id) DO NOTHING;
+  END LOOP;
+  RETURN jsonb_build_object('success', true, 'charges', v_charges);
+END;
+$$;
+
+-- What a ride was charged for entering zones, for the ride screen of the customer and of the rider. The customer also sees
+-- the warnings that have not been charged (yet): "up to UGX X at Y". The rider sees whether a fee they fronted is to be
+-- collected from the customer.
+CREATE OR REPLACE FUNCTION public.mbg_ride_zone_charges(p_ride_id UUID) RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  r      RECORD;
+  v_role TEXT;
+BEGIN
+  IF auth.uid() IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'Please sign in'); END IF;
+  SELECT ride.id, cu.user_id AS customer_user, rd.user_id AS rider_user INTO r
+    FROM public.mbg_rides ride
+    JOIN public.mbg_customers cu ON cu.id = ride.customer_id
+    LEFT JOIN public.mbg_riders rd ON rd.id = ride.rider_id
+   WHERE ride.id = p_ride_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('success', false, 'error', 'Ride not found'); END IF;
+  v_role := CASE WHEN r.customer_user = auth.uid() THEN 'customer' WHEN r.rider_user = auth.uid() THEN 'rider' END;
+  IF v_role IS NULL THEN RETURN jsonb_build_object('success', false, 'error', 'Ride not found'); END IF;
+
+  RETURN jsonb_build_object(
+    'success', true, 'role', v_role,
+    'charges', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object(
+               'visit_id', v.id, 'zone_name', z.name, 'organisation', bp.business_name,
+               'fee_ugx', v.entry_fee_ugx, 'paid_ugx', v.fee_paid_ugx, 'status', v.status, 'payer', v.payer,
+               'payment_method', v.payment_method, 'entered_at', v.entered_at,
+               'passed_on_ugx', v.passed_on_ugx,
+               -- the rider fronted it and it has not been paid back yet: they collect it from the customer
+               'recover_from_customer', v.payer = 'rider' AND v.ride_id IS NOT NULL AND v.entry_fee_ugx > 0 AND v.passed_on_at IS NULL) ORDER BY v.requested_at)
+      FROM public.mbg_access_visits v
+      JOIN public.mbg_access_zones z ON z.id = v.zone_id
+      JOIN public.business_profiles bp ON bp.id = z.business_profile_id
+      WHERE v.ride_id = p_ride_id AND v.status IN ('awaiting_payment', 'inside', 'exited') AND v.entry_fee_ugx > 0), '[]'::JSONB),
+    'warnings', COALESCE((
+      SELECT jsonb_agg(jsonb_build_object('zone_name', z.name, 'organisation', bp.business_name, 'max_fee_ugx', n.max_fee_ugx) ORDER BY z.name)
+      FROM public.mbg_ride_zone_notices n
+      JOIN public.mbg_access_zones z ON z.id = n.zone_id
+      JOIN public.business_profiles bp ON bp.id = z.business_profile_id
+      WHERE n.ride_id = p_ride_id
+        AND NOT EXISTS (SELECT 1 FROM public.mbg_access_visits v WHERE v.ride_id = p_ride_id AND v.zone_id = n.zone_id AND v.entry_fee_ugx > 0
+                          AND v.status IN ('awaiting_payment', 'inside', 'exited'))), '[]'::JSONB));
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.mbg_zone_dist_m(NUMERIC, NUMERIC, NUMERIC, NUMERIC)   FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.mbg_zone_touches(public.mbg_access_zones, NUMERIC, NUMERIC) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.mbg_zone_trip_charges(NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, UUID) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.mbg_zone_collect_wallet(UUID, UUID)                   FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.mbg_zone_pass_on_to_customer(UUID)                  FROM PUBLIC, anon, authenticated;
+
 -- ─── 9. Who may call what ────────────────────────────────────────────────────
 -- Supabase grants every new function to anon and authenticated; REVOKE FROM PUBLIC does not take those back, so they go by name.
 
-REVOKE ALL ON FUNCTION public.mbg_zone_upsert(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN, INTEGER, NUMERIC, INTEGER, TEXT, JSONB) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.mbg_zone_upsert(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN, INTEGER, NUMERIC, INTEGER, TEXT, JSONB, NUMERIC, NUMERIC, INTEGER) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.mbg_zone_list(UUID)                                   FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.mbg_zone_search_riders(UUID, UUID, TEXT)              FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.mbg_zone_member_add(UUID, UUID, TEXT, TIMESTAMPTZ, TIME, TIME, TEXT) FROM PUBLIC, anon;
@@ -1497,8 +1948,11 @@ REVOKE ALL ON FUNCTION public.mbg_zone_settle_owed(UUID)                        
 REVOKE ALL ON FUNCTION public.mbg_my_gate_passes()                                  FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.mbg_rider_pay_gate_fee(UUID)                          FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.mbg_rider_decline_gate_fee(UUID)                      FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.mbg_zone_charges_for_trip(NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, UUID) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.mbg_ack_ride_zone_charges(UUID, TEXT)                 FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.mbg_ride_zone_charges(UUID)                           FROM PUBLIC, anon;
 
-GRANT EXECUTE ON FUNCTION public.mbg_zone_upsert(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN, INTEGER, NUMERIC, INTEGER, TEXT, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.mbg_zone_upsert(UUID, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN, INTEGER, NUMERIC, INTEGER, TEXT, JSONB, NUMERIC, NUMERIC, INTEGER) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.mbg_zone_list(UUID)                                   TO authenticated;
 GRANT EXECUTE ON FUNCTION public.mbg_zone_search_riders(UUID, UUID, TEXT)              TO authenticated;
 GRANT EXECUTE ON FUNCTION public.mbg_zone_member_add(UUID, UUID, TEXT, TIMESTAMPTZ, TIME, TIME, TEXT) TO authenticated;
@@ -1516,6 +1970,9 @@ GRANT EXECUTE ON FUNCTION public.mbg_zone_settle_owed(UUID)                     
 GRANT EXECUTE ON FUNCTION public.mbg_my_gate_passes()                                  TO authenticated;
 GRANT EXECUTE ON FUNCTION public.mbg_rider_pay_gate_fee(UUID)                          TO authenticated;
 GRANT EXECUTE ON FUNCTION public.mbg_rider_decline_gate_fee(UUID)                      TO authenticated;
+GRANT EXECUTE ON FUNCTION public.mbg_zone_charges_for_trip(NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.mbg_ack_ride_zone_charges(UUID, TEXT)                 TO authenticated;
+GRANT EXECUTE ON FUNCTION public.mbg_ride_zone_charges(UUID)                           TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 

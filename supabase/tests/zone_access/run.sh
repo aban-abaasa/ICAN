@@ -37,6 +37,7 @@ step "$WORK/fee_rates_core.sql"
 step "$HERE/01_world.sql"
 step "$MIG"
 step "$HERE/02_tests.sql"
+step "$HERE/02c_customer_pays.sql"
 step "$HERE/02b_dev_changes_rate.sql"
 step "$MIG"                                  # a second run changes nothing and keeps the rate a developer set
 step "$HERE/03_after_rerun.sql"

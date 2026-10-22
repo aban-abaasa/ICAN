@@ -4,7 +4,8 @@
 --     can check a vehicle in or charge a fee any more
 --   * the 'zone_access_fee' rate row is removed and ican_fee_rate() loses its fallback
 --
--- It deliberately KEEPS the four tables (mbg_access_zones, mbg_access_zone_fees, mbg_access_zone_members, mbg_access_visits):
+-- It deliberately KEEPS the five tables (mbg_access_zones, mbg_access_zone_fees, mbg_access_zone_members, mbg_access_visits,
+-- mbg_ride_zone_notices):
 -- they are the record of who was let in and which fees were paid, and the fees already moved to the business wallets and to
 -- ICANera stay where they are. Running the migration again picks them up exactly as they were. They are closed to the API
 -- (no policies, no grants), so leaving them is harmless. To delete them as well, run the DROP TABLE lines at the bottom.
@@ -18,7 +19,7 @@ BEGIN
     SELECT p.oid::regprocedure AS sig
       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
      WHERE n.nspname = 'public'
-       AND (p.proname LIKE 'mbg\_zone\_%' OR p.proname IN ('mbg_my_gate_passes', 'mbg_rider_pay_gate_fee', 'mbg_rider_decline_gate_fee'))
+       AND (p.proname LIKE 'mbg\_zone\_%' OR p.proname IN ('mbg_my_gate_passes', 'mbg_rider_pay_gate_fee', 'mbg_rider_decline_gate_fee', 'mbg_ack_ride_zone_charges', 'mbg_ride_zone_charges'))
   LOOP
     EXECUTE format('DROP FUNCTION %s', v_fn.sig);
   END LOOP;
@@ -46,4 +47,4 @@ $$;
 NOTIFY pgrst, 'reload schema';
 
 -- Only if you also want the history gone (this cannot be undone):
--- DROP TABLE IF EXISTS public.mbg_access_visits, public.mbg_access_zone_members, public.mbg_access_zone_fees, public.mbg_access_zones;
+-- DROP TABLE IF EXISTS public.mbg_ride_zone_notices, public.mbg_access_visits, public.mbg_access_zone_members, public.mbg_access_zone_fees, public.mbg_access_zones;

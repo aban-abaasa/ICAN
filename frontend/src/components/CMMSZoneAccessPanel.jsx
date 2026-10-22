@@ -126,6 +126,13 @@ export default function CMMSZoneAccessPanel({ companyProfile }) {
             </p>
           )}
 
+          {zone.entry_mode === 'paid_entry' && zone.latitude == null && caps.edit && (
+            <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs cmms-tone-warn">
+              This zone is not on the map yet. Customers who book a trip here are not told about the entry fee, so riders would pay it alone.{' '}
+              <button type="button" onClick={() => setEditing(zone)} className="underline decoration-dotted">Add its location</button>
+            </p>
+          )}
+
           {caps.gate && (
             <CmmsFold title="Gate desk" icon={<ScanLine className="h-4 w-4" aria-hidden="true" />} accent="emerald" defaultOpen
               info="Scan a rider ID card to check a vehicle in or out. Approved vehicles pass free; others pay the entry fee; a vehicle leaves only when everything is cleared.">

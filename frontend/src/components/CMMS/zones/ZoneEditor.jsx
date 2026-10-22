@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Loader, Plus } from 'lucide-react';
+import { Check, Loader, LocateFixed, MapPin, Plus } from 'lucide-react';
 import { cmmsZoneAccessService } from '../../../services/cmmsZoneAccessService';
 import { VEHICLE_TYPES, ZONE_KINDS, ugx } from './zoneLabels';
 
@@ -8,6 +8,7 @@ const blankZone = {
   id: null, name: '', kind: 'estate', location: '', status: 'active', entry_mode: 'paid_entry', fee_basis: 'per_entry',
   accept_cash: false, require_valid_permit: false, max_stay_minutes: '', overstay_fee_ugx_per_hour: '', payment_window_minutes: 10,
   timezone: 'Africa/Kampala', fees: { motorcycle: 2000, car: 5000 },
+  latitude: '', longitude: '', radius_m: 200,
 };
 
 const fromZone = (zone) => ({
@@ -16,6 +17,9 @@ const fromZone = (zone) => ({
   max_stay_minutes: zone.max_stay_minutes ?? '',
   overstay_fee_ugx_per_hour: Number(zone.overstay_fee_ugx_per_hour) > 0 ? Number(zone.overstay_fee_ugx_per_hour) : '',
   fees: Object.fromEntries(Object.entries(zone.fees || {}).map(([k, v]) => [k, Number(v)])),
+  latitude: zone.latitude ?? '',
+  longitude: zone.longitude ?? '',
+  radius_m: zone.radius_m ?? 200,
 });
 
 export default function ZoneEditor({ businessProfileId, zone, platformFeeRate = 0.03, canEdit, onSaved, onCancel }) {
@@ -29,6 +33,17 @@ export default function ZoneEditor({ businessProfileId, zone, platformFeeRate = 
     return { ...f, fees };
   });
 
+  const [locating, setLocating] = useState(false);
+  const useMyLocation = () => {
+    if (!navigator.geolocation) { setError('This browser cannot find your location. Type the latitude and longitude instead.'); return; }
+    setLocating(true); setError('');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { set({ latitude: +pos.coords.latitude.toFixed(6), longitude: +pos.coords.longitude.toFixed(6) }); setLocating(false); },
+      () => { setLocating(false); setError('Could not get your location. Allow location access, or type the latitude and longitude.'); },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+  const onMap = form.latitude !== '' && form.longitude !== '';
   const pct = `${+(platformFeeRate * 100).toFixed(2)}%`;
   const example = Object.values(form.fees).find((v) => v > 0);
 
@@ -60,6 +75,33 @@ export default function ZoneEditor({ businessProfileId, zone, platformFeeRate = 
       <label className="text-sm text-slate-300">Where it is
         <input value={form.location} onChange={(e) => set({ location: e.target.value })} placeholder="Plot 12, Kololo" className={input} />
       </label>
+
+      <div className="space-y-2 rounded-xl border p-3 md:col-span-2" style={{ borderColor: 'var(--color-border)' }}>
+        <p className="flex items-center gap-1.5 text-sm font-medium cmms-classic-heading"><MapPin size={14} aria-hidden="true" /> Where it is on the map</p>
+        <p className="text-xs cmms-classic-muted">
+          Stand at the gate and press the button. Customers who book a trip to or from this area are then told about the entry fee
+          before they book, and when a rider arrives with a customer the fee is charged to the customer, not the rider.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_8rem]">
+          <label className="text-sm text-slate-300">Latitude
+            <input type="number" step="any" value={form.latitude} onChange={(e) => set({ latitude: e.target.value })} placeholder="0.3300" className={input} />
+          </label>
+          <label className="text-sm text-slate-300">Longitude
+            <input type="number" step="any" value={form.longitude} onChange={(e) => set({ longitude: e.target.value })} placeholder="32.5900" className={input} />
+          </label>
+          <label className="text-sm text-slate-300">Radius (m)
+            <input type="number" min="20" max="5000" value={form.radius_m} onChange={(e) => set({ radius_m: e.target.value })} className={input} />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={useMyLocation} disabled={locating} className="cmms-classic-btn-secondary flex items-center gap-1.5 px-3 py-1.5 text-xs">
+            {locating ? <Loader size={13} className="animate-spin" /> : <LocateFixed size={13} />} Use my location
+          </button>
+          {onMap
+            ? <span className="text-xs cmms-tone-ok">On the map: trips within {form.radius_m || 200} m of this point are covered.</span>
+            : <span className="text-xs cmms-tone-warn">Not on the map: customers will not be warned about the fee, so riders would pay it alone.</span>}
+        </div>
+      </div>
 
       <fieldset className="md:col-span-2">
         <legend className="text-sm text-slate-300">Vehicles that are not on the approved list</legend>

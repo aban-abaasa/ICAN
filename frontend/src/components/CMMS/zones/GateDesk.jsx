@@ -238,7 +238,16 @@ export default function GateDesk({ zone, onChanged }) {
               {verdict === 'pay_required' && visit && (
                 <div className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)' }}>
                   <p className="text-2xl font-extrabold cmms-classic-heading">{ugx(visit.fee_due_ugx)}</p>
-                  <p className="mt-1 flex items-center gap-2 text-sm cmms-classic-muted"><Loader size={14} className="animate-spin" /> Waiting for the rider to approve it in BodaGoEra{visit.pay_by ? ` (until ${clock(visit.pay_by)})` : ''}.</p>
+                  {visit.payer === 'customer' ? (
+                    <p className="mt-1 text-sm font-semibold cmms-tone-warn">Customer on board: the CUSTOMER pays this, not the rider. Take the cash from the passenger.</p>
+                  ) : result.recover_from_customer ? (
+                    <>
+                      <p className="mt-1 flex items-center gap-2 text-sm cmms-classic-muted"><Loader size={14} className="animate-spin" /> Waiting for the rider to approve it in BodaGoEra{visit.pay_by ? ` (until ${clock(visit.pay_by)})` : ''}.</p>
+                      <p className="mt-1 text-xs cmms-tone-ok">A customer is on this ride: once the rider has paid, the fee is passed on to the customer.</p>
+                    </>
+                  ) : (
+                    <p className="mt-1 flex items-center gap-2 text-sm cmms-classic-muted"><Loader size={14} className="animate-spin" /> Waiting for the rider to approve it in BodaGoEra{visit.pay_by ? ` (until ${clock(visit.pay_by)})` : ''}.</p>
+                  )}
                 </div>
               )}
               {verdict === 'balance_due' && visit && (
@@ -254,7 +263,10 @@ export default function GateDesk({ zone, onChanged }) {
                 </p>
               )}
               {verdict === 'granted' && visit && visit.fee_paid_ugx > 0 && (
-                <p className="text-sm cmms-classic-muted">Paid {ugx(visit.fee_paid_ugx)} by {visit.payment_method === 'cash' ? 'cash' : 'IcanEra wallet'}.</p>
+                <p className="text-sm cmms-classic-muted">
+                  Paid {ugx(visit.fee_paid_ugx)} by {visit.payment_method === 'cash' ? 'cash' : 'IcanEra wallet'}
+                  {visit.payer === 'customer' ? ' — by the customer on board, not the rider.' : '.'}
+                </p>
               )}
 
               {result.warnings?.length > 0 && (

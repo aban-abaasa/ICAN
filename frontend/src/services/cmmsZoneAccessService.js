@@ -49,6 +49,10 @@ export const cmmsZoneAccessService = {
       p_payment_window_minutes: zone.payment_window_minutes ? Number(zone.payment_window_minutes) : 10,
       p_timezone: zone.timezone || 'Africa/Kampala',
       p_fees: zone.entry_mode === 'paid_entry' ? zone.fees : {},
+      // where the zone is on the map: what lets customers be warned about the fee when they book a trip to or from it
+      p_latitude: zone.latitude === '' || zone.latitude == null ? null : Number(zone.latitude),
+      p_longitude: zone.longitude === '' || zone.longitude == null ? null : Number(zone.longitude),
+      p_radius_m: zone.latitude === '' || zone.latitude == null ? null : Number(zone.radius_m || 200),
     }),
 
   members: (zoneId) => call('mbg_zone_members', { p_zone_id: zoneId }),

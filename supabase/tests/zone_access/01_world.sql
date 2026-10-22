@@ -47,3 +47,16 @@ SELECT t.u(1000 + n), t.u(n), 'ICN-' || n, t.code(n),
 
 INSERT INTO public.ican_user_wallets SELECT t.u(n), 10 FROM generate_series(11, 21) n;
 UPDATE public.ican_user_wallets SET ican_balance = 0.1 WHERE user_id = t.u(16);
+
+-- customers 31-35 (user ids 31-35), each with a wallet; customer 33 cannot cover a fee
+INSERT INTO auth.users SELECT t.u(n) FROM generate_series(31, 35) n;
+INSERT INTO public.mbg_customers SELECT t.u(500 + n), t.u(n) FROM generate_series(31, 35) n;
+INSERT INTO public.ican_user_wallets SELECT t.u(n), 10 FROM generate_series(31, 35) n;
+UPDATE public.ican_user_wallets SET ican_balance = 0.1 WHERE user_id = t.u(33);
+
+-- a ride for customer c with rider r: from (a, b) to (c, d)
+CREATE FUNCTION t.ride(p_customer INT, p_rider INT, p_plat NUMERIC, p_plng NUMERIC, p_dlat NUMERIC, p_dlng NUMERIC, p_status TEXT, p_pay TEXT)
+RETURNS UUID LANGUAGE sql AS $$
+  INSERT INTO public.mbg_rides (customer_id, rider_id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, status, payment_method)
+  VALUES (t.u(500 + p_customer), t.u(1000 + p_rider), p_plat, p_plng, p_dlat, p_dlng, p_status, p_pay) RETURNING id $$;
+GRANT EXECUTE ON FUNCTION t.ride(INT, INT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, TEXT) TO PUBLIC;

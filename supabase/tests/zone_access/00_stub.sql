@@ -78,6 +78,15 @@ BEGIN
   RETURN jsonb_build_object('success', true, 'tx_id', gen_random_uuid(), 'ican_debited', p_ican_amount);
 END $$;
 
+-- the tithe-free credit that pays a rider back (ICAN/backend/ADD_RIDE_EARNING_CREDIT_FUNCTION.sql)
+CREATE FUNCTION public.mbg_credit_ride_earning(p_user_id UUID, p_ican_amount DECIMAL, p_source_app TEXT DEFAULT 'mybodaguy', p_reference_id TEXT DEFAULT NULL, p_note TEXT DEFAULT NULL)
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  INSERT INTO public.ican_user_wallets (user_id, ican_balance) VALUES (p_user_id, p_ican_amount)
+    ON CONFLICT (user_id) DO UPDATE SET ican_balance = public.ican_user_wallets.ican_balance + p_ican_amount;
+  RETURN jsonb_build_object('success', true);
+END $$;
+
 -- ── the platform-fee business (ROUTE_PLATFORM_FEES_TO_IWOS_BUSINESS.sql) ─────
 CREATE TABLE public.ican_platform_fee_recipient (id BOOLEAN PRIMARY KEY DEFAULT true CHECK (id), business_profile_id UUID);
 CREATE FUNCTION public.fn_get_platform_fee_business_id() RETURNS UUID LANGUAGE sql STABLE SECURITY DEFINER AS
@@ -120,6 +129,13 @@ CREATE FUNCTION public.mbg_rider_card_payload(p_card_id UUID) RETURNS JSONB LANG
                           WHEN r.license_expiry <= current_date + 30 THEN 'expiring_soon' ELSE 'valid' END,
     'commission_owed_ugx', 0, 'insurance', NULL)
   FROM public.mbg_rider_cards c JOIN public.mbg_riders r ON r.id = c.rider_id WHERE c.id = p_card_id $$;
+
+-- customers and their rides (status is an enum in the real table; the zones only compare it as text)
+CREATE TABLE public.mbg_customers (id UUID PRIMARY KEY, user_id UUID);
+CREATE TABLE public.mbg_rides (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), customer_id UUID NOT NULL REFERENCES public.mbg_customers(id),
+  rider_id UUID REFERENCES public.mbg_riders(id), pickup_lat NUMERIC, pickup_lng NUMERIC, dropoff_lat NUMERIC, dropoff_lng NUMERIC,
+  status TEXT NOT NULL DEFAULT 'pending', payment_method TEXT NOT NULL DEFAULT 'wallet', requested_at TIMESTAMPTZ NOT NULL DEFAULT now());
 
 -- phone alerts: record them instead of sending
 CREATE TABLE public.push_log (user_id UUID, source TEXT, title TEXT, message TEXT);

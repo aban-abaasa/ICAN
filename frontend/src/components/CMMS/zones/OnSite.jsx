@@ -6,7 +6,7 @@ import { duration, ugx, vehicleLabel, when } from './zoneLabels';
 
 // Who is inside right now, the gate log, and what the zone earned. Read-only: anyone with a Transport action can see it.
 const STATUS_TEXT = { inside: 'Inside', exited: 'Left', denied: 'Refused', cancelled: 'No payment', awaiting_payment: 'Waiting to pay' };
-const BASIS_TEXT = { member: 'Approved', paid: 'Paid', day_pass: 'Day pass', open: 'Free class' };
+const BASIS_TEXT = { member: 'Approved', paid: 'Paid', day_pass: 'Day pass', open: 'Free class', ride_pass: 'Ride pass' };
 
 export default function OnSite({ zone, businessProfileId, canEdit, refreshKey = 0 }) {
   const [view, setView] = useState('inside');
@@ -52,7 +52,8 @@ export default function OnSite({ zone, businessProfileId, canEdit, refreshKey = 
   const exportLog = () => downloadCsv(`${zone.name.replace(/\W+/g, '-')}-gate-log.csv`, visits.map((v) => ({
     Time: v.entered_at || v.requested_at, Status: STATUS_TEXT[v.status] || v.status, Plate: v.plate_number || '', Vehicle: v.vehicle_type || '',
     Rider: v.rider_name || '', Card: v.card_number || '', Access: BASIS_TEXT[v.access_basis] || '', Fee_due_UGX: v.fee_due_ugx, Fee_paid_UGX: v.fee_paid_ugx,
-    Paid_by: v.payment_method || '', IcanEra_fee_UGX: v.platform_fee_ugx, Gate_in: v.gate_in || '', Gate_out: v.gate_out || '',
+    Paid_by: v.payment_method || '', Charged_to: v.ride_id && v.fee_due_ugx > 0 ? (v.passed_on_at || v.payer === 'customer' ? 'customer' : 'rider (customer owes)') : (v.fee_due_ugx > 0 ? 'rider' : ''),
+    IcanEra_fee_UGX: v.platform_fee_ugx, Gate_in: v.gate_in || '', Gate_out: v.gate_out || '',
     Left: v.exited_at || '', Note: v.reason || '',
   })));
 
@@ -110,6 +111,7 @@ export default function OnSite({ zone, businessProfileId, canEdit, refreshKey = 
                   <span className="font-mono text-sm font-bold cmms-classic-heading !font-mono">{v.plate_number || (v.card_number ? `Card ${v.card_number}` : 'Unknown card')}</span>
                   <span className="cmms-classic-chip">{STATUS_TEXT[v.status] || v.status}</span>
                   {v.access_basis && <span className="cmms-classic-chip">{BASIS_TEXT[v.access_basis]}</span>}
+                  {v.ride_id && v.fee_due_ugx > 0 && <span className="cmms-classic-chip">{v.passed_on_at || v.payer === 'customer' ? 'Customer paid' : 'On a ride'}</span>}
                   {v.overstaying && <span className="cmms-classic-chip" style={{ color: '#b91c1c' }}>Over the time limit</span>}
                 </p>
                 <p className="truncate text-xs cmms-classic-muted">
