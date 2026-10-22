@@ -50,9 +50,9 @@ row falls back to the default (2% / 1%), never to "free".
 ## Heads-up: the live shop checkout adds tax on top of the shelf price
 
 The `customer_self_checkout` deployed in the live project is an older one than `backend/FIX_CUSTOMER_SELF_CHECKOUT_TAX_INCLUSIVE.sql`:
-it **adds tax on top** of the shelf price (an 18% product at UGX 10,000 costs the customer 11,800) and has no multi-currency pricing.
-This migration works with both and changes neither: the 1% is simply 1% of whatever total the customer is charged. If the tax-inclusive
-fix is meant to be live, that is its own deploy and its own decision.
+it **adds tax on top** of the shelf price (an 18% product at UGX 10,000 costs the customer 11,800). This migration works with both and
+changes neither: the 1% is simply 1% of whatever total the customer is charged. The tax fix is its own migration,
+`SHOP_TAX_INCLUDED_PASTE_INTO_SUPABASE.sql` (see `SHOP_TAX_INCLUDED_DEPLOY.md`); the two can be run in either order.
 
 ## Not covered (separate money flows that say "no fee" in their own code and tests)
 
