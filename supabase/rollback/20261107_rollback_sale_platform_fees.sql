@@ -58,6 +58,7 @@ BEGIN
       v_def := regexp_replace(v_def,
         $r$(transfer_ican\(\s*v_auth_id,\s*v_store_owner_id,\s*)v_store_ican\s*-\s*v_platform_fee_ican(\s*,)$r$, $r$\1v_store_ican\2$r$);
       v_def := replace(v_def, $r$ROUND((v_store_ican - v_platform_fee_ican) * v_price_per_ican, 2)$r$, 'v_net_total');
+      v_def := replace(v_def, $r$ROUND((v_store_ican - v_platform_fee_ican) * 5000, 2)$r$, 'v_net_total');
       v_def := replace(v_def,
         $r$format('Supermarket self-checkout | receipt %s | after the %s%% ICANera store fee', v_receipt_no, trim_scale(v_platform_fee_pct)::TEXT)$r$,
         $r$format('Supermarket self-checkout | receipt %s', v_receipt_no)$r$);

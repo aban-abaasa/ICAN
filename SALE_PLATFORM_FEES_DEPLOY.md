@@ -47,6 +47,13 @@ row falls back to the default (2% / 1%), never to "free".
 - A reseller's recorded margin (`dropship_orders.reseller_margin_amount`, the "+UGX …" on their Sales tab) is now what they actually
   keep. The fee and the rate it was charged at are on the order: `platform_fee_amount`, `platform_fee_rate`.
 
+## Heads-up: the live shop checkout adds tax on top of the shelf price
+
+The `customer_self_checkout` deployed in the live project is an older one than `backend/FIX_CUSTOMER_SELF_CHECKOUT_TAX_INCLUSIVE.sql`:
+it **adds tax on top** of the shelf price (an 18% product at UGX 10,000 costs the customer 11,800) and has no multi-currency pricing.
+This migration works with both and changes neither: the 1% is simply 1% of whatever total the customer is charged. If the tax-inclusive
+fix is meant to be live, that is its own deploy and its own decision.
+
 ## Not covered (separate money flows that say "no fee" in their own code and tests)
 
 Cash / card / mobile-money tenders rung up at a shop till, and the IcanEra digital card paid at a till (`imc_pay_with_card`, which
@@ -92,6 +99,6 @@ returns with it), removes the two rates and the helper, and keeps the `platform_
 ## Tests
 
 `supabase/tests/sale_fees/run.sh` — a throwaway Postgres (`psql`, nothing touches Supabase). It loads the **real** `dropship_checkout`
-and `customer_self_checkout` text out of the backend files and runs sales through them before and after the migration: the customer's
+and `customer_self_checkout` text out of the backend files (and the older shape deployed live, saved as `fixtures/live_customer_self_checkout.sql`) and runs sales through them before and after the migration: the customer's
 total is unchanged, every coin lands somewhere, the cap, the subsidy, 0%, a changed rate, no recipient, an unknown function shape
 (refused, nothing changed), running twice, rollback and rollback → migrate again. Only the wallet / shop / rider tables are stand-ins.
