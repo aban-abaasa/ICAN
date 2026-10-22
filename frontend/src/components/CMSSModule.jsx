@@ -1316,7 +1316,17 @@ const CMMSModule = ({
         requiresFullSetup = !bootstrapError && bootstrapResult?.mode === 'requires_full_setup';
       }
       const { data: shareholderBusinesses } = await findPichinShareholderBusinesses({ email: user?.email, userId: user?.id });
-      const business = (shareholderBusinesses || []).find(item => item.canManage);
+      const manageableBusinesses = (shareholderBusinesses || []).filter(item => item.canManage);
+      // A Pichin business runs one CMMS company. One that already runs another of this
+      // user's companies cannot be linked here as well (the database rejects it as a
+      // duplicate key), so link a free one and otherwise point to the company that owns it.
+      const owningMembership = (businessId) => companyMemberships.find(membership => (
+        membership.pichin_business_profile_id === businessId
+        && membership.cmms_company_id !== cmmsData.companyProfile?.id
+      ));
+      const business = manageableBusinesses.find(item => !owningMembership(item.id));
+      const ownedElsewhere = manageableBusinesses.map(item => owningMembership(item.id)).find(Boolean);
+      const alreadyLinkedMessage = 'Your Pichin business is already linked to another CMMS company, so it cannot be linked to this one as well.\n\nChoose that company in "Business profile / CMMS administrator" at the top, then open this tab again.';
       if (business && cmmsData.companyProfile?.id) {
         const { data: syncResult, error: linkError } = await supabase.rpc('cmms_sync_pichin_business', {
           p_cmms_company_id: cmmsData.companyProfile.id,
@@ -1331,7 +1341,15 @@ const CMMSModule = ({
           setSyncingPichin(false);
           return;
         }
-        window.alert(linkError?.message || 'Pichin synchronization could not be completed. Complete your business profile first.');
+        // 23505: another CMMS company (one this user is not a member of) already holds the business.
+        window.alert(linkError?.code === '23505'
+          ? alreadyLinkedMessage
+          : (linkError?.message || 'Pichin synchronization could not be completed. Complete your business profile first.'));
+      } else if (!business && ownedElsewhere) {
+        const ownerName = ownedElsewhere.company_name || 'your other CMMS company';
+        if (window.confirm(`"${cmmsData.companyProfile?.company_name || 'This company'}" is not linked to a Pichin business, and your business already runs "${ownerName}".\n\nSwitch to "${ownerName}"? Then open this tab again.`)) {
+          await handleSwitchCompany({ target: { value: ownedElsewhere.cmms_company_id } });
+        }
       } else if ((shareholderBusinesses || []).length) {
         window.alert('Your Gmail is recognized as a shareholder, but only a Pichin business administrator can synchronize CMMS payroll or transport.');
       } else {
