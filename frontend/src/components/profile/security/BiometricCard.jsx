@@ -6,8 +6,10 @@ import {
   enablePasskey, isPasskeyBackendMissing, listPasskeys, removePasskey,
 } from '../../../services/passkeyService';
 import { biometricName, isPasskeySupported, platformAuthenticatorAvailable } from '../../../utils/webauthn';
+import CollapsibleCard from './CollapsibleCard';
 
 const deviceIcon = (label) => (/Android|iOS|iPhone|iPad/i.test(label) ? Smartphone : Laptop);
+const shortDate = (value) => new Date(value).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 
 /**
  * Fingerprint / face sign-in. The device checks the person and keeps the private key in its secure hardware; the server
@@ -56,6 +58,7 @@ export default function BiometricCard({ twoStepOn = false }) {
   };
 
   const thisDevice = passkeys.find((p) => p.isThisDevice) || null;
+  const enabled = passkeys.length > 0;
 
   const turnOn = () => run(async () => {
     if (hasPassword && !asking) { setAsking(true); setNotice(''); return; }
@@ -74,29 +77,37 @@ export default function BiometricCard({ twoStepOn = false }) {
     await load();
   });
 
-  const enabled = passkeys.length > 0;
+  // What the folded row says. A card with nothing to read or do stays folded; one that is mid-action or has a message opens itself.
+  let chip;
+  let summary;
+  if (!supported || backendMissing) {
+    chip = <span className="gr-chip gr-chip--warn">Unavailable</span>;
+    summary = !supported ? 'This browser cannot use it' : 'Not switched on for this server yet';
+  } else if (loading) {
+    chip = <span className="gr-chip">Checking…</span>;
+  } else if (enabled) {
+    chip = <span className="gr-chip gr-chip--ok"><Check aria-hidden="true" />On · {passkeys.length} device{passkeys.length === 1 ? '' : 's'}</span>;
+    summary = thisDevice ? 'Active on this device' : 'Not set up on this device yet';
+  } else {
+    chip = <span className="gr-chip gr-chip--warn">Off</span>;
+    summary = `Open IcanEra with your ${name}`;
+  }
+  const needsAttention = Boolean(error || notice || asking || removing);
 
   return (
-    <section className="gr-card gr-form" aria-label="Fingerprint and face sign-in">
-      <div className="gr-status">
-        <Fingerprint aria-hidden="true" />
-        <div className="gr-status__body">
-          <div className="gr-sectionhead">
-            <div>
-              <p className="gr-eyebrow">The fast way in</p>
-              <h3 className="gr-title gr-h">Sign in with fingerprint or face</h3>
-            </div>
-            {enabled
-              ? <span className="gr-chip gr-chip--ok"><Check aria-hidden="true" />On · {passkeys.length} device{passkeys.length === 1 ? '' : 's'}</span>
-              : <span className="gr-chip gr-chip--warn">Off</span>}
-          </div>
-          <p className="gr-sub">
-            Open IcanEra with your {name} instead of typing a password. Your device does the checking and keeps the key
-            to itself: IcanEra never sees, stores or sends your fingerprint or face.
-            {twoStepOn ? ' You will still be asked for your authenticator code afterwards.' : ''}
-          </p>
-        </div>
-      </div>
+    <CollapsibleCard
+      id="biometric"
+      icon={Fingerprint}
+      eyebrow="The fast way in"
+      title="Sign in with fingerprint or face"
+      chip={chip}
+      summary={summary}
+      defaultOpen={needsAttention}
+    >
+      <p className="gr-sub">
+        Skip typing your password: your device checks your {name} and keeps the key to itself. IcanEra never sees, stores or sends your fingerprint or face.
+        {twoStepOn ? ' You will still be asked for your authenticator code afterwards.' : ''}
+      </p>
 
       {notice && <div className="gr-alert gr-alert--ok" role="status">{notice}</div>}
       {error && <div className="gr-alert gr-alert--err" role="alert">{error}</div>}
@@ -128,16 +139,16 @@ export default function BiometricCard({ twoStepOn = false }) {
                       <div className="gr-device__t">
                         {p.label}
                         {p.isThisDevice && <span className="gr-chip gr-chip--ok">This device</span>}
-                        {p.backed_up && <span className="gr-chip">Synced</span>}
                       </div>
                       <div className="gr-device__m">
-                        Added {new Date(p.created_at).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
-                        {' · '}{p.last_used_at ? `used ${formatTimeAgo(p.last_used_at).toLowerCase()}` : 'not used yet'}
+                        {p.backed_up ? <><b>Synced</b> · </> : null}
+                        Added {shortDate(p.created_at)} · {p.last_used_at ? `used ${formatTimeAgo(p.last_used_at).toLowerCase()}` : 'not used yet'}
                       </div>
                     </div>
-                    <button type="button" className="gr-btn gr-btn--ghost gr-btn--sm" disabled={busy}
-                      onClick={() => { setRemoving(p); setError(''); setNotice(''); }} aria-label={`Remove ${p.label}`}>
-                      <Trash2 aria-hidden="true" />Remove
+                    <button type="button" className="gr-icon-btn gr-icon-btn--danger" disabled={busy}
+                      onClick={() => { setRemoving(p); setError(''); setNotice(''); }}
+                      aria-label={`Remove ${p.label}`} title="Remove">
+                      <Trash2 aria-hidden="true" />
                     </button>
                   </div>
                 );
@@ -190,6 +201,6 @@ export default function BiometricCard({ twoStepOn = false }) {
           )}
         </>
       )}
-    </section>
+    </CollapsibleCard>
   );
 }
