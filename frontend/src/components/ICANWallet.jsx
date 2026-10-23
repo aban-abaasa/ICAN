@@ -1922,6 +1922,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         amount: parsedAmount,
         currency: selectedCurrency,
         description: description || `Transfer to ${recipientUser.name}`,
+        note: String(description || '').trim(), // only what the sender typed: the History rows add the names around it
         fee: 0,
         totalDeduction: parsedAmount,
         senderWalletId: null  // Will be set when processing
@@ -7597,6 +7598,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           recipient_id: pendingTransaction?.recipientId,
           sender_id: currentUserId,
           description: pendingTransaction?.description,
+          note: pendingTransaction?.note,
           fee: pendingTransaction?.fee
         }}
         onApprove={handleTransactionApproval}
