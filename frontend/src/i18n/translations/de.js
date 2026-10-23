@@ -111,6 +111,8 @@ export default {
   'auth.forgotPassword': 'Passwort vergessen?',
   'auth.noAccount': 'Noch kein Konto?',
   'auth.signInWallet': 'Mit Wallet anmelden',
+  'auth.signInBiometric': 'Mit Fingerabdruck oder Gesicht anmelden',
+  'auth.biometricChecking': 'Fingerabdruck oder Gesicht wird geprüft...',
   'auth.enteringApp': 'IcanEra wird geöffnet...',
   'auth.authenticating': 'Authentifizierung bei IcanEra...',
 

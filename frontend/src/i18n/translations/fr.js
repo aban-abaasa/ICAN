@@ -111,6 +111,8 @@ export default {
   'auth.forgotPassword': 'Mot de passe oublié ?',
   'auth.noAccount': 'Pas encore de compte ?',
   'auth.signInWallet': 'Se connecter avec le portefeuille',
+  'auth.signInBiometric': 'Se connecter avec l’empreinte ou le visage',
+  'auth.biometricChecking': 'Vérification de votre empreinte ou de votre visage...',
   'auth.enteringApp': 'Connexion à IcanEra...',
   'auth.authenticating': 'Authentification auprès d’IcanEra...',
 

@@ -111,6 +111,8 @@ export default {
   'auth.forgotPassword': 'هل نسيت كلمة المرور؟',
   'auth.noAccount': 'ليس لديك حساب؟',
   'auth.signInWallet': 'تسجيل الدخول بالمحفظة',
+  'auth.signInBiometric': 'تسجيل الدخول ببصمة الإصبع أو الوجه',
+  'auth.biometricChecking': 'جارٍ التحقق من بصمتك أو وجهك...',
   'auth.enteringApp': 'جارٍ الدخول إلى IcanEra...',
   'auth.authenticating': 'جارٍ المصادقة مع IcanEra...',
 

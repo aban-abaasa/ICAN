@@ -111,6 +111,8 @@ export default {
   'auth.forgotPassword': '忘记密码？',
   'auth.noAccount': '还没有账户？',
   'auth.signInWallet': '使用钱包登录',
+  'auth.signInBiometric': '使用指纹或面容登录',
+  'auth.biometricChecking': '正在验证您的指纹或面容...',
   'auth.enteringApp': '正在进入 IcanEra...',
   'auth.authenticating': '正在通过 IcanEra 验证...',
 

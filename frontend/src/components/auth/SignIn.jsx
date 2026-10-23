@@ -9,10 +9,13 @@ import ReferralCodeField from './ReferralCodeField';
 import { checkCanweFields } from '../../utils/canweGuard';
 import { getSupabaseClient } from '../../lib/supabase/client';
 import { useI18n } from '../../i18n/I18nProvider';
+import BiometricSignInButton from './BiometricSignInButton';
+import { isPasskeySupported } from '../../utils/webauthn';
+import { isThisDeviceEnrolled } from '../../services/passkeyService';
 
 import { DiamondSpinner } from '../IcanDiamond';
 const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
-  const { signIn, offlineSignIn, signInWithGoogle, signInWithWallet } = useAuth();
+  const { signIn, offlineSignIn, signInWithGoogle, signInWithWallet, signInWithBiometric } = useAuth();
   const { actualTheme } = useOptionalTheme();
   const { t } = useI18n();
   const [formData, setFormData] = useState({
@@ -29,7 +32,29 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
   const [walletPin, setWalletPin] = useState('');
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState('');
-  const isAuthenticating = loading || googleLoading || walletLoading;
+  const [biometricLoading, setBiometricLoading] = useState(false);
+  // Fingerprint / face sign-in: offered wherever the browser can do it, and put first on a device that is already set up.
+  const [biometricSupported] = useState(() => isPasskeySupported());
+  const [deviceEnrolled] = useState(() => isThisDeviceEnrolled());
+  const isAuthenticating = loading || googleLoading || walletLoading || biometricLoading;
+
+  const handleBiometricSignIn = async () => {
+    setError('');
+    if (!navigator.onLine) {
+      setError('📴 You\'re offline. Fingerprint and face sign-in needs a connection — use a cached session above or connect to the internet.');
+      return;
+    }
+    setBiometricLoading(true);
+    try {
+      await signInWithBiometric();
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      console.error('Biometric sign in error:', err);
+      setError(err?.message || 'Fingerprint or face sign-in failed. Please try again.');
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
 
   const handleWalletSubmit = async (e) => {
     e.preventDefault();
@@ -198,6 +223,21 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
         {error && (
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl">
             <p className="text-red-400 text-sm text-center">{error}</p>
+          </div>
+        )}
+
+        {/* This device is already set up for fingerprint / face: that is the fast way in, so it comes first */}
+        {biometricSupported && deviceEnrolled && (
+          <div className="mb-5">
+            <BiometricSignInButton
+              prominent
+              palette={palette}
+              label={t('auth.signInBiometric')}
+              busyLabel={t('auth.biometricChecking')}
+              loading={biometricLoading}
+              disabled={loading || googleLoading || walletLoading}
+              onClick={handleBiometricSignIn}
+            />
           </div>
         )}
 
@@ -377,6 +417,20 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
           )}
           Continue with Google
         </button>
+
+        {/* Fingerprint / face (not yet set up on this device, or a phone/laptop that can still offer it) */}
+        {biometricSupported && !deviceEnrolled && (
+          <div className="mt-3">
+            <BiometricSignInButton
+              palette={palette}
+              label={t('auth.signInBiometric')}
+              busyLabel={t('auth.biometricChecking')}
+              loading={biometricLoading}
+              disabled={loading || googleLoading || walletLoading}
+              onClick={handleBiometricSignIn}
+            />
+          </div>
+        )}
 
         {/* Wallet Login */}
         {!showWalletForm ? (

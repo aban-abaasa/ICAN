@@ -127,6 +127,11 @@
   color: var(--ia-fg) !important;
   background-color: var(--ia-alt) !important;
 }
+/* the main call to action that is not a form submit (fingerprint / face on a device that is already set up) */
+.ican-auth-classic button.ia-primary-action[type="button"][class*="w-full"] {
+  background-color: var(--ia-btn) !important;
+  color: var(--ia-btn-fg) !important;
+}
 /* text-style buttons: forgot password, show/hide, create account, cancel */
 .ican-auth-classic button:not([type="submit"]):not([class*="w-full"]) {
   background-color: transparent !important;

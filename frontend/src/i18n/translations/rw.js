@@ -111,6 +111,8 @@ export default {
   'auth.forgotPassword': 'Wibagiwe ijambobanga?',
   'auth.noAccount': 'Nta konti ufite?',
   'auth.signInWallet': 'Injira ukoresheje ikofi',
+  'auth.signInBiometric': 'Injira ukoresheje igikumwe cyangwa isura',
+  'auth.biometricChecking': 'Turimo kugenzura igikumwe cyangwa isura yawe...',
   'auth.enteringApp': 'Turimo kukwinjiza muri IcanEra...',
   'auth.authenticating': 'Turimo kugenzura muri IcanEra...',
 

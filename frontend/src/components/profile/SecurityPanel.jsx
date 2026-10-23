@@ -7,6 +7,7 @@ import {
 } from '../../services/securityService';
 import { daysSinceNewest, securityPosture } from '../../utils/securityHelpers';
 import ActivityCard from './security/ActivityCard';
+import BiometricCard from './security/BiometricCard';
 import DevicesCard from './security/DevicesCard';
 import PasswordCard from './security/PasswordCard';
 import TwoStepCard from './security/TwoStepCard';
@@ -114,6 +115,7 @@ export default function SecurityPanel() {
         <><div className="gr-skel" /><div className="gr-skel" /></>
       ) : (
         <>
+          <BiometricCard twoStepOn={data.factors.verified.length > 0} />
           {!mfaNote && <TwoStepCard factors={data.factors} onChanged={load} />}
           <PasswordCard email={user?.email} personal={[user?.email?.split('@')[0], profile?.full_name]} mfaFactorId={data.factors.verified[0]?.id} onChanged={load} />
           {!historyMissing && <DevicesCard sessions={data.sessions} onChanged={load} />}
@@ -126,7 +128,7 @@ export default function SecurityPanel() {
           <LogOut aria-hidden="true" />
           <div className="gr-status__body">
             <h3 className="gr-title gr-h">Sign out everywhere</h3>
-            <p className="gr-sub">Ends every session on every device, including this one. Use it if a phone is lost or you think someone else has your password.</p>
+            <p className="gr-sub">Ends every session on every device, including this one, and switches off fingerprint and face sign-in everywhere. Use it if a phone is lost or you think someone else has your password.</p>
           </div>
         </div>
         {!confirmGlobal ? (
