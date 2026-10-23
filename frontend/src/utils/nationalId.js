@@ -53,3 +53,83 @@ export const maskedNationalId = (idType, last4) => {
   if (!last4) return '';
   return `${idType || 'ID'} ending ${last4}`;
 };
+
+// ── Proving an ID is yours (backend/NATIONAL_ID_OWNERSHIP.sql) ─────────────────────────────────
+
+// The photos go to the EXISTING R2 folder the CMMS employee ID documents already use, through the existing
+// presign-upload route: the app is at Vercel's function limit, so there is no route or folder of its own.
+export const ID_PROOF_FOLDER = 'cmms-employment-documents';
+export const ID_PROOF_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+export const ID_PROOF_MAX_BYTES = 8 * 1024 * 1024;
+
+// A photo is acceptable if it is a JPEG, PNG or WebP picture of a sensible size. { ok, error? }
+export const checkProofImage = (file, what = 'photo') => {
+  if (!file) return { ok: false, error: `Add a ${what}.` };
+  if (!ID_PROOF_TYPES.includes(file.type)) return { ok: false, error: `The ${what} must be a JPG, PNG or WebP picture.` };
+  if (!(file.size > 0)) return { ok: false, error: `The ${what} is empty. Please choose it again.` };
+  if (file.size > ID_PROOF_MAX_BYTES) return { ok: false, error: `The ${what} is too large (the limit is ${Math.round(ID_PROOF_MAX_BYTES / 1048576)} MB).` };
+  return { ok: true };
+};
+
+// The words of a name, the way the database splits them: lower-case letters only, no repeats.
+export const nameWords = (name) => [...new Set(
+  String(name ?? '').toLowerCase().replace(/[^\p{L}\s]/gu, ' ').split(/\s+/).filter(Boolean)
+)];
+
+// "Aban Abaasa" is a full name; "Aban" is not. The ID's name must have at least two real words.
+export const isFullName = (name) => nameWords(name).filter((w) => w.length >= 2).length >= 2;
+
+// Does the wallet's name fit the name printed on the ID? Every word of the wallet name must be on the ID
+// (a single letter counts as an initial). Same rule as national_id_name_matches() in the database.
+export const nameFitsId = (walletName, idName) => {
+  const wallet = nameWords(walletName);
+  if (!wallet.length) return false;
+  const id = nameWords(idName);
+  return wallet.every((w) => (w.length === 1 ? id.some((x) => x[0] === w) : id.includes(w)));
+};
+
+// Everything that can be checked before a photo is uploaded. Returns an error message, or '' when all is well.
+export const proofFormProblem = ({ nameOnId, walletName, idPhoto, selfie, needsId = false, country = '', value = '' } = {}) => {
+  if (needsId) {
+    if (!String(country || '').trim()) return 'Choose the country of your ID.';
+    if (!normalizeNationalId(value)) return 'Enter your national ID number.';
+  }
+  if (!isFullName(nameOnId)) return 'Enter your full name exactly as it is printed on your ID (at least two names).';
+  if (walletName && !nameFitsId(walletName, nameOnId)) {
+    return `The name on your wallet (${walletName}) has to match the name on your ID. Change the wallet name in your account settings, or type the name exactly as printed on the ID.`;
+  }
+  const idCheck = checkProofImage(idPhoto, 'photo of your ID');
+  if (!idCheck.ok) return idCheck.error;
+  const selfieCheck = checkProofImage(selfie, 'selfie holding your ID');
+  if (!selfieCheck.ok) return selfieCheck.error;
+  return '';
+};
+
+// Where a person stands, in one word:
+//   unavailable  the database part is not installed        verified    a reviewer confirmed the ID is theirs
+//   none         no ID saved and no request                pending     a request is waiting for a reviewer
+//   unverified   an ID is saved, nothing proven yet        rejected    the newest request was turned down
+export const idVerificationState = (status) => {
+  if (!status || status.available === false) return 'unavailable';
+  if (status.verified) return 'verified';
+  if (status.check?.status === 'pending') return 'pending';
+  if (status.check?.status === 'rejected') return 'rejected';
+  return status.hasId ? 'unverified' : 'none';
+};
+
+// The "already linked to another wallet" answer: the one case where the person can ask to take the ID back.
+export const isIdTakenResult = (result) => !!result && !result.success
+  && (result.code === 'id_taken' || /already linked to another wallet/i.test(String(result.error || '')));
+
+// What a sender is told about the person they are about to pay. `trust` is { verified, nameMatches } or null
+// when the database cannot say (then nothing is shown, rather than a wrong "not verified").
+export const idTrustLabel = (trust) => {
+  if (!trust) return null;
+  if (!trust.verified) return { tone: 'warn', text: 'ID not verified' };
+  if (!trust.nameMatches) return { tone: 'warn', text: 'ID verified, but the wallet name differs from the name on it' };
+  return { tone: 'ok', text: 'ID verified' };
+};
+
+// A database refusal such as "NATIONAL_ID_NAME_LOCKED: your wallet name is tied to…" without its machine-readable prefix,
+// so it can be shown to a person as the sentence it is.
+export const friendlyIdError = (message) => String(message ?? '').replace(/^\s*(?:[^:]{0,40}:\s*)?NATIONAL_ID_[A-Z_]+:\s*/i, '');

@@ -93,6 +93,9 @@ export function describeSendError(error) {
   } else if (/NATIONAL_ID_REQUIRED/.test(raw)) {
     // The database refuses to let money leave a wallet with no national ID on file.
     message = 'Add your national ID to your wallet before you send or withdraw money. Open your wallet and enter it when asked.';
+  } else if (/NATIONAL_ID_NOT_VERIFIED/.test(raw)) {
+    // Stricter mode: an ID on file is not enough to send money, it has to be verified.
+    message = 'Your national ID has not been verified yet, so you cannot send or withdraw money. Open Settings in your wallet and verify your ID.';
   } else if (error?.requestId) {
     message = `${raw} (Payment request ${error.requestId} was created — see it in the business administrator's inbox.)`;
   }

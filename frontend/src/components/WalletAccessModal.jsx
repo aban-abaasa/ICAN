@@ -3,6 +3,7 @@ import { scrollFocusedIntoView } from '../utils/scrollFocus';
 import { Lock, X, Delete, Mail, KeyRound, CheckCircle2, Fingerprint, Smartphone } from 'lucide-react';
 import { walletAccountService } from '../services/walletAccountService';
 import NationalIdField from './NationalIdField';
+import NationalIdClaimOffer from './NationalIdClaimOffer';
 import useNationalIdStatus from '../hooks/useNationalIdStatus';
 import './wallet-access-classic.css';
 
@@ -189,6 +190,16 @@ const WalletAccessModal = ({
     />
   ) : null;
 
+  // When the ID typed above turns out to be saved on someone else's wallet, its real owner can ask for it.
+  const claimOffer = (message) => message ? (
+    <NationalIdClaimOffer
+      message={message}
+      country={walletCountry || form.idCountry || defaultCountry}
+      value={form.nationalId || ''}
+      walletName={form.accountHolderName || account?.account_holder_name || ''}
+    />
+  ) : null;
+
   const hasPin = !!account?.pin_hash;
   const canUnlock = pin.length >= PIN_MIN && !unlocking;
   const firstName = account?.account_holder_name ? account.account_holder_name.split(' ')[0] : '';
@@ -229,6 +240,7 @@ const WalletAccessModal = ({
       {accountMessage && (
         <p role="status" className={`wa-notice ${accountMessage.type === 'success' ? '' : 'is-error'}`}>{accountMessage.text}</p>
       )}
+      {accountMessage?.type !== 'success' && claimOffer(accountMessage?.text)}
 
       {/* ───────────── PIN tab ───────────── */}
       {tab === 'pin' && (
@@ -265,6 +277,7 @@ const WalletAccessModal = ({
                   {nationalIdField}
                 </div>
                 {pinLink.error && <p role="alert" className="wa-alert">{pinLink.error}</p>}
+                {claimOffer(pinLink.error)}
                 <button type="button" disabled={pinLink.loading} onClick={onSendLink} className={`${btnPrimary} mt-5`}>
                   {pinLink.loading ? 'Sending link…' : 'Email me the PIN setup link'}
                 </button>
@@ -305,6 +318,7 @@ const WalletAccessModal = ({
                 <p className="wa-p mb-3">We'll email a 6-digit code to confirm this address before you set a PIN.</p>
                 {otp.error && <p className="wa-alert" style={{ marginTop: 0, marginBottom: '0.6rem' }}>{otp.error}</p>}
                 {pinLink.error && !pinLink.sentTo && <p className="wa-alert" style={{ marginTop: 0, marginBottom: '0.6rem' }}>{pinLink.error}</p>}
+                {!pinLink.sentTo && claimOffer(pinLink.error)}
                 {pinLink.sentTo ? (
                   <LinkSent pinLink={pinLink} onSendLink={onSendLink} onContinue={onContinue} compact />
                 ) : !otp.sent ? (
