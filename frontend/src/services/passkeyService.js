@@ -10,8 +10,8 @@
 
 import { getSupabaseClient } from '../lib/supabase/client';
 import {
-  PasskeyError, assertionPayload, bytesToB64url, creationOptionsFromServer, describeWebAuthnError, deviceLabel,
-  isPasskeySupported, registrationPayload, requestOptionsFromServer,
+  BACKEND_MISSING_MESSAGE, PasskeyError, assertionPayload, bytesToB64url, creationOptionsFromServer, describeWebAuthnError,
+  deviceLabel, explainFunctionFailure, isPasskeySupported, registrationPayload, requestOptionsFromServer,
 } from '../utils/webauthn';
 
 const FUNCTION_NAME = 'passkey-auth';
@@ -19,7 +19,7 @@ const THIS_DEVICE_KEY = 'ican_passkey_credential_id';
 
 export class PasskeyBackendMissingError extends PasskeyError {
   constructor() {
-    super('Fingerprint and face sign-in is not switched on for this server yet. An administrator needs to apply the migration and deploy the passkey-auth function.', 'not_installed');
+    super(BACKEND_MISSING_MESSAGE, 'not_installed');
     this.name = 'PasskeyBackendMissingError';
   }
 }
@@ -54,13 +54,13 @@ const callFunction = async (action, body = {}) => {
   if (error) {
     let detail = null;
     try { detail = await error.context?.clone?.().json?.(); } catch { /* not JSON: a gateway page, or nothing at all */ }
-    if (detail?.code === 'not_installed') throw new PasskeyBackendMissingError();
-    if (detail?.error) throw new PasskeyError(String(detail.error), detail.code || '');
-    // The function's own refusals always carry `error`; a 404 without one is the platform saying it is not deployed.
-    if (error.context?.status === 404) throw new PasskeyBackendMissingError();
-    throw new PasskeyError(navigator.onLine === false
-      ? 'You are offline. Fingerprint and face sign-in needs a connection.'
-      : 'Could not reach the server. Check your connection and try again.');
+    const { message, code } = explainFunctionFailure({
+      detail,
+      status: error.context?.status || 0,
+      hasResponse: Boolean(error.context),
+      online: navigator.onLine !== false,
+    });
+    throw code === 'not_installed' ? new PasskeyBackendMissingError() : new PasskeyError(message, code);
   }
   if (!data?.success) throw new PasskeyError(data?.error || 'Fingerprint or face sign-in did not work. Try again.', data?.code || '');
   return data;

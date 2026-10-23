@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Laptop, Loader2, LogOut, Monitor, Smartphone, Tablet } from 'lucide-react';
+import CollapsibleCard from './CollapsibleCard';
 import { describeUserAgent } from '../../../utils/securityHelpers';
 import { formatTimeAgo } from '../../../services/universalNotificationsService';
 import { revokeSession, signOutOtherDevices } from '../../../services/securityService';
@@ -23,15 +24,15 @@ export default function DevicesCard({ sessions, onChanged }) {
   };
 
   return (
-    <section className="gr-card gr-form" aria-label="Devices and sessions">
-      <div className="gr-sectionhead">
-        <div>
-          <p className="gr-eyebrow">Where you are signed in</p>
-          <h3 className="gr-title gr-h">Devices &amp; sessions</h3>
-        </div>
-        <span className="gr-chip">{sessions.length} signed in</span>
-      </div>
-
+    <CollapsibleCard
+      id="devices"
+      icon={Laptop}
+      eyebrow="Where you are signed in"
+      title="Devices & sessions"
+      chip={<span className="gr-chip">{sessions.length} signed in</span>}
+      summary={others.length ? `This device and ${others.length} other${others.length === 1 ? '' : 's'}` : 'Only this device'}
+      defaultOpen={Boolean(error)}
+    >
       {error && <div className="gr-alert gr-alert--err" role="alert">{error}</div>}
 
       {sessions.length === 0 ? (
@@ -79,6 +80,6 @@ export default function DevicesCard({ sessions, onChanged }) {
           Sign out all {others.length} other device{others.length === 1 ? '' : 's'}
         </button>
       )}
-    </section>
+    </CollapsibleCard>
   );
 }

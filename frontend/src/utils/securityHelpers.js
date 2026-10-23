@@ -120,3 +120,17 @@ export function daysSinceNewest(dates, now = Date.now()) {
   if (!times.length) return null;
   return Math.floor((now - Math.max(...times)) / 86400000);
 }
+
+/** "today", "3 days ago", "2 months ago", "over a year ago" - an age a person reads at a glance (never an ambiguous 7/25/2026). */
+export function describeAge(date, now = Date.now()) {
+  const days = daysSinceNewest([date], now);
+  if (days === null) return '';
+  if (days < 1) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days} days ago`;
+  if (days < 365) {
+    const months = Math.floor(days / 30);
+    return months === 1 ? '1 month ago' : `${months} months ago`;
+  }
+  return days < 730 ? 'over a year ago' : `${Math.floor(days / 365)} years ago`;
+}

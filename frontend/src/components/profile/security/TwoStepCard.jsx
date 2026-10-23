@@ -3,6 +3,7 @@ import { Check, Copy, Loader2, ShieldCheck, ShieldOff, Smartphone } from 'lucide
 import {
   cancelTotpEnrollment, confirmTotpEnrollment, disableTotp, startTotpEnrollment,
 } from '../../../services/securityService';
+import CollapsibleCard from './CollapsibleCard';
 
 const digitsOnly = (v) => v.replace(/\D/g, '').slice(0, 6);
 
@@ -66,25 +67,23 @@ export default function TwoStepCard({ factors, onChanged }) {
     } catch { /* clipboard unavailable: the key is on screen to copy by hand */ }
   };
 
+  const since = enabled ? new Date(enabled.created_at).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+
   return (
-    <section className="gr-card gr-form" aria-label="Two-step verification">
-      <div className="gr-status">
-        {enabled ? <ShieldCheck aria-hidden="true" /> : <ShieldOff aria-hidden="true" />}
-        <div className="gr-status__body">
-          <div className="gr-sectionhead">
-            <div>
-              <p className="gr-eyebrow">Second step</p>
-              <h3 className="gr-title gr-h">Verify with your authenticator app</h3>
-            </div>
-            {enabled ? <span className="gr-chip gr-chip--ok"><Check aria-hidden="true" />On</span> : <span className="gr-chip gr-chip--warn">Off</span>}
-          </div>
-          <p className="gr-sub">
-            {enabled
-              ? `Active since ${new Date(enabled.created_at).toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' })}. Signing in needs your password and a code from your authenticator app. Changing your password or deleting your account asks for a fresh code too.`
-              : 'Adds a second step to signing in: a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy). A stolen password alone can no longer open your account.'}
-          </p>
-        </div>
-      </div>
+    <CollapsibleCard
+      id="two-step"
+      icon={enabled ? ShieldCheck : ShieldOff}
+      eyebrow="Second step"
+      title="Verify with your authenticator app"
+      chip={enabled ? <span className="gr-chip gr-chip--ok"><Check aria-hidden="true" />On</span> : <span className="gr-chip gr-chip--warn">Off</span>}
+      summary={enabled ? `Active since ${since}` : 'Add a code from an authenticator app'}
+      defaultOpen={step !== 'idle' || Boolean(error || notice)}
+    >
+      <p className="gr-sub">
+        {enabled
+          ? `Active since ${since}. Signing in needs your password and a code from your authenticator app. Changing your password or deleting your account asks for a fresh code too.`
+          : 'Adds a second step to signing in: a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy). A stolen password alone can no longer open your account.'}
+      </p>
 
       {notice && <div className="gr-alert gr-alert--ok" role="status">{notice}</div>}
       {error && <div className="gr-alert gr-alert--err" role="alert">{error}</div>}
@@ -151,6 +150,6 @@ export default function TwoStepCard({ factors, onChanged }) {
           </div>
         </div>
       )}
-    </section>
+    </CollapsibleCard>
   );
 }

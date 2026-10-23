@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Check, LogOut, ShieldAlert, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, LogOut, ShieldAlert, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getWalletPhoneAlertsStatus } from '../../services/walletPushService';
 import {
@@ -8,6 +8,7 @@ import {
 import { daysSinceNewest, securityPosture } from '../../utils/securityHelpers';
 import ActivityCard from './security/ActivityCard';
 import BiometricCard from './security/BiometricCard';
+import CollapsibleCard from './security/CollapsibleCard';
 import DevicesCard from './security/DevicesCard';
 import PasswordCard from './security/PasswordCard';
 import TwoStepCard from './security/TwoStepCard';
@@ -29,6 +30,7 @@ export default function SecurityPanel() {
   const [mfaNote, setMfaNote] = useState('');
   const [pushEnabled, setPushEnabled] = useState(false);
   const [confirmGlobal, setConfirmGlobal] = useState(false);
+  const [showChecks, setShowChecks] = useState(false);
   const [globalBusy, setGlobalBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -83,7 +85,11 @@ export default function SecurityPanel() {
             </p>
           </div>
         </div>
-        <div className="gr-checks" aria-label="Protection checklist">
+        <button type="button" className="gr-checks-toggle" aria-expanded={showChecks} aria-controls="gr-sec-checks" onClick={() => setShowChecks((v) => !v)}>
+          <ChevronDown aria-hidden="true" />
+          {showChecks ? 'Hide checklist' : `Show checklist · ${posture.checks.filter((c) => c.ok).length} of ${posture.checks.length} done`}
+        </button>
+        {showChecks && <div id="gr-sec-checks" className="gr-checks" aria-label="Protection checklist">
           {posture.checks.map((c) => (
             <div key={c.key} className={`gr-check ${c.ok ? 'is-ok' : ''}`}>
               <span className="gr-check__icon">{c.ok ? <Check aria-hidden="true" /> : <ShieldAlert aria-hidden="true" />}</span>
@@ -94,7 +100,7 @@ export default function SecurityPanel() {
               <span className="gr-small">{c.ok ? `+${c.weight}` : `0/${c.weight}`}</span>
             </div>
           ))}
-        </div>
+        </div>}
       </header>
 
       {historyMissing && (
@@ -117,20 +123,20 @@ export default function SecurityPanel() {
         <>
           <BiometricCard twoStepOn={data.factors.verified.length > 0} />
           {!mfaNote && <TwoStepCard factors={data.factors} onChanged={load} />}
-          <PasswordCard email={user?.email} personal={[user?.email?.split('@')[0], profile?.full_name]} mfaFactorId={data.factors.verified[0]?.id} onChanged={load} />
+          <PasswordCard email={user?.email} personal={[user?.email?.split('@')[0], profile?.full_name]} mfaFactorId={data.factors.verified[0]?.id} changedAt={data.passwordChangedAt} onChanged={load} />
           {!historyMissing && <DevicesCard sessions={data.sessions} onChanged={load} />}
           {!historyMissing && <ActivityCard activity={data.activity} />}
         </>
       )}
 
-      <section className="gr-card gr-form" aria-label="Sign out everywhere">
-        <div className="gr-status">
-          <LogOut aria-hidden="true" />
-          <div className="gr-status__body">
-            <h3 className="gr-title gr-h">Sign out everywhere</h3>
-            <p className="gr-sub">Ends every session on every device, including this one, and switches off fingerprint and face sign-in everywhere. Use it if a phone is lost or you think someone else has your password.</p>
-          </div>
-        </div>
+      <CollapsibleCard
+        id="signout-all"
+        icon={LogOut}
+        title="Sign out everywhere"
+        summary="Ends every session on every device"
+        defaultOpen={confirmGlobal}
+      >
+        <p className="gr-sub">Ends every session on every device, including this one, and switches off fingerprint and face sign-in everywhere. Use it if a phone is lost or you think someone else has your password.</p>
         {!confirmGlobal ? (
           <button type="button" className="gr-btn gr-btn--danger" onClick={() => setConfirmGlobal(true)}><LogOut aria-hidden="true" />Sign out of all devices</button>
         ) : (
@@ -139,7 +145,7 @@ export default function SecurityPanel() {
             <button type="button" className="gr-btn gr-btn--danger" onClick={doGlobal} disabled={globalBusy}>Yes, sign out everywhere</button>
           </div>
         )}
-      </section>
+      </CollapsibleCard>
     </section>
   );
 }

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, KeyRound, Loader2, Mail } from 'lucide-react';
-import { passwordStrength } from '../../../utils/securityHelpers';
+import { describeAge, passwordStrength } from '../../../utils/securityHelpers';
+import CollapsibleCard from './CollapsibleCard';
 import {
   ReauthRequiredError, changePassword, sendPasswordResetEmail, signOutOtherDevices, verifyTotpCode,
 } from '../../../services/securityService';
 
 /** Change password: confirms the current one, scores the new one, can sign other devices out. */
-export default function PasswordCard({ email, personal, mfaFactorId, onChanged }) {
+export default function PasswordCard({ email, personal, mfaFactorId, changedAt, onChanged }) {
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -66,14 +67,14 @@ export default function PasswordCard({ email, personal, mfaFactorId, onChanged }
   };
 
   return (
-    <section className="gr-card gr-form" aria-label="Password">
-      <div className="gr-status">
-        <KeyRound aria-hidden="true" />
-        <div className="gr-status__body">
-          <h3 className="gr-title gr-h">Password</h3>
-          <p className="gr-sub">Use a long, unique password you do not use anywhere else.</p>
-        </div>
-      </div>
+    <CollapsibleCard
+      id="password"
+      icon={KeyRound}
+      title="Password"
+      summary={changedAt ? `Changed ${describeAge(changedAt)}` : 'Use a long, unique password'}
+      defaultOpen={open || Boolean(error || notice)}
+    >
+      <p className="gr-sub">Use a long, unique password you do not use anywhere else.</p>
 
       {notice && <div className="gr-alert gr-alert--ok" role="status">{notice}</div>}
 
@@ -145,6 +146,6 @@ export default function PasswordCard({ email, personal, mfaFactorId, onChanged }
           </button>
         </form>
       )}
-    </section>
+    </CollapsibleCard>
   );
 }

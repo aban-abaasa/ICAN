@@ -124,6 +124,31 @@ export function assertionPayload(credential) {
   };
 }
 
+// ----------------------------------------------------- a failed call to the server
+
+export const BACKEND_MISSING_MESSAGE = 'Fingerprint and face sign-in is not switched on for this server yet. An administrator needs to apply the migration and deploy the passkey-auth function.';
+
+/**
+ * What a failed call to the passkey-auth function means, in words a person can act on.
+ *
+ * A function that is not deployed answers 404 WITHOUT the CORS headers a browser insists on, so the page is told the request
+ * failed outright (no response at all) - the same thing a dead connection looks like. The one difference is that the device
+ * still says it is online, so that case names both causes instead of blaming the connection alone.
+ *
+ * @param {{detail?: {error?: string, code?: string}|null, status?: number, hasResponse?: boolean, online?: boolean}} failure
+ * @returns {{message: string, code: string}}
+ */
+export function explainFunctionFailure({ detail = null, status = 0, hasResponse = false, online = true } = {}) {
+  if (detail?.code === 'not_installed' || (!detail?.error && status === 404)) return { message: BACKEND_MISSING_MESSAGE, code: 'not_installed' };
+  if (detail?.error) return { message: String(detail.error), code: detail.code || '' };
+  if (hasResponse) return { message: 'The server had a problem. Try again in a moment.', code: 'server_error' };
+  if (!online) return { message: 'You are offline. Fingerprint and face sign-in needs a connection.', code: 'offline' };
+  return {
+    message: 'Could not reach fingerprint and face sign-in. If your connection is fine, it is probably not switched on for this server yet: an administrator needs to deploy the passkey-auth function.',
+    code: 'unreachable',
+  };
+}
+
 // ----------------------------------------------------------------- errors
 
 /**

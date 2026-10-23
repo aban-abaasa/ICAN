@@ -31,8 +31,10 @@ for this server yet", the sign-in button simply reports the same if tapped, and 
      (and only the harmless columns); only the Edge Function can create or update them.
    * `passkey_challenges` - the one-time challenges. Service role only.
 2. **Edge Function** - deploy `backend/components/supabase/functions/passkey-auth` the same way as `wallet-login`
-   (`supabase functions deploy passkey-auth`). Leave "Verify JWT" **on** (the app always sends the anon key or the person's token).
-   It needs no new secret: it uses the `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_ANON_KEY` every function already has.
+   (`supabase functions deploy passkey-auth --no-verify-jwt`). Deploy it with "Verify JWT" **off**, like `wallet-login`: signing in happens
+   before there is any session, and the function does its own checks (enrolling needs the signed-in person's token and their password;
+   signing in needs a valid signature from a registered device). It needs no new secret: it uses the `SUPABASE_URL`,
+   `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_ANON_KEY` every function already has.
 
 Optional: set **`PASSKEY_ALLOWED_ORIGINS`** (comma separated, e.g. `https://app.icanera.com`) to restrict which web addresses may ask.
 Unset, any https address (and `localhost`) may - a passkey still only ever works on the exact address it was made on.
