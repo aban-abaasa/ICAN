@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  PasskeyError, assertionPayload, b64urlToBytes, biometricName, bytesToB64url, creationOptionsFromServer, describeWebAuthnError,
-  deviceLabel, registrationPayload, requestOptionsFromServer,
+  BACKEND_MISSING_MESSAGE, PasskeyError, assertionPayload, b64urlToBytes, biometricName, bytesToB64url, creationOptionsFromServer, describeWebAuthnError,
+  deviceLabel, explainFunctionFailure, registrationPayload, requestOptionsFromServer,
 } from '../src/utils/webauthn.js';
 import { b64urlEncode as serverEncode } from '../../backend/components/supabase/functions/_shared/webauthn.js';
 
@@ -105,4 +105,27 @@ test('the device is named the way its owner knows the feature', () => {
   assert.equal(biometricName('curl/8'), 'fingerprint or face');
   assert.equal(deviceLabel('Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/120 Mobile Safari/537.36'), 'Chrome on Android');
   assert.equal(deviceLabel(''), 'This device');
+});
+
+test('a function that is not deployed is not blamed on the connection: no response while online names both causes', () => {
+  // supabase-js reports a request the browser blocked (the gateway's 404 has no CORS headers) as a failure with no response at all
+  const r = explainFunctionFailure({ detail: null, status: 0, hasResponse: false, online: true });
+  assert.equal(r.code, 'unreachable');
+  assert.match(r.message, /not switched on|deploy the passkey-auth function/);
+  assert.match(r.message, /connection is fine/);
+});
+
+test('truly offline is said plainly, and a 404 that does reach the page means not installed', () => {
+  assert.deepEqual(explainFunctionFailure({ online: false }), { message: 'You are offline. Fingerprint and face sign-in needs a connection.', code: 'offline' });
+  assert.deepEqual(explainFunctionFailure({ status: 404, hasResponse: true }), { message: BACKEND_MISSING_MESSAGE, code: 'not_installed' });
+  assert.equal(explainFunctionFailure({ detail: { code: 'not_installed', error: 'x' }, status: 503, hasResponse: true }).code, 'not_installed');
+});
+
+test('the function\'s own refusal is passed through word for word, and a bare server error is a retry', () => {
+  assert.deepEqual(explainFunctionFailure({ detail: { error: 'That password is not right.', code: 'wrong_password' }, status: 401, hasResponse: true }),
+    { message: 'That password is not right.', code: 'wrong_password' });
+  // a 404 the function itself sent (unknown credential) is its answer, not "not installed"
+  assert.equal(explainFunctionFailure({ detail: { error: 'This device is not set up', code: 'unknown_credential' }, status: 404, hasResponse: true }).code, 'unknown_credential');
+  assert.equal(explainFunctionFailure({ status: 502, hasResponse: true }).code, 'server_error');
+  assert.equal(explainFunctionFailure().code, 'unreachable');
 });

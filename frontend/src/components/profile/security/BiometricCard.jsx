@@ -183,7 +183,7 @@ export default function BiometricCard({ twoStepOn = false }) {
                 )}
                 <button type="button" className="gr-btn gr-btn--primary" disabled={busy || !deviceReady} onClick={turnOn}>
                   {busy ? <Loader2 className="gr-spin" aria-hidden="true" /> : <ScanFace aria-hidden="true" />}
-                  {enabled ? 'Add this device' : 'Turn on for this device'}
+                  {asking ? 'Turn on' : enabled ? 'Add this device' : 'Turn on for this device'}
                 </button>
               </div>
             </>
