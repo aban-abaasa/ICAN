@@ -5739,6 +5739,9 @@ const CMMSModule = ({
       }
     };
 
+    const getInitials = (value = '') =>
+      String(value).trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('') || '?';
+
     // Search ICAN users - exact function from BusinessProfileForm
     const handleSearchUsers = async (query) => {
       setEmailSearchQuery(query);
@@ -6118,10 +6121,10 @@ const CMMSModule = ({
     };
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Toasts for the Add User flow — theme-aware replacement for the old
             native alert() popups. */}
-        <div className="fixed top-4 right-4 z-[100] flex w-full max-w-sm flex-col gap-2 pointer-events-none">
+        <div className="fixed top-4 left-4 right-4 sm:left-auto z-[100] flex sm:w-full sm:max-w-sm flex-col gap-2 pointer-events-none">
           {toasts.map(t => {
             const styles = {
               success: { border: 'border-emerald-500/30', iconBg: 'bg-emerald-500/15', iconColor: 'text-emerald-400', Icon: CheckCircle2 },
@@ -6160,170 +6163,178 @@ const CMMSModule = ({
         `}</style>
 
         {userRole === 'admin' && (
-          <div className="cmms-classic-card p-4" style={{ borderLeft: '4px solid #22c55e' }}>
-            <p className="text-green-300 font-semibold text-sm">Admin full access is active.</p>
-            <p className="cmms-classic-muted text-xs mt-1">You can assign another Admin and manage all CMMS roles.</p>
-          </div>
+          <p className="text-xs text-slate-400 border-l-2 border-green-500 pl-3 py-0.5">
+            <span className="text-green-300 font-semibold">Admin full access is active.</span>{' '}
+            You can assign another Admin and manage all CMMS roles.
+          </p>
         )}
 
-        {/* Add New User Form with Dropdown Search */}
-        <div className="cmms-classic-card p-6">
-          <h3 className="cmms-classic-heading text-xl mb-4 flex items-center gap-2">
-            <User className="w-6 h-6" style={{ color: 'var(--color-primary)' }} />
+        {/* Add user: open layout (no boxed card) so the form uses the full width */}
+        <section>
+          <h3 className="cmms-classic-heading text-lg mb-3 flex items-center gap-2">
+            <User className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
             Add User to CMMS
           </h3>
 
-          <div className="space-y-4">
-            {/* User Search & Selection - EXACT from BusinessProfileForm */}
-            <div>
-              <label className="text-slate-300 text-sm block mb-2">Search IcanEra User (by name or email) *</label>
-              <div className="relative">
-                <div className="flex items-center gap-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded px-3 py-2 focus-within:border-blue-500 focus-within:border-opacity-100">
-                  <Search className="w-4 h-4 text-slate-400" />
+          <div className="space-y-3">
+            {/* Step 1: search. Once someone is picked the search box is replaced
+                by a single compact "selected user" row. */}
+            {!newUser.email ? (
+              <div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
                   <input
                     type="text"
+                    inputMode="search"
                     value={emailSearchQuery}
                     onChange={(e) => handleSearchUsers(e.target.value)}
-                    onBlur={() => setTimeout(() => setSearchResults([]), 300)}
-                    placeholder="Type name or email to search..."
-                    className="flex-1 bg-transparent text-white outline-none placeholder-gray-400"
+                    placeholder="Search IcanEra user by name or email"
+                    aria-label="Search IcanEra user by name or email"
+                    className="w-full h-12 pl-10 pr-10 rounded-md bg-white/10 border border-white/20 text-white text-base placeholder-slate-400 focus:border-blue-400"
+                    style={{ outline: 'none', boxShadow: 'none' }}
                     autoComplete="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                   />
-                  {searchingUsers && (
-                    <Loader className="w-4 h-4 text-blue-400 animate-spin" />
-                  )}
-                  {searchResults.length > 0 && (
-                    <span className="text-green-400 text-xs">({searchResults.length} found)</span>
-                  )}
-                </div>
-                
-                {/* Search Results Dropdown */}
-                {searchResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-blue-500 rounded shadow-lg z-20 max-h-48 overflow-y-auto">
-                    <div className="px-3 py-2 bg-slate-800 text-slate-400 text-xs border-b border-slate-600">
-                      👆 Click to select and auto-fill
-                    </div>
-                    {searchResults.map(user => (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
+                    {searchingUsers ? (
+                      <Loader className="w-4 h-4 text-blue-400 animate-spin" />
+                    ) : emailSearchQuery ? (
                       <button
-                        key={user.email}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => handleSelectUser(user)}
-                        className="w-full text-left px-3 py-2 hover:bg-blue-600/30 text-white border-b border-slate-600 last:border-b-0 transition flex items-center justify-between"
+                        type="button"
+                        onClick={() => { setEmailSearchQuery(''); setSearchResults([]); }}
+                        className="text-slate-400 hover:text-white"
+                        aria-label="Clear search"
                       >
-                        <div>
-                          <p className="font-medium">{user.name}</p>
-                          <p className="text-xs text-slate-400">{user.email}</p>
-                        </div>
-                        <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+                        <X className="w-4 h-4" />
                       </button>
-                    ))}
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Results sit in the page flow (not floating over the form) */}
+                {searchResults.length > 0 && (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between px-1 pb-1 text-xs text-slate-400">
+                      <span>Tap a person to select</span>
+                      <span className="text-green-400">{searchResults.length} found</span>
+                    </div>
+                    <div className="max-h-[45vh] overflow-y-auto overscroll-contain divide-y divide-white/10 border-y border-white/10">
+                      {searchResults.map(user => (
+                        <button
+                          type="button"
+                          key={user.email}
+                          onClick={() => handleSelectUser(user)}
+                          className="w-full text-left py-2.5 px-1 flex items-center gap-3 hover:bg-white/5 active:bg-white/10 transition"
+                        >
+                          <span className="w-9 h-9 rounded-full bg-blue-500/25 text-blue-200 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                            {getInitials(user.name || user.email)}
+                          </span>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-sm font-medium text-white truncate">{user.name}</span>
+                            <span className="block text-xs text-slate-400 truncate">{user.email}</span>
+                          </span>
+                          <CheckCircle2 className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {/* No results message */}
                 {emailSearchQuery.length >= 2 && searchResults.length === 0 && !searchingUsers && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-700 border border-orange-500 rounded shadow-lg z-20 p-3">
-                    <p className="text-orange-300 text-sm">⚠️ No IcanEra users found matching "{emailSearchQuery}"</p>
-                    <p className="text-slate-400 text-xs mt-1">The person must have an IcanEra account first.</p>
-                  </div>
+                  <p className="mt-2 text-xs text-orange-300">
+                    No IcanEra users match "{emailSearchQuery}". The person must have an IcanEra account first.
+                  </p>
+                )}
+                {emailSearchQuery.length < 2 && (
+                  <p className="mt-2 text-xs text-slate-500">Type at least 2 characters.</p>
                 )}
               </div>
-            </div>
-
-            {/* Auto-filled Name */}
-            <div>
-              <label className="text-slate-300 text-sm block mb-2">
-                Full Name {newUser.name && <span className="text-green-400">✓ Auto-filled</span>}
-              </label>
-              <div className="flex items-center gap-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded px-3 py-2">
-                <input
-                  type="text"
-                  value={newUser.name}
-                  readOnly
-                  placeholder="← Search and select a user first"
-                  className="flex-1 bg-transparent text-white outline-none placeholder-gray-400 cursor-not-allowed"
-                />
-                {newUser.email && verificationStatus[newUser.email]?.exists && (
-                  <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
-                )}
-              </div>
-            </div>
-
-            {/* Show selected user email */}
-            {newUser.email && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-blue-900/30 rounded border border-blue-500/50">
-                <span className="text-blue-300 text-sm">📧 Selected: <strong>{newUser.email}</strong></span>
-                <button
-                  onClick={() => {
-                    setNewUser({ name: '', email: '', phone: '', auth_user_id: '', role: '', department_id: '', assignedServices: [] });
-                    setEmailSearchQuery('');
-                  }}
-                  className="ml-auto text-red-400 hover:text-red-300 text-xs"
-                >
-                  ✕ Clear
-                </button>
-              </div>
-            )}
-
-            {/* Verification Status */}
-            {newUser.email && verificationStatus[newUser.email] && (
-              <div className={`flex items-center gap-2 px-3 py-2 rounded ${
-                verificationStatus[newUser.email]?.exists 
-                  ? 'bg-green-900/30 text-green-300' 
-                  : 'bg-red-900/30 text-red-300'
-              }`}>
-                {verificationStatus[newUser.email]?.exists ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span className="text-sm">✓ IcanEra account verified - Ready to add!</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle className="w-4 h-4" />
-                    <span className="text-sm text-xs">{verificationStatus[newUser.email]?.error}</span>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Phone (Optional) */}
-            {newUser.email && (
-              <input
-                type="tel"
-                placeholder="Phone (optional)"
-                value={newUser.phone}
-                onChange={(e) => setNewUser({...newUser, phone: e.target.value})}
-                className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
-              />
-            )}
-
-            {/* Role Selection */}
-            {newUser.email && (
+            ) : (
               <div>
-                <label className="text-white text-sm block mb-2">Role *</label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-                  className="w-full px-3 py-2 bg-slate-700 border border-white border-opacity-20 rounded text-white font-medium focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="" className="bg-slate-700 text-white">Select role...</option>
-                  {roles.map(r => (
-                    <option key={r.id} value={r.id} className="bg-slate-700 text-white">
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="cmms-keep flex items-center gap-3 py-2 px-3 rounded-md bg-blue-500/10 border border-blue-500/40">
+                  <span className="w-9 h-9 rounded-full bg-blue-500/30 text-blue-100 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                    {getInitials(newUser.name || newUser.email)}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-white truncate">{newUser.name}</span>
+                      {verificationStatus[newUser.email]?.exists && (
+                        <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" title="IcanEra account verified" />
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-400 truncate">{newUser.email}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewUser({ name: '', email: '', phone: '', auth_user_id: '', role: '', department_id: '', assignedServices: [] });
+                      setEmailSearchQuery('');
+                      setSearchResults([]);
+                    }}
+                    className="text-xs font-semibold text-blue-300 hover:text-white px-2 py-1"
+                  >
+                    Change
+                  </button>
+                </div>
+                {verificationStatus[newUser.email] && !verificationStatus[newUser.email]?.exists && (
+                  <p className="mt-1.5 text-xs text-red-300 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    {verificationStatus[newUser.email]?.error || 'No IcanEra account found for this email.'}
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Department - conditional */}
+            {/* Step 2: role, phone, department */}
+            {newUser.email && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-300 text-xs font-semibold block mb-1">Role *</label>
+                  <select
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                    className="w-full h-11 px-3 bg-slate-700 border border-white/20 rounded-md text-white text-base focus:border-blue-400 focus:outline-none"
+                  >
+                    <option value="" className="bg-slate-700 text-white">Select role...</option>
+                    {roles.map(r => (
+                      <option key={r.id} value={r.id} className="bg-slate-700 text-white">
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-300 text-xs font-semibold block mb-1">Phone (optional)</label>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="e.g. 0700 000 000"
+                    value={newUser.phone}
+                    onChange={(e) => setNewUser({...newUser, phone: e.target.value})}
+                    className="w-full h-11 px-3 bg-white/10 border border-white/20 rounded-md text-white text-base placeholder-slate-500 focus:border-blue-400"
+                    style={{ outline: 'none', boxShadow: 'none' }}
+                  />
+                </div>
+              </div>
+            )}
+
             {newUser.email && roleNeedsDepartment && (
-              <div className="space-y-2">
-                <label className="text-white text-sm block">Department *</label>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-300 text-xs font-semibold">Department *</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowDepartmentForm(prev => !prev)}
+                    className="text-xs font-semibold text-blue-300 hover:text-white"
+                  >
+                    {showDepartmentForm ? 'Hide new department' : '+ New department'}
+                  </button>
+                </div>
                 <select
                   value={newUser.department_id}
                   onChange={(e) => setNewUser({ ...newUser, department_id: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-700 border border-white border-opacity-20 rounded text-white font-medium focus:border-blue-500 focus:outline-none"
+                  className="w-full h-11 px-3 bg-slate-700 border border-white/20 rounded-md text-white text-base focus:border-blue-400 focus:outline-none"
                 >
                   <option value="">{departmentOptions.length === 0 ? 'Loading departments...' : 'Select Department...'}</option>
                   {departmentOptions.map(dept => (
@@ -6333,42 +6344,34 @@ const CMMSModule = ({
                   ))}
                 </select>
 
-                <button
-                  type="button"
-                  onClick={() => setShowDepartmentForm(prev => !prev)}
-                  className="px-3 py-1.5 bg-blue-500 bg-opacity-30 text-blue-200 rounded text-xs font-semibold hover:bg-opacity-50 transition-all"
-                >
-                  {showDepartmentForm ? 'Hide Department Form' : 'Register New Department'}
-                </button>
-
                 {showDepartmentForm && (
-                  <div className="bg-white bg-opacity-5 border border-white border-opacity-10 rounded p-3 space-y-2">
+                  <div className="mt-2 space-y-2 border-l-2 border-white/15 pl-3">
                     <input
                       type="text"
                       placeholder="Department Name *"
                       value={departmentForm.department_name}
                       onChange={(e) => setDepartmentForm({ ...departmentForm, department_name: e.target.value })}
-                      className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+                      className="w-full h-11 px-3 bg-white/10 border border-white/20 rounded-md text-white text-base placeholder-slate-500"
                     />
                     <input
                       type="text"
                       placeholder="Location"
                       value={departmentForm.location}
                       onChange={(e) => setDepartmentForm({ ...departmentForm, location: e.target.value })}
-                      className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+                      className="w-full h-11 px-3 bg-white/10 border border-white/20 rounded-md text-white text-base placeholder-slate-500"
                     />
                     <textarea
                       placeholder="Description"
                       value={departmentForm.description}
                       onChange={(e) => setDepartmentForm({ ...departmentForm, description: e.target.value })}
                       rows={2}
-                      className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-20 rounded text-white placeholder-gray-400"
+                      className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-md text-white text-base placeholder-slate-500"
                     />
                     <button
                       type="button"
                       onClick={handleCreateDepartmentInline}
                       disabled={isSavingDepartment}
-                      className="px-3 py-2 bg-green-500 bg-opacity-30 text-green-200 rounded text-xs font-semibold hover:bg-opacity-50 transition-all disabled:opacity-50"
+                      className="px-3 py-2 bg-green-500/30 text-green-200 rounded-md text-xs font-semibold hover:bg-green-500/50 transition-all disabled:opacity-50"
                     >
                       {isSavingDepartment ? 'Saving...' : 'Create Department'}
                     </button>
@@ -6377,175 +6380,142 @@ const CMMSModule = ({
               </div>
             )}
 
-            {/* Services - conditional */}
             {newUser.email && newUser.role === 'service-provider' && (
               <div>
-                <label className="text-white text-sm mb-2 block">Select Services (can choose multiple):</label>
+                <label className="text-slate-300 text-xs font-semibold block mb-1">Services (choose one or more)</label>
                 <div className="grid grid-cols-2 gap-2">
-                  {['Preventive Maintenance', 'Corrective Maintenance', 'Installation', 'Inspection', 'Repair', 'Upgrade'].map(service => (
-                    <button
-                      key={service}
-                      onClick={() => {
-                        if (newUser.assignedServices.includes(service)) {
-                          setNewUser({
-                            ...newUser,
-                            assignedServices: newUser.assignedServices.filter(s => s !== service)
-                          });
-                        } else {
-                          setNewUser({
-                            ...newUser,
-                            assignedServices: [...newUser.assignedServices, service]
-                          });
-                        }
-                      }}
-                      className={`px-3 py-2 rounded text-sm font-medium transition-all ${
-                        newUser.assignedServices.includes(service)
-                          ? 'bg-green-500 text-white'
-                          : 'bg-white bg-opacity-10 text-gray-300 hover:bg-opacity-20'
-                      }`}
-                    >
-                      {newUser.assignedServices.includes(service) ? '✓ ' : '○ '}{service}
-                    </button>
-                  ))}
+                  {['Preventive Maintenance', 'Corrective Maintenance', 'Installation', 'Inspection', 'Repair', 'Upgrade'].map(service => {
+                    const selected = newUser.assignedServices.includes(service);
+                    return (
+                      <button
+                        type="button"
+                        key={service}
+                        onClick={() => setNewUser({
+                          ...newUser,
+                          assignedServices: selected
+                            ? newUser.assignedServices.filter(s => s !== service)
+                            : [...newUser.assignedServices, service]
+                        })}
+                        className={`px-2 py-2 rounded-md text-xs font-medium transition-all ${
+                          selected ? 'bg-green-500 text-white' : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                        }`}
+                      >
+                        {selected ? '✓ ' : ''}{service}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Add Button */}
             {newUser.email && (
               <button
+                type="button"
                 onClick={handleAddUser}
-                className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-700 transition-all flex items-center justify-center gap-2"
+                className="w-full h-12 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-md font-semibold hover:from-green-600 hover:to-emerald-700 transition-all flex items-center justify-center gap-2"
               >
                 <Plus className="w-5 h-5" />
                 Add User to CMMS
               </button>
             )}
           </div>
-        </div>
+        </section>
 
-        {/* Users List */}
-        <div className="cmms-classic-card p-6">
-          <h3 className="cmms-classic-heading text-xl mb-4 flex items-center gap-2">
-            <Users className="w-6 h-6" style={{ color: 'var(--color-primary)' }} />
+        {/* Users list: compact rows separated by hairlines */}
+        <section>
+          <h3 className="cmms-classic-heading text-lg mb-1 flex items-center gap-2">
+            <Users className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
             Users & Roles ({cmmsData.users.length})
           </h3>
-          <div className="space-y-3">
+          <div className="divide-y divide-white/10">
             {cmmsData.users.map(user => {
               const normalizedUserRole = normalizeRoleKey(user.role);
               const role = allRoles.find(r => r.id === normalizedUserRole);
               const isNewlyAdded = newlyAddedUserId === user.id;
               const currentDept = cmmsData.departments?.find(d => d.id === user.department_id);
-              
-              return (
-                <div 
-                  key={user.id} 
-                  className={`
-                    bg-gradient-to-r ${role?.color} bg-opacity-20 border border-current border-opacity-30 
-                    rounded-lg p-4 transition-all duration-500
-                    ${isNewlyAdded ? 'ring-2 ring-green-400 shadow-lg shadow-green-500/50 scale-105' : 'hover:border-opacity-60'}
-                  `}
-                >
-                  <div className="flex flex-col gap-4">
-                    {/* User Info Row */}
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">{role?.icon}</span>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <div className="text-white font-bold">{user.name}</div>
-                              {user.isCreator && (
-                                <span className="px-2 py-0.5 bg-amber-500 bg-opacity-50 text-amber-100 text-xs rounded-full font-bold flex items-center gap-1">
-                                  👑 Creator
-                                </span>
-                              )}
-                              {isNewlyAdded && (
-                                <span className="px-2 py-1 bg-green-500 bg-opacity-40 text-green-200 text-xs rounded-full font-semibold animate-pulse">
-                                  ✨ NEW
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-300">{role?.label || normalizedUserRole}</div>
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-400 space-y-1">
-                          <div>📧 {user.email}</div>
-                          {user.phone && <div>📱 {user.phone}</div>}
-                          {user.icanVerified && <div className="text-green-300">✅ IcanEra Verified</div>}
-                          {user.assignedServices && user.assignedServices.length > 0 && (
-                            <div>🔧 {user.assignedServices.join(', ')}</div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        {userRole === 'admin' && normalizedUserRole !== 'admin' && !user.isCreator && (
-                          <button
-                            onClick={() => handleAssignAdmin(user)}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-1"
-                            title="Promote this user to Admin - they will have full CMMS access"
-                          >
-                            ⭐ Make Admin
-                          </button>
-                        )}
-                        {user.isCreator && normalizedUserRole === 'admin' && (
-                          <div className="px-3 py-1.5 bg-amber-500 bg-opacity-60 text-amber-900 rounded text-xs font-semibold flex items-center justify-center gap-1">
-                            👑 Creator Admin
-                          </div>
-                        )}
-                        {hasPermission('canDeleteUsers') && !user.isCreator && (
-                          <button
-                            onClick={() => handleDeleteUser(user)}
-                            className="px-3 py-1.5 bg-red-500 bg-opacity-30 text-red-300 rounded text-xs md:text-sm hover:bg-opacity-50 font-semibold transition-all"
-                            title="Permanently remove this user from CMMS"
-                          >
-                            🗑️ Remove
-                          </button>
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Department Assignment Row */}
-                    {userRole === 'admin' && (
-                      <div className="border-t border-white border-opacity-20 pt-3 mt-2">
-                        <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
-                          <div className="flex-1">
-                            <label className="text-xs font-semibold text-gray-300 block mb-1.5">
-                              🏢 Assign to Department
-                            </label>
-                            <select
-                              value={user.department_id || ''}
-                              onChange={(e) => handleUpdateUserDepartment(user.id, e.target.value)}
-                              style={{ colorScheme: 'dark' }}
-                              className="w-full px-3 py-2 bg-white bg-opacity-10 border border-white border-opacity-30 rounded text-white text-sm focus:border-blue-400 outline-none transition-all"
-                            >
-                              <option value="">← No Department Assigned</option>
-                              {cmmsData.departments?.map(dept => (
-                                <option key={dept.id} value={dept.id} className="bg-slate-800 text-white">
-                                  {dept.department_name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          {currentDept && (
-                            <div className="flex items-center gap-2 px-3 py-2 bg-green-500 bg-opacity-20 border border-green-500 border-opacity-40 rounded text-xs text-green-200 font-semibold md:mt-6">
-                              ✅ {currentDept.department_name}
-                            </div>
-                          )}
-                        </div>
+              return (
+                <div
+                  key={user.id}
+                  className={`py-3 transition-colors duration-500 ${isNewlyAdded ? 'bg-green-500/10 ring-1 ring-green-400/60 rounded-md px-2' : ''}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-lg flex-shrink-0">
+                      {role?.icon || getInitials(user.name)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-white font-semibold text-sm">{user.name}</span>
+                        {user.isCreator && (
+                          <span className="px-1.5 py-0.5 bg-amber-500/40 text-amber-100 text-[10px] rounded-full font-bold">👑 Creator</span>
+                        )}
+                        {isNewlyAdded && (
+                          <span className="px-1.5 py-0.5 bg-green-500/40 text-green-200 text-[10px] rounded-full font-semibold animate-pulse">NEW</span>
+                        )}
                       </div>
-                    )}
+                      <div className="text-xs text-slate-300">
+                        {role?.label || normalizedUserRole}
+                        {user.icanVerified && <span className="text-green-300"> · ✅ Verified</span>}
+                      </div>
+                      <div className="text-xs text-slate-400 break-all">{user.email}{user.phone ? ` · ${user.phone}` : ''}</div>
+                      {user.assignedServices && user.assignedServices.length > 0 && (
+                        <div className="text-xs text-slate-400">🔧 {user.assignedServices.join(', ')}</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {userRole === 'admin' && normalizedUserRole !== 'admin' && !user.isCreator && (
+                        <button
+                          type="button"
+                          onClick={() => handleAssignAdmin(user)}
+                          className="px-2 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold transition-all"
+                          title="Promote this user to Admin - they will have full CMMS access"
+                        >
+                          ⭐ Admin
+                        </button>
+                      )}
+                      {hasPermission('canDeleteUsers') && !user.isCreator && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUser(user)}
+                          className="w-8 h-8 flex items-center justify-center bg-red-500/20 text-red-300 rounded-md hover:bg-red-500/40 transition-all"
+                          title="Permanently remove this user from CMMS"
+                          aria-label={`Remove ${user.name}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {userRole === 'admin' && (
+                    <div className="mt-2 flex items-center gap-2 pl-[52px]">
+                      <span className="text-xs text-slate-400 flex-shrink-0" title="Department">🏢</span>
+                      <select
+                        value={user.department_id || ''}
+                        onChange={(e) => handleUpdateUserDepartment(user.id, e.target.value)}
+                        style={{ colorScheme: 'dark' }}
+                        aria-label={`Department for ${user.name}`}
+                        className="flex-1 min-w-0 h-9 px-2 bg-white/10 border border-white/20 rounded-md text-white text-sm focus:border-blue-400 outline-none transition-all"
+                      >
+                        <option value="">No department assigned</option>
+                        {cmmsData.departments?.map(dept => (
+                          <option key={dept.id} value={dept.id} className="bg-slate-800 text-white">
+                            {dept.department_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               );
             })}
             {cmmsData.users.length === 0 && (
-              <div className="text-center py-8 text-gray-400">
+              <div className="text-center py-8 text-gray-400 text-sm">
                 No users assigned yet. Add users to get started.
               </div>
             )}
           </div>
-        </div>
+        </section>
       </div>
     );
   };
