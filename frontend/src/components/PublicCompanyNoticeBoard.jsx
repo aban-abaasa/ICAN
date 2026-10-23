@@ -3141,7 +3141,7 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
   // For a signed-out visitor the server's quote is the source of truth (it
   // prices the rider who will actually be booked); otherwise the preview above.
   const shownDeliveryFee = !user && guest.quote ? guest.quote.delivery_fee_ugx : deliveryFeeAmount;
-  // The store's own products are priced with their tax included, as dropship adds it: the server's figure is the one to show.
+  // For the store's own products the server's quote is the figure to show (dropship prices them, tax included, exactly as it will charge).
   const itemsAmount = hasStoreItems && guest.quote ? guest.quote.items_ugx : cartTotal;
   const walletTotal = !user && guest.quote ? guest.quote.order_total_ugx : itemsAmount + (deliveryFeeAmount || 0);
   // Mobile Money / card / bank for store products needs guest checkout to be set up for it (the server says so).

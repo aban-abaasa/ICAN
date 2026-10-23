@@ -52,9 +52,10 @@ wallet (PIN) - or, without an account, Mobile Money / card / bank.
 * `site_checkout_with_pin` = lend + `dropship_checkout_with_pin` (the PIN is checked there, as for every dropship order).
 * `site_guest_checkout_start` = lend + `guest_checkout_start`. `guest_checkout_fulfil` (which runs when Flutterwave has confirmed the
   payment) is **patched in place** with the same two calls; the patch changes nothing else in it and is exactly reversed by the rollback.
-* **Tax.** Dropship adds the product's tax on top of the price, as it does for every dropship order. The cart shows the server's exact
-  total (items with tax, fare, total) before anyone pays. (The shop's pickup price is tax-inclusive; changing how dropship applies tax is a
-  separate decision, as noted in `20261108100000_shop_checkout_tax_included.sql`.)
+* **Tax.** Dropship used to add the product's tax on top of the price, while the shop's pickup price is tax-inclusive. Run
+  `DROPSHIP_TAX_INCLUDED_PASTE_INTO_SUPABASE.sql` (see `DROPSHIP_TAX_INCLUDED_DEPLOY.md`) and every dropship price - delivery of store products
+  included - is tax-inclusive too: the customer pays the price they were shown plus the rider's fare. The cart shows the server's exact
+  total either way.
 * **One store per order**, like every dropship order. Instalments are not offered on store products (they are built on dropship listings);
   they are paid in full.
 * If the store later loses its pin, wallet or currency, delivery quietly stops being offered (the switch stays on and comes back by itself
