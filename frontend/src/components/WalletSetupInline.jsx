@@ -7,6 +7,7 @@ import { CountryService } from '../services/countryService';
 import { ensureNationalId } from '../services/nationalIdService';
 import useNationalIdStatus from '../hooks/useNationalIdStatus';
 import NationalIdField from './NationalIdField';
+import NationalIdClaimOffer from './NationalIdClaimOffer';
 
 const SKINS = {
   slate: {
@@ -153,6 +154,7 @@ export default function WalletSetupInline({ skin = 'slate', defaultName = '', de
         {busy ? 'Creating your wallet…' : 'Create my wallet & set PIN'}
       </button>
       {error && <p className={k.err} role="alert">{error}</p>}
+      <NationalIdClaimOffer message={error} country={country} value={nationalId} walletName={name} className={k.btn2} />
     </div>
   );
 }

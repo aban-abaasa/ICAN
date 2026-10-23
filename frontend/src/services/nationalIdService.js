@@ -5,10 +5,17 @@
  * function is reported as `available: false`, and the wallet screens then simply do not
  * ask for an ID. The ID itself is never stored by the browser; the database keeps a keyed
  * hash plus the last 4 characters.
+ *
+ * Proving an ID is the holder's (backend/NATIONAL_ID_OWNERSHIP.sql): requestIdVerification / claimNationalId upload the
+ * ID photo and selfie to the existing R2 folder through the existing upload route (no new serverless function), then file a
+ * request that a reviewer approves in the Dev console (devNationalId).
  */
 
 import { getSupabaseClient } from '../lib/supabase/client';
-import { checkNationalIdFormat, isMissingFunctionError, nationalIdFormatMessage, normalizeNationalId } from '../utils/nationalId';
+import { uploadToR2 } from './r2StorageService';
+import {
+  checkNationalIdFormat, ID_PROOF_FOLDER, isMissingFunctionError, nationalIdFormatMessage, normalizeNationalId, proofFormProblem
+} from '../utils/nationalId';
 
 const ruleCache = new Map();
 
@@ -57,7 +64,14 @@ export const getNationalIdStatus = async () => {
     idType: data.idType || null,
     last4: data.last4 || null,
     countryCode: data.countryCode || null,
-    accountCountry: data.accountCountry || null
+    accountCountry: data.accountCountry || null,
+    verified: !!data.verified,
+    verifiedAt: data.verifiedAt || null,
+    nameOnId: data.nameOnId || null,
+    requireVerified: !!data.requireVerified,
+    walletName: data.walletName || null,
+    // The newest ownership request, whatever became of it: { id, kind, status, reviewNote, createdAt, reviewedAt } or null.
+    check: data.check || null
   };
 };
 
@@ -74,7 +88,7 @@ export const saveNationalId = async (country, value) => {
 
   const { data, error } = await getSupabaseClient().rpc('set_my_national_id', { p_country: code, p_id: value });
   if (error) return { success: false, error: error.message || 'Could not save your national ID.' };
-  if (!data?.success) return { success: false, error: data?.error || 'Could not save your national ID.' };
+  if (!data?.success) return { success: false, error: data?.error || 'Could not save your national ID.', code: data?.code || null };
   return { success: true, last4: data.last4, idType: data.idType, countryCode: data.countryCode };
 };
 
@@ -91,5 +105,80 @@ export const ensureNationalId = async ({ country, value } = {}) => {
   return saveNationalId(status.accountCountry || country, value);
 };
 
-export const nationalIdService = { getNationalIdRule, getNationalIdStatus, saveNationalId, ensureNationalId };
+// ── Proving an ID is yours ───────────────────────────────────────────────────────────────────────
+
+const uploadProofImage = async (file) => {
+  const { data } = await getSupabaseClient().auth.getSession();
+  const accessToken = data?.session?.access_token;
+  if (!accessToken) return { success: false, error: 'Your session expired. Please sign in again.' };
+  return uploadToR2({ file, folder: ID_PROOF_FOLDER, accessToken });
+};
+
+/**
+ * File an ownership request. Both photos are checked, uploaded, then handed to the database with the name on the ID.
+ *   mode 'verify'  the ID already saved on this wallet is the holder's
+ *   mode 'claim'   the ID was saved by someone else first and is really this person's (also needs country + value)
+ * Resolves { success, error?, code? }; code is 'not_taken' / 'already_yours' for the claim cases the screen explains.
+ */
+export const submitIdProof = async ({ mode = 'verify', country, value, nameOnId, idPhoto, selfie, note, walletName } = {}) => {
+  const claim = mode === 'claim';
+  const problem = proofFormProblem({ nameOnId, walletName, idPhoto, selfie, needsId: claim, country, value });
+  if (problem) return { success: false, error: problem };
+
+  const idUpload = await uploadProofImage(idPhoto);
+  if (!idUpload.success) return { success: false, error: idUpload.error || 'Could not upload the photo of your ID.' };
+  const selfieUpload = await uploadProofImage(selfie);
+  if (!selfieUpload.success) return { success: false, error: selfieUpload.error || 'Could not upload your selfie.' };
+
+  const args = { p_name_on_id: String(nameOnId).trim(), p_id_photo: idUpload.url, p_selfie_photo: selfieUpload.url, p_note: String(note || '').trim() || null };
+  const { data, error } = claim
+    ? await getSupabaseClient().rpc('claim_national_id', { p_country: String(country).trim().toUpperCase(), p_id: value, ...args })
+    : await getSupabaseClient().rpc('request_my_id_verification', args);
+  if (error) {
+    if (isMissingFunctionError(error)) return { success: false, error: 'ID verification is not switched on yet. Please try again later.' };
+    return { success: false, error: error.message || 'Could not send your request.' };
+  }
+  if (!data?.success) return { success: false, error: data?.error || 'Could not send your request.', code: data?.code || null };
+  return { success: true, checkId: data.checkId };
+};
+
+export const requestIdVerification = (fields) => submitIdProof({ ...fields, mode: 'verify' });
+export const claimNationalId = (fields) => submitIdProof({ ...fields, mode: 'claim' });
+
+/**
+ * Is the person behind each wallet ID-verified? { [userId]: { verified, nameMatches } }, or null when the database cannot
+ * say (not installed, offline): the screen then shows nothing rather than a wrong "not verified". At most 20 per call.
+ */
+export const getIdTrust = async (userIds) => {
+  const ids = [...new Set((userIds || []).filter(Boolean))].slice(0, 20);
+  if (!ids.length) return {};
+  const { data, error } = await getSupabaseClient().rpc('get_id_trust', { p_user_ids: ids });
+  if (error || !Array.isArray(data)) return null;
+  return Object.fromEntries(data.map((row) => [row.user_id, { verified: !!row.verified, nameMatches: !!row.name_matches }]));
+};
+
+/**
+ * The Dev console's side: the queue of ownership requests and the decision. Both take the panel's dev token like every
+ * other Dev console tab. `missing: true` means the SQL is not installed.
+ */
+const devRpc = async (name, args) => {
+  const { data, error } = await getSupabaseClient().rpc(name, args);
+  if (error) {
+    if (isMissingFunctionError(error)) return { missing: true };
+    throw error;
+  }
+  return { data };
+};
+
+export const devNationalId = {
+  list: (token, status = 'pending') => devRpc('ican_id_dev_list', { dev_token: token, p_status: status }),
+  review: (token, { checkId, approve, note = null, replaceVerified = false }) => devRpc('ican_id_dev_review', {
+    dev_token: token, p_check_id: checkId, p_approve: !!approve, p_note: note, p_replace_verified: !!replaceVerified
+  })
+};
+
+export const nationalIdService = {
+  getNationalIdRule, getNationalIdStatus, saveNationalId, ensureNationalId,
+  submitIdProof, requestIdVerification, claimNationalId, getIdTrust, devNationalId
+};
 export default nationalIdService;

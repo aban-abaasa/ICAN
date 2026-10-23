@@ -18,6 +18,7 @@ import ICANSectorDevTab from './ICANSectorDevTab';
 import ICANStableDevTab from './ICANStableDevTab';
 import ICANFeesDevTab from './ICANFeesDevTab';
 import ICANChainDevTab from './ICANChainDevTab';
+import ICANIdChecksDevTab from './ICANIdChecksDevTab';
 import { useDirectCall } from '../hooks/useDirectCall';
 import { Linkify } from '../utils/linkify';
 import { isAssistantMessage } from '../constants/supportAssistant';
@@ -136,6 +137,7 @@ const TABS = [
   { id: 'referrals',  label: 'Referrals',    Icon: Gift,        color: '#84cc16' },
   { id: 'franchise',  label: 'Franchise',    Icon: Network,     color: '#f59e0b' },
   { id: 'stable',     label: 'ICEC-S',         Icon: ShieldCheck, color: '#34d399' },
+  { id: 'idchecks',   label: 'ID checks',      Icon: ShieldCheck, color: '#22d3ee' },
   { id: 'fees',       label: 'Sale fees',      Icon: Percent,     color: '#f472b6' },
   { id: 'sectors',    label: 'Sector Markets', Icon: TrendingUp, color: '#fbbf24' },
   { id: 'onchain',    label: 'On-chain',       Icon: TrendingUp, color: '#38bdf8' },
@@ -2749,6 +2751,9 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
 
         {/* ══ ICEC-S, the stable form inside IcanEra (switch, live value, vault, settings; the panel's dev token) ══ */}
         {tab==='stable' && <ICANStableDevTab devToken={DEV_TOKEN}/>}
+
+        {/* ══ ID CHECKS (people proving a national ID is theirs; a reviewer approves or rejects; the panel's dev token) ══ */}
+        {tab==='idchecks' && <ICANIdChecksDevTab devToken={DEV_TOKEN}/>}
 
         {/* ══ SALE FEES (what ICANera takes from a dropship sale and a store sale; the panel's dev token AND the operator account) ══ */}
         {tab==='fees' && <ICANFeesDevTab devToken={DEV_TOKEN}/>}

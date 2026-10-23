@@ -266,6 +266,14 @@ test('describeSendError turns the national-ID block into a clear instruction ins
   assert.doesNotMatch(message, /NATIONAL_ID_REQUIRED/);
 });
 
+test('describeSendError tells an unverified ID from a missing one, and points to the fix', () => {
+  const message = describeSendError(new Error('NATIONAL_ID_NOT_VERIFIED: your national ID has not been verified yet, so you cannot send or withdraw money .'));
+  assert.match(message, /has not been verified/);
+  assert.match(message, /verify your ID/);
+  assert.doesNotMatch(message, /NATIONAL_ID_NOT_VERIFIED/);
+  assert.doesNotMatch(message, /Add your national ID to your wallet/);
+});
+
 // ─── balance is checked before any prompt ─────────────────────────────────
 
 test('a personal sender without enough coin is told so before any confirm or PIN (a UGX figure read as coins used to ask for a PIN, then fail)', async () => {

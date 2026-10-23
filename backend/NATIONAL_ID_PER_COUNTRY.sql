@@ -15,10 +15,17 @@
 -- or add a country with an UPDATE/INSERT, no redeploy). Countries with no
 -- row fall back to the 'ZZ' rule (5–20 letters/digits).
 --
--- NOTE: this validates FORMAT and UNIQUENESS only. It does not prove the
--- ID is real or belongs to the person — that needs a lookup against the
--- issuing authority (e.g. NIRA in Uganda), which is a separate integration.
--- That is why user_accounts.kyc_verified is NOT touched here.
+-- NOTE: saving an ID validates FORMAT and UNIQUENESS only. Anyone can type any
+-- well-formed ID that nobody has used yet, so a saved ID is only a CLAIM until
+-- it has been verified (user_national_ids.verified). Proving that an ID belongs
+-- to the person holding the wallet is what NATIONAL_ID_OWNERSHIP.sql adds: the
+-- person submits their name as printed plus a photo of the ID and a selfie, a
+-- reviewer approves it in the Dev console, and the real owner of an ID that
+-- someone else claimed first can take it back. This file holds the tables, switches
+-- and money-blocking rules those features build on; run NATIONAL_ID_OWNERSHIP.sql
+-- after it. (Neither file is a lookup against the issuing authority, e.g. NIRA
+-- in Uganda; that is a separate integration, which is why user_accounts.kyc_verified
+-- is NOT touched here.)
 --
 -- ENFORCEMENT IS OFF WHEN THIS RUNS. Nothing is blocked until you switch it on:
 --     UPDATE public.national_id_enforcement SET enforced = true, enforced_from = now();
@@ -31,6 +38,12 @@
 -- Receiving money is never blocked. Accounts that must keep moving money
 -- without a person behind them (treasury, fee accounts) go in
 -- public.national_id_exemptions.
+--
+-- A second, separate switch makes the debit rule stricter, and only matters
+-- while enforced = true: an ID that is merely on file is no longer enough, it
+-- must have been VERIFIED (see NATIONAL_ID_OWNERSHIP.sql). Leave it off until
+-- reviewers have worked through the existing wallets:
+--     UPDATE public.national_id_enforcement SET require_verified = true;
 --
 -- BACK UP the pepper (app_private.secrets, name = 'national_id_pepper')
 -- with the rest of your secrets. If it is ever lost or regenerated, stored
@@ -115,11 +128,16 @@ CREATE TABLE IF NOT EXISTS public.user_national_ids (
   id_type      TEXT NOT NULL,
   id_hash      TEXT NOT NULL UNIQUE,             -- HMAC of country + normalized ID. One wallet per ID.
   id_last4     TEXT NOT NULL,
-  verified     BOOLEAN NOT NULL DEFAULT false,   -- reserved for a future issuer lookup (e.g. NIRA)
+  verified     BOOLEAN NOT NULL DEFAULT false,   -- true once a reviewer (or a future issuer lookup, e.g. NIRA) has confirmed it is theirs
   verified_at  TIMESTAMPTZ,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Set when a reviewer verifies the ID (NATIONAL_ID_OWNERSHIP.sql): the name exactly as printed on it,
+-- and who approved it.
+ALTER TABLE public.user_national_ids ADD COLUMN IF NOT EXISTS name_on_id  TEXT;
+ALTER TABLE public.user_national_ids ADD COLUMN IF NOT EXISTS verified_by TEXT;
 
 ALTER TABLE public.user_national_ids ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS user_national_ids_own_read ON public.user_national_ids;
@@ -127,7 +145,7 @@ CREATE POLICY user_national_ids_own_read ON public.user_national_ids
   FOR SELECT TO authenticated USING (user_id = auth.uid());
 REVOKE ALL ON public.user_national_ids FROM PUBLIC, anon, authenticated;
 -- Column-level grant: the hash itself is never selectable through the API.
-GRANT SELECT (user_id, country_code, id_type, id_last4, verified, verified_at, created_at)
+GRANT SELECT (user_id, country_code, id_type, id_last4, verified, verified_at, name_on_id, created_at)
   ON public.user_national_ids TO authenticated;
 
 -- ------------------------------------------------------------
@@ -141,6 +159,7 @@ CREATE TABLE IF NOT EXISTS public.national_id_enforcement (
 );
 INSERT INTO public.national_id_enforcement (singleton, enforced) VALUES (true, false)
 ON CONFLICT (singleton) DO NOTHING;
+ALTER TABLE public.national_id_enforcement ADD COLUMN IF NOT EXISTS require_verified BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE public.national_id_enforcement ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.national_id_enforcement FROM PUBLIC, anon, authenticated;
 
@@ -151,6 +170,46 @@ CREATE TABLE IF NOT EXISTS public.national_id_exemptions (
 );
 ALTER TABLE public.national_id_exemptions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.national_id_exemptions FROM PUBLIC, anon, authenticated;
+
+-- ------------------------------------------------------------
+-- 4b. Ownership checks: a person asking a reviewer to confirm an ID is theirs
+-- ------------------------------------------------------------
+-- kind 'verify': the ID is already saved on this wallet; prove it is the holder's.
+-- kind 'claim' : the ID was saved by SOMEONE ELSE first; the person who says it is
+--                theirs asks for it to be moved. Only a reviewer can approve that.
+-- The photo columns hold r2:// keys inside the existing 'cmms-employment-documents'
+-- R2 folder (no new upload route, see NATIONAL_ID_OWNERSHIP.sql). Neither them nor the ID hash is
+-- readable through the API: the owner sees only the columns granted below.
+CREATE TABLE IF NOT EXISTS public.national_id_checks (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id           UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  kind              TEXT NOT NULL CHECK (kind IN ('verify', 'claim')),
+  country_code      VARCHAR(2) NOT NULL,
+  id_type           TEXT NOT NULL,
+  id_hash           TEXT NOT NULL,
+  id_last4          TEXT NOT NULL,
+  name_on_id        TEXT NOT NULL,
+  id_photo          TEXT NOT NULL,
+  selfie_photo      TEXT NOT NULL,
+  note              TEXT,
+  status            TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  review_note       TEXT,
+  reviewed_by       TEXT,
+  reviewed_at       TIMESTAMPTZ,
+  displaced_user_id UUID,                          -- a claim that was approved: whose claim on the ID it replaced
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS national_id_checks_one_pending ON public.national_id_checks (user_id) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS national_id_checks_status ON public.national_id_checks (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS national_id_checks_hash ON public.national_id_checks (id_hash);
+
+ALTER TABLE public.national_id_checks ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS national_id_checks_own_read ON public.national_id_checks;
+CREATE POLICY national_id_checks_own_read ON public.national_id_checks
+  FOR SELECT TO authenticated USING (user_id = auth.uid());
+REVOKE ALL ON public.national_id_checks FROM PUBLIC, anon, authenticated;
+GRANT SELECT (id, kind, country_code, id_type, id_last4, name_on_id, note, status, review_note, reviewed_at, created_at)
+  ON public.national_id_checks TO authenticated;
 
 -- ------------------------------------------------------------
 -- 5. Helpers
@@ -187,30 +246,42 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
    LIMIT 1;
 $$;
 
--- What the app needs to decide whether to show the ID step / blocking screen.
+-- What the app needs to decide whether to show the ID step / blocking screen / verification card.
 CREATE OR REPLACE FUNCTION public.get_my_national_id_status()
 RETURNS JSONB LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_uid UUID := auth.uid();
   v_id  public.user_national_ids;
-  v_enforced BOOLEAN;
+  v_enf public.national_id_enforcement;
   v_account_country TEXT;
+  v_wallet_name TEXT;
+  v_check public.national_id_checks;
 BEGIN
   IF v_uid IS NULL THEN RETURN jsonb_build_object('authenticated', false); END IF;
-  SELECT enforced INTO v_enforced FROM public.national_id_enforcement LIMIT 1;
+  SELECT * INTO v_enf FROM public.national_id_enforcement LIMIT 1;
   SELECT * INTO v_id FROM public.user_national_ids WHERE user_id = v_uid;
-  SELECT country_code INTO v_account_country
+  SELECT country_code, account_holder_name INTO v_account_country, v_wallet_name
     FROM public.user_accounts WHERE user_id = v_uid AND account_type = 'personal'
    ORDER BY created_at LIMIT 1;
+  -- The newest request, whatever became of it (a rejected one explains why).
+  SELECT * INTO v_check FROM public.national_id_checks WHERE user_id = v_uid ORDER BY created_at DESC LIMIT 1;
   RETURN jsonb_build_object(
     'authenticated', true,
-    'enforced', COALESCE(v_enforced, false),
+    'enforced', COALESCE(v_enf.enforced, false),
+    'requireVerified', COALESCE(v_enf.require_verified, false),
     'exempt', EXISTS (SELECT 1 FROM public.national_id_exemptions WHERE user_id = v_uid),
     'hasId', v_id.user_id IS NOT NULL,
+    'verified', COALESCE(v_id.verified, false),
+    'verifiedAt', v_id.verified_at,
+    'nameOnId', CASE WHEN v_id.verified THEN v_id.name_on_id END,
     'countryCode', v_id.country_code,
     'idType', v_id.id_type,
     'last4', v_id.id_last4,
-    'accountCountry', v_account_country
+    'accountCountry', v_account_country,
+    'walletName', v_wallet_name,
+    'check', CASE WHEN v_check.id IS NULL THEN NULL ELSE jsonb_build_object(
+      'id', v_check.id, 'kind', v_check.kind, 'status', v_check.status,
+      'reviewNote', v_check.review_note, 'createdAt', v_check.created_at, 'reviewedAt', v_check.reviewed_at) END
   );
 END; $$;
 
@@ -269,8 +340,8 @@ BEGIN
     VALUES (v_uid, v_country, v_rule.id_type, v_hash, right(v_norm, 4));
   EXCEPTION WHEN unique_violation THEN
     INSERT INTO app_private.national_id_attempts (user_id, success) VALUES (v_uid, false);
-    RETURN jsonb_build_object('success', false,
-      'error', 'This ID is already linked to another wallet. If it is yours, contact support.');
+    RETURN jsonb_build_object('success', false, 'code', 'id_taken',
+      'error', 'This ID is already linked to another wallet. If it is yours, you can ask for a review and take it back.');
   END;
 
   UPDATE public.user_accounts SET country_code = v_country
@@ -288,9 +359,13 @@ RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_uid UUID;
   v_blocked BOOLEAN := false;
+  v_finishing BOOLEAN := false;   -- the first PIN being set: an ID on file is enough, it need not be verified yet
   v_what TEXT;
+  v_enf public.national_id_enforcement;
+  v_id public.user_national_ids;
 BEGIN
-  IF NOT COALESCE((SELECT enforced FROM public.national_id_enforcement LIMIT 1), false) THEN
+  SELECT * INTO v_enf FROM public.national_id_enforcement LIMIT 1;
+  IF NOT COALESCE(v_enf.enforced, false) THEN
     RETURN NEW;
   END IF;
 
@@ -298,7 +373,7 @@ BEGIN
     IF NEW.account_type IS DISTINCT FROM 'personal' THEN RETURN NEW; END IF;
     v_uid := NEW.user_id;
     IF OLD.pin_hash IS NULL AND NEW.pin_hash IS NOT NULL THEN
-      v_blocked := true; v_what := 'create your wallet';
+      v_blocked := true; v_finishing := true; v_what := 'create your wallet';
     ELSIF COALESCE(NEW.usd_balance, 0)       < COALESCE(OLD.usd_balance, 0)
        OR COALESCE(NEW.ugx_balance, 0)       < COALESCE(OLD.ugx_balance, 0)
        OR COALESCE(NEW.kes_balance, 0)       < COALESCE(OLD.kes_balance, 0)
@@ -319,9 +394,18 @@ BEGIN
 
   IF NOT v_blocked OR v_uid IS NULL THEN RETURN NEW; END IF;
 
-  IF EXISTS (SELECT 1 FROM public.user_national_ids WHERE user_id = v_uid)
-     OR EXISTS (SELECT 1 FROM public.national_id_exemptions WHERE user_id = v_uid) THEN
+  IF EXISTS (SELECT 1 FROM public.national_id_exemptions WHERE user_id = v_uid) THEN
     RETURN NEW;
+  END IF;
+
+  SELECT * INTO v_id FROM public.user_national_ids WHERE user_id = v_uid;
+  IF v_id.user_id IS NOT NULL THEN
+    -- An ID on file is enough, unless the stricter switch is on and money is leaving.
+    IF v_finishing OR v_id.verified OR NOT COALESCE(v_enf.require_verified, false) THEN
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'NATIONAL_ID_NOT_VERIFIED: your national ID has not been verified yet, so you cannot % . Open your wallet and verify your ID.', v_what
+      USING ERRCODE = 'P0001', HINT = 'national_id_not_verified';
   END IF;
 
   RAISE EXCEPTION 'NATIONAL_ID_REQUIRED: add your national ID to your wallet before you % .', v_what

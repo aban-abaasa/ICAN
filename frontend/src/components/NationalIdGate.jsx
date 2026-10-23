@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { ShieldCheck, X } from 'lucide-react';
 import NationalIdField from './NationalIdField';
+import NationalIdClaimOffer from './NationalIdClaimOffer';
+import NationalIdVerifyDialog from './NationalIdVerifyDialog';
 import useNationalIdStatus from '../hooks/useNationalIdStatus';
 import { saveNationalId } from '../services/nationalIdService';
 import { scrollFocusedIntoView } from '../utils/scrollFocus';
@@ -16,7 +18,9 @@ const REMINDER_DISMISSED_KEY = 'ican_national_id_reminder_dismissed';
  *   - Once enforced: a dialog nobody can close until an ID is saved. (The database also
  *     refuses to let money leave such a wallet, so this is the friendly front door, not the lock.)
  *
- * Renders nothing when the migration is not installed, the person is exempt, or an ID is on file.
+ * Renders nothing when the migration is not installed, the person is exempt, or an ID is on file, with one exception: once
+ * strict mode is on (national_id_enforcement.require_verified, see backend/NATIONAL_ID_OWNERSHIP.sql) a person whose saved ID is
+ * not verified gets a reminder to verify it, because their wallet can no longer send money.
  *
  *   countryHint  the country from sign-up, used only if the wallet itself has none recorded
  *   onSaved      called after the ID is saved
@@ -28,12 +32,15 @@ export default function NationalIdGate({ countryHint = '', onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
   const [dismissed, setDismissed] = useState(() => {
     try { return sessionStorage.getItem(REMINDER_DISMISSED_KEY) === '1'; } catch { return false; }
   });
 
   const needsId = !!status && status.available && status.authenticated !== false && !status.exempt && !status.hasId;
-  const enforced = needsId && status.enforced;
+  // They asked for an ID someone else saved first and a reviewer has not decided yet: nothing more to ask them for.
+  const waiting = needsId && status.check?.status === 'pending';
+  const enforced = needsId && !waiting && status.enforced;
   const walletCountry = status?.accountCountry || '';
 
   // The wallet's own country wins; otherwise start from the sign-up country.
@@ -41,7 +48,47 @@ export default function NationalIdGate({ countryHint = '', onSaved }) {
     setCountry((prev) => prev || walletCountry || String(countryHint || '').toUpperCase());
   }, [walletCountry, countryHint]);
 
+  const dismissReminder = () => {
+    setDismissed(true);
+    try { sessionStorage.setItem(REMINDER_DISMISSED_KEY, '1'); } catch { /* private mode: it just comes back next visit */ }
+  };
+
+  // A saved ID that nobody has confirmed is theirs, in a system that now needs it confirmed before money leaves.
+  const needsVerify = !!status && status.available && status.authenticated !== false && !status.exempt && status.hasId
+    && !status.verified && status.enforced && status.requireVerified && status.check?.status !== 'pending';
+  if (needsVerify) {
+    return (
+      <>
+        {!dismissed && (
+          <div role="status" style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }} className="fixed left-1/2 z-40 flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 items-start justify-between gap-3 rounded-xl border border-amber-400/40 bg-slate-900/95 p-3 text-sm text-amber-100 shadow-xl backdrop-blur">
+            <p className="min-w-0">
+              <b>Verify your national ID to send money.</b> Anyone can type an ID number, so we ask you to prove yours.
+              {' '}<button type="button" onClick={() => setVerifyOpen(true)} className="inline-flex min-h-[44px] items-center underline font-semibold">Verify now</button>
+            </p>
+            <button type="button" onClick={dismissReminder} aria-label="Dismiss reminder" className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center opacity-70 hover:opacity-100"><X className="h-4 w-4" /></button>
+          </div>
+        )}
+        {verifyOpen && (
+          <NationalIdVerifyDialog
+            mode="verify"
+            walletName={status.walletName || ''}
+            onClose={() => { setVerifyOpen(false); refresh(); }}
+            onDone={() => refresh()}
+          />
+        )}
+      </>
+    );
+  }
+
   if (!needsId) return null;
+
+  if (waiting) {
+    return (
+      <div role="status" style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }} className="fixed left-1/2 z-40 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-xl border border-amber-400/40 bg-slate-900/95 p-3 text-sm text-amber-100 shadow-xl backdrop-blur">
+        <b>Your request for this ID is waiting for a reviewer.</b> You can receive money meanwhile.
+      </div>
+    );
+  }
 
   const dialogOpen = enforced || open;
 
@@ -60,11 +107,6 @@ export default function NationalIdGate({ countryHint = '', onSaved }) {
     } finally {
       setSaving(false);
     }
-  };
-
-  const dismissReminder = () => {
-    setDismissed(true);
-    try { sessionStorage.setItem(REMINDER_DISMISSED_KEY, '1'); } catch { /* private mode: it just comes back next visit */ }
   };
 
   return (
@@ -93,7 +135,8 @@ export default function NationalIdGate({ countryHint = '', onSaved }) {
             <div className="wa-body" onFocus={scrollFocusedIntoView}>
               <p className="wa-p">
                 Every IcanEra wallet is tied to one national ID. It stops anyone opening a second wallet in your name and
-                makes it far harder for someone else to take over yours. You can still receive money meanwhile.
+                makes it far harder for someone else to take over yours. You can still receive money meanwhile. After you save it,
+                you can verify it with a photo of the ID so that people who pay you know it is really yours.
               </p>
               <form onSubmit={submit} className="mt-4" autoComplete="off">
                 <NationalIdField
@@ -106,6 +149,7 @@ export default function NationalIdGate({ countryHint = '', onSaved }) {
                   disabled={saving}
                 />
                 {error && <p role="alert" className="wa-alert mt-3">{error}</p>}
+                <NationalIdClaimOffer message={error} country={country} value={value} walletName={status?.walletName || ''} onSent={refresh} />
                 <button type="submit" disabled={saving || !country || !value.trim()} className="wa-btn wa-btn-primary w-full mt-5">
                   {saving ? 'Saving…' : 'Save my national ID'}
                 </button>

@@ -58,8 +58,10 @@ import { payIcanRequest, parseIcanPayCode, getIcanPaymentRequest } from '../serv
 import { getSupabaseClient } from '../lib/supabase/client';
 import { getUserTrustGroups } from '../services/trustService';
 import { CountryService } from '../services/countryService';
-import { ensureNationalId } from '../services/nationalIdService';
+import { ensureNationalId, getIdTrust } from '../services/nationalIdService';
+import { friendlyIdError, idTrustLabel } from '../utils/nationalId';
 import NationalIdGate from './NationalIdGate';
+import NationalIdStatusCard from './NationalIdStatusCard';
 import { getAllAccessibleBusinessProfiles } from '../services/pitchingService';
 import { calculateLiveShareValue } from '../services/pitchinValuationService';
 import { createBusinessProfileFromCategory } from '../services/businessManagementService';
@@ -1698,6 +1700,14 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         setRecipientPreview(found.error
           ? { status: 'notfound' }
           : { status: 'found', name: found.name, accountType: found.accountType, userId: found.userId });
+        // Is the person behind this wallet ID-verified? (backend/NATIONAL_ID_OWNERSHIP.sql) Shown once it arrives; if the
+        // database cannot say, nothing is shown rather than a wrong "not verified".
+        if (!found.error && found.accountType === 'personal' && found.userId) {
+          const trust = await getIdTrust([found.userId]);
+          if (!cancelled && trust?.[found.userId]) {
+            setRecipientPreview((prev) => (prev?.status === 'found' && prev.userId === found.userId ? { ...prev, trust: trust[found.userId] } : prev));
+          }
+        }
       } catch {
         if (!cancelled) setRecipientPreview(null);
       }
@@ -3148,7 +3158,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
       if (!result.success) {
         setAccountMessage({
           type: 'error',
-          text: `Update failed: ${result.error}`
+          text: `Update failed: ${friendlyIdError(result.error)}`
         });
         setAccountEditLoading(false);
         return;
@@ -5891,6 +5901,9 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
           </div>
         </div>
 
+        {/* 🪪 National ID: saved vs. verified, and how to prove it is yours (renders nothing until the SQL is installed) */}
+        <NationalIdStatusCard />
+
         {/* Expandable Accounts Panel */}
         {showSettingsPanel && (
           <div className="space-y-4">
@@ -6725,6 +6738,12 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                             {recipientPreview.status === 'checking' && 'Checking…'}
                             {recipientPreview.status === 'notfound' && 'No IcanEra account found for this.'}
                             {recipientPreview.status === 'found' && !previewIsSelf && `● ${recipientPreview.name || 'Account found'} · ${recipientPreview.accountType === 'business' ? 'Business' : 'Personal'} account`}
+                            {recipientPreview.status === 'found' && !previewIsSelf && (() => {
+                              const trust = idTrustLabel(recipientPreview.trust);
+                              return trust ? (
+                                <span style={{ color: trust.tone === 'ok' ? '#2f9e72' : '#8a6a1f' }}>{` · ${trust.tone === 'ok' ? '✓' : '⚠'} ${trust.text}`}</span>
+                              ) : null;
+                            })()}
                             {previewIsSelf && "That's your own account — you can't send to yourself."}
                           </p>
                         )}
