@@ -23,6 +23,7 @@ export default function useGuestCheckout({
   maxDeliveryHours,
   vehicleType,
   storeName,
+  storeDelivery = false,
   onPaid,
 }) {
   const [quote, setQuote] = useState(null);
@@ -47,6 +48,7 @@ export default function useGuestCheckout({
     deliveryLng: deliveryCoords?.lng,
     maxDeliveryHours,
     vehicleTypes,
+    storeDelivery,
   });
 
   // Live server quote whenever the cart, delivery point, window or vehicle changes.
@@ -64,7 +66,7 @@ export default function useGuestCheckout({
     }, 400);
     return () => { cancelled = true; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, businessProfileId, cartKey, deliveryCoords?.lat, deliveryCoords?.lng, maxDeliveryHours, vehicleType]);
+  }, [enabled, businessProfileId, cartKey, deliveryCoords?.lat, deliveryCoords?.lng, maxDeliveryHours, vehicleType, storeDelivery]);
 
   // Paid but closed the tab last time? Finish that order now.
   useEffect(() => {
@@ -96,7 +98,7 @@ export default function useGuestCheckout({
       setPaying(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerName, customerPhone, deliveryAddress, deliveryCoords, maxDeliveryHours, vehicleType, quote, quoteError, cartKey, businessProfileId, storeName]);
+  }, [customerName, customerPhone, deliveryAddress, deliveryCoords, maxDeliveryHours, vehicleType, quote, quoteError, cartKey, businessProfileId, storeName, storeDelivery]);
 
   return { quote, quoting, quoteError, paying, payError, payNow };
 }

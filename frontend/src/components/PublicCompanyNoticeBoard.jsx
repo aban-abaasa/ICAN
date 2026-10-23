@@ -16,6 +16,8 @@ import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
 import siteLibraryService from '../services/siteLibraryService';
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
+import { getSiteDeliveryStorefront, findSiteDeliveryRiders, siteCheckout } from '../services/siteDeliveryService';
+import { indexDeliveryByProduct, planDelivery, mergeDeliveryCart, withoutMoved, isStoreListing } from '../utils/siteDelivery';
 import useGuestCheckout from '../hooks/useGuestCheckout';
 import useBusinessSiteSlug from '../hooks/useBusinessSiteSlug';
 import { buildBusinessSiteLink } from '../services/businessSiteLinkService';
@@ -727,6 +729,8 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
   // The business's own store products, when its CMMS website profile says the
   // Shop tab should show them (instead of / as well as resellers' listings).
   const [storeProducts, setStoreProducts] = useState([]);
+  // Delivery on those store products, when the business switched it on: { enabled, guestOk, store, listings } (see utils/siteDelivery.js).
+  const [siteDelivery, setSiteDelivery] = useState(null);
   const [productsLoading, setProductsLoading] = useState(false);
   const [cart, setCart] = usePersistedCart(`icanera_cart_nb_${companyId}`); // { [listing_id]: quantity } -- survives the round-trip to Google
 
@@ -867,15 +871,18 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
 
   useEffect(() => {
     let cancelled = false;
-    if (!company?.business_profile_id) { setProducts([]); setStoreProducts([]); return; }
+    if (!company?.business_profile_id) { setProducts([]); setStoreProducts([]); setSiteDelivery(null); return; }
     setProductsLoading(true);
     Promise.all([
       cmmsAnnouncementsService.getPublicSiteProducts(companyId),
       getDropshipStorefront(company.business_profile_id),
-    ]).then(([site, { data }]) => {
+      getSiteDeliveryStorefront(company.business_profile_id),
+    ]).then(([site, { data }, delivery]) => {
       if (cancelled) return;
       setStoreProducts(site.storeProducts);
       setProducts(site.source === 'store' ? [] : (data || []));
+      // Delivery is for the store's own products, so it only matters when the website shows them.
+      setSiteDelivery(site.source === 'resellers' ? null : delivery);
       setProductsLoading(false);
     });
     return () => { cancelled = true; };
@@ -1378,7 +1385,8 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
             <ShopSection
               products={products}
               storeProducts={storeProducts}
-              payBasket={payInfo ? payBasket : null}
+              delivery={siteDelivery}
+              payBasket={payBasket}
               setPayBasket={setPayBasket}
               onPayForBasket={payInfo ? payForBasket : null}
               contact={{ phone: company.phone, whatsapp: company.whatsapp }}
@@ -2966,7 +2974,9 @@ const isPayableProduct = (item) => String(item.currency || 'UGX').toUpperCase() 
 // button then pays instantly. A visitor who doesn't want a wallet can instead
 // pay with Mobile Money, card or bank -- that adds a small payment-processing
 // fee and is handled by useGuestCheckout / guestCheckoutService.
-const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBasket = null, onPayForBasket = null, contact = {}, loading, cart, setCart, businessProfileId, user, authLoading }) => {
+const NO_LISTINGS = [];
+
+const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket = null, setPayBasket = null, onPayForBasket = null, contact = {}, loading, cart, setCart, businessProfileId, user, authLoading }) => {
   const { askPin, pinDialog } = usePinPrompt();
   const { walletState, recheckWallet } = useWalletReady(user?.id);
   const cartOpenKey = `icanera_cart_nbshop_${businessProfileId}`;
@@ -2993,9 +3003,18 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
   const [selectedRiderId, setSelectedRiderId] = useState(null); // null = auto-assign nearest
   const [vehicleType, setVehicleType] = useState(null); // null = any bike/car/van
 
+  // Delivery on the business's OWN store products: they ride the same cart, rider picker and checkout as a dropship listing
+  // (server side the order goes to the very same dropship checkout -- see utils/siteDelivery.js). Nothing is listed anywhere.
+  const storeListings = delivery?.enabled ? delivery.listings : NO_LISTINGS;
+  const allListings = useMemo(() => [...products, ...storeListings], [products, storeListings]);
+  const listingsById = useMemo(() => new Map(allListings.map((l) => [l.listing_id, l])), [allListings]);
+  const deliveryByProduct = useMemo(() => indexDeliveryByProduct(products, storeListings), [products, storeListings]);
+  const canDeliverProduct = (item) => Boolean(deliveryByProduct.get(String(item.product_id))?.in_stock);
+
   // The store this order is picked up from: the first item in the cart (an
   // order is single-store), or the first listing before anything is added.
-  const pickupListing = products.find((p) => (cart[p.listing_id] || 0) > 0) || products[0];
+  const pickupListing = allListings.find((p) => (cart[p.listing_id] || 0) > 0) || allListings[0];
+  const pickupIsStore = isStoreListing(pickupListing);
   const storeLat = pickupListing?.store_lat;
   const storeLng = pickupListing?.store_lng;
   const pickupProductId = pickupListing?.product_id;
@@ -3016,15 +3035,19 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
     }
     setRidersLoading(true);
     setSelectedRiderId(null);
-    findStoreFirstRiders(businessProfileId, pickupProductId, storeLat, storeLng, deliveryCoords.lat, deliveryCoords.lng, {
-      vehicleTypes: vehicleType ? [vehicleType] : null,
-    }).then(({ data }) => {
+    // The store's own products have no listing for dropship to find the store from, so ask by business: same ranking.
+    const lookup = pickupIsStore
+      ? findSiteDeliveryRiders(businessProfileId, deliveryCoords.lat, deliveryCoords.lng, { vehicleTypes: vehicleType ? [vehicleType] : null })
+      : findStoreFirstRiders(businessProfileId, pickupProductId, storeLat, storeLng, deliveryCoords.lat, deliveryCoords.lng, {
+        vehicleTypes: vehicleType ? [vehicleType] : null,
+      });
+    lookup.then(({ data }) => {
       if (cancelled) return;
       setRiders(data || []);
       setRidersLoading(false);
     });
     return () => { cancelled = true; };
-  }, [user, businessProfileId, pickupProductId, storeLat, storeLng, deliveryCoords, vehicleType]);
+  }, [user, businessProfileId, pickupIsStore, pickupProductId, storeLat, storeLng, deliveryCoords, vehicleType]);
 
   const shareLocation = () => {
     if (!navigator.geolocation) {
@@ -3049,11 +3072,14 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
 
   const cartItems = useMemo(
     () => Object.entries(cart)
-      .map(([listingId, qty]) => ({ listing: products.find((p) => p.listing_id === listingId), qty }))
+      .map(([listingId, qty]) => ({ listing: listingsById.get(listingId), qty }))
       .filter((row) => row.listing && row.qty > 0),
-    [cart, products]
+    [cart, listingsById]
   );
   const cartTotal = cartItems.reduce((sum, row) => sum + row.listing.listed_price * row.qty, 0);
+  // Any of the business's own store products in the cart: the order is placed through site_checkout_with_pin /
+  // site_guest_checkout_start (which hand it to dropship's checkout) instead of a plain dropship listing's.
+  const hasStoreItems = cartItems.some((row) => isStoreListing(row.listing));
   // A shop priced in another currency is bought through "Pay in instalments" / pay-in-full (not the Ugandan rider checkout).
   const [shelf, setShelf] = useState({});
   useEffect(() => {
@@ -3068,10 +3094,21 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
   const foreignCurrency = currencyOf(cartItems[0]?.listing);
   const foreign = cartItems.length > 0 && foreignCurrency !== 'UGX';
   const cartCount = cartItems.reduce((sum, row) => sum + row.qty, 0);
-  // Market-tab selection that goes to the Pay tab (separate from the delivery-shop cart above).
-  const pickedRows = payBasket ? storeProducts.filter((p) => (payBasket[String(p.product_id)] || 0) > 0 && isPayableProduct(p)) : [];
+  // Market-tab selection: it goes to the Pay tab, or -- when the business delivers -- into the delivery cart above.
+  const canPay = Boolean(onPayForBasket);
+  const pickedRows = payBasket ? storeProducts.filter((p) => (payBasket[String(p.product_id)] || 0) > 0 && ((canPay && isPayableProduct(p)) || canDeliverProduct(p))) : [];
   const pickedCount = pickedRows.reduce((sum, p) => sum + payBasket[String(p.product_id)], 0);
   const pickedTotal = pickedRows.reduce((sum, p) => sum + (Number(p.price) || 0) * payBasket[String(p.product_id)], 0);
+  const payPicked = canPay && pickedRows.some(isPayableProduct);
+  const deliverPlan = useMemo(() => planDelivery(payBasket, deliveryByProduct), [payBasket, deliveryByProduct]);
+  const offersDelivery = storeProducts.some(canDeliverProduct);
+  // "Deliver it to me": what is ticked moves into the delivery cart (capped by stock) and the cart opens.
+  const startDelivery = () => {
+    if (deliverPlan.count === 0) return;
+    setCart((prev) => mergeDeliveryCart(prev, deliverPlan.cart, listingsById));
+    setPayBasket((prev) => withoutMoved(prev, deliverPlan.moved));
+    setShowCart(true);
+  };
   const allFreeDelivery = cartItems.length > 0 && cartItems.every((row) => row.listing.free_delivery);
   // Preview only -- dropship_checkout always recomputes the REAL fare
   // server-side (BodaGoera's own fare formula for whichever rider actually
@@ -3097,13 +3134,18 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
     deliveryCoords,
     maxDeliveryHours,
     vehicleType,
-    storeName: products[0]?.reseller_name || 'Store',
+    storeName: allListings[0]?.reseller_name || 'Store',
+    storeDelivery: hasStoreItems,
     onPaid: (data) => { setReceipt({ ...data, paid_via: 'guest' }); setCart({}); },
   });
   // For a signed-out visitor the server's quote is the source of truth (it
   // prices the rider who will actually be booked); otherwise the preview above.
   const shownDeliveryFee = !user && guest.quote ? guest.quote.delivery_fee_ugx : deliveryFeeAmount;
-  const walletTotal = !user && guest.quote ? guest.quote.order_total_ugx : orderTotal;
+  // The store's own products are priced with their tax included, as dropship adds it: the server's figure is the one to show.
+  const itemsAmount = hasStoreItems && guest.quote ? guest.quote.items_ugx : cartTotal;
+  const walletTotal = !user && guest.quote ? guest.quote.order_total_ugx : itemsAmount + (deliveryFeeAmount || 0);
+  // Mobile Money / card / bank for store products needs guest checkout to be set up for it (the server says so).
+  const guestPayOffered = !hasStoreItems || Boolean(delivery?.guestOk);
 
   const changeQty = (listingId, delta, maxStock) => {
     setCart((prev) => {
@@ -3144,11 +3186,13 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
       // first, then the nearest other). If that rider got taken meanwhile,
       // let the server auto-pick instead of failing the order.
       const autoRiderId = selectedRiderId ? null : riders[0]?.rider_id;
-      let { data, error } = await dropshipCheckout(businessProfileId, cartPayload, {
+      // Store products are paid through the same checkout, just handed to it by the business (see siteDeliveryService.js).
+      const checkout = hasStoreItems ? siteCheckout : dropshipCheckout;
+      let { data, error } = await checkout(businessProfileId, cartPayload, {
         ...checkoutOptions, riderId: selectedRiderId || autoRiderId || undefined,
       });
       if (autoRiderId && (error || !data?.success) && /no longer available/i.test(error?.message || data?.error || '')) {
-        ({ data, error } = await dropshipCheckout(businessProfileId, cartPayload, checkoutOptions));
+        ({ data, error } = await checkout(businessProfileId, cartPayload, checkoutOptions));
       }
       if (error || !data?.success) {
         throw new Error(error?.message || data?.error || 'Checkout failed');
@@ -3267,7 +3311,20 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
       {storeProducts.length > 0 && (
         <div className={products.length > 0 ? 'mt-8' : ''}>
           <h3 className="text-sm font-semibold nb-text mb-1">{products.length > 0 ? 'From our store' : 'Our products'}</h3>
-          <p className="text-xs nb-text-muted mb-3">{onPayForBasket ? 'Tap everything you want, then pay for it all together — cash, IcanEra wallet, Mobile Money, card or bank.' : 'Contact us to order these.'}</p>
+          <p className="text-xs nb-text-muted mb-3">
+            {onPayForBasket
+              ? `Tap everything you want, then pay for it all together — cash, IcanEra wallet, Mobile Money, card or bank${offersDelivery ? ', or have it delivered' : ''}.`
+              : offersDelivery ? 'Tap everything you want, then have it delivered to you.' : 'Contact us to order these.'}
+          </p>
+          {offersDelivery && (
+            <div className="nb-card rounded-xl p-3 mb-3 flex items-start gap-2.5 text-xs nb-text-muted">
+              <Truck className="w-4 h-4 nb-link flex-shrink-0 mt-0.5" />
+              <p>
+                <span className="font-semibold nb-text">We deliver.</span> A BodaGoera rider collects your order from our store and brings it to you.
+                You pay the rider&apos;s real fare — you see it before you pay — and your payment is held safely until the rider has collected the order.
+              </p>
+            </div>
+          )}
           {(buildWhatsAppLink(contact.whatsapp) || buildTelLink(contact.phone)) && (
             <div className="flex gap-2 mb-3">
               {buildWhatsAppLink(contact.whatsapp) && (
@@ -3284,7 +3341,11 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
           )}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
             {storeProducts.map((item) => {
-              const payable = !!onPayForBasket && !!payBasket && isPayableProduct(item);
+              const deliverListing = deliveryByProduct.get(String(item.product_id));
+              const deliverable = Boolean(deliverListing?.in_stock);
+              const inDeliveryCart = deliverListing ? (cart[deliverListing.listing_id] || 0) : 0;
+              // Tap-to-pick works when the visitor can pay for the item here, or have it delivered.
+              const payable = !!payBasket && ((canPay && isPayableProduct(item)) || deliverable);
               const id = String(item.product_id);
               const picked = payable ? (payBasket[id] || 0) : 0;
               const setPicked = (qty) => setPayBasket((prev) => ({ ...prev, [id]: Math.max(0, Math.min(99, qty)) }));
@@ -3314,6 +3375,14 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
                   ) : (
                     <p className="mt-1 text-[11px] nb-text-muted">In stock</p>
                   )}
+                  {deliverable && (
+                    <p className="mt-0.5 flex items-center gap-1 text-[11px] nb-text-muted"><Truck className="w-3 h-3" />We deliver this</p>
+                  )}
+                  {inDeliveryCart > 0 && (
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setShowCart(true); }} className="mt-1 self-start px-2 py-0.5 rounded-full nb-chip-green text-[11px] font-semibold">
+                      {inDeliveryCart} in your delivery cart
+                    </button>
+                  )}
                   {payable && (picked === 0 ? (
                     <span className="mt-2 w-full min-h-[40px] rounded-lg nb-btn-primary text-xs font-semibold flex items-center justify-center gap-1"><Plus className="w-3.5 h-3.5" />Add</span>
                   ) : (
@@ -3330,13 +3399,20 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
           </div>
           {pickedCount > 0 && (
             <div className="sticky bottom-[calc(148px+env(safe-area-inset-bottom))] sm:bottom-6 z-30 mt-4 max-w-md mx-auto">
-              <div className="nb-card rounded-2xl shadow-lg p-2.5 pl-4 flex items-center gap-3">
-                <div className="min-w-0 flex-1">
+              <div className="nb-card rounded-2xl shadow-lg p-2.5 pl-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+                <div className="min-w-0 flex-1 basis-28">
                   <p className="text-xs nb-text-muted">{pickedCount} item{pickedCount === 1 ? '' : 's'} selected</p>
                   <p className="font-extrabold nb-text truncate">{formatUGX(pickedTotal)}</p>
                 </div>
                 <button type="button" onClick={() => setPayBasket({})} className="nb-text-faint text-xs font-semibold min-h-[44px] px-2">Clear</button>
-                <button type="button" onClick={onPayForBasket} className="nb-btn-primary rounded-xl min-h-[44px] px-5 text-sm font-bold">Pay now</button>
+                {deliverPlan.count > 0 && (
+                  <button type="button" onClick={startDelivery} className={`${payPicked ? 'nb-btn-secondary' : 'nb-btn-primary'} rounded-xl min-h-[44px] px-4 text-sm font-bold inline-flex items-center gap-1.5`}>
+                    <Truck className="w-4 h-4" />Deliver it to me
+                  </button>
+                )}
+                {payPicked && (
+                  <button type="button" onClick={onPayForBasket} className="nb-btn-primary rounded-xl min-h-[44px] px-5 text-sm font-bold">{deliverPlan.count > 0 ? 'Pick up & pay' : 'Pay now'}</button>
+                )}
               </div>
             </div>
           )}
@@ -3356,7 +3432,12 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
                     <p className="text-sm nb-text truncate">{row.listing.name}</p>
                     <p className="text-xs nb-text-faint">{priceOf(row.listing.listed_price, row.listing)} × {row.qty}</p>
                   </div>
-                  <button onClick={() => setCart((prev) => ({ ...prev, [row.listing.listing_id]: 0 }))} className="p-1.5 nb-text-faint hover:opacity-70"><Trash2 className="w-4 h-4" /></button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => changeQty(row.listing.listing_id, -1, row.listing.available_stock)} className="p-1.5 nb-text-faint hover:opacity-70" aria-label={`Fewer ${row.listing.name}`}><Minus className="w-4 h-4" /></button>
+                    <span className="text-sm font-semibold nb-text min-w-[1.25rem] text-center">{row.qty}</span>
+                    <button onClick={() => changeQty(row.listing.listing_id, 1, row.listing.available_stock)} className="p-1.5 nb-text-faint hover:opacity-70" aria-label={`More ${row.listing.name}`}><Plus className="w-4 h-4" /></button>
+                    <button onClick={() => setCart((prev) => ({ ...prev, [row.listing.listing_id]: 0 }))} className="p-1.5 nb-text-faint hover:opacity-70" aria-label={`Remove ${row.listing.name}`}><Trash2 className="w-4 h-4" /></button>
+                  </div>
                 </div>
               ))}
               <div className="space-y-2 pt-2 border-t nb-border">
@@ -3462,7 +3543,7 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
                 </>)}
               </div>
               <div className="border-t nb-border pt-3 space-y-1">
-                <div className="flex justify-between text-sm nb-text-faint"><span>Items</span><span>{foreign ? formatMoney(cartTotal, foreignCurrency) : formatUGX(cartTotal)}</span></div>
+                <div className="flex justify-between text-sm nb-text-faint"><span>{hasStoreItems && guest.quote ? 'Items (tax included)' : 'Items'}</span><span>{foreign ? formatMoney(cartTotal, foreignCurrency) : formatUGX(itemsAmount)}</span></div>
                 {!foreign && shownDeliveryFee > 0 && (
                   <div className="flex justify-between text-sm nb-text-faint"><span>Delivery</span><span>{formatUGX(shownDeliveryFee)}</span></div>
                 )}
@@ -3472,19 +3553,22 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
               {!authLoading && !user && foreign && (
                 <ContinueWithGoogle skin="nb" pendingSection="shop" onUseEmail={() => setShowAuthModal(true)} onBeforeRedirect={() => markCartOpen(cartOpenKey)} />
               )}
-              <InstallmentOffer
-                businessProfileId={businessProfileId}
-                cartItems={cartItems}
-                user={user}
-                authLoading={authLoading}
-                onNeedAuth={() => setShowAuthModal(true)}
-                pendingSection="shop"
-                onBeforeAuthRedirect={() => markCartOpen(cartOpenKey)}
-                customerName={customerName}
-                customerPhone={customerPhone}
-                storeName={products[0]?.reseller_name || 'Store'}
-                skin="nb"
-              />
+              {/* Instalments are built on dropship listings; the store's own products are paid in full here (or picked up and paid on the Pay tab). */}
+              {!hasStoreItems && (
+                <InstallmentOffer
+                  businessProfileId={businessProfileId}
+                  cartItems={cartItems}
+                  user={user}
+                  authLoading={authLoading}
+                  onNeedAuth={() => setShowAuthModal(true)}
+                  pendingSection="shop"
+                  onBeforeAuthRedirect={() => markCartOpen(cartOpenKey)}
+                  customerName={customerName}
+                  customerPhone={customerPhone}
+                  storeName={products[0]?.reseller_name || 'Store'}
+                  skin="nb"
+                />
+              )}
               {!foreign && (
                 <div className="space-y-2">
                   {!authLoading && !user ? (
@@ -3512,6 +3596,7 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
                   </button>
                   </div>
                   )}
+                  {guestPayOffered ? (<>
                   <div className="flex items-center gap-2 text-[11px] nb-text-faint"><span className="flex-1 h-px nb-border-strong border-t" />{user ? 'or pay another way' : 'or no wallet needed'}<span className="flex-1 h-px nb-border-strong border-t" /></div>
                   <button
                     onClick={guest.payNow}
@@ -3531,6 +3616,12 @@ const ShopSection = ({ products, storeProducts = [], payBasket = null, setPayBas
                     </p>
                   )}
                   {(guest.quoteError || guest.payError) && <p className="nb-error-text text-xs">{guest.payError || guest.quoteError}</p>}
+                  </>) : (
+                    <p className="text-[11px] nb-text-muted">
+                      Delivery from this shop is paid with an IcanEra wallet (free to open, no extra fee). You can also pick the items up and pay with Mobile Money, card or bank on the Pay tab.
+                    </p>
+                  )}
+                  {hasStoreItems && guest.quote && <p className="text-[11px] nb-text-faint">The tax on your items is included in the total shown.</p>}
                 </div>
               )}
             </div>

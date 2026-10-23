@@ -18,6 +18,7 @@ import CMMSEmploymentDocumentsPanel from './CMMSEmploymentDocumentsPanel';
 import CMMSBusinessOpportunitiesPanel from './CMMSBusinessOpportunitiesPanel';
 import CMMSInquiriesPanel from './CMMSInquiriesPanel';
 import CMMSSiteLibraryPanel from './CMMSSiteLibraryPanel';
+import CMMSSiteDeliveryPanel from './CMMSSiteDeliveryPanel';
 import businessChatService from '../services/businessChatService';
 import siteLibraryService from '../services/siteLibraryService';
 import useBusinessSiteSlug from '../hooks/useBusinessSiteSlug';
@@ -1055,7 +1056,7 @@ const CMMSAnnouncementsPanel = ({
                   <option value="both">Both — store products and reseller listings</option>
                 </select>
                 <p className="text-xs cmms-classic-muted mt-1">
-                  Store products are shown with their price and whether they are in stock. Customers order them from you directly; only reseller listings can be added to a cart on the website.
+                  Store products are shown with their price and whether they are in stock. Customers pick them up and pay on the website, or — if you switch on Delivery below — have them delivered by a rider.
                 </p>
                 <div className="flex items-center justify-end gap-2 mt-2">
                   <button
@@ -1066,6 +1067,9 @@ const CMMSAnnouncementsPanel = ({
                     {savingProductsSource ? 'Saving…' : 'Save products source'}
                   </button>
                 </div>
+                {savedProductsSource !== 'resellers' && (
+                  <CMMSSiteDeliveryPanel key={savedBusinessProfileId} companyId={companyId} />
+                )}
               </div>
             )}
           </div>
