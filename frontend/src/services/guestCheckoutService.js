@@ -22,6 +22,15 @@ const writePending = (value) => {
   } catch { /* private mode — resume just won't be available */ }
 };
 
+// A cart of the business's own store products (delivery on its website) is priced and ordered through
+// site_guest_checkout_start, which lends the products to the very same guest_checkout_start; everything else is unchanged.
+const startCall = (p, dryRun) => {
+  const { p_reseller_business_profile_id, ...rest } = toPayload(p);
+  return p.storeDelivery
+    ? ['site_guest_checkout_start', { p_business_profile_id: p_reseller_business_profile_id, ...rest, p_dry_run: dryRun }]
+    : ['guest_checkout_start', { p_reseller_business_profile_id, ...rest, p_dry_run: dryRun }];
+};
+
 const toPayload = (p) => ({
   p_reseller_business_profile_id: p.businessProfileId,
   p_cart: p.cart,
@@ -37,7 +46,8 @@ const toPayload = (p) => ({
 // Price an order for a guest without creating anything. Returns the same
 // breakdown the real payment will use: items, delivery, processing fee, charge.
 export async function quoteGuestCheckout(params) {
-  const { data, error } = await supabase.rpc('guest_checkout_start', { ...toPayload(params), p_dry_run: true });
+  const [fn, args] = startCall(params, true);
+  const { data, error } = await supabase.rpc(fn, args);
   if (error) throw new Error(error.message || 'Could not price this order');
   if (!data?.success) throw new Error(data?.error || 'Could not price this order');
   return data;
@@ -70,7 +80,8 @@ export async function completeGuestCheckout(txRef, transactionId) {
 // If the quote has moved since the customer last saw it (a different rider
 // became the nearest), nothing is charged — resolves { priceChanged: true, quote }.
 export async function payAsGuest(params, { expectedCharge = null, storeName = 'IcanEra order' } = {}) {
-  const { data: start, error } = await supabase.rpc('guest_checkout_start', { ...toPayload(params), p_dry_run: false });
+  const [fn, args] = startCall(params, false);
+  const { data: start, error } = await supabase.rpc(fn, args);
   if (error) throw new Error(error.message || 'Could not start this order');
   if (!start?.success) throw new Error(start?.error || 'Could not start this order');
 
