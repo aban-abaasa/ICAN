@@ -111,6 +111,8 @@ export default {
   'auth.forgotPassword': 'Umesahau nenosiri?',
   'auth.noAccount': 'Huna akaunti?',
   'auth.signInWallet': 'Ingia kwa Pochi',
+  'auth.signInBiometric': 'Ingia kwa alama ya kidole au uso',
+  'auth.biometricChecking': 'Inakagua alama ya kidole au uso wako...',
   'auth.enteringApp': 'Inaingia IcanEra...',
   'auth.authenticating': 'Inathibitisha na IcanEra...',
 

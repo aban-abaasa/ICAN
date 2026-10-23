@@ -111,6 +111,8 @@ export default {
   'auth.forgotPassword': 'Esqueceu-se da palavra-passe?',
   'auth.noAccount': 'Ainda não tem conta?',
   'auth.signInWallet': 'Iniciar sessão com a carteira',
+  'auth.signInBiometric': 'Iniciar sessão com impressão digital ou rosto',
+  'auth.biometricChecking': 'A verificar a impressão digital ou o rosto...',
   'auth.enteringApp': 'A entrar no IcanEra...',
   'auth.authenticating': 'A autenticar no IcanEra...',
 

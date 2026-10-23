@@ -4,6 +4,7 @@ import { offlineAuthManager } from '../lib/offlineAuthManager';
 import { syncManager } from '../lib/syncManager';
 import { isNetworkAuthError } from '../lib/authErrors';
 import { uploadToR2, resolveMediaValue } from '../services/r2StorageService';
+import { removeAllPasskeys, requestPasskeyLogin } from '../services/passkeyService';
 
 const AuthContext = createContext({});
 
@@ -574,6 +575,10 @@ export const AuthProvider = ({ children }) => {
     const client = getSupabase();
     if (!client) throw new Error('Supabase not initialized');
 
+    // A lost phone must not keep a way back in: fingerprint / face sign-in is switched off on every device too.
+    // (Needs the live session, so it goes first; a failure here must not stop the sign-out.)
+    await removeAllPasskeys().catch((err) => console.warn('[AuthContext] Could not remove fingerprint/face devices:', err?.message || err));
+
     const { error } = await client.auth.signOut({ scope: 'global' });
 
     if (user?.email) {
@@ -646,6 +651,25 @@ export const AuthProvider = ({ children }) => {
     return otpData;
   };
 
+  // Sign in with this device's fingerprint or face (a WebAuthn passkey) - no email, password or PIN typed. The device
+  // checks the person and signs a one-time challenge; the passkey-auth edge function verifies the signature against the
+  // public key it stored and returns a magic-link token_hash, redeemed here exactly like the wallet sign-in above.
+  // A two-step (authenticator app) account is still asked for its code afterwards, same as every other sign-in method.
+  const signInWithBiometric = async () => {
+    const supabase = getSupabase();
+    if (!supabase) throw new Error('Supabase not initialized');
+
+    const { tokenHash } = await requestPasskeyLogin();
+
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: 'email',
+    });
+
+    if (error) throw error;
+    return data;
+  };
+
   // Sign in with Google - exactly like FARM-AGENT
   const signInWithGoogle = async () => {
     const supabase = getSupabase();
@@ -695,6 +719,7 @@ export const AuthProvider = ({ children }) => {
     signUp,
     signIn,
     signInWithWallet,
+    signInWithBiometric,
     signOut,
     signOutEverywhere,
     mfaStatus,
