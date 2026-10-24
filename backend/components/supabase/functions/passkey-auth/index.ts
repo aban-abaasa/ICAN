@@ -192,7 +192,7 @@ serve(async (req) => {
           },
           pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
           authenticatorSelection: {
-            authenticatorAttachment: "platform", // this device's own fingerprint / face / PIN
+            authenticatorAttachment: "platform", // this device's own fingerprint / face
             residentKey: "required", // discoverable: lets sign-in start from nothing but a fingerprint or face
             requireResidentKey: true,
             userVerification: "required",
