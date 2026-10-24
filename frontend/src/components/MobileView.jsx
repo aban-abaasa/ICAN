@@ -677,16 +677,6 @@ const FeatureCardWithSlideshow = ({
   );
 };
 
-// Static Tailwind class sets per journey stage (1-4) for the Progress card.
-// Kept as literal strings (not built via template interpolation) so Tailwind's
-// JIT scanner picks them all up regardless of which stage is active at runtime.
-const STAGE_STYLES = {
-  1: { cardBg: 'from-red-900/60 to-red-900/40', cardBorder: 'border-red-500/60', barGradient: 'from-red-500 to-red-400', badgeText: 'text-red-300', titleText: 'text-red-100/80', activeBtn: 'bg-gradient-to-br from-red-600/50 to-red-700/40 border-red-500/60', activeIcon: 'text-red-400', activeLabel: 'text-red-300' },
-  2: { cardBg: 'from-yellow-900/60 to-yellow-900/40', cardBorder: 'border-yellow-500/60', barGradient: 'from-yellow-500 to-yellow-400', badgeText: 'text-yellow-300', titleText: 'text-yellow-100/80', activeBtn: 'bg-gradient-to-br from-yellow-600/40 to-yellow-700/30 border-yellow-500/40', activeIcon: 'text-yellow-400', activeLabel: 'text-yellow-300' },
-  3: { cardBg: 'from-blue-900/60 to-blue-900/40', cardBorder: 'border-blue-500/60', barGradient: 'from-blue-500 to-blue-400', badgeText: 'text-blue-300', titleText: 'text-blue-100/80', activeBtn: 'bg-gradient-to-br from-blue-600/40 to-blue-700/30 border-blue-500/40', activeIcon: 'text-blue-400', activeLabel: 'text-blue-300' },
-  4: { cardBg: 'from-green-900/60 to-green-900/40', cardBorder: 'border-green-500/60', barGradient: 'from-green-500 to-green-400', badgeText: 'text-green-300', titleText: 'text-green-100/80', activeBtn: 'bg-gradient-to-br from-green-600/40 to-green-700/30 border-green-500/40', activeIcon: 'text-green-400', activeLabel: 'text-green-300' },
-};
-
 // Dashboard header navigation row — shows as many sections as actually fit
 // the available width, and collapses whatever doesn't fit behind a trailing
 // "More" dropdown, instead of leaving them in a horizontally scrolling row
@@ -1197,18 +1187,18 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
   const [businessTrendLoading, setBusinessTrendLoading] = useState(false);
   const [dashboardTrend, setDashboardTrend] = useState({ direction: 'stable', confidence: 0 });
 
-  // Financial Trends chart: a named preset (1M/3M/1Y/5Y/All) picks the window,
-  // VelocityEngine.getRangeSeries() auto-picks the bucket size (day/week/
-  // month/year) for it, and tapping a point drills into that bucket at finer
-  // granularity — trendZoomStack holds the trail back out. The loaded
+  // Financial Trends chart: a resolution tab (Min/Hour/Day/Month/Year) picks
+  // the window and bucket size together (VelocityEngine.getPresetRange), and
+  // tapping a point twice drills into that bucket at the next finer
+  // resolution — trendZoomStack holds the trail back out. The loaded
   // VelocityEngine instance is cached in a ref so zooming/drilling recomputes
   // instantly over already-fetched transactions instead of refetching.
   const dashboardEngineRef = useRef(null);
-  const [trendPreset, setTrendPreset] = useState('1m');
+  const [trendPreset, setTrendPreset] = useState('day');
   const [trendGranularity, setTrendGranularity] = useState('daily');
   const [trendRangeLabel, setTrendRangeLabel] = useState(null);
-  const [trendCurrentRange, setTrendCurrentRange] = useState(null); // { start, end }
-  const [trendZoomStack, setTrendZoomStack] = useState([]); // [{ start, end }, ...] — "back" trail
+  const [trendCurrentRange, setTrendCurrentRange] = useState(null); // { start, end, granularity }
+  const [trendZoomStack, setTrendZoomStack] = useState([]); // [{ start, end, granularity }, ...] — "back" trail
 
   const trendScopedBusinessId = () => (dashboardScope === 'business' ? (dashboardBusinessId || null) : null);
 
@@ -1217,14 +1207,16 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     return `${start.toLocaleDateString(undefined, opts)} – ${end.toLocaleDateString(undefined, opts)}`;
   };
 
-  const applyTrendRange = (start, end) => {
+  // `granularity` is optional: a resolution tab pins its own bucket size,
+  // while a drill-down omits it and lets the shrunken span pick one.
+  const applyTrendRange = (start, end, granularity) => {
     const engine = dashboardEngineRef.current;
     if (!engine) return;
-    const { data, granularity } = engine.getRangeSeries(dashboardScope, trendScopedBusinessId(), { start, end });
-    setDailyTrackingData(data);
-    setTrendGranularity(granularity);
+    const series = engine.getRangeSeries(dashboardScope, trendScopedBusinessId(), { start, end, granularity });
+    setDailyTrackingData(series.data);
+    setTrendGranularity(series.granularity);
     setTrendRangeLabel(formatTrendRangeLabel(start, end));
-    setTrendCurrentRange({ start, end });
+    setTrendCurrentRange({ start, end, granularity: series.granularity });
   };
 
   // Preset tap (1M/3M/1Y/5Y/All): jump straight to that window, clearing any
@@ -1234,11 +1226,11 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     setTrendPreset(presetId);
     setTrendZoomStack([]);
     if (!engine) return;
-    const { start, end } = engine.getPresetRange(presetId, dashboardScope, trendScopedBusinessId());
-    applyTrendRange(start, end);
+    const { start, end, granularity } = engine.getPresetRange(presetId, dashboardScope, trendScopedBusinessId());
+    applyTrendRange(start, end, granularity);
   };
 
-  // Tap a point on a zoomed-out chart (weekly/monthly/yearly buckets): zoom
+  // Tap a point twice on a zoomed-out chart (yearly/monthly/daily/hourly buckets): zoom
   // into that bucket's own span, which naturally renders at finer granularity.
   const handleTrendDrill = (point) => {
     const engine = dashboardEngineRef.current;
@@ -1252,15 +1244,15 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     if (trendZoomStack.length === 0) return;
     const restored = trendZoomStack[trendZoomStack.length - 1];
     setTrendZoomStack(trendZoomStack.slice(0, -1));
-    applyTrendRange(restored.start, restored.end);
+    applyTrendRange(restored.start, restored.end, restored.granularity);
   };
 
   const handleTrendResetZoom = () => {
     const engine = dashboardEngineRef.current;
     setTrendZoomStack([]);
     if (!engine) return;
-    const { start, end } = engine.getPresetRange(trendPreset, dashboardScope, trendScopedBusinessId());
-    applyTrendRange(start, end);
+    const { start, end, granularity } = engine.getPresetRange(trendPreset, dashboardScope, trendScopedBusinessId());
+    applyTrendRange(start, end, granularity);
   };
 
   // Modal State Variables (7 action button modals)
@@ -2703,7 +2695,7 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
           setDailyTrackingData(initialSeries.data);
           setTrendGranularity(initialSeries.granularity);
           setTrendRangeLabel(formatTrendRangeLabel(initialRange.start, initialRange.end));
-          setTrendCurrentRange(initialRange);
+          setTrendCurrentRange({ ...initialRange, granularity: initialSeries.granularity });
         }
         if (!cancelled) setDashboardTrend(engine.calculateTrends(engine.getScopedTransactions(dashboardScope, scopedBusinessId)));
 
@@ -7350,8 +7342,6 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
       {(() => {
         const stage = determineCurrentStage(dashboardNetWorth);
         const stageInfo = journeyStages[stage];
-        const style = STAGE_STYLES[stage];
-        const StageIcon = stageInfo.icon;
         const netProfitMonthly = typeof metricPeriodData.netProfit.monthly === 'number' ? metricPeriodData.netProfit.monthly : 0;
         const savingsRateMonthly = metricPeriodData.savingsRate.monthly;
         const roiMonthly = metricPeriodData.roi.monthly;
@@ -7374,28 +7364,27 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
               )}
             </div>
 
-            {/* Personal / Business scope toggle */}
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3 mb-4 space-y-2">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">View</p>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'personal', label: 'Personal' },
-                  { id: 'business', label: 'Business' },
-                  { id: 'all', label: 'Combined' }
-                ].map((scope) => (
-                  <button
-                    key={scope.id}
-                    onClick={() => setDashboardScope(scope.id)}
-                    className={`py-2 rounded-lg text-xs font-bold transition ${
-                      dashboardScope === scope.id ? 'bg-rose-600 text-white shadow' : 'bg-white/10 text-gray-300 hover:bg-white/20'
-                    }`}
-                  >
-                    {scope.label}
-                  </button>
-                ))}
-              </div>
-              {dashboardScope === 'business' && (
-                dashboardBusinessProfiles.length === 0 ? (
+            {/* Personal / Business / Combined — plain text tabs, no box */}
+            <div className="flex items-center gap-5 mb-3 px-1">
+              {[
+                { id: 'personal', label: 'Personal' },
+                { id: 'business', label: 'Business' },
+                { id: 'all', label: 'Combined' }
+              ].map((scope) => (
+                <button
+                  key={scope.id}
+                  onClick={() => setDashboardScope(scope.id)}
+                  className={`pb-1 text-xs font-bold border-b-2 transition ${
+                    dashboardScope === scope.id ? 'text-white border-rose-500' : 'text-gray-500 border-transparent hover:text-gray-300'
+                  }`}
+                >
+                  {scope.label}
+                </button>
+              ))}
+            </div>
+            {dashboardScope === 'business' && (
+              <div className="mb-3 px-1">
+                {dashboardBusinessProfiles.length === 0 ? (
                   <p className="text-xs text-gray-500 italic">Loading your businesses…</p>
                 ) : (
                   <select
@@ -7409,66 +7398,44 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
                       <option key={p.id} value={p.id} className="bg-white text-gray-900">{p.business_name}</option>
                     ))}
                   </select>
-                )
-              )}
-            </div>
-
-            {/* Smart indicators -- each tile carries its own accent color
-                (dash-card-*, see index.css) instead of a Tailwind
-                bg-gradient-to-br class. ThemeContext's dynamic override
-                stylesheet force-flattens every `[class*="bg-gradient"]`
-                element to a single flat color, which is why these used to
-                render as plain white/gray boxes with only their opacity-
-                suffixed border surviving. */}
-            <div className="grid grid-cols-4 gap-1.5 mb-4">
-              <div className="dash-card dash-card-blue p-1.5" style={{ paddingTop: 'calc(0.375rem + 3px)' }}>
-                <div className="flex items-center gap-0.5 mb-0.5">
-                  <StageIcon className="w-2.5 h-2.5 shrink-0" style={{ color: '#3b82f6' }} />
-                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>Net Worth</p>
-                </div>
-                <p className="font-bold text-[11px] leading-tight truncate" style={{ color: 'var(--color-text)' }}>{formatCurrency(dashboardNetWorth)}</p>
-                <p className="text-[7px] truncate" style={{ color: '#3b82f6' }}>{stageInfo.name}</p>
+                )}
               </div>
+            )}
 
-              <div className="dash-card dash-card-orange p-1.5" style={{ paddingTop: 'calc(0.375rem + 3px)' }}>
-                <div className="flex items-center gap-0.5 mb-0.5">
-                  {netProfitMonthly >= 0 ? <TrendingUp className="w-2.5 h-2.5 shrink-0 text-emerald-400" /> : <TrendingDown className="w-2.5 h-2.5 shrink-0 text-red-400" />}
-                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>Net Profit</p>
-                </div>
-                <p className={`font-bold text-[11px] leading-tight truncate ${netProfitMonthly >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(netProfitMonthly)}</p>
-                <p className="text-[7px] truncate" style={{ color: 'var(--color-textSecondary)' }}>This month</p>
+            {/* Key figures as one line of plain information — no cards */}
+            <div className="grid grid-cols-4 gap-2 mb-3 px-1">
+              <div className="min-w-0">
+                <p className="text-[9px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>Net Worth</p>
+                <p className="font-bold text-xs leading-tight truncate" style={{ color: 'var(--color-text)' }}>{formatCurrency(dashboardNetWorth)}</p>
+                <p className="text-[9px] truncate" style={{ color: '#3b82f6' }}>{stageInfo.name}</p>
               </div>
-
-              <div className="dash-card dash-card-purple p-1.5" style={{ paddingTop: 'calc(0.375rem + 3px)' }}>
-                <div className="flex items-center gap-0.5 mb-0.5">
-                  <Percent className="w-2.5 h-2.5 shrink-0" style={{ color: '#a855f7' }} />
-                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>Savings Rate</p>
-                </div>
-                <p className="font-bold text-[11px] leading-tight truncate" style={{ color: '#a855f7' }}>
+              <div className="min-w-0">
+                <p className="text-[9px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>Net Profit</p>
+                <p className={`font-bold text-xs leading-tight truncate ${netProfitMonthly >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(netProfitMonthly)}</p>
+                <p className="text-[9px] truncate" style={{ color: 'var(--color-textSecondary)' }}>This month</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[9px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>Savings</p>
+                <p className="font-bold text-xs leading-tight truncate" style={{ color: '#a855f7' }}>
                   {typeof savingsRateMonthly === 'string' ? savingsRateMonthly : `${(savingsRateMonthly || 0).toFixed(1)}%`}
                 </p>
-                <p className="text-[7px] truncate" style={{ color: 'var(--color-textSecondary)' }}>This month</p>
+                <p className="text-[9px] truncate" style={{ color: 'var(--color-textSecondary)' }}>This month</p>
               </div>
-
-              <div className="dash-card dash-card-pink p-1.5" style={{ paddingTop: 'calc(0.375rem + 3px)' }}>
-                <div className="flex items-center gap-0.5 mb-0.5">
-                  <Target className="w-2.5 h-2.5 shrink-0" style={{ color: '#ec4899' }} />
-                  <p className="text-[7px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>ROI</p>
-                </div>
-                <p className="font-bold text-[11px] leading-tight truncate" style={{ color: '#ec4899' }}>
+              <div className="min-w-0">
+                <p className="text-[9px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>ROI</p>
+                <p className="font-bold text-xs leading-tight truncate" style={{ color: '#ec4899' }}>
                   {typeof roiMonthly === 'string' ? roiMonthly : `${(roiMonthly || 0).toFixed(1)}%`}
                 </p>
-                <p className="text-[7px] truncate" style={{ color: 'var(--color-textSecondary)' }}>This month</p>
+                <p className="text-[9px] truncate" style={{ color: 'var(--color-textSecondary)' }}>This month</p>
               </div>
             </div>
 
-            {/* Daily cash-flow line graph — Income / Expense / Net, real transactions */}
+            {/* Cash-flow graph — Income / Expense / Net, real transactions, read in min/hour/day/month/year */}
             <DailyTrackingChart
               data={dailyTrackingData}
               loading={dashboardLoading}
               title={dashboardScope === 'business' ? 'Business Cash Flow' : dashboardScope === 'all' ? 'Combined Cash Flow' : 'Personal Cash Flow'}
               granularity={trendGranularity}
-              activePreset={trendZoomStack.length === 0 ? trendPreset : null}
               onPresetChange={handleTrendPresetChange}
               rangeLabel={trendRangeLabel}
               canGoBack={trendZoomStack.length > 0}

@@ -560,28 +560,31 @@ export class VelocityEngine {
     return series;
   }
 
-  // --- Smart multi-granularity series: years of history, drillable ---
+  // --- Smart multi-resolution series: minutes to years, drillable ---
   //
-  // Rather than one fixed "last 30 days" window, callers hand this a
-  // [start, end] span (or a named preset) and it auto-picks the coarsest
-  // bucket size that still keeps the chart readable — daily for a month or
-  // less, weekly out to about a year, monthly out to a few years, yearly
-  // beyond that. Drilling into one bucket just re-runs this over that
-  // bucket's own [start, end], which naturally lands on a finer granularity
-  // since the span shrank — no separate "zoom" data path needed.
+  // Callers hand this a [start, end] span (or a named resolution) and it
+  // auto-picks the coarsest bucket size that still keeps the chart readable —
+  // per-minute inside a few hours, hourly inside a few days, daily out to
+  // about four months, monthly out to a few years, yearly beyond that.
+  // Drilling into one bucket just re-runs this over that bucket's own
+  // [start, end], which naturally lands on a finer resolution since the span
+  // shrank (year → month → day → hour → minute) — no separate "zoom" path.
 
   // Coarsest granularity that keeps a [start, end] span readable.
   pickGranularity(start, end) {
-    const days = Math.max(1, (end - start) / (24 * 60 * 60 * 1000));
-    if (days <= 45) return 'daily';       // up to ~6 weeks: every day
-    if (days <= 400) return 'weekly';     // up to ~1 year: every week (~52 points)
-    if (days <= 2200) return 'monthly';   // up to ~6 years: every month (~72 points)
-    return 'yearly';                      // beyond that: every year
+    const hours = Math.max(1 / 60, (end - start) / (60 * 60 * 1000));
+    if (hours <= 3) return 'minutely';        // up to 3 hours: every minute
+    if (hours <= 72) return 'hourly';         // up to 3 days: every hour
+    if (hours <= 24 * 120) return 'daily';    // up to ~4 months: every day
+    if (hours <= 24 * 2200) return 'monthly'; // up to ~6 years: every month
+    return 'yearly';                          // beyond that: every year
   }
 
   // Normalize a date down to the start of its bucket for a granularity.
   bucketStart(date, granularity) {
     const d = new Date(date);
+    if (granularity === 'minutely') { d.setSeconds(0, 0); return d; }
+    if (granularity === 'hourly') { d.setMinutes(0, 0, 0); return d; }
     if (granularity === 'weekly') {
       d.setHours(0, 0, 0, 0);
       const dow = (d.getDay() + 6) % 7; // Monday = 0
@@ -597,26 +600,50 @@ export class VelocityEngine {
   // Step a bucket-start date forward by one bucket of the given granularity.
   nextBucket(date, granularity) {
     const d = new Date(date);
-    if (granularity === 'weekly') d.setDate(d.getDate() + 7);
+    if (granularity === 'minutely') d.setMinutes(d.getMinutes() + 1);
+    else if (granularity === 'hourly') d.setHours(d.getHours() + 1);
+    else if (granularity === 'weekly') d.setDate(d.getDate() + 7);
     else if (granularity === 'monthly') d.setMonth(d.getMonth() + 1);
     else if (granularity === 'yearly') d.setFullYear(d.getFullYear() + 1);
     else d.setDate(d.getDate() + 1);
     return d;
   }
 
+  // Bucket key in the user's LOCAL time (never toISOString — that is UTC and
+  // shifts local-midnight buckets onto the previous day east of Greenwich).
   bucketKey(date, granularity) {
     const d = this.bucketStart(date, granularity);
+    const pad = (n) => String(n).padStart(2, '0');
+    const ymd = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     if (granularity === 'yearly') return String(d.getFullYear());
-    if (granularity === 'monthly') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    return d.toISOString().split('T')[0];
+    if (granularity === 'monthly') return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    if (granularity === 'hourly') return `${ymd}T${pad(d.getHours())}`;
+    if (granularity === 'minutely') return `${ymd}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return ymd;
   }
 
-  // Named presets → concrete [start, end] windows. 'all' reaches back to the
-  // user's first-ever transaction so multi-year history is always available.
+  // Named resolutions → concrete window + the bucket size that resolution
+  // means. The resolution IS the unit you read the graph in: 'minute' shows
+  // the last hour minute by minute, 'hour' the last day hour by hour, 'day'
+  // the last month day by day, 'month' the last year month by month, and
+  // 'year' your whole history year by year. The older range presets
+  // (7d/1m/3m/1y/5y/all) still work and let the span pick the bucket size.
   getPresetRange(preset, scope = 'all', businessId = null) {
     const end = new Date();
     const start = new Date(end);
     switch (preset) {
+      case 'minute': start.setMinutes(start.getMinutes() - 60); return { start, end, granularity: 'minutely' };
+      case 'hour': start.setHours(start.getHours() - 24); return { start, end, granularity: 'hourly' };
+      case 'day': start.setDate(start.getDate() - 30); return { start, end, granularity: 'daily' };
+      case 'month': start.setFullYear(start.getFullYear() - 1); return { start, end, granularity: 'monthly' };
+      case 'year': {
+        // Whole history, but never fewer than 5 yearly points so it reads as
+        // a line rather than a lone dot.
+        const floor = new Date(end);
+        floor.setFullYear(floor.getFullYear() - 4);
+        const earliest = this.getEarliestTransactionDate(scope, businessId);
+        return { start: earliest && earliest < floor ? earliest : floor, end, granularity: 'yearly' };
+      }
       case '7d': start.setDate(start.getDate() - 7); break;
       case '1m': start.setMonth(start.getMonth() - 1); break;
       case '3m': start.setMonth(start.getMonth() - 3); break;
@@ -628,7 +655,7 @@ export class VelocityEngine {
         start.setFullYear(start.getFullYear() - 1);
         break;
       }
-      default: start.setMonth(start.getMonth() - 1);
+      default: start.setDate(start.getDate() - 30); return { start, end, granularity: 'daily' };
     }
     return { start, end };
   }
