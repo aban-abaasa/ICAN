@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search, ShoppingBag, Download, Gem, Eye } from 'lucide-react';
+import { ThumbsUp, MessageCircle, Share2, Clock, Users, FileText, Zap, AlertCircle, Building2, Loader, Plus, Trash2, Lock, Unlock, X, Send, Copy, Check, Play, Home, BookMarked, Heart, Briefcase, Bell, Search, ShoppingBag, Download, Gem, Eye, Tag } from 'lucide-react';
 import './pitchin-classic.css';
 import DiamondLoader from './DiamondLoader';
 import PitchVideoRecorder from './PitchVideoRecorder';
@@ -8,6 +8,8 @@ import PitchUploadTray from './PitchUploadTray';
 import { enqueuePitchUpload, takeFinishedPitchUploads, subscribePitchUploads, getPitchUploads } from '../services/pitchUploadStore';
 import SmartContractGenerator from './SmartContractGenerator';
 import PrivatePitchInviteModal from './PrivatePitchInviteModal';
+import PitchProductBadgeOverlay from './PitchProductBadgeOverlay';
+import PitchBadgeManager from './PitchBadgeManager';
 import ShareSigningFlow from './ShareSigningFlow';
 import InvestmentProgressView from './InvestmentProgressView';
 import MyInvestmentsList from './MyInvestmentsList';
@@ -206,6 +208,7 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
   const { country: userCountry } = useCountry();
   const [businessLiveOffer, setBusinessLiveOffer] = useState(null); // live getLiveShareOffer() result for businessDetailsPitch
   const [invitePitch, setInvitePitch] = useState(null); // pitch whose "Invite investor" modal (PrivatePitchInviteModal) is open
+  const [badgePitch, setBadgePitch] = useState(null); // pitch whose "Product badges" manager (PitchBadgeManager) is open
   const [businessLiveOfferLoading, setBusinessLiveOfferLoading] = useState(false);
   const [showComments, setShowComments] = useState(null); // pitch id for comments modal
   const [comments, setComments] = useState({});
@@ -1702,6 +1705,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                       <DiamondLoader size={56} />
                     </div>
                   )}
+                  {/* Products the business advertises in this video, at the seconds it chose */}
+                  <PitchProductBadgeOverlay pitchId={activePitch.id} />
                   <button
                     onClick={() => toggleVideoSound(activePitch.id)}
                     className="icon-btn-transparent group absolute inset-0 flex items-center justify-center"
@@ -2316,6 +2321,9 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                         </div>
                       )}
                     </div>
+
+                    {/* Products the business advertises in this video, at the seconds it chose */}
+                    {pitch.video_url && !videoErrors[pitch.id] && <PitchProductBadgeOverlay pitchId={pitch.id} />}
 
                     {/* Overlay Container - All UI on top of video */}
                     <div className="absolute inset-0 z-20 pointer-events-none">
@@ -3277,6 +3285,19 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
                         <Lock className="w-3.5 h-3.5" />
                         Invite investor privately
                       </button>
+
+                      {/* Advertise products inside this video: a badge with the product and its price at the seconds you choose.
+                          Only the pitch's owner is offered it; the database checks again on every change. */}
+                      {pitch.video_url && currentUser?.id && pitch.business_profiles?.user_id === currentUser.id && (
+                        <button
+                          onClick={() => setBadgePitch(pitch)}
+                          className="mt-2 w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 border border-pink-500/20 transition-all"
+                          title="Show your products and prices inside this video"
+                        >
+                          <Tag className="w-3.5 h-3.5" />
+                          Product badges
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
@@ -3288,6 +3309,25 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
 
       {invitePitch && (
         <PrivatePitchInviteModal pitch={invitePitch} onClose={() => setInvitePitch(null)} />
+      )}
+
+      {badgePitch && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Product badges">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2 min-w-0">
+                <Tag className="w-5 h-5 text-pink-400 flex-shrink-0" />
+                <span className="truncate">Product badges · {badgePitch.title}</span>
+              </h3>
+              <button onClick={() => setBadgePitch(null)} aria-label="Close" className="icon-btn-transparent text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <PitchBadgeManager pitch={badgePitch} businessProfileId={badgePitch.business_profile_id || badgePitch.business_profiles?.id} />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Business Details Modal — opened by tapping a pitch's Pitcher icon */}
@@ -3468,6 +3508,8 @@ const Pitchin = ({ showPitchCreator, onClosePitchCreator, onOpenCreate, openBusi
               </div>
             )}
           </div>
+
+          {videoPlayerPitch.video_url && !videoErrors[videoPlayerPitch.id] && <PitchProductBadgeOverlay pitchId={videoPlayerPitch.id} />}
 
           {/* Right Side Action Buttons - TikTok Style */}
           <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-5 z-30">

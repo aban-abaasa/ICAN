@@ -15,6 +15,7 @@ import {
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { LIVE_OFFER_BLOCKED_MESSAGE } from './Pitchin';
 import ShareSigningFlow from './ShareSigningFlow';
+import PitchProductBadgeOverlay from './PitchProductBadgeOverlay';
 import LoadingPage from './LoadingPage';
 
 // Rendered instead of the normal authenticated app (see main.jsx) when the
@@ -614,6 +615,8 @@ const PublicPitchViewer = ({ pitchId, nextPitch = null, hasPrev = false, onNext,
             <AlertCircle className="w-12 h-12 text-slate-300" />
           </div>
         )}
+        {/* Products the business advertises in this video, above the pitch title that sits at the bottom */}
+        {pitch.video_url && <PitchProductBadgeOverlay pitchId={pitch.id} bottomOffset={220} />}
       </div>
 
       {/* Pitch info */}

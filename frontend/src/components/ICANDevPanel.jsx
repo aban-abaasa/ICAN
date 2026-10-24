@@ -17,6 +17,7 @@ import ICANInsuranceDevTab from './ICANInsuranceDevTab';
 import ICANSectorDevTab from './ICANSectorDevTab';
 import ICANStableDevTab from './ICANStableDevTab';
 import ICANFeesDevTab from './ICANFeesDevTab';
+import ICANServicePricesDevTab from './ICANServicePricesDevTab';
 import ICANChainDevTab from './ICANChainDevTab';
 import ICANIdChecksDevTab from './ICANIdChecksDevTab';
 import { useDirectCall } from '../hooks/useDirectCall';
@@ -138,7 +139,7 @@ const TABS = [
   { id: 'franchise',  label: 'Franchise',    Icon: Network,     color: '#f59e0b' },
   { id: 'stable',     label: 'ICEC-S',         Icon: ShieldCheck, color: '#34d399' },
   { id: 'idchecks',   label: 'ID checks',      Icon: ShieldCheck, color: '#22d3ee' },
-  { id: 'fees',       label: 'Sale fees',      Icon: Percent,     color: '#f472b6' },
+  { id: 'fees',       label: 'Fees & services', Icon: Percent,    color: '#f472b6' },
   { id: 'sectors',    label: 'Sector Markets', Icon: TrendingUp, color: '#fbbf24' },
   { id: 'onchain',    label: 'On-chain',       Icon: TrendingUp, color: '#38bdf8' },
   { id: 'api',        label: 'API',          Icon: Zap,         color: '#38bdf8' },
@@ -2756,7 +2757,12 @@ export const ICANDevDashboard = ({ onExit, visibleTabs = null, headerExtra = nul
         {tab==='idchecks' && <ICANIdChecksDevTab devToken={DEV_TOKEN}/>}
 
         {/* ══ SALE FEES (what ICANera takes from a dropship sale and a store sale; the panel's dev token AND the operator account) ══ */}
-        {tab==='fees' && <ICANFeesDevTab devToken={DEV_TOKEN}/>}
+        {tab==='fees' && (
+          <div className="space-y-8">
+            <ICANFeesDevTab devToken={DEV_TOKEN}/>
+            <ICANServicePricesDevTab devToken={DEV_TOKEN}/>
+          </div>
+        )}
 
         {/* ══ SECTOR MARKETS (kill switch, vault, sectors, settings; the panel's dev token) ══ */}
         {tab==='sectors' && <ICANSectorDevTab devToken={DEV_TOKEN}/>}
