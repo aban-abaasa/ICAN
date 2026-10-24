@@ -244,6 +244,19 @@ describe('fallback', () => {
     assert.ok(r.links.every((l) => /^https:\/\//.test(l.url)));
   });
 
+  test('"how can I get my free website" is answered with how to get the site, not the wallet fees', () => {
+    for (const q of ['How can get my free website', 'I want a free website for my business', 'how do I create a website']) {
+      const r = ask(q, 'icanera');
+      assert.match(r.reply, /company profile/i, q);
+      assert.ok(!/Sending ICAN to another/.test(r.reply), `${q}: must not fall into the fees answer`);
+    }
+  });
+
+  test('a fees question still gets the fees', () => {
+    assert.match(ask('is it free to send ican to a friend?', 'icanera').reply, /Sending ICAN to another/);
+    assert.match(ask('what does it cost to withdraw').reply, /Withdrawing from your wallet/);
+  });
+
   test('quotes the live coin price without predicting it', () => {
     const r = ask('what is the icaneracoin price today?');
     assert.match(r.reply, /UGX 5,819\.63/);

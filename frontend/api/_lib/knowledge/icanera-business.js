@@ -46,6 +46,13 @@ export const TOPICS = [
     followUps: ['Why is a tab missing from my site?', 'How do customers pay on my site?'],
   },
   {
+    id: 'site-get', app: 'icanera', title: 'How to get a business website',
+    keywords: ['free website', 'get a website', 'get my website', 'get my free website', 'create a website', 'create website', 'build a website', 'make a website', 'make website', 'need a website', 'want a website', 'own website', 'start a website', 'website for my business'],
+    answer: 'Your business website is created for you when you set up your business in IcanEra: sign in, open CMMS (the business workspace), choose your business category and create the company profile. The site is then live at icanera.space/<your-business-name>, and you can change that address later under CMMS > Company > Company Profile. For a personal page instead, you can build a free resume and portfolio page at icanera.space/portfolio/<your-handle>. I cannot confirm what is included in your plan, so ask the team if you need to be sure.',
+    links: ['icanera'],
+    followUps: ['How do I create my company profile?', 'Why is a tab missing from my site?', 'How do I build a portfolio page?'],
+  },
+  {
     id: 'site-tabs', app: 'icanera', title: 'Business website tabs',
     keywords: ['tab', 'tabs', 'missing tab', 'pitches', 'opportunities', 'library', 'market', 'my account', 'news', 'home tab'],
     answer: 'Home, News, Market, Pay and Careers are always there. Pitches appears when a Pitchin profile is linked. Opportunities and Library appear only once something is listed. "My account" appears when a profile is linked and customer accounts are on. The Library holds documents and links you choose; locked items need a password or PIN.',
