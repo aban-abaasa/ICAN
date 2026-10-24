@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Heart, Share2, ChevronLeft, ChevronRight, Send, MessageCircle, ShoppingBag } from 'lucide-react';
+import { X, Heart, Share2, ChevronLeft, ChevronRight, Send, MessageCircle, ShoppingBag, Tag } from 'lucide-react';
 import { incrementStatusView } from '../../services/statusService';
 import {
   sendStatusMessage,
@@ -14,6 +14,8 @@ import {
 import { getUserStorefronts } from '../../services/dropshipService';
 import { useAuth } from '../../context/AuthContext';
 import StatusCaptionText from './StatusCaptionText';
+import PitchProductBadgeOverlay from '../PitchProductBadgeOverlay';
+import PitchBadgeManager from '../PitchBadgeManager';
 
 const timeAgo = (timestamp) => {
   if (!timestamp) return 'Now';
@@ -24,7 +26,7 @@ const timeAgo = (timestamp) => {
   return `${hours}h ago`;
 };
 
-export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) => {
+export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose, initialPanel = null }) => {
   const { user, getAvatarUrl, getDisplayName, getInitials } = useAuth();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
@@ -38,12 +40,21 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
   const [showCommentsPanel, setShowCommentsPanel] = useState(false);
   const messagesEndRef = useRef(null);
   const [captionExpanded, setCaptionExpanded] = useState(false);
+  // the owner's own status whose product-badge manager is open (the 5-second timer waits while it is)
+  const [badgeStatus, setBadgeStatus] = useState(null);
   // user_id -> { businessProfileId, businessName }, only for posters who
   // currently have a live dropship storefront -- gates the "Order Now" tag
   // on their statuses and reveals whose storefront it links to.
   const [storefrontsByUser, setStorefrontsByUser] = useState(new Map());
 
   const currentStatus = statuses[currentIndex];
+
+  // Opened from a hint on the poster's own card: go straight to what it was about (the comments, or the product-badge manager).
+  useEffect(() => {
+    if (initialPanel === 'comments') setShowCommentsPanel(true);
+    if (initialPanel === 'badges' && statuses[initialIndex]?.user_id === user?.id) setBadgeStatus(statuses[initialIndex]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-scroll to bottom of comments
   useEffect(() => {
@@ -81,6 +92,7 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
 
   // Progress bar animation
   useEffect(() => {
+    if (badgeStatus) return undefined;
     setProgress(0);
     let interval = setInterval(() => {
       setProgress(p => {
@@ -98,7 +110,7 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
     }, 50);
 
     return () => clearInterval(interval);
-  }, [currentIndex, statuses.length, onClose]);
+  }, [currentIndex, statuses.length, onClose, badgeStatus]);
 
   // Track view
   useEffect(() => {
@@ -315,6 +327,8 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
                 alt="Status"
                 className="w-full h-full object-contain"
               />
+              {/* Products the poster advertises on this status; tapping one opens their shop */}
+              <PitchProductBadgeOverlay key={currentStatus.id} statusId={currentStatus.id} bottomOffset={270} />
               {/* Caption overlay on image */}
               <StatusCaptionText
                 text={currentStatus.caption}
@@ -332,6 +346,7 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
                 autoPlay
                 className="w-full h-full object-contain"
               />
+              <PitchProductBadgeOverlay key={currentStatus.id} statusId={currentStatus.id} bottomOffset={270} />
               {/* Caption overlay on video */}
               <StatusCaptionText
                 text={currentStatus.caption}
@@ -345,7 +360,7 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
           ) : (
             <div
               style={{ backgroundColor: currentStatus.background_color }}
-              className="w-full h-full flex items-center justify-center p-8"
+              className="relative w-full h-full flex items-center justify-center p-8"
             >
               <StatusCaptionText
                 text={currentStatus.caption}
@@ -355,6 +370,7 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
                 clampLines={8}
                 className="w-full max-w-md cursor-pointer"
               />
+              <PitchProductBadgeOverlay key={currentStatus.id} statusId={currentStatus.id} bottomOffset={270} />
             </div>
           )}
 
@@ -434,6 +450,18 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
               >
                 <Share2 className="w-6 h-6" />
               </button>
+
+              {/* Only the poster: advertise a product of their business on this status */}
+              {currentStatus.user_id === user?.id && new Date(currentStatus.expires_at || 0).getTime() > Date.now() && (
+                <button
+                  onClick={() => setBadgeStatus(currentStatus)}
+                  className="p-3 rounded-full backdrop-blur-sm bg-white/10 text-white hover:bg-white/20 transition-all"
+                  title="Add product badges"
+                  aria-label="Add product badges to this status"
+                >
+                  <Tag className="w-6 h-6" />
+                </button>
+              )}
 
               {storefrontsByUser.has(currentStatus.user_id) && (
                 <button
@@ -564,6 +592,20 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
           </button>
         </div>
       </div>
+
+      {badgeStatus && (
+        <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Product badges">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2"><Tag className="w-5 h-5 text-pink-400" />Product badges</h3>
+              <button onClick={() => setBadgeStatus(null)} aria-label="Close" className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-700 transition"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <PitchBadgeManager kind="status" status={badgeStatus} />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

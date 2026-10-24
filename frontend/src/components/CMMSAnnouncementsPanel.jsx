@@ -18,6 +18,7 @@ import CMMSEmploymentDocumentsPanel from './CMMSEmploymentDocumentsPanel';
 import CMMSBusinessOpportunitiesPanel from './CMMSBusinessOpportunitiesPanel';
 import CMMSInquiriesPanel from './CMMSInquiriesPanel';
 import CMMSSiteLibraryPanel from './CMMSSiteLibraryPanel';
+import CMMSPitchBadgesPanel from './CMMSPitchBadgesPanel';
 import CMMSSiteDeliveryPanel from './CMMSSiteDeliveryPanel';
 import businessChatService from '../services/businessChatService';
 import siteLibraryService from '../services/siteLibraryService';
@@ -830,6 +831,7 @@ const CMMSAnnouncementsPanel = ({
     { id: 'applications', label: `Applications${applications.length ? ` (${applications.length})` : ''}`, accent: 'emerald', show: canManageApplications },
     { id: 'inquiries', label: `Inquiries${inquiryUnread ? ` (${inquiryUnread})` : ''}`, accent: 'emerald', show: (canEdit || canManageApplications) && inquiriesAvailable !== false },
     { id: 'library', label: `Library${libraryCount ? ` (${libraryCount})` : ''}`, accent: 'teal', show: canEdit && libraryAvailable !== false },
+    { id: 'videobadges', label: 'Video badges', accent: 'plum', show: canEdit },
     { id: 'profile', label: 'Board profile', accent: 'navy', show: canEdit },
     { id: 'pitch', label: 'Investor pitch', accent: 'plum', show: canEdit },
     { id: 'opportunities', label: 'Opportunities', accent: 'teal', show: true },
@@ -1244,6 +1246,10 @@ const CMMSAnnouncementsPanel = ({
 
       {subTab === 'library' && canEdit && (
         <CMMSSiteLibraryPanel companyId={companyId} onCountChange={setLibraryCount} />
+      )}
+
+      {subTab === 'videobadges' && canEdit && (
+        <CMMSPitchBadgesPanel businessProfileId={savedBusinessProfileId} />
       )}
 
       {subTab === 'opportunities' && (

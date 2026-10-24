@@ -1,5 +1,6 @@
 import './pitchin-classic.css';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import PitchProductBadgeOverlay from './PitchProductBadgeOverlay';
 import { X, Heart, Share2, Send, MessageCircle, AlertCircle, AlertTriangle, Check, Compass, Volume2, VolumeX } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
@@ -315,6 +316,9 @@ const PublicStatusViewer = ({ statusId, feedStatuses = [], onPosition, onEnd, on
         ) : (
           <div style={{ backgroundColor: status.background_color || '#6366f1' }} className="w-full h-full" />
         )}
+
+        {/* Products the poster advertises on this update; a tap opens their shop. Sits above the tap zones and the caption. */}
+        {!mediaBroken && <PitchProductBadgeOverlay key={status.id} statusId={status.id} bottomOffset={230} />}
 
         {/* Tap zones: left third = previous, the rest = next, hold = pause. */}
         <div className="absolute inset-0 z-10 flex">

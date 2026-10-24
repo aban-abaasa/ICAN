@@ -8,6 +8,8 @@ import { useAuth } from '../context/AuthContext';
 import { getActiveStatuses, getUserStatuses, deleteStatus } from '../services/statusService';
 import { Eye, Trash2, Share2, MoreVertical, ChevronDown } from 'lucide-react';
 import { FullscreenStatusViewer } from './status/FullscreenStatusViewer';
+import StatusUpdateHint from './status/StatusUpdateHint';
+import useStatusUpdateHints from '../hooks/useStatusUpdateHints';
 import LoadingPage from './LoadingPage';
 
 export const StatusFeed = () => {
@@ -18,6 +20,21 @@ export const StatusFeed = () => {
   const [selectedStatus, setSelectedStatus] = useState(null);
   const [showMenu, setShowMenu] = useState(null);
   const [myStatusesCollapsed, setMyStatusesCollapsed] = useState(false);
+  const [viewerPanel, setViewerPanel] = useState(null); // 'comments' | 'badges': where the viewer opens when a hint was tapped
+
+  // A gentle note on one of my cards when something related is new (comments, a hidden product badge, views, ending soon).
+  const hints = useStatusUpdateHints({
+    userId: user?.id,
+    statusIds: myStatuses.map((s) => s.id),
+    enabled: !loading && !myStatusesCollapsed && !selectedStatus && myStatuses.length > 0,
+  });
+
+  // Opening one of my own statuses: everything on it counts as seen.
+  const openMine = (status, panel = null) => {
+    setViewerPanel(panel);
+    setSelectedStatus(status);
+    hints.opened(status.id);
+  };
 
   useEffect(() => {
     loadStatuses();
@@ -82,7 +99,7 @@ export const StatusFeed = () => {
                 >
                   {/* Thumbnail */}
                   <div
-                    onClick={() => setSelectedStatus(status)}
+                    onClick={() => openMine(status)}
                     className="relative w-full aspect-[9/16] bg-black rounded-2xl overflow-hidden"
                   >
                     {status.media_type === 'image' ? (
@@ -131,7 +148,7 @@ export const StatusFeed = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedStatus(status);
+                          openMine(status);
                         }}
                         className="bg-white/20 hover:bg-white/30 text-white rounded-full p-3 backdrop-blur-sm transition-all"
                         title="View"
@@ -191,6 +208,15 @@ export const StatusFeed = () => {
                   <div className="absolute bottom-3 left-3 text-xs text-white/80 bg-black/40 backdrop-blur-sm px-2 py-1 rounded">
                     {status.view_count} {status.view_count === 1 ? 'view' : 'views'}
                   </div>
+
+                  {/* What just happened on this update, shown quietly once and only when it is new */}
+                  {hints.active?.statusId === status.id && (
+                    <StatusUpdateHint
+                      hint={hints.active}
+                      onDone={hints.done}
+                      onOpen={(hint) => openMine(status, hint.open === 'status' ? null : hint.open)}
+                    />
+                  )}
                 </div>
               ))}
             </div>
@@ -303,7 +329,8 @@ export const StatusFeed = () => {
               ? myStatuses.findIndex(s => s.id === selectedStatus.id)
               : otherStatuses.findIndex(s => s.id === selectedStatus.id)
           }
-          onClose={() => setSelectedStatus(null)}
+          initialPanel={viewerPanel}
+          onClose={() => { setSelectedStatus(null); setViewerPanel(null); }}
         />
       )}
     </div>

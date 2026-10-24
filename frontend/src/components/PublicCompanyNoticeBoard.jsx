@@ -25,6 +25,7 @@ import { buildBusinessSiteUrl, businessSitePath } from '../utils/businessSiteUrl
 import InstallmentOffer from './InstallmentOffer';
 import ContinueWithGoogle from './ContinueWithGoogle';
 import BusinessEngagementCard from './BusinessEngagementCard';
+import PitchProductBadgeOverlay from './PitchProductBadgeOverlay';
 import WalletSetupInline from './WalletSetupInline';
 import WalletTopUpInline from './WalletTopUpInline';
 import useWalletReady from '../hooks/useWalletReady';
@@ -3825,13 +3826,17 @@ const PitchDetailModal = ({ pitch, offer, onClose, onShare }) => {
   return (
     <Modal onClose={onClose} footer={investFooter}>
       {pitch.video_url ? (
-        <video
-          src={pitch.video_url}
-          poster={pitch.thumbnail_url || undefined}
-          controls
-          playsInline
-          className="w-full max-h-64 object-cover rounded-xl mb-4 bg-black"
-        />
+        <div className="relative mb-4 rounded-xl overflow-hidden bg-black">
+          <video
+            src={pitch.video_url}
+            poster={pitch.thumbnail_url || undefined}
+            controls
+            playsInline
+            className="w-full max-h-64 object-cover bg-black"
+          />
+          {/* Products this business advertises in the video; a tap opens its Market */}
+          <PitchProductBadgeOverlay pitchId={pitch.id} bottomOffset={56} />
+        </div>
       ) : pitch.deck_url ? (
         <div className="mb-4">
           <iframe
