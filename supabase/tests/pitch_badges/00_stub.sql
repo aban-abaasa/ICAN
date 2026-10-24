@@ -24,7 +24,11 @@ CREATE TABLE public.pitches (
   title TEXT, visibility TEXT DEFAULT 'public', status TEXT DEFAULT 'published', video_duration_seconds INTEGER);
 CREATE TABLE public.ican_statuses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), user_id UUID NOT NULL, media_type TEXT NOT NULL, visibility TEXT NOT NULL DEFAULT 'public',
+  view_count INTEGER NOT NULL DEFAULT 0,
   expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '24 hours'), created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE public.ican_status_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), status_id UUID NOT NULL REFERENCES public.ican_statuses(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL, message_text TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT now());
 CREATE TABLE public.supermarkets (id UUID PRIMARY KEY, name TEXT, is_active BOOLEAN DEFAULT TRUE, pichin_business_profile_id UUID, price_currency TEXT);
 CREATE TABLE public.products (
   id UUID PRIMARY KEY, supermarket_id UUID, name TEXT, selling_price NUMERIC, price NUMERIC, images JSONB, image_url TEXT,

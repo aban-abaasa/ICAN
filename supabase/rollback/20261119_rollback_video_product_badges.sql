@@ -1,6 +1,7 @@
 -- Removes product badges (PitchIn videos and status updates) and the service-price switches.
 -- WARNING: deletes every badge, the record of what badges cost, and the price the developer set. Pitches, wallets and stores are untouched.
 -- Coin already paid for badges is not refunded.
+DROP FUNCTION IF EXISTS public.fn_my_status_updates();
 DROP FUNCTION IF EXISTS public.fn_publish_video_badge(UUID);
 DROP FUNCTION IF EXISTS public.fn_save_status_badge(UUID, UUID, UUID, UUID, TEXT, NUMERIC, TEXT, TEXT, INTEGER, INTEGER, TEXT);
 DROP FUNCTION IF EXISTS public.fn_list_status_badges_manage(UUID);

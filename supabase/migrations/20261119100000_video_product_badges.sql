@@ -29,7 +29,8 @@
 --   video_badge_charges            what each publish / renewal cost (including free ones)
 --
 -- Nothing here changes pitches, wallets or stores. Charging needs fn_credit_platform_fee_to_business
--- (ROUTE_PLATFORM_FEES_TO_IWOS_BUSINESS.sql); while a service is free it is never called. Run after
+-- (ROUTE_PLATFORM_FEES_TO_IWOS_BUSINESS.sql); while a service is free it is never called. It also adds fn_my_status_updates, the small read that
+-- lets the status feed show a gentle "what is happening" hint on the owner's own cards. Run after
 -- 20261009100000_secure_dev_access.sql (the developer allowlist). Safe to run more than once; it never overwrites a price a developer
 -- has set. Roll back with supabase/rollback/20261119_rollback_video_product_badges.sql.
 -- ============================================================
@@ -694,6 +695,40 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.fn_publish_video_badge(UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.fn_publish_video_badge(UUID) TO authenticated;
+
+-- ------------------------------------------------------------
+-- 8. What is happening on the signed-in user's own status cards
+-- ------------------------------------------------------------
+-- One call for the status feed's "My Updates" cards: per active status of the caller, how many comments others have left (the caller's own
+-- replies are not counted), the view count, when it ends, and its live badges with the reason any of them is currently hidden (the product sold
+-- out or was switched off). The app turns changes in these numbers into one gentle, self-dismissing hint on the card (see statusUpdateHints.js);
+-- nothing here sends a notification. Only the owner's own statuses are returned. Works whether or not comments are installed.
+CREATE OR REPLACE FUNCTION public.fn_my_status_updates() RETURNS JSONB
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_has_comments BOOLEAN := to_regclass('public.ican_status_messages') IS NOT NULL;
+  v_out JSONB;
+BEGIN
+  IF auth.uid() IS NULL THEN RETURN '[]'::JSONB; END IF;
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+           'status_id', s.id,
+           'view_count', s.view_count,
+           'expires_at', s.expires_at,
+           'comment_count', CASE WHEN v_has_comments
+                                 THEN (SELECT count(*) FROM public.ican_status_messages m WHERE m.status_id = s.id AND m.sender_id <> s.user_id)
+                                 ELSE 0 END,
+           'badges', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', b.id, 'name', x.j ->> 'name', 'problem', x.j ->> 'problem'))
+                                 FROM public.video_product_badges b
+                                 CROSS JOIN LATERAL (SELECT public._pitch_badge_json(b, TRUE) AS j) x
+                                WHERE b.status_id = s.id AND b.status = 'live' AND b.live_until > now()), '[]'::JSONB)
+         ) ORDER BY s.created_at DESC), '[]'::JSONB)
+    INTO v_out
+    FROM public.ican_statuses s
+   WHERE s.user_id = auth.uid() AND s.expires_at > now();
+  RETURN v_out;
+END $$;
+REVOKE ALL ON FUNCTION public.fn_my_status_updates() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.fn_my_status_updates() TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 

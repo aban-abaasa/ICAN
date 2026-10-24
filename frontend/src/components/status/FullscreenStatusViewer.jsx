@@ -26,7 +26,7 @@ const timeAgo = (timestamp) => {
   return `${hours}h ago`;
 };
 
-export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) => {
+export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose, initialPanel = null }) => {
   const { user, getAvatarUrl, getDisplayName, getInitials } = useAuth();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [progress, setProgress] = useState(0);
@@ -48,6 +48,13 @@ export const FullscreenStatusViewer = ({ statuses, initialIndex = 0, onClose }) 
   const [storefrontsByUser, setStorefrontsByUser] = useState(new Map());
 
   const currentStatus = statuses[currentIndex];
+
+  // Opened from a hint on the poster's own card: go straight to what it was about (the comments, or the product-badge manager).
+  useEffect(() => {
+    if (initialPanel === 'comments') setShowCommentsPanel(true);
+    if (initialPanel === 'badges' && statuses[initialIndex]?.user_id === user?.id) setBadgeStatus(statuses[initialIndex]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-scroll to bottom of comments
   useEffect(() => {

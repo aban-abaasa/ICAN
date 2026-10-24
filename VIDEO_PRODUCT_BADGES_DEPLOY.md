@@ -42,20 +42,41 @@ Charged badges are taken from the **business wallet** and credited to the platfo
 the badge does not go live. Every change is logged with who made it. Only the allowlisted developer account can change a price (the panel token alone is
 not enough).
 
-## 4. Deploy the website
+## 4. Gentle updates on your status cards
+
+On the status feed's **My Updates** cards, a small note now appears when something related to *that* card is new, so the owner can tap and open it
+before it slides away. It is quiet by design:
+
+| It says | When | Tapping opens |
+| --- | --- | --- |
+| "2 new comments" | other people commented (your own replies are not counted) | the status, with comments open |
+| "Fresh Milk 1L sold out · its badge is hidden" | a live product badge is hidden because its product sold out or was switched off | the status, with the badge manager open |
+| "8 new views" | 3 or more new views | the status |
+| "Ends in 1h 20m · your product badge goes with it" | under 2 hours left and a live badge is on it | the status |
+
+- Only **one note at a time**, on the card it is about, in that order of importance; nothing when nothing is new.
+- It fades in about a second after the cards appear, stays **9 seconds** (longer while a finger or pointer rests on it), then slides away by itself. A small ×
+  sends it away sooner. It never takes focus and never blocks the card underneath.
+- Each piece of news is announced **once**: it is remembered on that device, and opening the status catches everything up. Nothing is shown while the cards are
+  collapsed or a status is open, and it is not used up then.
+- It looks for news when the cards appear, every minute while the page is in view, and when you return to the tab. No push notification is sent.
+- Reads one function, `fn_my_status_updates` (in the same SQL file): the owner's own active statuses, their comment and view counts, and their live badges.
+  It needs no new setup; without the SQL there are simply no notes.
+
+## 5. Deploy the website
 
 Merge the ICAN branch. The viewers ask the database for badges only when a video is on screen and show nothing if the SQL is not installed, so the site
 and the SQL can go out in either order.
 
-## 5. Checks run
+## 6. Checks run
 
-- `supabase/tests/pitch_badges/run.sh`: 98 database checks against a throwaway Postgres (price switch and logging, who may manage, live product data,
+- `supabase/tests/pitch_badges/run.sh`: 106 database checks against a throwaway Postgres (price switch and logging, who may manage, live product data,
   sold-out hiding, private pitches and statuses, ended statuses, the money path including a failed platform credit that undoes the whole payment,
   renewals, idempotent re-run keeping the developer's price, paste file equals the migration, rollback). The platform credit
   (`fn_credit_platform_fee_to_business`) is a **stand-in** in that test, so the payment logic is proven against its documented behaviour, not the live function.
-- `frontend/tests/pitchBadges.test.js`, `servicePrices.test.js`: timing, auto-placement, wording, form checks, and that the screens only call functions the migration defines.
+- `frontend/tests/pitchBadges.test.js`, `servicePrices.test.js`, `statusUpdateHints.test.js`: timing, auto-placement, wording, form checks, what is announced and in what order and never twice, and that the screens only call functions the migration defines.
 - The real overlay and manager components were also run in headless Chromium against a stubbed backend (timing on a fake video clock, stacking, taps, forms,
-  free/charged wording, refusals, the status screens). That used a minimal stylesheet, not the app's Tailwind build, so **how it looks has not been seen**.
+  free/charged wording, refusals, the status screens, and the update notes over time: appears, waits under a pointer, slides away, never repeats, one at a time). That used a minimal stylesheet, not the app's Tailwind build, so **how it looks has not been seen**.
 
 ## Known behaviour to be aware of
 

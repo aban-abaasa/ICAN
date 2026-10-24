@@ -489,3 +489,48 @@ BEGIN
   DELETE FROM public.ican_statuses WHERE id = 'f0000000-0000-0000-0000-000000000001';
   PERFORM t.check('8.31 deleting a status removes its badges', (SELECT count(*) FROM public.video_product_badges WHERE status_id = 'f0000000-0000-0000-0000-000000000001') = 0);
 END $t$;
+
+-- ============ 9. What is happening on my own status cards
+SELECT t.as_anon();
+DO $t$
+BEGIN
+  PERFORM t.check('9.1 a visitor who is not signed in cannot ask', t.raises('SELECT public.fn_my_status_updates()'));
+END $t$;
+SELECT t.as_user(3);
+DO $t$
+BEGIN
+  PERFORM t.check('9.2 someone with no statuses gets nothing', public.fn_my_status_updates() = '[]'::JSONB);
+END $t$;
+SELECT t.as_admin();
+UPDATE public.ican_statuses SET view_count = 7 WHERE id = 'f0000000-0000-0000-0000-000000000002';
+INSERT INTO public.ican_status_messages (status_id, sender_id, message_text) VALUES
+  ('f0000000-0000-0000-0000-000000000002', public.tu(3), 'How much?'),
+  ('f0000000-0000-0000-0000-000000000002', public.tu(4), 'Is it fresh?'),
+  ('f0000000-0000-0000-0000-000000000002', public.tu(1), 'Yes, delivered this morning');
+SELECT t.as_user(1);
+DO $t$
+DECLARE r JSONB; photo JSONB;
+BEGIN
+  r := public.fn_my_status_updates();
+  PERFORM t.check('9.3 only my active statuses: the ended one and other people''s are left out', jsonb_array_length(r) = 2
+    AND NOT (r::TEXT LIKE '%f0000000-0000-0000-0000-000000000004%') AND NOT (r::TEXT LIKE '%f0000000-0000-0000-0000-000000000003%'), r::TEXT);
+  SELECT j INTO photo FROM jsonb_array_elements(r) j WHERE j ->> 'status_id' = 'f0000000-0000-0000-0000-000000000002';
+  PERFORM t.check('9.4 comments from others are counted, my own replies are not', (photo ->> 'comment_count')::INT = 2, photo::TEXT);
+  PERFORM t.check('9.5 the view count comes through', (photo ->> 'view_count')::INT = 7);
+  PERFORM t.check('9.6 live badges are listed, none hidden yet', jsonb_array_length(photo -> 'badges') = 1 AND photo #>> '{badges,0,name}' = 'Fresh Milk 1L' AND photo #> '{badges,0,problem}' = 'null'::JSONB, (photo -> 'badges')::TEXT);
+END $t$;
+SELECT t.as_admin();
+UPDATE public.inventory SET current_stock = 0 WHERE product_id = 'c0000000-0000-0000-0000-000000000001';
+SELECT t.as_user(1);
+DO $t$
+DECLARE photo JSONB;
+BEGIN
+  SELECT j INTO photo FROM jsonb_array_elements(public.fn_my_status_updates()) j WHERE j ->> 'status_id' = 'f0000000-0000-0000-0000-000000000002';
+  PERFORM t.check('9.7 when the product sells out the card learns why its badge is hidden', photo #>> '{badges,0,problem}' = 'sold_out', (photo -> 'badges')::TEXT);
+END $t$;
+SELECT t.as_user(4);
+DO $t$
+BEGIN
+  PERFORM t.check('9.8 another owner sees only their own status', jsonb_array_length(public.fn_my_status_updates()) = 1
+    AND public.fn_my_status_updates() #>> '{0,status_id}' = 'f0000000-0000-0000-0000-000000000003');
+END $t$;
