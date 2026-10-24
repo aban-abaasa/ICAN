@@ -66,7 +66,7 @@ export const TOPICS = [
   },
   {
     id: 'icanera-fees', app: 'icanera', core: true, title: 'Wallet fees',
-    keywords: ['fee', 'fees', 'charge', 'charges', 'cost', 'how much does it cost', 'commission', 'cash out', 'cashout', 'withdraw', 'withdrawal', 'free', 'processing fee', 'deducted', 'extra charge', 'percentage'],
+    keywords: ['fee', 'fees', 'charge', 'charges', 'cost', 'how much does it cost', 'commission', 'cash out', 'cashout', 'withdraw', 'withdrawal', 'is it free', 'any fee', 'free to send', 'processing fee', 'deducted', 'extra charge', 'percentage'],
     answer: 'Sending ICAN to another IcanEra wallet: free. Buying coin with your wallet money: free. Selling coin for money, or cashing out coin to Mobile Money or bank: 3%. Withdrawing from your wallet money balance: no fee (a withdrawal never splits across the two balances). Paying a business QR with Mobile Money, card or bank adds a processing fee (3.5% by default, shown before you pay); paying from your IcanEra wallet does not. The ICEC-S stable coin currently has no fee. BodaGoEra rides add a platform charge (see the live figure).',
     facts: 'Cash-out fees go to GODMINDERA ORGANISATION (U) LTD. Pay-in-instalments: wallet payments have no fee, other methods add the gateway fee.',
     followUps: ['How do I withdraw?', 'What is the ICEC-S stable coin?'],
