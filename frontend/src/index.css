@@ -3004,3 +3004,41 @@ select.rz-input { appearance: none; background-image: linear-gradient(45deg, tra
 @media (min-width: 1920px) {
   .icanera-nb .nb-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 2.5rem; }
 }
+
+/* ==========================================================================
+   Open-page layout for the classic CMMS / Tithe pages.
+   The big boxed containers (tab card, accordion sections, payslip / staff
+   cards, full-page frames) are flattened to hairline-separated rows so the
+   content uses the whole screen instead of sitting 3-4 boxes deep. Heading
+   medallions, chips, tabs and form controls are untouched.
+   ========================================================================== */
+.cmms-page-classic .cmms-classic-card,
+.cmms-page-classic .cmms-sec,
+.cmms-page-classic .cmms-staff-card,
+.cmms-page-classic .pay-slip,
+.cmms-page-classic .pay-row {
+  background: transparent !important;
+  background-image: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border-width: 0 0 1px 0 !important;
+  border-style: solid !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+/* The page frame itself has no divider and almost no top/bottom padding */
+.cmms-page-classic .cmms-classic-card { border-bottom-width: 0 !important; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.cmms-page-classic .cmms-sec { margin-top: 0; }
+.cmms-page-classic .cmms-sec::before { display: none; }
+.cmms-page-classic .cmms-sec:hover { transform: none; }
+/* Payslips keep their thin status bar (draft / approved / paid) */
+.cmms-page-classic .pay-slip { padding-left: 0.75rem !important; }
+.cmms-page-classic .pay-slip::before { top: 8px; bottom: 8px; }
+.cmms-page-classic .pay-slip[data-selected="true"] { border-color: #b8892b !important; background: rgba(184, 137, 43, 0.08) !important; }
+
+@media (max-width: 767px) {
+  /* Full-page frames run edge to edge */
+  .cmms-page-classic .cmms-fullpage { padding-left: 0.625rem !important; padding-right: 0.625rem !important; padding-top: 0.625rem !important; }
+  .cmms-page-classic .pay-ledger { margin-left: -0.25rem; margin-right: -0.25rem; }
+}

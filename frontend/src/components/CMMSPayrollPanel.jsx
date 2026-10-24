@@ -812,13 +812,13 @@ export default function CMMSPayrollPanel({ companyProfile, users = [], currentUs
               const otherDeductions = Math.max(Number(entry.base_amount || 0) - Number(entry.net_amount || 0) - attendanceDeduction, 0);
               return (
                 <li key={entry.id} className="pay-slip" data-status={entry.status} data-selected={payment.entry === entry.id} style={{ animationDelay: `${Math.min(i, 8) * 60}ms` }}>
-                  <div className="flex items-start gap-3">
+                  <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
                     <span className="cmms-monogram" aria-hidden="true">{initials}</span>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-[9rem] flex-1">
                       <p className="break-words cmms-classic-heading leading-tight">{name}</p>
                       <p className="text-xs cmms-classic-muted">{employee?.role || 'Employee'}</p>
                     </div>
-                    <div className="flex-shrink-0 text-right">
+                    <div className="ml-auto flex-shrink-0 text-right">
                       <p className="pay-num text-base font-bold" style={{ color: 'var(--pay-success-text)', fontFamily: 'Georgia, serif' }}>{amount(entry.net_amount, currency)}</p>
                       <StatusBadge tone={progressTone(entry.status)}>{entry.status === 'approved' ? 'ready to pay' : entry.status}</StatusBadge>
                     </div>
