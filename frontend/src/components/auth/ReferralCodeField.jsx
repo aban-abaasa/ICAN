@@ -58,7 +58,7 @@ export default function ReferralCodeField({ palette }) {
   const msg = MESSAGES[status];
 
   return (
-    <div>
+    <div className={open ? 'w-full' : undefined}>
       {!open ? (
         <button type="button" onClick={() => setOpen(true)}
           className="text-sm font-medium hover:underline" style={{ color: palette.link }}>

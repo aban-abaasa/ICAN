@@ -66,7 +66,7 @@ PIN, not just a tap); the signature matches the stored public key; and the count
 * Phones sync passkeys through their own keychain (iCloud Keychain / Google Password Manager), so a new phone of the same owner may offer it
   automatically; it appears in the list as **Synced**.
 * Needs a recent browser: Chrome/Edge 85+, Safari 16.4+, Firefox 119+, over https (or `localhost`). Otherwise the button is hidden.
-* A device with no fingerprint, face or screen lock turned on cannot make a passkey; the card says so.
+* A device with no fingerprint or face unlock set up cannot make a passkey; the card says so.
 
 ## Tests
 

@@ -99,8 +99,8 @@
 @media (max-width: 640px) {
   .ican-auth-classic .max-w-md { padding: 1.25rem !important; }
   /* 16px stops iOS Safari zooming the page when a field is focused */
-  .ican-auth-classic input { font-size: 16px !important; min-height: 3rem; }
-  .ican-auth-classic h2 { font-size: 1.75rem; }
+  .ican-auth-classic input { font-size: 16px !important; min-height: 2.75rem; }
+  .ican-auth-classic h2 { font-size: 1.5rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ican-auth-classic * { animation: none !important; transition: none !important; }
@@ -127,13 +127,36 @@
   color: var(--ia-fg) !important;
   background-color: var(--ia-alt) !important;
 }
-/* the main call to action that is not a form submit (fingerprint / face on a device that is already set up) */
-.ican-auth-classic button.ia-primary-action[type="button"][class*="w-full"] {
+/* compact ways in under the password form: fingerprint / face tile, Google, Wallet */
+.ican-auth-classic button.ia-alt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0 0.75rem;
+  border: 2px solid var(--ia-ink);
+  background-color: var(--ia-alt) !important;
+  color: var(--ia-fg) !important;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.ican-auth-dark button.ia-alt-btn { border-color: var(--ia-amber); }
+.ican-auth-classic button.ia-alt-btn:hover:not(:disabled) { transform: translate(-1px, -1px); filter: brightness(1.05); }
+.ican-auth-classic button.ia-alt-btn:active:not(:disabled) { transform: translate(2px, 2px); }
+.ican-auth-classic button.ia-alt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ican-auth-classic button.ia-icon-btn { flex: none; width: 3rem; padding: 0; }
+/* fingerprint / face on a device that is already set up: the fast way in, so it is the one filled tile */
+.ican-auth-classic button.ia-icon-btn--primary {
   background-color: var(--ia-btn) !important;
   color: var(--ia-btn-fg) !important;
+  box-shadow: 3px 3px 0 0 rgba(31, 26, 18, 0.25);
 }
+.ican-auth-classic button.ia-icon-btn--large { width: 4.5rem; height: 4.5rem; }
 /* text-style buttons: forgot password, show/hide, create account, cancel */
-.ican-auth-classic button:not([type="submit"]):not([class*="w-full"]) {
+.ican-auth-classic button:not([type="submit"]):not([class*="w-full"]):not(.ia-alt-btn) {
   background-color: transparent !important;
   color: var(--ia-link) !important;
   border-color: transparent !important;

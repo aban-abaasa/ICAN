@@ -137,7 +137,7 @@ export function checkClientData(clientDataJSON, expected) {
 /** Both flags: the device was in the person's hands (present) and checked who they are (fingerprint, face or device PIN). */
 function requirePresenceAndVerification(parsed) {
   if (!parsed.userPresent) throw new WebAuthnError('The device did not confirm you were there.');
-  if (!parsed.userVerified) throw new WebAuthnError('Your fingerprint, face or device PIN was not checked. Turn on screen lock and try again.');
+  if (!parsed.userVerified) throw new WebAuthnError('Your fingerprint or face was not checked. Try again.');
 }
 
 // ------------------------------------------------------------- crypto

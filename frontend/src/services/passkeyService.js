@@ -2,7 +2,7 @@
 // (backend/components/supabase/functions/passkey-auth) verifies the signature against the public key it stored, then hands
 // back a token this app redeems into a normal Supabase session - the same route wallet sign-in takes.
 //
-//   enablePasskey      make a passkey on THIS device (signed in; asks the device for its fingerprint / face / PIN)
+//   enablePasskey      make a passkey on THIS device (signed in; asks the device for its fingerprint / face)
 //   requestPasskeyLogin  sign in with nothing typed: the device offers its account, the person proves it is them
 //   listPasskeys / removePasskey / removeAllPasskeys   the account's devices, straight from public.user_passkeys (RLS: own rows)
 //

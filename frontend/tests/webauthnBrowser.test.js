@@ -90,7 +90,7 @@ test('browser error names become plain sentences', () => {
   assert.match(describeWebAuthnError(named('NotAllowedError')), /cancelled|took too long/);
   assert.match(describeWebAuthnError(named('InvalidStateError'), 'create'), /already set up/);
   assert.doesNotMatch(describeWebAuthnError(named('InvalidStateError'), 'get'), /already set up/);
-  assert.match(describeWebAuthnError(named('ConstraintError')), /screen lock/);
+  assert.match(describeWebAuthnError(named('ConstraintError')), /fingerprint or face unlock/);
   assert.match(describeWebAuthnError(named('SecurityError')), /https/);
   assert.equal(describeWebAuthnError(new PasskeyError('ours')), 'ours');
   assert.equal(describeWebAuthnError(new Error('something odd')), 'something odd');

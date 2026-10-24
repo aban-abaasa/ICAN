@@ -24,7 +24,7 @@ export default function BiometricCard({ twoStepOn = false }) {
   const [passkeys, setPasskeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [backendMissing, setBackendMissing] = useState(false);
-  const [deviceReady, setDeviceReady] = useState(true); // false: this device has no fingerprint / face / screen lock to use
+  const [deviceReady, setDeviceReady] = useState(true); // false: this device has no fingerprint / face unlock to use
   const [asking, setAsking] = useState(false); // showing the password box
   const [password, setPassword] = useState('');
   const [removing, setRemoving] = useState(null); // passkey awaiting "yes, remove"
@@ -172,7 +172,7 @@ export default function BiometricCard({ twoStepOn = false }) {
             <>
               {!deviceReady && (
                 <div className="gr-alert gr-alert--warn" role="note">
-                  This device has no fingerprint, face or screen lock turned on yet. Turn one on in your device settings, then come back.
+                  This device has no fingerprint or face unlock set up yet. Add one in your device settings, then come back.
                 </div>
               )}
 

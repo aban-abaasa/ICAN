@@ -44,7 +44,7 @@ export function isPasskeySupported() {
   );
 }
 
-/** This device has a fingerprint / face / PIN check it can use to make a passkey. */
+/** This device has a fingerprint / face unlock it can use to make a passkey. */
 export async function platformAuthenticatorAvailable() {
   try {
     return Boolean(await window.PublicKeyCredential?.isUserVerifyingPlatformAuthenticatorAvailable?.());
@@ -168,7 +168,7 @@ export function describeWebAuthnError(error, ceremony = 'get') {
         ? 'This device is already set up for your account.'
         : 'That did not work. Try again.';
     case 'ConstraintError':
-      return 'This device has no fingerprint, face or screen lock turned on. Turn one on in your device settings, then try again.';
+      return 'This device has no fingerprint or face unlock set up. Add one in your device settings, then try again.';
     case 'NotSupportedError':
       return 'This device or browser cannot use fingerprint or face sign-in.';
     case 'SecurityError':
