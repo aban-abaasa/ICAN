@@ -1,15 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
-  LineChart,
+  ComposedChart,
+  Area,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
+  ReferenceLine,
   ResponsiveContainer,
 } from 'recharts';
-import { TrendingUp, TrendingDown, Minus, Activity, ChevronLeft, ZoomOut } from 'lucide-react';
+import { TrendingUp, TrendingDown, ChevronLeft, ZoomOut } from 'lucide-react';
 
 const fmtShort = (n) => {
   const v = Math.abs(n || 0);
@@ -23,26 +24,50 @@ const fmtShort = (n) => {
   return `${sign}${v.toFixed(0)}`;
 };
 
-// Bucket-key → axis tick / tooltip label, shaped by the chart's current
-// granularity so a 5-year "All" view reads in years while a drilled-in week
-// still reads in days.
-const fmtLabel = (key, granularity) => {
-  if (!key) return '';
-  if (granularity === 'yearly') return key;
-  if (granularity === 'monthly') {
-    const [y, m] = key.split('-');
-    return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
-  }
-  const d = new Date(key);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+// Bucket keys are LOCAL-time strings from VelocityEngine.bucketKey():
+// 'YYYY' | 'YYYY-MM' | 'YYYY-MM-DD' | 'YYYY-MM-DDTHH' | 'YYYY-MM-DDTHH:mm'.
+// `new Date('2026-10-03')` would parse as UTC and land on the wrong day
+// west of Greenwich, so build the Date from its parts instead.
+const parseKey = (key) => {
+  const [datePart, timePart] = String(key).split('T');
+  const [y, m = 1, d = 1] = datePart.split('-').map(Number);
+  const [hh = 0, mm = 0] = (timePart || '').split(':').map(Number);
+  return new Date(y, m - 1, d, hh, mm);
 };
 
-export const PRESETS = [
-  { id: '1m', label: '1M' },
-  { id: '3m', label: '3M' },
-  { id: '1y', label: '1Y' },
-  { id: '5y', label: '5Y' },
-  { id: 'all', label: 'All' },
+const time = (d) => d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+const day = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+// Short label for an axis tick, shaped by the current resolution.
+const fmtTick = (key, granularity) => {
+  if (!key) return '';
+  const d = parseKey(key);
+  if (granularity === 'yearly') return String(d.getFullYear());
+  if (granularity === 'monthly') return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+  if (granularity === 'hourly') return d.getHours() === 0 ? day(d) : d.toLocaleTimeString(undefined, { hour: 'numeric' });
+  if (granularity === 'minutely') return time(d);
+  return day(d);
+};
+
+// Long label for the readout above the graph.
+const fmtFull = (key, granularity) => {
+  if (!key) return '';
+  const d = parseKey(key);
+  if (granularity === 'yearly') return String(d.getFullYear());
+  if (granularity === 'monthly') return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  if (granularity === 'hourly') return `${day(d)} · ${d.toLocaleTimeString(undefined, { hour: 'numeric' })}`;
+  if (granularity === 'minutely') return `${day(d)} · ${time(d)}`;
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+// The resolution is the unit you read the graph in. Tapping one jumps to a
+// window sized for it (see VelocityEngine.getPresetRange).
+export const RESOLUTIONS = [
+  { id: 'minute', label: 'Min', granularity: 'minutely' },
+  { id: 'hour', label: 'Hour', granularity: 'hourly' },
+  { id: 'day', label: 'Day', granularity: 'daily' },
+  { id: 'month', label: 'Month', granularity: 'monthly' },
+  { id: 'year', label: 'Year', granularity: 'yearly' },
 ];
 
 const CHART_COLORS = {
@@ -53,7 +78,7 @@ const CHART_COLORS = {
 
 const DiamondDot = ({ cx, cy }) => {
   if (cx == null || cy == null) return null;
-  const r = 4;
+  const r = 3.5;
   return (
     <path
       d={`M ${cx} ${cy - r} L ${cx + r} ${cy} L ${cx} ${cy + r} L ${cx - r} ${cy} Z`}
@@ -64,34 +89,25 @@ const DiamondDot = ({ cx, cy }) => {
   );
 };
 
-const CustomTooltip = ({ active, payload, label, granularity }) => {
-  if (!active || !payload?.length) return null;
-  const income = payload.find((p) => p.dataKey === 'income')?.value || 0;
-  const expense = payload.find((p) => p.dataKey === 'expense')?.value || 0;
-  const net = payload.find((p) => p.dataKey === 'net')?.value ?? income - expense;
-  return (
-    <div className="bg-slate-800 border border-slate-700 rounded-md px-3 py-2 shadow-lg text-xs">
-      <p className="text-slate-400 font-semibold mb-1">{fmtLabel(label, granularity)}</p>
-      <p style={{ color: CHART_COLORS.income }}>Income: {fmtShort(income)}</p>
-      <p style={{ color: CHART_COLORS.expense }}>Expense: {fmtShort(expense)}</p>
-      <p style={{ color: CHART_COLORS.net }}>Net: {net >= 0 ? '+' : ''}{fmtShort(net)}</p>
-    </div>
-  );
-};
+// Only draw a marker per point while there are few enough for it to read.
+const MAX_DOTS = 40;
 
 /**
- * Real income/expense/net cash-flow chart, fed by VelocityEngine.getRangeSeries()
- * — a zero-filled continuous timeline, never synthesized data. Bucket size
- * (day/week/month/year) adapts to how wide the selected range is, so the same
- * chart works whether it's showing a week or five years of history. Tapping a
- * point on a zoomed-out view drills into that bucket at finer granularity.
+ * Bare cash-flow graph — no cards, no boxes. Fed by VelocityEngine.getRangeSeries()
+ * (a zero-filled continuous timeline, never synthesized data).
+ *
+ * Reading it:
+ *  - Min / Hour / Day / Month / Year tabs set the resolution and its window.
+ *  - Drag a finger across the graph and the readout above follows it.
+ *  - Tap a point to pin it; tap the same point again to zoom into that bucket
+ *    one level finer (year → month → day → hour → minute). Back / zoom-out
+ *    arrows retrace the trail.
  */
 export default function DailyTrackingChart({
   data = [],
   loading = false,
   title = 'Financial Trends',
   granularity = 'daily',
-  activePreset = null,
   onPresetChange = null,
   rangeLabel = null,
   canGoBack = false,
@@ -99,6 +115,15 @@ export default function DailyTrackingChart({
   onReset = null,
   onDrill = null,
 }) {
+  const [hoverIdx, setHoverIdx] = useState(null);
+  const [pinnedIdx, setPinnedIdx] = useState(null);
+
+  // A new window/resolution invalidates any selected point.
+  useEffect(() => {
+    setHoverIdx(null);
+    setPinnedIdx(null);
+  }, [data]);
+
   const { totalIncome, totalExpense, totalNet, trendPct, hasActivity } = useMemo(() => {
     const inc = data.reduce((s, d) => s + (d.income || 0), 0);
     const exp = data.reduce((s, d) => s + (d.expense || 0), 0);
@@ -115,148 +140,174 @@ export default function DailyTrackingChart({
     };
   }, [data]);
 
-  const drillable = typeof onDrill === 'function' && granularity !== 'daily';
+  const drillable = typeof onDrill === 'function' && granularity !== 'minutely';
 
-  const handleChartClick = (chartState) => {
-    if (!drillable) return;
-    const point = chartState?.activePayload?.[0]?.payload;
-    if (point?.bucketStart) onDrill(point);
+  // Recharts hands mouse/touch handlers the active point as an index (v3) or
+  // only as its x-axis label; resolve either to an index into `data`.
+  const indexFromState = (state) => {
+    const raw = state?.activeTooltipIndex ?? state?.activeIndex;
+    const n = raw == null ? NaN : Number(raw);
+    if (Number.isFinite(n) && data[n]) return n;
+    const byLabel = data.findIndex((d) => d.date === state?.activeLabel);
+    return byLabel >= 0 ? byLabel : null;
   };
 
-  return (
-    // Four independent containers -- header, presets, chart, totals --
-    // stacked as siblings, each carrying its own accent color
-    // (blue/purple/orange/pink, see .dash-card-* in index.css) instead of
-    // a single flat bg-slate-900 surface. Plain slate/gray Tailwind
-    // classes get force-flattened to one color by ThemeContext's dynamic
-    // override stylesheet, which is why this used to render as identical
-    // colorless white/gray boxes in every theme -- dash-card tints the
-    // theme's own CSS vars instead of fighting that override, so each
-    // panel keeps its identity in light, dark, and every custom theme.
-    // Income/expense/net keep their existing semantic colors
-    // (green/gold/icy-blue) since those are meaningful, not decor.
-    <div className="space-y-3">
-      <div className="dash-card dash-card-blue flex items-center justify-between gap-2 px-4 py-3">
-        <div className="flex items-center gap-2 min-w-0">
-          {canGoBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="shrink-0 p-1 -ml-1 rounded hover:bg-white/10 text-slate-300"
-              aria-label="Back"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-          )}
-          <Activity className="w-4 h-4 shrink-0" style={{ color: '#3b82f6' }} />
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>{title}</h3>
-        </div>
-        {hasActivity && (
-          <span className={`flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded border shrink-0 ${
-            trendPct > 0 ? 'text-emerald-400 border-emerald-500/30' : trendPct < 0 ? 'text-red-400 border-red-500/30' : 'text-slate-400 border-slate-600'
-          }`}>
-            {trendPct > 0 ? <TrendingUp className="w-3 h-3" /> : trendPct < 0 ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
-            {Math.abs(trendPct).toFixed(0)}%
-          </span>
-        )}
-      </div>
+  const handleMove = (state) => setHoverIdx(indexFromState(state));
+  const handleLeave = () => setHoverIdx(null);
 
-      {/* Range presets — years of history, one tap away */}
-      {onPresetChange && (
-        <div className="dash-card dash-card-purple p-3">
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg p-0.5 flex-1">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => onPresetChange(p.id)}
-                  className={`flex-1 py-1 rounded-md text-[10px] font-bold transition ${
-                    activePreset === p.id ? 'bg-blue-700 text-white shadow' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-            {canGoBack && onReset && (
+  const handleClick = (state) => {
+    const idx = indexFromState(state);
+    if (idx == null) return;
+    if (drillable && idx === pinnedIdx && data[idx]?.bucketStart) {
+      onDrill(data[idx]);
+      return;
+    }
+    setPinnedIdx(idx);
+  };
+
+  const shownIdx = hoverIdx ?? pinnedIdx;
+  const shown = shownIdx != null ? data[shownIdx] : null;
+  const income = shown ? shown.income || 0 : totalIncome;
+  const expense = shown ? shown.expense || 0 : totalExpense;
+  const net = shown ? shown.net || 0 : totalNet;
+  const readoutLabel = shown ? fmtFull(shown.date, granularity) : title;
+  const hint = shown && drillable && shownIdx === pinnedIdx
+    ? 'Tap again to zoom in'
+    : (!shown && rangeLabel ? rangeLabel : '');
+
+  const activeResolution = RESOLUTIONS.find((r) => r.granularity === granularity)?.id;
+
+  return (
+    <div>
+      {/* Readout — plain text that follows your finger across the graph */}
+      <div className="flex items-start justify-between gap-2 px-1">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1">
+            {canGoBack && (
               <button
                 type="button"
-                onClick={onReset}
-                className="shrink-0 p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10"
-                aria-label="Zoom out to full range"
+                onClick={onBack}
+                className="shrink-0 -ml-1 p-0.5 rounded text-slate-300 hover:bg-white/10"
+                aria-label="Back"
               >
-                <ZoomOut className="w-3.5 h-3.5" />
+                <ChevronLeft className="w-4 h-4" />
               </button>
             )}
+            <p className="text-[11px] font-semibold uppercase tracking-wide truncate" style={{ color: 'var(--color-textSecondary)' }}>
+              {readoutLabel}
+            </p>
           </div>
-
-          {rangeLabel && (
-            <p className="text-[10px] text-slate-500 mt-2">
-              {rangeLabel}
-              {drillable && ' · tap a point to zoom in'}
+          {hasActivity && !loading && (
+            <p className="mt-0.5 font-bold text-2xl tabular-nums leading-tight" style={{ color: CHART_COLORS.net }}>
+              {net >= 0 ? '+' : ''}{fmtShort(net)}
             </p>
           )}
+          {hasActivity && !loading && (
+            <p className="mt-0.5 flex items-center gap-3 text-[11px] tabular-nums">
+              <span style={{ color: CHART_COLORS.income }}>● In {fmtShort(income)}</span>
+              <span style={{ color: CHART_COLORS.expense }}>● Out {fmtShort(expense)}</span>
+            </p>
+          )}
+          {hint && <p className="mt-0.5 text-[10px] text-slate-500">{hint}</p>}
         </div>
-      )}
 
-      <div className="dash-card dash-card-orange p-4">
+        <div className="flex items-center gap-2 shrink-0">
+          {canGoBack && onReset && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="p-1 rounded text-slate-300 hover:bg-white/10"
+              aria-label="Zoom out to full range"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </button>
+          )}
+          {hasActivity && !loading && (
+            <span className={`flex items-center gap-0.5 text-[11px] font-semibold ${
+              trendPct > 0 ? 'text-emerald-400' : trendPct < 0 ? 'text-red-400' : 'text-slate-400'
+            }`}>
+              {trendPct > 0 && <TrendingUp className="w-3 h-3" />}
+              {trendPct < 0 && <TrendingDown className="w-3 h-3" />}
+              {trendPct !== 0 && `${Math.abs(trendPct).toFixed(0)}%`}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* The graph itself */}
+      <div className="h-64 mt-2 -mx-1 select-none">
         {loading ? (
-          <div className="h-48 flex items-center justify-center text-slate-500 text-xs">Loading activity…</div>
+          <div className="h-full flex items-center justify-center text-slate-500 text-xs">Loading activity…</div>
         ) : !hasActivity ? (
-          <div className="h-48 flex flex-col items-center justify-center gap-2 text-center">
-            <Activity className="w-8 h-8 text-slate-700" />
+          <div className="h-full flex items-center justify-center text-center">
             <p className="text-xs text-slate-500">No transactions recorded in this period yet.</p>
           </div>
         ) : (
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 192 }}>
-              <LineChart
-                data={data}
-                margin={{ top: 4, right: 4, left: -16, bottom: 0 }}
-                onClick={handleChartClick}
-                style={drillable ? { cursor: 'pointer' } : undefined}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={(key) => fmtLabel(key, granularity)}
-                  interval={Math.max(0, Math.floor(data.length / 6) - 1)}
-                  tick={{ fill: '#64748b', fontSize: 10 }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-                  tickLine={false}
-                />
-                <YAxis tickFormatter={fmtShort} tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} width={40} />
-                <Tooltip content={<CustomTooltip granularity={granularity} />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
-                <Legend
-                  wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-                  formatter={(value) => <span className="text-slate-300">{value}</span>}
-                />
-                <Line type="monotone" dataKey="income" name="Income" stroke={CHART_COLORS.income} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                <Line type="monotone" dataKey="expense" name="Expense" stroke={CHART_COLORS.expense} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                <Line type="monotone" dataKey="net" name="Net" stroke={CHART_COLORS.net} strokeWidth={2} dot={<DiamondDot />} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 256 }}>
+            <ComposedChart
+              data={data}
+              accessibilityLayer={false}
+              margin={{ top: 8, right: 8, left: 8, bottom: 0 }}
+              onMouseMove={handleMove}
+              onMouseLeave={handleLeave}
+              onClick={handleClick}
+              style={drillable ? { cursor: 'pointer' } : undefined}
+            >
+              <defs>
+                <linearGradient id="trendNetFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={CHART_COLORS.net} stopOpacity={0.28} />
+                  <stop offset="100%" stopColor={CHART_COLORS.net} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={(key) => fmtTick(key, granularity)}
+                interval="preserveStartEnd"
+                minTickGap={36}
+                tick={{ fill: '#64748b', fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis hide domain={['auto', 'auto']} />
+              <ReferenceLine y={0} stroke="rgba(255,255,255,0.12)" />
+              {/* Values live in the readout above, so the tooltip draws only the cursor line + active dots */}
+              <Tooltip content={() => null} cursor={{ stroke: 'rgba(255,255,255,0.25)' }} />
+              <Area type="monotone" dataKey="net" stroke="none" fill="url(#trendNetFill)" isAnimationActive={false} activeDot={false} />
+              <Line type="monotone" dataKey="income" name="Income" stroke={CHART_COLORS.income} strokeWidth={1.5} dot={false} activeDot={{ r: 3.5 }} />
+              <Line type="monotone" dataKey="expense" name="Expense" stroke={CHART_COLORS.expense} strokeWidth={1.5} dot={false} activeDot={{ r: 3.5 }} />
+              <Line
+                type="monotone"
+                dataKey="net"
+                name="Net"
+                stroke={CHART_COLORS.net}
+                strokeWidth={2.5}
+                dot={data.length <= MAX_DOTS ? <DiamondDot /> : false}
+                activeDot={{ r: 5 }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
         )}
       </div>
 
-      {hasActivity && !loading && (
-        <div className="dash-card dash-card-pink grid grid-cols-3 gap-2 p-3">
-          <div className="text-center min-w-0">
-            <p className="font-bold text-sm tabular-nums whitespace-nowrap" style={{ color: CHART_COLORS.income }}>{fmtShort(totalIncome)}</p>
-            <p className="text-[10px] text-slate-500">Income</p>
-          </div>
-          <div className="text-center min-w-0">
-            <p className="font-bold text-sm tabular-nums whitespace-nowrap" style={{ color: CHART_COLORS.expense }}>{fmtShort(totalExpense)}</p>
-            <p className="text-[10px] text-slate-500">Expense</p>
-          </div>
-          <div className="text-center min-w-0">
-            <p className="font-bold text-sm tabular-nums whitespace-nowrap" style={{ color: CHART_COLORS.net }}>
-              {totalNet >= 0 ? '+' : ''}{fmtShort(totalNet)}
-            </p>
-            <p className="text-[10px] text-slate-500">Net</p>
-          </div>
+      {/* Resolution — plain text tabs, no boxes */}
+      {onPresetChange && (
+        <div className="flex items-center justify-between px-2 mt-1">
+          {RESOLUTIONS.map((r) => {
+            const active = activeResolution === r.id;
+            return (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => onPresetChange(r.id)}
+                className={`flex-1 py-2 text-xs font-bold transition border-b-2 ${
+                  active ? 'text-white border-sky-300' : 'text-slate-500 border-transparent hover:text-slate-300'
+                }`}
+              >
+                {r.label}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
