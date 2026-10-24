@@ -24,6 +24,7 @@ import { buildBusinessSiteLink } from '../services/businessSiteLinkService';
 import { buildBusinessSiteUrl, businessSitePath } from '../utils/businessSiteUrl';
 import InstallmentOffer from './InstallmentOffer';
 import ContinueWithGoogle from './ContinueWithGoogle';
+import BusinessEngagementCard from './BusinessEngagementCard';
 import WalletSetupInline from './WalletSetupInline';
 import WalletTopUpInline from './WalletTopUpInline';
 import useWalletReady from '../hooks/useWalletReady';
@@ -1356,6 +1357,7 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
             <div className="lg:grid lg:grid-cols-[1fr_300px] min-[1920px]:grid-cols-[1fr_22rem] lg:gap-6 lg:items-start">
               <div className="min-w-0">
                 <SectionTiles tabs={navTabs.filter((tab) => tab.id !== 'home')} counts={{ notices: notices.length, careers: jobs.length, pitchin: pitches.length, opportunities: opportunities.length, library: libraryLinks.length }} getImages={tileImages} onNavigate={navigateTo} />
+                <BusinessEngagementCard company={company} user={user} authLoading={authLoading} pendingSection="home" className="mb-5" />
                 {company.about && <AboutCard company={company} />}
                 <LocationCard company={company} className="lg:hidden" />
                 {notices.length > 0 && (
@@ -1380,6 +1382,9 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
               <PageTitle title="News & updates" subtitle={`The latest from ${company.company_name}`} />
               <NoticeList notices={notices} onSelect={(notice) => openDetail(notice, setSelectedNotice)} />
             </>
+          )}
+          {activeSection === 'shop' && (
+            <BusinessEngagementCard company={company} user={user} authLoading={authLoading} pendingSection="shop" className="mb-5" />
           )}
           {activeSection === 'shop' && (
             <ShopSection
