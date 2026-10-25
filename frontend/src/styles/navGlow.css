@@ -154,3 +154,6 @@
 @media (prefers-reduced-motion: reduce) {
   .ng-tab { transition: none; animation: none; }
 }
+
+/* Icon-only variant (the business site's bar): no labels, so tabs sit closer. */
+.ng-bar-icons .ng-tab { flex: 1 0 3.25rem; max-width: 5rem; }
