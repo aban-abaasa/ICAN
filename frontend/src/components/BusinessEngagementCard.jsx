@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Star, Bell, BellRing, Loader, ChevronDown, ChevronUp } from 'lucide-react';
+import { Star, Bell, BellRing, Loader, ChevronDown, ChevronUp, X } from 'lucide-react';
 import ContinueWithGoogle from './ContinueWithGoogle';
 import {
   getBusinessSiteStats, getBusinessSiteReviews, rateBusiness, clearBusinessRating, subscribeToBusiness, unsubscribeFromBusiness,
@@ -24,10 +24,12 @@ const Stars = ({ value, onPick = null, size = 'w-5 h-5', label }) => (
  * Rating and subscription for one business, on its public website. Customers' ratings and subscriptions are what
  * put a business's products first in IcanEra, SupermarketEra and BodaGoEra. Anyone can read; rating and subscribing
  * need a free IcanEra account (the card offers Google sign-in right here). Shows nothing until the database
- * functions are installed, and nothing at all to a business with no id to attach to.
+ * functions are installed, and nothing at all to a business with no id to attach to. It rests as a single icon and
+ * only opens into the full card when tapped.
  */
 export default function BusinessEngagementCard({ company, user, authLoading, pendingSection = 'home', className = '' }) {
   const businessId = company?.business_profile_id || null;
+  const [open, setOpen] = useState(false);
   const [state, setState] = useState({ loaded: false, available: false, stats: null });
   const [reviews, setReviews] = useState([]);
   const [showReviews, setShowReviews] = useState(false);
@@ -95,6 +97,29 @@ export default function BusinessEngagementCard({ company, user, authLoading, pen
   };
 
   const avgText = formatRating(stats.ratingAvg);
+
+  // Resting state: just an icon (a filled bell once subscribed, a star on the owner's own site).
+  if (!open) {
+    const RestIcon = stats.isOwner ? Star : stats.subscribed ? BellRing : Bell;
+    const restLabel = stats.isOwner
+      ? 'Ratings and subscribers'
+      : stats.subscribed ? 'Subscribed. Open ratings and subscription' : 'Subscribe or rate this business';
+    return (
+      <div className={className}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-expanded={false}
+          aria-label={restLabel}
+          title={restLabel}
+          className={`relative w-11 h-11 rounded-full flex items-center justify-center transition ${stats.subscribed ? 'nb-btn-primary' : 'nb-btn-secondary'}`}
+        >
+          <RestIcon className="w-5 h-5" />
+        </button>
+      </div>
+    );
+  }
+
   const showRatingForm = !stats.isOwner && (editing || !stats.myRating);
 
   return (
@@ -110,13 +135,22 @@ export default function BusinessEngagementCard({ company, user, authLoading, pen
           </div>
         </div>
 
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-label="Close ratings and subscription"
+          className="ml-auto order-last w-9 h-9 rounded-full nb-btn-secondary flex items-center justify-center"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
         {!stats.isOwner && (
           <button
             type="button"
             onClick={toggleSubscribe}
             disabled={busy === 'subscribe'}
             aria-pressed={stats.subscribed}
-            className={`ml-auto min-h-[44px] px-4 rounded-xl font-semibold text-sm transition flex items-center gap-2 disabled:opacity-50 ${stats.subscribed ? 'nb-btn-secondary' : 'nb-btn-primary'}`}
+            className={`min-h-[44px] px-4 rounded-xl font-semibold text-sm transition flex items-center gap-2 disabled:opacity-50 ${stats.subscribed ? 'nb-btn-secondary' : 'nb-btn-primary'}`}
           >
             {busy === 'subscribe' ? <Loader className="w-4 h-4 animate-spin" /> : stats.subscribed ? <BellRing className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
             {stats.subscribed ? 'Subscribed' : 'Subscribe'}
