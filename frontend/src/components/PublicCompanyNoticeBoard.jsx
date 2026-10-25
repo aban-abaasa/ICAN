@@ -1773,7 +1773,7 @@ const BottomNav = ({ tabs, section, onNavigate, navRef, user = null, authLoading
   <nav
     ref={navRef}
     aria-label="Sections"
-    className="nb-tab-nav ng-bar ng-bar-nb ng-bar-icons sm:hidden fixed bottom-0 inset-x-0 z-30 flex"
+    className="nb-tab-nav ng-bar ng-bar-nb sm:hidden fixed bottom-0 inset-x-0 z-30 flex"
   >
     <NavGlowDefs />
     {tabs.map((tab) => (
@@ -1783,11 +1783,12 @@ const BottomNav = ({ tabs, section, onNavigate, navRef, user = null, authLoading
         active={section === tab.id}
         onNavigate={onNavigate}
         ariaLabel={tab.id === 'account' ? (user ? 'My account' : 'Sign in or create account') : tab.label}
-        className={`ng-tab ${section === tab.id ? 'ng-on' : ''} flex items-center justify-center py-2.5`}
+        className={`ng-tab ${section === tab.id ? 'ng-on' : ''} flex flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-semibold whitespace-nowrap`}
       >
         {tab.id === 'account'
           ? <SmartAccountIcon user={user} loading={authLoading} active={section === tab.id} />
-          : <tab.icon className="w-6 h-6" />}
+          : <tab.icon className="w-5 h-5" />}
+        <span className="truncate max-w-[68px]">{tab.id === 'account' && !user && !authLoading ? 'Sign in' : (tab.mobileLabel || tab.label)}</span>
       </TabLink>
     ))}
   </nav>
@@ -1803,18 +1804,18 @@ const SmartAccountIcon = ({ user, loading, active }) => {
   const initial = (meta.full_name || meta.name || user?.email || '?').trim().charAt(0).toUpperCase();
   const [photoFailed, setPhotoFailed] = useState(false);
 
-  if (loading) return <User className="w-6 h-6 animate-pulse opacity-60" />;
+  if (loading) return <User className="w-5 h-5 animate-pulse opacity-60" />;
   if (!user) {
     return (
       <span className="relative inline-flex">
-        <User className="w-6 h-6" />
+        <User className="w-5 h-5" />
         <span className="absolute -top-0.5 -right-1 w-2.5 h-2.5 rounded-full nb-btn-primary border-2" style={{ borderColor: 'var(--nb-surface)' }} aria-hidden="true" />
       </span>
     );
   }
   return (
     <span
-      className="inline-flex items-center justify-center w-7 h-7 rounded-full overflow-hidden nb-btn-primary text-xs font-bold"
+      className="inline-flex items-center justify-center w-5 h-5 rounded-full overflow-hidden nb-btn-primary text-[10px] font-bold"
       style={{ boxShadow: active ? '0 0 0 2px var(--nb-surface), 0 0 0 4px var(--ng-active)' : '0 0 0 1.5px var(--ng-text)' }}
     >
       {photo && !photoFailed

@@ -24,8 +24,9 @@ const Stars = ({ value, onPick = null, size = 'w-5 h-5', label }) => (
  * Rating and subscription for one business, on its public website. Customers' ratings and subscriptions are what
  * put a business's products first in IcanEra, SupermarketEra and BodaGoEra. Anyone can read; rating and subscribing
  * need a free IcanEra account (the card offers Google sign-in right here). Shows nothing until the database
- * functions are installed, and nothing at all to a business with no id to attach to. It rests as a single icon and
- * only opens into the full card when tapped.
+ * functions are installed, and nothing at all to a business with no id to attach to. It rests as one compact, named
+ * button ("Subscribe" / "Subscribed") and only opens into the full card when tapped. Subscribing needs an IcanEra
+ * account: a signed-out visitor is asked to sign in or create one, and the database refuses the call regardless.
  */
 export default function BusinessEngagementCard({ company, user, authLoading, pendingSection = 'home', className = '' }) {
   const businessId = company?.business_profile_id || null;
@@ -98,23 +99,21 @@ export default function BusinessEngagementCard({ company, user, authLoading, pen
 
   const avgText = formatRating(stats.ratingAvg);
 
-  // Resting state: just an icon (a filled bell once subscribed, a star on the owner's own site).
+  // Resting state: one compact, named button (a filled bell once subscribed, a star on the owner's own site).
   if (!open) {
     const RestIcon = stats.isOwner ? Star : stats.subscribed ? BellRing : Bell;
-    const restLabel = stats.isOwner
-      ? 'Ratings and subscribers'
-      : stats.subscribed ? 'Subscribed. Open ratings and subscription' : 'Subscribe or rate this business';
+    const restText = stats.isOwner ? 'Ratings' : stats.subscribed ? 'Subscribed' : 'Subscribe';
     return (
       <div className={className}>
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-expanded={false}
-          aria-label={restLabel}
-          title={restLabel}
-          className={`relative w-11 h-11 rounded-full flex items-center justify-center transition ${stats.subscribed ? 'nb-btn-primary' : 'nb-btn-secondary'}`}
+          title={stats.isOwner ? 'Ratings and subscribers' : 'Subscribe or rate this business'}
+          className={`min-h-[44px] px-4 rounded-full font-semibold text-sm flex items-center gap-2 transition ${stats.subscribed ? 'nb-btn-primary' : 'nb-btn-secondary'}`}
         >
           <RestIcon className="w-5 h-5" />
+          {restText}
         </button>
       </div>
     );
@@ -198,7 +197,7 @@ export default function BusinessEngagementCard({ company, user, authLoading, pen
 
       {needsSignIn && !user && (
         <div className="mt-4 pt-4 border-t nb-border space-y-2">
-          <p className="text-sm nb-text">Sign in to rate or subscribe. It's free and takes one tap.</p>
+          <p className="text-sm nb-text">You need an IcanEra account to subscribe or rate. Sign in, or create one free with one tap.</p>
           <ContinueWithGoogle skin="nb" compact pendingSection={pendingSection} />
         </div>
       )}
