@@ -1325,7 +1325,7 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
         </div>
       </header>
 
-      <BottomNav tabs={navTabs} section={activeSection} onNavigate={navigateTo} navRef={bottomNavRef} />
+      <BottomNav tabs={navTabs} section={activeSection} onNavigate={navigateTo} navRef={bottomNavRef} user={user} authLoading={authLoading} />
 
       {/* jobs/notices here are the list RPC's rows, which (unlike the
           single-notice detail fetch) don't compute is_open -- fine for a
@@ -1769,11 +1769,11 @@ const ThemeToggleButton = ({ theme, onToggle, className = '' }) => (
 // section's icon is drawn in colours that travel along its own shape; the row is
 // spaced apart and scrolls sideways (see styles/navGlow.css, themed here through
 // ng-bar-nb).
-const BottomNav = ({ tabs, section, onNavigate, navRef }) => (
+const BottomNav = ({ tabs, section, onNavigate, navRef, user = null, authLoading = false }) => (
   <nav
     ref={navRef}
     aria-label="Sections"
-    className="nb-tab-nav ng-bar ng-bar-nb sm:hidden fixed bottom-0 inset-x-0 z-30 flex"
+    className="nb-tab-nav ng-bar ng-bar-nb ng-bar-icons sm:hidden fixed bottom-0 inset-x-0 z-30 flex"
   >
     <NavGlowDefs />
     {tabs.map((tab) => (
@@ -1782,14 +1782,47 @@ const BottomNav = ({ tabs, section, onNavigate, navRef }) => (
         tab={tab}
         active={section === tab.id}
         onNavigate={onNavigate}
-        className={`ng-tab ${section === tab.id ? 'ng-on' : ''} flex flex-col items-center justify-center gap-0.5 py-1.5 text-[10px] font-semibold whitespace-nowrap`}
+        ariaLabel={tab.id === 'account' ? (user ? 'My account' : 'Sign in or create account') : tab.label}
+        className={`ng-tab ${section === tab.id ? 'ng-on' : ''} flex items-center justify-center py-2.5`}
       >
-        <tab.icon className="w-5 h-5" />
-        <span className="truncate max-w-[68px]">{tab.mobileLabel || tab.label}</span>
+        {tab.id === 'account'
+          ? <SmartAccountIcon user={user} loading={authLoading} active={section === tab.id} />
+          : <tab.icon className="w-6 h-6" />}
       </TabLink>
     ))}
   </nav>
 );
+
+// The Account tab's icon reads the visitor's state at a glance: their own
+// photo (or first initial) once signed in, a plain person with a small dot
+// nudging them to sign in otherwise, and a quiet pulse while the session is
+// still being checked so it never flashes the wrong state.
+const SmartAccountIcon = ({ user, loading, active }) => {
+  const meta = user?.user_metadata || {};
+  const photo = meta.avatar_url || meta.picture || null;
+  const initial = (meta.full_name || meta.name || user?.email || '?').trim().charAt(0).toUpperCase();
+  const [photoFailed, setPhotoFailed] = useState(false);
+
+  if (loading) return <User className="w-6 h-6 animate-pulse opacity-60" />;
+  if (!user) {
+    return (
+      <span className="relative inline-flex">
+        <User className="w-6 h-6" />
+        <span className="absolute -top-0.5 -right-1 w-2.5 h-2.5 rounded-full nb-btn-primary border-2" style={{ borderColor: 'var(--nb-surface)' }} aria-hidden="true" />
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center justify-center w-7 h-7 rounded-full overflow-hidden nb-btn-primary text-xs font-bold"
+      style={{ boxShadow: active ? '0 0 0 2px var(--nb-surface), 0 0 0 4px var(--ng-active)' : '0 0 0 1.5px var(--ng-text)' }}
+    >
+      {photo && !photoFailed
+        ? <img src={photo} alt="" className="w-full h-full object-cover" onError={() => setPhotoFailed(true)} />
+        : initial}
+    </span>
+  );
+};
 
 // A real link (href + click handler) rather than a button, so every section
 // can be opened in a new tab, bookmarked, copied, and found by crawlers -- a
