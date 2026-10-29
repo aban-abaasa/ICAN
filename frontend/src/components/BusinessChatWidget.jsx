@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, X, Send, Loader, Sparkles, User, ArrowRight, CheckCircle2, Users, ExternalLink } from 'lucide-react';
-import { askAssistant, startInquiry, sendInquiryMessage, getInquiry } from '../services/businessChatService';
+import { MessageCircle, X, Send, Loader, Sparkles, User, ArrowRight, CheckCircle2, Users, ExternalLink, Zap, ThumbsUp, ThumbsDown, BadgeCheck } from 'lucide-react';
+import { askAssistant, rateAnswer, startInquiry, sendInquiryMessage, getInquiry } from '../services/businessChatService';
 import { FAMILY_APPS, familyAppName } from '../constants/familyApps';
 
 /**
@@ -174,7 +174,7 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
     try {
       const answer = await askAssistant(companyId, history, { app: platformSupport ? (appOverride || focusApp) : null });
       if (platformSupport && answer.app) setFocusApp(answer.app);
-      setMessages((current) => [...current, { id: `a${Date.now()}`, role: 'assistant', text: answer.reply, needsHuman: answer.needsHuman, suggestions: answer.suggestions, actions: answer.actions.filter((a) => tabIds.has(a.tab)), links: platformSupport ? answer.links : [], app: platformSupport ? answer.app : null }]);
+      setMessages((current) => [...current, { id: `a${Date.now()}`, role: 'assistant', text: answer.reply, needsHuman: answer.needsHuman, source: answer.source, memoryId: answer.memoryId, pinned: answer.pinned, suggestions: answer.suggestions, actions: answer.actions.filter((a) => tabIds.has(a.tab)), links: platformSupport ? answer.links : [], app: platformSupport ? answer.app : null }]);
     } catch (err) {
       setMessages((current) => [...current, { id: `e${Date.now()}`, role: 'assistant', error: true, needsHuman: true, text: `${err.message} You can leave a message for the team instead.` }]);
     } finally {
@@ -193,6 +193,13 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
     setView('assistant');
     ask(chatRequest.text);
   }, [chatRequest]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Thumbs up / down on a remembered answer. A thumbs down also offers the team, since the assistant clearly missed.
+  const rate = (message, helpful) => {
+    if (!message.memoryId || message.rated) return;
+    setMessages((current) => current.map((m) => (m.id === message.id ? { ...m, rated: helpful ? 'up' : 'down', ...(helpful ? {} : { needsHuman: true }) } : m)));
+    rateAnswer(companyId, message.memoryId, helpful);
+  };
 
   const goTo = (tab) => {
     onNavigate?.(tab);
@@ -324,6 +331,25 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
                       <div className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${m.role === 'user' ? 'nb-btn-primary rounded-br-md' : 'nb-surface-alt nb-text rounded-bl-md'}`}>
                         {m.text}
                       </div>
+                      {m.role === 'assistant' && !m.local && m.memoryId && (
+                        <div className="flex items-center gap-2 mt-1 ml-1 text-[11px] nb-text-faint">
+                          {m.source === 'memory' && (
+                            <span className="inline-flex items-center gap-1 font-semibold" title={m.pinned ? 'An answer written by the team' : 'Answered instantly from a question we have answered before'}>
+                              {m.pinned ? <BadgeCheck className="w-3 h-3" /> : <Zap className="w-3 h-3" />}
+                              {m.pinned ? 'From the team' : 'Instant answer'}
+                            </span>
+                          )}
+                          {m.rated ? (
+                            <span>{m.rated === 'up' ? 'Thanks for the feedback!' : 'Sorry about that. You can ask the team below.'}</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 ml-auto">
+                              <span className="mr-1">Helpful?</span>
+                              <button type="button" onClick={() => rate(m, true)} aria-label="This answer helped" className="p-1 rounded-full hover:opacity-70"><ThumbsUp className="w-3 h-3" /></button>
+                              <button type="button" onClick={() => rate(m, false)} aria-label="This answer did not help" className="p-1 rounded-full hover:opacity-70"><ThumbsDown className="w-3 h-3" /></button>
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {m.role === 'assistant' && !m.local && (m.actions?.length > 0 || m.links?.length > 0 || m.needsHuman) && (
                         <div className="flex flex-wrap gap-1.5 mt-1.5">
                           {m.actions?.map((a) => (

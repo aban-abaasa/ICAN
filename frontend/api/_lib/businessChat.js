@@ -15,6 +15,8 @@
  * curated app knowledge, the live coin price, vetted links and the app a question is about.
  */
 import { callAI } from './aiProvider.js';
+import { recallAnswer, rememberAnswer } from './chatMemory.js';
+import { isMemorableQuestion } from '../../src/utils/chatQuestionKey.js';
 import {
   buildPlatformPrompt, isPlatformSite, parseFocusApp, platformFallback, sanitizePlatformOutput, selectTopics,
 } from './familySupport.js';
@@ -327,14 +329,32 @@ export const fallbackAnswer = (k, question) => {
 // ---------------------------------------------------------------------------------------------
 // Entry point shared by the HTTP handler and tests
 // ---------------------------------------------------------------------------------------------
-export const answerVisitor = async ({ supabase, companyId, messages, focusApp = null }) => {
+export const answerVisitor = async ({ supabase, companyId, messages, focusApp = null, memory = null }) => {
   const knowledge = await loadKnowledge(supabase, companyId);
   if (!knowledge) return { status: 404, body: { error: 'This business could not be found' } };
   const question = messages[messages.length - 1].text;
   const platform = Boolean(knowledge.platform);
+
+  // Answer memory (chatMemory.js): a question already answered gets its stored answer at once. The GODMINDERA family
+  // site is left out because its answers depend on the app and on live prices.
+  const facts = !platform && memory ? buildFacts(knowledge) : null;
+  if (facts) {
+    const remembered = await recallAnswer({ memory, companyId, question, facts, allowedTabs: allowedTabs(knowledge) });
+    if (remembered) {
+      const { memoryId, pinned, ...answer } = remembered;
+      return { status: 200, body: { ...answer, needsHuman: false, platform, source: 'memory', memoryId, pinned } };
+    }
+  }
+
   try {
-    const ai = await askAi(knowledge, messages, { focusApp });
-    if (ai) return { status: 200, body: { ...ai, platform, source: 'ai' } };
+    // A standalone question is put to the AI on its own: an answer that will be reused must not depend on, or carry
+    // anything from, what an earlier visitor-supplied turn said.
+    const standalone = Boolean(facts) && isMemorableQuestion(question);
+    const ai = await askAi(knowledge, standalone ? messages.slice(-1) : messages, { focusApp });
+    if (ai) {
+      const memoryId = facts ? await rememberAnswer({ memory, companyId, question, answer: ai, facts }) : null;
+      return { status: 200, body: { ...ai, platform, source: 'ai', ...(memoryId ? { memoryId } : {}) } };
+    }
   } catch (err) {
     // Not configured, quota, provider outage: fall through to the rule-based answerer.
     console.warn('business-chat: AI unavailable, using fallback:', err?.message);

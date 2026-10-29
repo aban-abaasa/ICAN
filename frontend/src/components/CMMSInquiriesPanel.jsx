@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Inbox, Loader, Mail, MessageCircle, Phone, RefreshCw, Send, Sparkles, User } from 'lucide-react';
+import { ArrowLeft, Brain, CheckCircle2, Inbox, Loader, Mail, MessageCircle, Phone, RefreshCw, Send, Sparkles, User } from 'lucide-react';
 import businessChatService from '../services/businessChatService';
+import CMMSLearnedAnswersPanel from './CMMSLearnedAnswersPanel';
 
 /**
  * Lives inside the Jobs & Announcements panel (CMMSAnnouncementsPanel.jsx) as its "Inquiries" sub-tab: the staff
@@ -43,6 +44,7 @@ export default function CMMSInquiriesPanel({ companyId, onUnreadChange }) {
   const [filter, setFilter] = useState('active'); // 'active' | 'all'
   const [selectedId, setSelectedId] = useState(null);
   const [thread, setThread] = useState(null);
+  const [section, setSection] = useState('conversations'); // 'conversations' | 'learned' (what the assistant has remembered)
   const [threadLoading, setThreadLoading] = useState(false);
   const [reply, setReply] = useState('');
   const [saving, setSaving] = useState(false);
@@ -203,8 +205,29 @@ export default function CMMSInquiriesPanel({ companyId, onUnreadChange }) {
     </div>
   );
 
+  const sections = (
+    <div className="flex gap-2 text-sm" role="tablist" aria-label="Inquiries">
+      {[['conversations', 'Conversations', MessageCircle], ['learned', 'Learned answers', Brain]].map(([id, label, Icon]) => (
+        <button key={id} type="button" role="tab" aria-selected={section === id} onClick={() => setSection(id)} className={`px-3.5 py-2 rounded-full border inline-flex items-center gap-1.5 ${section === id ? 'cmms-classic-btn-primary' : 'cmms-classic-btn-secondary'} !h-auto !min-h-0`}>
+          <Icon className="w-4 h-4" /> {label}
+          {id === 'conversations' && unreadCount > 0 && <span className="text-[10px] font-bold px-1.5 rounded-full bg-rose-500 text-white">{unreadCount}</span>}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (section === 'learned') {
+    return (
+      <div className="space-y-3">
+        {sections}
+        <CMMSLearnedAnswersPanel companyId={companyId} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
+      {sections}
       <div className="cmms-classic-card p-3 text-sm cmms-classic-muted flex items-start gap-2">
         <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-400" />
         <span>
