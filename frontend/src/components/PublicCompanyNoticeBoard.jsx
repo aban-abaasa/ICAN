@@ -9,7 +9,7 @@ import {
   Trash2, Truck, Store, Award, Phone, Mail, Navigation, MessageCircle,
   Facebook, Instagram, Twitter, Linkedin, Music2, BadgeCheck, Globe,
   Video, Play, Eye, Heart, Bike, Star, Sun, Moon, TrendingUp, MoreVertical, Home,
-  Download, Banknote, User, Lock, FolderOpen, ExternalLink, Link2, KeyRound, ShieldCheck
+  Download, Banknote, User, Lock, FolderOpen, ExternalLink, Link2, KeyRound, ShieldCheck, CalendarCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
@@ -39,6 +39,8 @@ import { getPitchesByBusinessProfileId, getPitchById, getBusinessProfileIdByName
 import { getLiveShareOffer } from '../services/pitchinValuationService';
 import { useAuth } from '../context/AuthContext';
 import { usePinPrompt } from './PinPromptDialog';
+import SiteBookingPanel from './booking/SiteBookingPanel';
+import { isBookable } from '../utils/siteBooking';
 import { AuthPage } from './auth';
 import BusinessChatWidget from './BusinessChatWidget';
 import LoadingPage from './LoadingPage';
@@ -1408,6 +1410,7 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
               onPayForBasket={payInfo ? payForBasket : null}
               contact={{ phone: company.phone, email: company.email }}
               onAskUs={askUs}
+              businessName={company.company_name}
               loading={productsLoading}
               cart={cart}
               setCart={setCart}
@@ -3052,7 +3055,7 @@ const isPayableProduct = (item) => String(item.currency || 'UGX').toUpperCase() 
 // fee and is handled by useGuestCheckout / guestCheckoutService.
 const NO_LISTINGS = [];
 
-const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket = null, setPayBasket = null, onPayForBasket = null, contact = {}, onAskUs = null, loading, cart, setCart, businessProfileId, user, authLoading }) => {
+const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket = null, setPayBasket = null, onPayForBasket = null, contact = {}, onAskUs = null, businessName = '', loading, cart, setCart, businessProfileId, user, authLoading }) => {
   const { askPin, pinDialog } = usePinPrompt();
   const { walletState, recheckWallet } = useWalletReady(user?.id);
   const cartOpenKey = `icanera_cart_nbshop_${businessProfileId}`;
@@ -3064,6 +3067,7 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
   const [placing, setPlacing] = useState(false);
   const [checkoutError, setCheckoutError] = useState(null);
   const [receipt, setReceipt] = useState(null);
+  const [bookingId, setBookingId] = useState(null); // the service whose booking form is open right in its card
 
   // Delivery location, window and vehicle/rider choice -- required by
   // dropship_checkout to book a real BodaGoera rider (see dropshipService.js
@@ -3489,12 +3493,13 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
               {goodsItems.length > 0 && (
                 <>
                   <h3 className="text-sm font-semibold nb-text mb-1">Our services</h3>
-                  <p className="text-xs nb-text-muted mb-3">Pick a service to pay for it here, or message us to book a time.</p>
+                  <p className="text-xs nb-text-muted mb-3">{serviceItems.some(isBookable) ? 'Book a time right here, pay for a service, or ask us first.' : 'Pick a service to pay for it here, or message us to book a time.'}</p>
                 </>
               )}
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+              <div className="grid sm:grid-cols-2 xl:grid-cols-3 grid-flow-dense gap-4 sm:gap-5">
                 {serviceItems.map((item) => {
                   const { payable, picked, setPicked } = pickState(item);
+                  const bookable = isBookable(item);
                   const askText = isFixedPrice(item)
                     ? `I would like to book "${item.name}". What do I need to know, and when are you available?`
                     : `I would like to book "${item.name}". Could you give me a quote?`;
@@ -3503,6 +3508,32 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
                   const emailLink = !onAskUs && !callLink
                     ? buildGmailComposeLink(contact.email, `Booking: ${item.name}`)
                     : null;
+                  // The booking form opens inside the service's own card, which then takes the whole row.
+                  if (bookable && bookingId === item.product_id) {
+                    return (
+                      <div key={item.product_id} className="nb-card rounded-2xl shadow-lg overflow-hidden min-w-0 sm:col-span-2 xl:col-span-3 ring-2 ring-[var(--nb-green)] animate-fadeInUp">
+                        <div className="flex items-center gap-3 p-3 sm:p-4 border-b nb-border">
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden nb-surface-alt flex-shrink-0">
+                            {item.images?.[0] ? <img src={item.images[0]} alt="" className="w-full h-full object-cover" /> : <CoverFallback icon={Briefcase} />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold nb-text line-clamp-1">{item.name}</p>
+                            <p className="nb-price font-bold text-sm">{servicePriceText(item, formatMoney)}</p>
+                            {item.description && <p className="text-xs nb-text-muted line-clamp-2 mt-0.5">{item.description}</p>}
+                          </div>
+                        </div>
+                        <SiteBookingPanel
+                          service={item}
+                          businessName={businessName}
+                          user={user}
+                          phone={contact.phone}
+                          onNeedAuth={() => setShowAuthModal(true)}
+                          onAskUs={onAskUs}
+                          onClose={() => setBookingId(null)}
+                        />
+                      </div>
+                    );
+                  }
                   return (
                     <div
                       key={item.product_id}
@@ -3523,11 +3554,16 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
                       <div className="p-4 flex-1 flex flex-col">
                         <p className="font-bold nb-text line-clamp-2">{item.name}</p>
                         {item.description && <p className="text-sm nb-text-muted mt-1.5 line-clamp-3">{item.description}</p>}
-                        {(onAskUs || callLink || emailLink) && (
+                        {(bookable || onAskUs || callLink || emailLink) && (
                           <div className="flex flex-wrap gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
+                            {bookable && (
+                              <button type="button" onClick={() => setBookingId(item.product_id)} className="inline-flex items-center gap-1.5 px-3.5 min-h-[40px] rounded-lg nb-btn-primary text-sm font-bold">
+                                <CalendarCheck className="w-4 h-4" />Book now
+                              </button>
+                            )}
                             {onAskUs && (
-                              <button type="button" onClick={() => onAskUs(askText)} className={`inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg ${payable ? 'nb-btn-secondary' : 'nb-btn-primary'} text-xs font-semibold`}>
-                                <MessageCircle className="w-3.5 h-3.5" />{isFixedPrice(item) ? 'Ask us to book' : 'Ask us for a quote'}
+                              <button type="button" onClick={() => onAskUs(askText)} className={`inline-flex items-center gap-1.5 px-3 min-h-[40px] rounded-lg ${payable || bookable ? 'nb-btn-secondary' : 'nb-btn-primary'} text-xs font-semibold`}>
+                                <MessageCircle className="w-3.5 h-3.5" />{bookable ? 'Ask us' : isFixedPrice(item) ? 'Ask us to book' : 'Ask us for a quote'}
                               </button>
                             )}
                             {callLink && (
