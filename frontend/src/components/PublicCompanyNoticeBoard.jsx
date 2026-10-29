@@ -58,9 +58,10 @@ const buildTelLink = (phone) => (phone?.trim() ? `tel:${phone.replace(/[^\d+]/g,
 // first for one who isn't -- either way, unlike mailto:, it never just goes
 // nowhere.
 const buildGmailComposeLink = (email) => (email?.trim() ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email.trim())}` : null);
-const buildWhatsAppLink = (whatsapp) => {
+const buildWhatsAppLink = (whatsapp, message) => {
   const digits = whatsapp?.replace(/[^\d]/g, '');
-  return digits ? `https://wa.me/${digits}` : null;
+  if (!digits) return null;
+  return message ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}` : `https://wa.me/${digits}`;
 };
 // /maps/search/ (the old endpoint here) only ever opens a place search --
 // tapping it never actually starts turn-by-turn navigation. /maps/dir/ with
@@ -1173,12 +1174,15 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
   // the two longest labels ("Track my application"/"Track my bid") from
   // wrapping or getting clipped under an icon in the bottom bar's much
   // narrower per-tab width.
+  // A business that lists only services calls its tab "Services": "Market" reads like a shop it isn't.
+  const servicesOnly = storeProducts.length > 0 && products.length === 0 && storeProducts.every((p) => p.is_service);
+  const marketLabel = servicesOnly ? 'Services' : 'Market';
   const tabs = [
     { id: 'home', label: 'Home', mobileLabel: 'Home', icon: Home },
     { id: 'notices', label: 'News', mobileLabel: 'News', icon: Megaphone },
     // The Market tab exists for every business website, even before anything is listed:
     // a store always has a website, and its market is where its products and services live.
-    { id: 'shop', label: 'Market', mobileLabel: 'Market', icon: ShoppingBag },
+    { id: 'shop', label: marketLabel, mobileLabel: marketLabel, icon: ShoppingBag },
     // Shown whenever this business has PitchIn enabled at all (a linked or
     // name-matched business_profile_id, see pitchesBusinessProfileId above)
     // not just once it already has a published pitch -- otherwise the
@@ -1339,6 +1343,7 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
             jobCount={jobs.length}
             pitchCount={pitches.length}
             marketCount={products.length + storeProducts.length}
+            servicesOnly={servicesOnly}
             onNavigate={navigateTo}
           />
         )
@@ -2246,7 +2251,7 @@ const HeroStats = ({ noticeCount, jobCount, pitchCount = 0 }) => {
 // The homepage hero -- shown only on the "Notices" (front page) tab, same
 // place a real business's own website would put its cover photo, logo and
 // tagline above the fold.
-const BusinessHero = ({ company, noticeCount = 0, jobCount = 0, pitchCount = 0, marketCount = 0, onNavigate }) => {
+const BusinessHero = ({ company, noticeCount = 0, jobCount = 0, pitchCount = 0, marketCount = 0, servicesOnly = false, onNavigate }) => {
   const [linkCopied, setLinkCopied] = useState(false);
   const shareBoard = async () => {
     const link = window.location.href.split('?')[0];
@@ -2319,7 +2324,7 @@ const BusinessHero = ({ company, noticeCount = 0, jobCount = 0, pitchCount = 0, 
               )}
               {marketCount > 0 && (
                 <TabLink tab={{ id: 'shop' }} onNavigate={onNavigate} className={`${jobCount > 0 ? 'nb-action-btn' : 'nb-btn-primary'} rounded-xl px-5 py-2.5 text-sm font-bold inline-flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]`}>
-                  <ShoppingBag className="w-4 h-4" /> Visit our market
+                  <ShoppingBag className="w-4 h-4" /> {servicesOnly ? 'See our services' : 'Visit our market'}
                 </TabLink>
               )}
             </div>
@@ -3149,6 +3154,21 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
     setPayBasket((prev) => withoutMoved(prev, deliverPlan.moved));
     setShowCart(true);
   };
+  // The business's services get their own list below its goods: a service has no stock or delivery, it is booked.
+  const goodsItems = storeProducts.filter((p) => !p.is_service);
+  const serviceItems = storeProducts.filter((p) => p.is_service);
+  // Everything a card needs to be tapped into the Market selection (shared by goods and services).
+  const pickState = (item) => {
+    const deliverListing = deliveryByProduct.get(String(item.product_id));
+    const deliverable = Boolean(deliverListing?.in_stock);
+    const inDeliveryCart = deliverListing ? (cart[deliverListing.listing_id] || 0) : 0;
+    // Tap-to-pick works when the visitor can pay for the item here, or have it delivered.
+    const payable = !!payBasket && ((canPay && isPayableProduct(item)) || deliverable);
+    const id = String(item.product_id);
+    const picked = payable ? (payBasket[id] || 0) : 0;
+    const setPicked = (qty) => setPayBasket((prev) => ({ ...prev, [id]: Math.max(0, Math.min(99, qty)) }));
+    return { deliverable, inDeliveryCart, payable, id, picked, setPicked };
+  };
   const allFreeDelivery = cartItems.length > 0 && cartItems.every((row) => row.listing.free_delivery);
   // Preview only -- dropship_checkout always recomputes the REAL fare
   // server-side (BodaGoera's own fare formula for whichever rider actually
@@ -3350,11 +3370,11 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
 
       {storeProducts.length > 0 && (
         <div className={products.length > 0 ? 'mt-8' : ''}>
-          <h3 className="text-sm font-semibold nb-text mb-1">{products.length > 0 ? 'From our store' : 'Our products'}</h3>
+          <h3 className="text-sm font-semibold nb-text mb-1">{goodsItems.length === 0 ? 'Our services' : products.length > 0 ? 'From our store' : 'Our products'}</h3>
           <p className="text-xs nb-text-muted mb-3">
             {onPayForBasket
               ? `Tap everything you want, then pay for it all together — cash, IcanEra wallet, Mobile Money, card or bank${offersDelivery ? ', or have it delivered' : ''}.`
-              : offersDelivery ? 'Tap everything you want, then have it delivered to you.' : 'Contact us to order these.'}
+              : offersDelivery ? 'Tap everything you want, then have it delivered to you.' : goodsItems.length === 0 ? 'Message us to book a service.' : 'Contact us to order these.'}
           </p>
           {offersDelivery && (
             <div className="nb-card rounded-xl p-3 mb-3 flex items-start gap-2.5 text-xs nb-text-muted">
@@ -3365,7 +3385,7 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
               </p>
             </div>
           )}
-          {(buildWhatsAppLink(contact.whatsapp) || buildTelLink(contact.phone)) && (
+          {goodsItems.length > 0 && (buildWhatsAppLink(contact.whatsapp) || buildTelLink(contact.phone)) && (
             <div className="flex gap-2 mb-3">
               {buildWhatsAppLink(contact.whatsapp) && (
                 <a href={buildWhatsAppLink(contact.whatsapp)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg nb-btn-primary text-xs font-semibold">
@@ -3379,16 +3399,10 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
               )}
             </div>
           )}
+          {goodsItems.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-            {storeProducts.map((item) => {
-              const deliverListing = deliveryByProduct.get(String(item.product_id));
-              const deliverable = Boolean(deliverListing?.in_stock);
-              const inDeliveryCart = deliverListing ? (cart[deliverListing.listing_id] || 0) : 0;
-              // Tap-to-pick works when the visitor can pay for the item here, or have it delivered.
-              const payable = !!payBasket && ((canPay && isPayableProduct(item)) || deliverable);
-              const id = String(item.product_id);
-              const picked = payable ? (payBasket[id] || 0) : 0;
-              const setPicked = (qty) => setPayBasket((prev) => ({ ...prev, [id]: Math.max(0, Math.min(99, qty)) }));
+            {goodsItems.map((item) => {
+              const { deliverable, inDeliveryCart, payable, picked, setPicked } = pickState(item);
               return (
               <div
                 key={item.product_id}
@@ -3437,6 +3451,69 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
               );
             })}
           </div>
+          )}
+
+          {serviceItems.length > 0 && (
+            <div className={goodsItems.length > 0 ? 'mt-8' : ''}>
+              {goodsItems.length > 0 && (
+                <>
+                  <h3 className="text-sm font-semibold nb-text mb-1">Our services</h3>
+                  <p className="text-xs nb-text-muted mb-3">Pick a service to pay for it here, or message us to book a time.</p>
+                </>
+              )}
+              <div className="space-y-2.5">
+                {serviceItems.map((item) => {
+                  const { payable, picked, setPicked } = pickState(item);
+                  const bookLink = buildWhatsAppLink(contact.whatsapp, `Hello, I would like to book "${item.name}".`);
+                  const callLink = buildTelLink(contact.phone);
+                  const hasPrice = Number(item.price) > 0;
+                  return (
+                    <div
+                      key={item.product_id}
+                      {...(payable ? { role: 'button', tabIndex: 0, 'aria-pressed': picked > 0, onClick: () => { if (picked === 0) setPicked(1); }, onKeyDown: (e) => { if ((e.key === 'Enter' || e.key === ' ') && picked === 0) { e.preventDefault(); setPicked(1); } } } : {})}
+                      className={`nb-card rounded-2xl p-3 flex items-center gap-3${payable ? ' cursor-pointer transition active:scale-[0.99]' : ''}${picked > 0 ? ' ring-2 ring-[var(--nb-green)]' : ''}`}
+                    >
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl nb-surface-alt flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {item.images?.[0] ? (
+                          <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <Briefcase className="w-6 h-6 nb-icon-muted" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm sm:text-base nb-text font-semibold line-clamp-2">{item.name}</p>
+                        <p className="nb-price font-bold mt-0.5">{hasPrice ? formatMoney(item.price, item.currency) : 'Ask for a quote'}</p>
+                        {(bookLink || callLink) && (
+                          <div className="flex flex-wrap gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                            {bookLink && (
+                              <a href={bookLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg nb-btn-secondary text-xs font-semibold">
+                                <MessageCircle className="w-3.5 h-3.5" />Book on WhatsApp
+                              </a>
+                            )}
+                            {callLink && (
+                              <a href={callLink} className="inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg nb-btn-secondary text-xs font-semibold" aria-label={`Call to book ${item.name}`}>
+                                <Phone className="w-3.5 h-3.5" />Call
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {payable && (picked === 0 ? (
+                        <span className="flex-shrink-0 min-h-[44px] px-4 rounded-xl nb-btn-primary text-xs font-bold flex items-center justify-center gap-1"><Plus className="w-3.5 h-3.5" />Add</span>
+                      ) : (
+                        <div className="flex-shrink-0 min-h-[44px] rounded-xl nb-option-selected flex items-center" onClick={(e) => e.stopPropagation()}>
+                          <button type="button" onClick={() => setPicked(picked - 1)} className="min-w-[40px] min-h-[44px] flex items-center justify-center" aria-label={`Fewer ${item.name}`}><Minus className="w-4 h-4" /></button>
+                          <span className="text-sm font-bold min-w-[1.25rem] text-center" aria-live="polite">{picked}</span>
+                          <button type="button" onClick={() => setPicked(picked + 1)} className="min-w-[40px] min-h-[44px] flex items-center justify-center" aria-label={`More ${item.name}`}><Plus className="w-4 h-4" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {pickedCount > 0 && (
             <div className="sticky bottom-[calc(148px+env(safe-area-inset-bottom))] sm:bottom-6 z-30 mt-4 max-w-md mx-auto">
               <div className="nb-card rounded-2xl shadow-lg p-2.5 pl-4 flex flex-wrap items-center gap-x-3 gap-y-2">
