@@ -42,7 +42,7 @@ const WIDGET_STYLES = `
 @media (prefers-reduced-motion: reduce) { .nb-chat-dot, .nb-chat-sheet { animation: none; } }
 `;
 
-export default function BusinessChatWidget({ company, companyId, availableTabs = [], onNavigate, jobCount = 0, noticeCount = 0, payOnline = false, platformSupport = false, askRequest = null }) {
+export default function BusinessChatWidget({ company, companyId, availableTabs = [], onNavigate, jobCount = 0, noticeCount = 0, payOnline = false, platformSupport = false, askRequest = null, chatRequest = null }) {
   const tokenKey = `nb_inquiry_token_${companyId}`;
   const seenKey = `nb_inquiry_seen_${companyId}`;
   const chatKey = `nb_chat_${companyId}`;
@@ -181,6 +181,18 @@ export default function BusinessChatWidget({ company, companyId, availableTabs =
       setThinking(false);
     }
   };
+
+  // A "Ask us" button elsewhere on the page (e.g. a service card in the Market tab) hands in { id, text }: open the
+  // chat on the assistant and put that question to it. The Team tab stays one tap away, and its form is prefilled
+  // from the same question (see openHandoff), so the visitor can follow up with the business directly.
+  const handledChatRequest = useRef(null);
+  useEffect(() => {
+    if (!chatRequest?.id || handledChatRequest.current === chatRequest.id) return;
+    handledChatRequest.current = chatRequest.id;
+    setOpen(true);
+    setView('assistant');
+    ask(chatRequest.text);
+  }, [chatRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goTo = (tab) => {
     onNavigate?.(tab);

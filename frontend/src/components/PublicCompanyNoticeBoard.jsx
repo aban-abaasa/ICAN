@@ -705,6 +705,9 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
   const [libraryLinks, setLibraryLinks] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
   const [selectedNotice, setSelectedNotice] = useState(null);
+  // "Ask us" buttons in the Market tab hand a ready-made question to the chat bubble (AI first, then the team).
+  const [chatRequest, setChatRequest] = useState(null);
+  const askUs = useCallback((text) => setChatRequest({ id: Date.now(), text }), []);
   const [selectedOpportunity, setSelectedOpportunity] = useState(null);
 
   // Two small things every tab needs to actually feel like its own page
@@ -1403,7 +1406,8 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
               payBasket={payBasket}
               setPayBasket={setPayBasket}
               onPayForBasket={payInfo ? payForBasket : null}
-              contact={{ phone: company.phone, whatsapp: company.whatsapp, email: company.email }}
+              contact={{ phone: company.phone, email: company.email }}
+              onAskUs={askUs}
               loading={productsLoading}
               cart={cart}
               setCart={setCart}
@@ -1476,6 +1480,7 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
         payOnline={Boolean(payInfo)}
         platformSupport={siteSlug === PRODUCT_OWNER_SLUG}
         askRequest={siteSlug === PRODUCT_OWNER_SLUG ? parseAskParam(window.location.search) : null}
+        chatRequest={chatRequest}
       />
 
       {selectedNotice && <NoticeDetailModal notice={selectedNotice} onClose={closeDetail} onShare={handleShare} />}
@@ -3047,7 +3052,7 @@ const isPayableProduct = (item) => String(item.currency || 'UGX').toUpperCase() 
 // fee and is handled by useGuestCheckout / guestCheckoutService.
 const NO_LISTINGS = [];
 
-const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket = null, setPayBasket = null, onPayForBasket = null, contact = {}, loading, cart, setCart, businessProfileId, user, authLoading }) => {
+const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket = null, setPayBasket = null, onPayForBasket = null, contact = {}, onAskUs = null, loading, cart, setCart, businessProfileId, user, authLoading }) => {
   const { askPin, pinDialog } = usePinPrompt();
   const { walletState, recheckWallet } = useWalletReady(user?.id);
   const cartOpenKey = `icanera_cart_nbshop_${businessProfileId}`;
@@ -3411,12 +3416,12 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
               </p>
             </div>
           )}
-          {goodsItems.length > 0 && (buildWhatsAppLink(contact.whatsapp) || buildTelLink(contact.phone)) && (
+          {goodsItems.length > 0 && (onAskUs || buildTelLink(contact.phone)) && (
             <div className="flex gap-2 mb-3">
-              {buildWhatsAppLink(contact.whatsapp) && (
-                <a href={buildWhatsAppLink(contact.whatsapp)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg nb-btn-primary text-xs font-semibold">
-                  <MessageCircle className="w-3.5 h-3.5" />WhatsApp
-                </a>
+              {onAskUs && (
+                <button type="button" onClick={() => onAskUs('I would like to order from your store. What can you help me with?')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg nb-btn-primary text-xs font-semibold">
+                  <MessageCircle className="w-3.5 h-3.5" />Ask us
+                </button>
               )}
               {buildTelLink(contact.phone) && (
                 <a href={buildTelLink(contact.phone)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg nb-btn-secondary text-xs font-semibold">
@@ -3490,12 +3495,12 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
               <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
                 {serviceItems.map((item) => {
                   const { payable, picked, setPicked } = pickState(item);
-                  const bookLink = buildWhatsAppLink(contact.whatsapp, isFixedPrice(item)
-                    ? `Hello, I would like to book "${item.name}".`
-                    : `Hello, I would like to book "${item.name}". Could you give me a quote?`);
+                  const askText = isFixedPrice(item)
+                    ? `I would like to book "${item.name}". What do I need to know, and when are you available?`
+                    : `I would like to book "${item.name}". Could you give me a quote?`;
                   const callLink = buildTelLink(contact.phone);
-                  // No phone or WhatsApp saved: email the business instead, so the row is never a dead end.
-                  const emailLink = !bookLink && !callLink
+                  // Without the Ask us chat and without a phone, email the business instead, so the row is never a dead end.
+                  const emailLink = !onAskUs && !callLink
                     ? buildGmailComposeLink(contact.email, `Booking: ${item.name}`)
                     : null;
                   return (
@@ -3518,15 +3523,12 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
                       <div className="p-4 flex-1 flex flex-col">
                         <p className="font-bold nb-text line-clamp-2">{item.name}</p>
                         {item.description && <p className="text-sm nb-text-muted mt-1.5 line-clamp-3">{item.description}</p>}
-                        {!bookLink && !callLink && !emailLink && !payable && (
-                          <p className="text-xs nb-text-muted mt-3">Tap <b>Ask us</b> to message the business about this service.</p>
-                        )}
-                        {(bookLink || callLink || emailLink) && (
+                        {(onAskUs || callLink || emailLink) && (
                           <div className="flex flex-wrap gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
-                            {bookLink && (
-                              <a href={bookLink} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg ${payable ? 'nb-btn-secondary' : 'nb-btn-primary'} text-xs font-semibold`}>
-                                <MessageCircle className="w-3.5 h-3.5" />{isFixedPrice(item) ? 'Book on WhatsApp' : 'Ask on WhatsApp'}
-                              </a>
+                            {onAskUs && (
+                              <button type="button" onClick={() => onAskUs(askText)} className={`inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg ${payable ? 'nb-btn-secondary' : 'nb-btn-primary'} text-xs font-semibold`}>
+                                <MessageCircle className="w-3.5 h-3.5" />{isFixedPrice(item) ? 'Ask us to book' : 'Ask us for a quote'}
+                              </button>
                             )}
                             {callLink && (
                               <a href={callLink} className="inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg nb-btn-secondary text-xs font-semibold" aria-label={`Call to book ${item.name}`}>
