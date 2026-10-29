@@ -2479,46 +2479,83 @@ const AboutCard = ({ company }) => (
   </div>
 );
 
+// The designed stand-in for a missing poster: the soft ruled-paper cover and floating emblem the Pitches tab uses
+// for business plans, so a card without a photo still fills its image area instead of collapsing to a small icon.
+const CoverFallback = ({ icon: Icon, label }) => (
+  <div className="nb-plan-cover w-full h-full flex flex-col items-center justify-center gap-2">
+    <span className="nb-plan-emblem relative z-[1] w-14 h-14 rounded-full flex items-center justify-center">
+      <Icon className="w-6 h-6" />
+    </span>
+    {label && <span className="relative z-[1] nb-serif text-sm font-bold nb-text">{label}</span>}
+  </div>
+);
+
 const NoticeList = ({ notices, onSelect }) => {
   if (notices.length === 0) {
     return <EmptyState icon={Megaphone} text="No public notices right now. Check back later." />;
   }
-  // xl (not lg) for the 3rd column -- on the Notices tab this grid shares
-  // its row with BusinessInfoSidebar from lg upward, so 3 columns would
-  // otherwise start cramping right where the sidebar appears.
+  // Image-first grid, same columns as the Pitches tab. The newest notice that has a poster is the "featured" one:
+  // it spans two columns and the poster runs edge to edge with the headline laid over it.
+  const featuredId = notices.length > 1 ? notices.find((n) => n.poster_url)?.id : null;
   return (
-    <div className="nb-rows">
-      {notices.map((notice, i) => (
-        <button
-          key={notice.id}
-          onClick={() => onSelect(notice)}
-          style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
-          className="nb-row group w-full text-left flex items-center gap-3 animate-fadeInUp"
-        >
-          <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 overflow-hidden rounded-lg nb-surface-alt">
-            {notice.poster_url ? (
-              <img src={notice.poster_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Megaphone className="w-6 h-6 nb-icon-muted" />
+    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+      {notices.map((notice, i) => {
+        const featured = notice.id === featuredId;
+        const fresh = isRecentlyPublished(notice.published_at);
+        const date = notice.published_at ? new Date(notice.published_at).toLocaleDateString() : '';
+        const delay = { animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' };
+        if (featured) {
+          return (
+            <button
+              key={notice.id}
+              type="button"
+              onClick={() => onSelect(notice)}
+              style={delay}
+              className="group relative block w-full text-left sm:col-span-2 min-h-[18rem] sm:min-h-[20rem] rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp nb-surface-alt"
+            >
+              <img src={notice.poster_url} alt="" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6 text-white">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">Latest</span>
+                  {fresh && <span className="nb-badge-new text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">New</span>}
+                </div>
+                <h3 className="text-xl sm:text-2xl font-extrabold leading-tight line-clamp-3">{notice.title}</h3>
+                {notice.summary && <p className="text-sm text-white/85 mt-1.5 line-clamp-2 max-w-2xl">{notice.summary}</p>}
+                <p className="text-xs text-white/70 mt-2 flex items-center gap-1"><Clock className="w-3 h-3" /> {date}</p>
               </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold nb-text line-clamp-2 flex-1 min-w-0">{notice.title}</h3>
-              {isRecentlyPublished(notice.published_at) && (
-                <span className="nb-badge-new text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0">New</span>
+            </button>
+          );
+        }
+        return (
+          <button
+            key={notice.id}
+            type="button"
+            onClick={() => onSelect(notice)}
+            style={delay}
+            className="group flex flex-col w-full text-left nb-card rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp"
+          >
+            <div className="relative aspect-video w-full overflow-hidden nb-surface-alt">
+              {notice.poster_url ? (
+                <img src={notice.poster_url} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              ) : (
+                <CoverFallback icon={Megaphone} label="Announcement" />
+              )}
+              {fresh && (
+                <span className="absolute top-2 left-2 nb-badge-new text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">New</span>
               )}
             </div>
-            {notice.summary && <p className="text-sm nb-text-muted mt-0.5 line-clamp-1">{notice.summary}</p>}
-            <p className="text-xs nb-text-faint mt-1 flex items-center gap-1">
-              <Clock className="w-3 h-3" /> {notice.published_at ? new Date(notice.published_at).toLocaleDateString() : ''}
-            </p>
-          </div>
-          <ChevronRight className="w-5 h-5 nb-icon-muted flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1" />
-        </button>
-      ))}
+            <div className="p-4 flex-1 flex flex-col">
+              <h3 className="font-bold nb-text line-clamp-2">{notice.title}</h3>
+              {notice.summary && <p className="text-sm nb-text-muted mt-1.5 line-clamp-2">{notice.summary}</p>}
+              <div className="mt-auto pt-3 flex items-center justify-between text-xs">
+                <span className="nb-text-faint inline-flex items-center gap-1"><Clock className="w-3 h-3" /> {date}</span>
+                <span className="font-semibold nb-link inline-flex items-center gap-1">Read more <span className="nb-read-arrow">→</span></span>
+              </div>
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 };
@@ -2666,31 +2703,34 @@ const JobList = ({ jobs, onSelect }) => {
   if (jobs.length === 0) {
     return <EmptyState icon={Briefcase} text="No open positions right now. Check back later." />;
   }
+  // Same image-first card grid as the Pitches tab: the poster fills the top of the card, and a role without one
+  // gets a designed "We're hiring" cover instead of a tiny icon.
   return (
-    <div className="nb-rows">
+    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
       {jobs.map((job, i) => (
         <button
           key={job.id}
+          type="button"
           onClick={() => onSelect(job)}
           style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
-          className="nb-row group w-full text-left flex items-center gap-3 animate-fadeInUp"
+          className="group flex flex-col w-full text-left nb-card rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp"
         >
-          {job.poster_url ? (
-            <img src={job.poster_url} alt="" className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-lg flex-shrink-0" />
-          ) : (
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg nb-chip-green flex items-center justify-center flex-shrink-0">
-              <Briefcase className="w-5 h-5" />
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <h3 className="font-bold nb-text line-clamp-1">{job.title}</h3>
-            {job.summary && <p className="text-sm nb-text-muted line-clamp-1">{job.summary}</p>}
-            <div className="flex flex-wrap gap-2 mt-2">
-              {job.employment_type && (
-                <span className="inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-green">
-                  {EMPLOYMENT_LABELS[job.employment_type] || job.employment_type}
-                </span>
-              )}
+          <div className="relative aspect-video w-full overflow-hidden nb-surface-alt">
+            {job.poster_url ? (
+              <img src={job.poster_url} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+            ) : (
+              <CoverFallback icon={Briefcase} label="We're hiring" />
+            )}
+            {job.employment_type && (
+              <span className="absolute top-2 left-2 text-[11px] font-bold px-2 py-0.5 rounded-full nb-chip-green">
+                {EMPLOYMENT_LABELS[job.employment_type] || job.employment_type}
+              </span>
+            )}
+          </div>
+          <div className="p-4 flex-1 flex flex-col">
+            <h3 className="font-bold nb-text line-clamp-2">{job.title}</h3>
+            {job.summary && <p className="text-sm nb-text-muted mt-1.5 line-clamp-2">{job.summary}</p>}
+            <div className="flex flex-wrap items-center gap-2 mt-3">
               {job.location && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-neutral">
                   <MapPin className="w-3 h-3" /> {job.location}
@@ -2698,8 +2738,8 @@ const JobList = ({ jobs, onSelect }) => {
               )}
               <DeadlineChip deadline={job.application_deadline} />
             </div>
+            <p className="mt-auto pt-3 text-xs font-semibold nb-link inline-flex items-center gap-1">View role &amp; apply <span className="nb-read-arrow">→</span></p>
           </div>
-          <ChevronRight className="w-5 h-5 nb-icon-muted flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1" />
         </button>
       ))}
     </div>
@@ -3331,16 +3371,16 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
       {products.length === 0 && storeProducts.length === 0 ? (
         <EmptyState icon={ShoppingBag} text="This market has nothing listed yet. Check back soon." />
       ) : products.length === 0 ? null : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
           {products.map((listing) => {
             const qty = cart[listing.listing_id] || 0;
             return (
-              <div key={listing.listing_id} className="nb-card rounded-2xl overflow-hidden flex flex-col">
-                <div className="aspect-square nb-surface-alt flex items-center justify-center overflow-hidden">
+              <div key={listing.listing_id} className="group nb-card rounded-2xl overflow-hidden flex flex-col shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+                <div className="aspect-[4/5] nb-surface-alt flex items-center justify-center overflow-hidden">
                   {listing.images?.[0] ? (
-                    <img src={listing.images[0]} alt={listing.name} className="w-full h-full object-cover" />
+                    <img src={listing.images[0]} alt={listing.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                   ) : (
-                    <Store className="w-8 h-8 nb-icon-muted" />
+                    <CoverFallback icon={Store} />
                   )}
                 </div>
                 <div className="p-2.5 flex-1 flex flex-col">
@@ -3402,20 +3442,20 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
             </div>
           )}
           {goodsItems.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
             {goodsItems.map((item) => {
               const { deliverable, inDeliveryCart, payable, picked, setPicked } = pickState(item);
               return (
               <div
                 key={item.product_id}
                 {...(payable ? { role: 'button', tabIndex: 0, 'aria-pressed': picked > 0, onClick: () => { if (picked === 0) setPicked(1); }, onKeyDown: (e) => { if ((e.key === 'Enter' || e.key === ' ') && picked === 0) { e.preventDefault(); setPicked(1); } } } : {})}
-                className={`nb-card rounded-2xl overflow-hidden flex flex-col${payable ? ' cursor-pointer transition active:scale-[0.98]' : ''}${picked > 0 ? ' ring-2 ring-[var(--nb-green)]' : ''}`}
+                className={`group nb-card rounded-2xl overflow-hidden flex flex-col shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1${payable ? ' cursor-pointer active:scale-[0.98]' : ''}${picked > 0 ? ' ring-2 ring-[var(--nb-green)]' : ''}`}
               >
-                <div className="aspect-square nb-surface-alt flex items-center justify-center overflow-hidden relative">
+                <div className="aspect-[4/5] nb-surface-alt flex items-center justify-center overflow-hidden relative">
                   {item.images?.[0] ? (
-                    <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
+                    <img src={item.images[0]} alt={item.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                   ) : (
-                    <Store className="w-8 h-8 nb-icon-muted" />
+                    <CoverFallback icon={Store} />
                   )}
                   {picked > 0 && (
                     <span className="absolute top-2 right-2 nb-badge-count text-xs font-bold rounded-full min-w-[24px] h-6 px-1.5 flex items-center justify-center"><Check className="w-3 h-3 mr-0.5" />{picked}</span>
@@ -3463,7 +3503,7 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
                   <p className="text-xs nb-text-muted mb-3">Pick a service to pay for it here, or message us to book a time.</p>
                 </>
               )}
-              <div className="space-y-2.5">
+              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
                 {serviceItems.map((item) => {
                   const { payable, picked, setPicked } = pickState(item);
                   const bookLink = buildWhatsAppLink(contact.whatsapp, isFixedPrice(item)
@@ -3474,21 +3514,24 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
                     <div
                       key={item.product_id}
                       {...(payable ? { role: 'button', tabIndex: 0, 'aria-pressed': picked > 0, onClick: () => { if (picked === 0) setPicked(1); }, onKeyDown: (e) => { if ((e.key === 'Enter' || e.key === ' ') && picked === 0) { e.preventDefault(); setPicked(1); } } } : {})}
-                      className={`nb-card rounded-2xl p-3 flex items-center gap-3${payable ? ' cursor-pointer transition active:scale-[0.99]' : ''}${picked > 0 ? ' ring-2 ring-[var(--nb-green)]' : ''}`}
+                      className={`group nb-card rounded-2xl shadow-sm overflow-hidden flex flex-col transition-all duration-300 hover:shadow-lg hover:-translate-y-1${payable ? ' cursor-pointer active:scale-[0.99]' : ''}${picked > 0 ? ' ring-2 ring-[var(--nb-green)]' : ''}`}
                     >
-                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl nb-surface-alt flex items-center justify-center overflow-hidden flex-shrink-0">
+                      <div className="relative aspect-video w-full overflow-hidden nb-surface-alt">
                         {item.images?.[0] ? (
-                          <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" loading="lazy" />
+                          <img src={item.images[0]} alt={item.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                         ) : (
-                          <Briefcase className="w-6 h-6 nb-icon-muted" />
+                          <CoverFallback icon={Briefcase} label="Service" />
+                        )}
+                        <span className="absolute bottom-2 left-2 nb-price font-bold text-sm px-2.5 py-1 rounded-full nb-surface shadow-md">{servicePriceText(item, formatMoney)}</span>
+                        {picked > 0 && (
+                          <span className="absolute top-2 right-2 nb-badge-count text-xs font-bold rounded-full min-w-[24px] h-6 px-1.5 flex items-center justify-center"><Check className="w-3 h-3 mr-0.5" />{picked}</span>
                         )}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm sm:text-base nb-text font-semibold line-clamp-2">{item.name}</p>
-                        {item.description && <p className="text-xs nb-text-muted mt-0.5 line-clamp-2">{item.description}</p>}
-                        <p className="nb-price font-bold mt-0.5">{servicePriceText(item, formatMoney)}</p>
+                      <div className="p-4 flex-1 flex flex-col">
+                        <p className="font-bold nb-text line-clamp-2">{item.name}</p>
+                        {item.description && <p className="text-sm nb-text-muted mt-1.5 line-clamp-3">{item.description}</p>}
                         {(bookLink || callLink) && (
-                          <div className="flex flex-wrap gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-wrap gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
                             {bookLink && (
                               <a href={bookLink} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg ${payable ? 'nb-btn-secondary' : 'nb-btn-primary'} text-xs font-semibold`}>
                                 <MessageCircle className="w-3.5 h-3.5" />{isFixedPrice(item) ? 'Book on WhatsApp' : 'Ask on WhatsApp'}
@@ -3501,16 +3544,20 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
                             )}
                           </div>
                         )}
+                        {payable && (
+                          <div className="mt-auto pt-3">
+                            {picked === 0 ? (
+                              <span className="w-full min-h-[44px] rounded-xl nb-btn-primary text-sm font-bold flex items-center justify-center gap-1"><Plus className="w-4 h-4" />Add</span>
+                            ) : (
+                              <div className="w-full min-h-[44px] rounded-xl nb-option-selected flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                                <button type="button" onClick={() => setPicked(picked - 1)} className="min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label={`Fewer ${item.name}`}><Minus className="w-4 h-4" /></button>
+                                <span className="text-sm font-bold" aria-live="polite">{picked}</span>
+                                <button type="button" onClick={() => setPicked(picked + 1)} className="min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label={`More ${item.name}`}><Plus className="w-4 h-4" /></button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {payable && (picked === 0 ? (
-                        <span className="flex-shrink-0 min-h-[44px] px-4 rounded-xl nb-btn-primary text-xs font-bold flex items-center justify-center gap-1"><Plus className="w-3.5 h-3.5" />Add</span>
-                      ) : (
-                        <div className="flex-shrink-0 min-h-[44px] rounded-xl nb-option-selected flex items-center" onClick={(e) => e.stopPropagation()}>
-                          <button type="button" onClick={() => setPicked(picked - 1)} className="min-w-[40px] min-h-[44px] flex items-center justify-center" aria-label={`Fewer ${item.name}`}><Minus className="w-4 h-4" /></button>
-                          <span className="text-sm font-bold min-w-[1.25rem] text-center" aria-live="polite">{picked}</span>
-                          <button type="button" onClick={() => setPicked(picked + 1)} className="min-w-[40px] min-h-[44px] flex items-center justify-center" aria-label={`More ${item.name}`}><Plus className="w-4 h-4" /></button>
-                        </div>
-                      ))}
                     </div>
                   );
                 })}
