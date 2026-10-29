@@ -2479,8 +2479,30 @@ const AboutCard = ({ company }) => (
   </div>
 );
 
-// The designed stand-in for a missing poster: the soft ruled-paper cover and floating emblem the Pitches tab uses
-// for business plans, so a card without a photo still fills its image area instead of collapsing to a small icon.
+// A full-bleed poster tile: the picture fills the whole card, a dark gradient rises from the bottom and the
+// children (always white text) sit on it. A tile without a picture gets a deep green cover with the section's
+// icon as a large watermark, so every card in the grid keeps the same size and weight.
+const PosterTile = ({ image, icon: Icon, onClick, index = 0, className = '', children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    style={{ animationDelay: `${Math.min(index, 8) * 60}ms`, animationFillMode: 'backwards' }}
+    className={`group relative block w-full text-left rounded-2xl overflow-hidden shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 animate-fadeInUp nb-surface-alt ${className}`}
+  >
+    {image ? (
+      <img src={image} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+    ) : (
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(150deg, var(--nb-green), #06251a)' }}>
+        <Icon className="absolute -right-8 -top-8 w-56 h-56 text-white opacity-10 transition-transform duration-700 group-hover:scale-110 group-hover:-rotate-6" />
+      </div>
+    )}
+    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+    <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 text-white">{children}</div>
+  </button>
+);
+
+// The designed stand-in for a missing photo in the lighter Market cards: the soft ruled-paper cover and
+// floating emblem the Pitches tab uses for business plans.
 const CoverFallback = ({ icon: Icon, label }) => (
   <div className="nb-plan-cover w-full h-full flex flex-col items-center justify-center gap-2">
     <span className="nb-plan-emblem relative z-[1] w-14 h-14 rounded-full flex items-center justify-center">
@@ -2494,66 +2516,34 @@ const NoticeList = ({ notices, onSelect }) => {
   if (notices.length === 0) {
     return <EmptyState icon={Megaphone} text="No public notices right now. Check back later." />;
   }
-  // Image-first grid, same columns as the Pitches tab. The newest notice that has a poster is the "featured" one:
-  // it spans two columns and the poster runs edge to edge with the headline laid over it.
-  const featuredId = notices.length > 1 ? notices.find((n) => n.poster_url)?.id : null;
+  // A "bento" grid: the newest notice is a double-width, double-height hero and the rest are poster tiles that
+  // tuck in beside and below it (grid-flow-dense fills the gaps). On two columns the hero spans the full row.
   return (
-    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+    <div className="grid sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 grid-flow-dense gap-4 sm:gap-6">
       {notices.map((notice, i) => {
-        const featured = notice.id === featuredId;
+        const hero = i === 0 && notices.length > 1;
         const fresh = isRecentlyPublished(notice.published_at);
         const date = notice.published_at ? new Date(notice.published_at).toLocaleDateString() : '';
-        const delay = { animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' };
-        if (featured) {
-          return (
-            <button
-              key={notice.id}
-              type="button"
-              onClick={() => onSelect(notice)}
-              style={delay}
-              className="group relative block w-full text-left sm:col-span-2 min-h-[18rem] sm:min-h-[20rem] rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp nb-surface-alt"
-            >
-              <img src={notice.poster_url} alt="" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 p-4 sm:p-6 text-white">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">Latest</span>
-                  {fresh && <span className="nb-badge-new text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">New</span>}
-                </div>
-                <h3 className="text-xl sm:text-2xl font-extrabold leading-tight line-clamp-3">{notice.title}</h3>
-                {notice.summary && <p className="text-sm text-white/85 mt-1.5 line-clamp-2 max-w-2xl">{notice.summary}</p>}
-                <p className="text-xs text-white/70 mt-2 flex items-center gap-1"><Clock className="w-3 h-3" /> {date}</p>
-              </div>
-            </button>
-          );
-        }
         return (
-          <button
+          <PosterTile
             key={notice.id}
-            type="button"
+            image={notice.poster_url}
+            icon={Megaphone}
             onClick={() => onSelect(notice)}
-            style={delay}
-            className="group flex flex-col w-full text-left nb-card rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp"
+            index={i}
+            className={hero ? 'aspect-[4/5] sm:aspect-[16/9] xl:aspect-auto sm:col-span-2 xl:row-span-2 xl:min-h-[34rem]' : 'aspect-[4/3]'}
           >
-            <div className="relative aspect-video w-full overflow-hidden nb-surface-alt">
-              {notice.poster_url ? (
-                <img src={notice.poster_url} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-              ) : (
-                <CoverFallback icon={Megaphone} label="Announcement" />
-              )}
-              {fresh && (
-                <span className="absolute top-2 left-2 nb-badge-new text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">New</span>
-              )}
+            <div className="flex items-center gap-2 mb-2">
+              {hero && <span className="text-[11px] font-bold uppercase tracking-wide px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">Latest</span>}
+              {fresh && <span className="nb-badge-new text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full">New</span>}
             </div>
-            <div className="p-4 flex-1 flex flex-col">
-              <h3 className="font-bold nb-text line-clamp-2">{notice.title}</h3>
-              {notice.summary && <p className="text-sm nb-text-muted mt-1.5 line-clamp-2">{notice.summary}</p>}
-              <div className="mt-auto pt-3 flex items-center justify-between text-xs">
-                <span className="nb-text-faint inline-flex items-center gap-1"><Clock className="w-3 h-3" /> {date}</span>
-                <span className="font-semibold nb-link inline-flex items-center gap-1">Read more <span className="nb-read-arrow">→</span></span>
-              </div>
+            <h3 className={`font-extrabold leading-tight ${hero ? 'text-2xl sm:text-3xl line-clamp-3' : 'text-lg line-clamp-2'}`}>{notice.title}</h3>
+            {notice.summary && <p className={`text-white/85 mt-1.5 ${hero ? 'text-base line-clamp-3 max-w-2xl' : 'text-sm line-clamp-2'}`}>{notice.summary}</p>}
+            <div className="mt-3 flex items-center justify-between text-xs text-white/75">
+              <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" /> {date}</span>
+              <span className="font-bold text-white inline-flex items-center gap-1">Read more <span className="nb-read-arrow">→</span></span>
             </div>
-          </button>
+          </PosterTile>
         );
       })}
     </div>
@@ -2703,44 +2693,36 @@ const JobList = ({ jobs, onSelect }) => {
   if (jobs.length === 0) {
     return <EmptyState icon={Briefcase} text="No open positions right now. Check back later." />;
   }
-  // Same image-first card grid as the Pitches tab: the poster fills the top of the card, and a role without one
-  // gets a designed "We're hiring" cover instead of a tiny icon.
+  // Tall poster tiles: the image is the whole card and the role details sit over its lower edge. Four across on
+  // very wide screens, so the pictures stay big instead of shrinking to thumbnails.
   return (
-    <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5">
+    <div className="grid sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6">
       {jobs.map((job, i) => (
-        <button
+        <PosterTile
           key={job.id}
-          type="button"
+          image={job.poster_url}
+          icon={Briefcase}
           onClick={() => onSelect(job)}
-          style={{ animationDelay: `${Math.min(i, 8) * 60}ms`, animationFillMode: 'backwards' }}
-          className="group flex flex-col w-full text-left nb-card rounded-2xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fadeInUp"
+          index={i}
+          className="aspect-[4/5]"
         >
-          <div className="relative aspect-video w-full overflow-hidden nb-surface-alt">
-            {job.poster_url ? (
-              <img src={job.poster_url} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-            ) : (
-              <CoverFallback icon={Briefcase} label="We're hiring" />
-            )}
-            {job.employment_type && (
-              <span className="absolute top-2 left-2 text-[11px] font-bold px-2 py-0.5 rounded-full nb-chip-green">
-                {EMPLOYMENT_LABELS[job.employment_type] || job.employment_type}
+          {job.employment_type && (
+            <span className="inline-block mb-2 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">
+              {EMPLOYMENT_LABELS[job.employment_type] || job.employment_type}
+            </span>
+          )}
+          <h3 className="text-lg sm:text-xl font-extrabold leading-tight line-clamp-2">{job.title}</h3>
+          {job.summary && <p className="text-sm text-white/80 mt-1.5 line-clamp-2">{job.summary}</p>}
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            {job.location && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">
+                <MapPin className="w-3 h-3" /> {job.location}
               </span>
             )}
+            <DeadlineChip deadline={job.application_deadline} />
           </div>
-          <div className="p-4 flex-1 flex flex-col">
-            <h3 className="font-bold nb-text line-clamp-2">{job.title}</h3>
-            {job.summary && <p className="text-sm nb-text-muted mt-1.5 line-clamp-2">{job.summary}</p>}
-            <div className="flex flex-wrap items-center gap-2 mt-3">
-              {job.location && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full nb-chip-neutral">
-                  <MapPin className="w-3 h-3" /> {job.location}
-                </span>
-              )}
-              <DeadlineChip deadline={job.application_deadline} />
-            </div>
-            <p className="mt-auto pt-3 text-xs font-semibold nb-link inline-flex items-center gap-1">View role &amp; apply <span className="nb-read-arrow">→</span></p>
-          </div>
-        </button>
+          <p className="mt-3 text-xs font-bold inline-flex items-center gap-1">View role &amp; apply <span className="nb-read-arrow">→</span></p>
+        </PosterTile>
       ))}
     </div>
   );
