@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase/client';
 import { getBackendUrl } from '../lib/backendUrl';
+import { questionKey } from '../utils/chatQuestionKey';
 
 /**
  * The "Ask us" chat on a business's public website: the AI assistant (api/business-chat.js, nothing stored),
@@ -35,12 +36,27 @@ export const askAssistant = async (companyId, messages, { app = null } = {}) => 
   return {
     reply: data.reply,
     needsHuman: data.needsHuman === true,
+    // 'memory' = a remembered answer (api/_lib/chatMemory.js); memoryId lets the visitor rate any remembered answer.
+    source: typeof data.source === 'string' ? data.source : 'ai',
+    memoryId: typeof data.memoryId === 'string' ? data.memoryId : null,
+    pinned: data.pinned === true,
     suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
     actions: Array.isArray(data.actions) ? data.actions : [],
     app: typeof data.app === 'string' ? data.app : null,
     // Only https links the server vetted; anything else is dropped here as well.
     links: (Array.isArray(data.links) ? data.links : []).filter((l) => l && typeof l.label === 'string' && /^https:\/\/[^\s]+$/.test(String(l.url || ''))).slice(0, 2),
   };
+};
+
+/** A visitor's thumbs up / down on a remembered answer. Best effort: it never throws. */
+export const rateAnswer = async (companyId, memoryId, helpful) => {
+  try {
+    await fetch(`${getBackendUrl()}/api/business-chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memoryFeedback: { companyId, memoryId, helpful } }),
+    });
+  } catch { /* the vote is a courtesy; nothing to tell the visitor */ }
 };
 
 /** Hand the conversation to the team. Resolves the visitor's private access token. */
@@ -86,7 +102,37 @@ export const setInquiryStatus = async (threadId, status) => {
   return error ? { success: false, error: error.message } : { success: true };
 };
 
+// ---- staff side: what the assistant has learned (CMMS > Posts & Jobs > Inquiries > Learned answers) ----------
+
+const rows = (data, error) => (error ? { success: false, error: error.message, data: [] } : { success: true, data: data || [] });
+const done = (error) => (error ? { success: false, error: error.message } : { success: true });
+
+export const listLearnedAnswers = async (companyId) => {
+  const { data, error } = await supabase.rpc('fn_cmms_chat_memory_list', { p_company_id: companyId });
+  return rows(data, error);
+};
+
+/** Edit the words (which pins the answer) and/or set its status: 'learned' | 'pinned' | 'muted'. */
+export const updateLearnedAnswer = async (id, { reply = null, status = null } = {}) => {
+  const { error } = await supabase.rpc('fn_cmms_chat_memory_update', { p_id: id, p_reply: reply, p_status: status });
+  return done(error);
+};
+
+export const deleteLearnedAnswer = async (id) => {
+  const { error } = await supabase.rpc('fn_cmms_chat_memory_delete', { p_id: id });
+  return done(error);
+};
+
+/** Teach the assistant a question and the answer to give (pinned: the team's own words). */
+export const teachAnswer = async (companyId, question, reply) => {
+  const { error } = await supabase.rpc('fn_cmms_chat_memory_teach', {
+    p_company_id: companyId, p_question: question, p_key: questionKey(question), p_reply: reply,
+  });
+  return done(error);
+};
+
 export default {
-  askAssistant, startInquiry, sendInquiryMessage, getInquiry,
+  askAssistant, rateAnswer, startInquiry, sendInquiryMessage, getInquiry,
   listInquiries, getInquiryThread, replyToInquiry, setInquiryStatus,
+  listLearnedAnswers, updateLearnedAnswer, deleteLearnedAnswer, teachAnswer,
 };
