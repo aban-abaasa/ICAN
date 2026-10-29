@@ -58,7 +58,9 @@ const buildTelLink = (phone) => (phone?.trim() ? `tel:${phone.replace(/[^\d+]/g,
 // pre-addressed compose window for a signed-in visitor, or prompts sign-in
 // first for one who isn't -- either way, unlike mailto:, it never just goes
 // nowhere.
-const buildGmailComposeLink = (email) => (email?.trim() ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email.trim())}` : null);
+const buildGmailComposeLink = (email, subject) => (email?.trim()
+  ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email.trim())}${subject ? `&su=${encodeURIComponent(subject)}` : ''}`
+  : null);
 const buildWhatsAppLink = (whatsapp, message) => {
   const digits = whatsapp?.replace(/[^\d]/g, '');
   if (!digits) return null;
@@ -1401,7 +1403,7 @@ const PublicCompanyNoticeBoard = ({ companyId, slug = null }) => {
               payBasket={payBasket}
               setPayBasket={setPayBasket}
               onPayForBasket={payInfo ? payForBasket : null}
-              contact={{ phone: company.phone, whatsapp: company.whatsapp }}
+              contact={{ phone: company.phone, whatsapp: company.whatsapp, email: company.email }}
               loading={productsLoading}
               cart={cart}
               setCart={setCart}
@@ -3492,6 +3494,10 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
                     ? `Hello, I would like to book "${item.name}".`
                     : `Hello, I would like to book "${item.name}". Could you give me a quote?`);
                   const callLink = buildTelLink(contact.phone);
+                  // No phone or WhatsApp saved: email the business instead, so the row is never a dead end.
+                  const emailLink = !bookLink && !callLink
+                    ? buildGmailComposeLink(contact.email, `Booking: ${item.name}`)
+                    : null;
                   return (
                     <div
                       key={item.product_id}
@@ -3512,7 +3518,10 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
                       <div className="p-4 flex-1 flex flex-col">
                         <p className="font-bold nb-text line-clamp-2">{item.name}</p>
                         {item.description && <p className="text-sm nb-text-muted mt-1.5 line-clamp-3">{item.description}</p>}
-                        {(bookLink || callLink) && (
+                        {!bookLink && !callLink && !emailLink && !payable && (
+                          <p className="text-xs nb-text-muted mt-3">Tap <b>Ask us</b> to message the business about this service.</p>
+                        )}
+                        {(bookLink || callLink || emailLink) && (
                           <div className="flex flex-wrap gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
                             {bookLink && (
                               <a href={bookLink} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg ${payable ? 'nb-btn-secondary' : 'nb-btn-primary'} text-xs font-semibold`}>
@@ -3522,6 +3531,11 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
                             {callLink && (
                               <a href={callLink} className="inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg nb-btn-secondary text-xs font-semibold" aria-label={`Call to book ${item.name}`}>
                                 <Phone className="w-3.5 h-3.5" />Call
+                              </a>
+                            )}
+                            {emailLink && (
+                              <a href={emailLink} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg ${payable ? 'nb-btn-secondary' : 'nb-btn-primary'} text-xs font-semibold`}>
+                                <Mail className="w-3.5 h-3.5" />{isFixedPrice(item) ? 'Email to book' : 'Email for a quote'}
                               </a>
                             )}
                           </div>
