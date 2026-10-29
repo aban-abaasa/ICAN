@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase/client';
 import cmmsAnnouncementsService from '../services/cmmsAnnouncementsService';
+import { servicePriceText, isFixedPrice } from '../utils/servicePrice';
 import cmmsBusinessOpportunitiesService from '../services/cmmsBusinessOpportunitiesService';
 import siteLibraryService from '../services/siteLibraryService';
 import { getDropshipStorefront, dropshipCheckout, findStoreFirstRiders } from '../services/dropshipService';
@@ -3011,7 +3012,8 @@ const VEHICLE_TYPE_OPTIONS = [
 ];
 
 // In-site payment is in UGX (the Pay tab's currency) and only for what can be bought right now.
-const isPayableProduct = (item) => String(item.currency || 'UGX').toUpperCase() === 'UGX' && Boolean(item.is_service || item.in_stock);
+// A service can only be paid for here when it has one fixed price; a range or a quote is agreed with the business first.
+const isPayableProduct = (item) => String(item.currency || 'UGX').toUpperCase() === 'UGX' && (item.is_service ? isFixedPrice(item) : Boolean(item.in_stock));
 
 // Browsing is free for anyone. Paying with an IcanEra wallet is the
 // recommended way (no extra fee): an anonymous visitor who picks it gets the
@@ -3464,9 +3466,10 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
               <div className="space-y-2.5">
                 {serviceItems.map((item) => {
                   const { payable, picked, setPicked } = pickState(item);
-                  const bookLink = buildWhatsAppLink(contact.whatsapp, `Hello, I would like to book "${item.name}".`);
+                  const bookLink = buildWhatsAppLink(contact.whatsapp, isFixedPrice(item)
+                    ? `Hello, I would like to book "${item.name}".`
+                    : `Hello, I would like to book "${item.name}". Could you give me a quote?`);
                   const callLink = buildTelLink(contact.phone);
-                  const hasPrice = Number(item.price) > 0;
                   return (
                     <div
                       key={item.product_id}
@@ -3482,12 +3485,13 @@ const ShopSection = ({ products, storeProducts = [], delivery = null, payBasket 
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm sm:text-base nb-text font-semibold line-clamp-2">{item.name}</p>
-                        <p className="nb-price font-bold mt-0.5">{hasPrice ? formatMoney(item.price, item.currency) : 'Ask for a quote'}</p>
+                        {item.description && <p className="text-xs nb-text-muted mt-0.5 line-clamp-2">{item.description}</p>}
+                        <p className="nb-price font-bold mt-0.5">{servicePriceText(item, formatMoney)}</p>
                         {(bookLink || callLink) && (
                           <div className="flex flex-wrap gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
                             {bookLink && (
-                              <a href={bookLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg nb-btn-secondary text-xs font-semibold">
-                                <MessageCircle className="w-3.5 h-3.5" />Book on WhatsApp
+                              <a href={bookLink} target="_blank" rel="noreferrer" className={`inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-lg ${payable ? 'nb-btn-secondary' : 'nb-btn-primary'} text-xs font-semibold`}>
+                                <MessageCircle className="w-3.5 h-3.5" />{isFixedPrice(item) ? 'Book on WhatsApp' : 'Ask on WhatsApp'}
                               </a>
                             )}
                             {callLink && (
