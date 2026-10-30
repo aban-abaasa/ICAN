@@ -11,37 +11,22 @@
  */
 
 import { supabase } from '../lib/supabase/client';
-import { describeFunctionFailure } from '../utils/functionErrors';
+import { describeFunctionFailure, icanEraFallbackError, ICANERA_WALLET_URL, ICANERA_FALLBACK_HINT } from '../utils/functionErrors';
+
+export { icanEraFallbackError, ICANERA_WALLET_URL, ICANERA_FALLBACK_HINT };
 
 export const ICAN_TO_UGX = 5000;
 export const SOURCE_APP = 'ican';
 
-// supabase.functions.invoke() only throws a generic "Edge Function returned
-// a non-2xx status code" for HTTP error responses — the actual {success,
-// error} JSON body the function sent back (e.g. Flutterwave's real
-// rejection reason) is left on error.context (the raw fetch Response) and
-// has to be read out explicitly, or every functions.invoke() failure looks
-// identical and undebuggable from the client.
-async function functionErrorMessage(error, fallback) {
-  const body = error?.context;
-  if (body && typeof body.json === 'function') {
-    try {
-      const parsed = await body.clone().json();
-      if (parsed?.error) return parsed.error;
-    } catch {
-      // Response wasn't JSON — fall through to the generic message below.
-    }
-  }
-  return error?.message || fallback;
-}
-
 // Money that leaves the app (mobile money, bank): the error also says whether the server ANSWERED. An answer is a final
-// refusal; no answer (connection lost, timeout) means the transfer may still have been carried out. See utils/functionErrors.js.
+// refusal, so the IcanEra recommendation is added; no answer (connection lost, timeout) means the transfer may still have been
+// carried out, and suggesting another send then could pay twice - so nothing is recommended. See utils/functionErrors.js.
 async function sendOutError(error, fallback) {
   const failure = await describeFunctionFailure(error, fallback);
-  return Object.assign(new Error(failure.message), { answered: failure.answered });
+  const base = failure.answered ? icanEraFallbackError(failure.message) : new Error(failure.message);
+  return Object.assign(base, { answered: failure.answered });
 }
-const answeredError = (message) => Object.assign(new Error(message), { answered: true });
+const answeredError = (message) => Object.assign(icanEraFallbackError(message), { answered: true });
 
 const BUSINESS_PAYMENT_HINTS = /\b(store|shop|market|supermarket|restaurant|cafe|business|supplier|vendor|school|hospital|hotel|fuel station)\b/i;
 
@@ -448,8 +433,8 @@ export async function requestIcanPayout({
       source_app: SOURCE_APP,
     },
   });
-  if (error) throw new Error(await functionErrorMessage(error, 'Payout failed'));
-  if (!data?.success) throw new Error(data?.error ?? 'Payout failed');
+  if (error) throw await sendOutError(error, 'Payout failed');
+  if (!data?.success) throw answeredError(data?.error ?? 'Payout failed');
   return data;
 }
 
@@ -588,6 +573,7 @@ export default {
   sendFiatToMobileMoney,
   sendFiatToBank,
   detectUgandaMobileNetwork,
+  icanEraFallbackError,
   ugxToICAN,
   icanToUGX,
   formatICAN,

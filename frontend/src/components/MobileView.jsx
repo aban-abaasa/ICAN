@@ -1013,6 +1013,14 @@ const MobileView = ({ userProfile, isWebDashboard = false }) => {
     setActiveBottomTab('cmms');
   }, []);
 
+  // Other IcanEra apps send people here with https://icanera.space/#wallet (e.g. when a mobile-money or bank
+  // payout is refused, to send IcanEra wallet-to-wallet instead): open straight onto the wallet.
+  useEffect(() => {
+    if (window.location.hash.replace(/^#/, '').toLowerCase() !== 'wallet') return;
+    setShowWalletPanel(true);
+    setActiveBottomTab('wallet');
+  }, []);
+
   // ====== VOICE RECOGNITION STATE ======
   const [isListening, setIsListening] = useState(false);
   const [voiceInterim, setVoiceInterim] = useState('');

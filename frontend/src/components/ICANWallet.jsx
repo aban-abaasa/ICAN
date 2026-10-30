@@ -2226,6 +2226,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         type: 'send',
         success: false,
         message: `${error.message || 'An error occurred during the mobile money transfer.'}${maybeSent ? SEND_MAY_HAVE_GONE_THROUGH : ''}`,
+        suggestIcanEra: Boolean(error?.suggestIcanEra),
       });
       if (dispatched && currentUserId) loadWalletBalances(currentUserId);
       return maybeSent ? 'uncertain' : 'failed';
@@ -2315,6 +2316,7 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
         type: 'send',
         success: false,
         message: `${error.message || 'An error occurred during the bank transfer.'}${maybeSent ? SEND_MAY_HAVE_GONE_THROUGH : ''}`,
+        suggestIcanEra: Boolean(error?.suggestIcanEra),
       });
       if (dispatched && currentUserId) loadWalletBalances(currentUserId);
       return maybeSent ? 'uncertain' : 'failed';
@@ -6912,6 +6914,16 @@ const ICANWallet = ({ businessProfiles = [], onRefreshProfiles = null, navRef = 
                       <p className="text-sm font-medium" style={{ color: result.success ? '#1f7a5a' : '#b91c1c' }}>
                         {result.message}
                       </p>
+                      {isSend && !result.success && result.suggestIcanEra && sendMethod !== 'ican' && (
+                        <button
+                          type="button"
+                          onClick={() => { setSendMethod('ican'); setTransactionResult(null); }}
+                          className="mt-2.5 px-3.5 py-2 rounded-lg text-sm font-semibold"
+                          style={{ background: 'rgba(196,160,82,0.18)', border: '1px solid rgba(196,160,82,0.6)', color: T }}
+                        >
+                          Send to an IcanEra wallet instead
+                        </button>
+                      )}
                       {result.transactionId && (
                         <p className="text-xs mt-1.5 break-all" style={{ color: T2 }}>Ref: {result.transactionId}</p>
                       )}
