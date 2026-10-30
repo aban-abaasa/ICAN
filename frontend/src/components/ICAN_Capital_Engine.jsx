@@ -3527,7 +3527,8 @@ const ICANCapitalEngine = () => {
   const [statusRefresh, setStatusRefresh] = useState(0);
   const [showTRUST, setShowTRUST] = useState(false);
   const [showSHARE, setShowSHARE] = useState(false);
-  const [showWallet, setShowWallet] = useState(false);
+  // https://icanera.space/#wallet opens straight onto the wallet (links from the other IcanEra apps).
+  const [showWallet, setShowWallet] = useState(() => typeof window !== 'undefined' && window.location.hash.replace(/^#/, '').toLowerCase() === 'wallet');
   const [showJourneyDetails, setShowJourneyDetails] = useState(false);
   const [showAIInsights, setShowAIInsights] = useState(false);
   const [showFinancialAnalytics, setShowFinancialAnalytics] = useState(false);

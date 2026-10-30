@@ -22,3 +22,27 @@ export async function describeFunctionFailure(error, fallback) {
   }
   return { message: error?.message || fallback, answered: false };
 }
+
+// When a mobile-money or bank payout is refused (the money was refunded), the cheapest way forward is IcanEra itself:
+// sending to any IcanEra wallet is instant, free and never touches the payment provider. Every send-out failure that
+// the server definitely answered carries this recommendation, so every screen that shows error.message passes it on.
+export const ICANERA_WALLET_URL = 'https://icanera.space/#wallet';
+export const ICANERA_FALLBACK_HINT = 'You can still send IcanEra to any IcanEra wallet instantly, with no fee.';
+// Problems the person fixes themselves (balance, PIN, a typo): another way of paying would not help.
+const NOT_A_PAYOUT_FAULT = /insufficient|not enough|own (registered )?phone number|\bpin\b|\bvalid\b|required|enter |choose |too small/i;
+
+/**
+ * An Error for a refused payout that recommends sending to an IcanEra wallet instead.
+ * `rawMessage` is the server's own wording (for records that must not carry the advice); `suggestIcanEra` and
+ * `icanEraWalletUrl` let a screen offer an "Open IcanEra Wallet" button.
+ */
+export function icanEraFallbackError(message) {
+  const text = String(message || '').trim();
+  if (!text || NOT_A_PAYOUT_FAULT.test(text)) return Object.assign(new Error(text || 'Transfer failed'), { rawMessage: text });
+  const sentence = /[.!?]$/.test(text) ? text : `${text}.`;
+  return Object.assign(new Error(`${sentence} ${ICANERA_FALLBACK_HINT}`), {
+    rawMessage: text,
+    suggestIcanEra: true,
+    icanEraWalletUrl: ICANERA_WALLET_URL,
+  });
+}

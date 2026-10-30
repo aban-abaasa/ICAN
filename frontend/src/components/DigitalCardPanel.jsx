@@ -100,7 +100,7 @@ const DigitalCardPanel = ({ userId, askPin, onPaidOut, business = null }) => {
         setMsg({ ok: true, text: `Sent ${Number(claimed.amount).toLocaleString()} ${claimed.currency} to ${claimed.requester_name}. It is confirmed with the network shortly and refunded automatically if it fails.` });
         onPaidOut?.();
       } catch (payErr) {
-        await finishCardQrRequest(req.id, false, null, payErr.message).catch(() => {});
+        await finishCardQrRequest(req.id, false, null, payErr.rawMessage || payErr.message).catch(() => {});
         throw payErr;
       }
     } catch (e) {
