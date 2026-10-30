@@ -1791,6 +1791,7 @@ const BottomNav = ({ tabs, section, onNavigate, navRef, user = null, authLoading
     aria-label="Sections"
     className="nb-tab-nav ng-bar ng-bar-nb sm:hidden fixed bottom-0 inset-x-0 z-30 flex"
   >
+    <span aria-hidden="true" className="ng-fade" />
     <NavGlowDefs />
     {tabs.map((tab) => (
       <TabLink

@@ -56,6 +56,10 @@
   --ng-c1: #f43f5e;
   --ng-c2: #facc15;
   --ng-c3: #06b6d4;
+  /* The page colour the fade below blends into. Normally the same as the halo
+     colour; a host whose bar surface differs from its page (the business site)
+     sets it. */
+  --ng-fade: var(--ng-surface);
   background: none;
   border: 0;
   gap: 0.5rem;
@@ -84,6 +88,8 @@
    the colours read on both the light and the dark site theme. */
 .ng-bar-nb {
   --ng-surface: var(--nb-surface);
+  /* The site's page is --nb-bg; --nb-surface is the (lighter / raised) card colour. */
+  --ng-fade: var(--nb-bg);
   --ng-text: var(--nb-text-muted);
   --ng-active: var(--nb-green);
   --ng-c1: var(--nb-green);
@@ -97,6 +103,29 @@
 .ng-bar.ng-bar-nb.nb-tab-nav {
   -webkit-mask-image: none;
   mask-image: none;
+}
+
+/* ── The fade: page colour behind the bare icons ──────────────────────── */
+/* Nothing is painted behind the icons, so cards scrolling underneath would
+   show through and sit under the labels. This strip of the page colour,
+   solid at the screen edge and clearing to nothing above the icons, keeps both
+   readable. `fixed` takes it out of the (clipping, scrolling) row so it spans
+   the whole screen width; as a child of the bar it hides and themes with it
+   (including the app's theme switches), and it paints beneath the tabs. It
+   never takes a tap. Don't add it to a bar that has `backdrop-filter` or
+   `transform`: those make the bar the containing block of a fixed child. */
+.ng-fade {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  height: calc(5rem + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    var(--ng-fade) 0%,
+    color-mix(in srgb, var(--ng-fade) 90%, transparent) 50%,
+    transparent 100%
+  );
 }
 
 /* ── One tab: icon over label, no box, no background ──────────────────── */
