@@ -111,8 +111,6 @@ export default {
   'auth.signInTitle': 'Sign in to IcanEra',
   'auth.forgotPassword': 'Forgot password?',
   'auth.noAccount': 'Don\'t have an account?',
-  'auth.signInWallet': 'Sign in with Wallet',
-  'auth.walletShort': 'Wallet',
   'auth.signInBiometric': 'Sign in with fingerprint or face',
   'auth.biometricChecking': 'Checking your fingerprint or face...',
   'auth.enteringApp': 'Entering IcanEra...',

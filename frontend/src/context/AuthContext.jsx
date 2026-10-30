@@ -620,40 +620,9 @@ export const AuthProvider = ({ children }) => {
     setIsRecoveryMode(false);
   };
 
-  // Sign in with a wallet account number (or phone) + PIN — verified
-  // server-side by the wallet-login edge function (service role, never
-  // exposes pin_hash), which hands back a magic-link token_hash we redeem
-  // into a real session here. onAuthStateChange picks the session up from
-  // there, same as every other sign-in method.
-  const signInWithWallet = async (identifier, pin) => {
-    const supabase = getSupabase();
-    if (!supabase) throw new Error('Supabase not initialized');
-
-    const { data, error } = await supabase.functions.invoke('wallet-login', {
-      body: { identifier: String(identifier || '').trim(), pin: String(pin || '').trim() },
-    });
-
-    if (error) {
-      // supabase-js only gives a generic "Edge Function returned a non-2xx
-      // status code" here — the actual { success: false, error } body the
-      // function sent lives on error.context (the raw Response object).
-      const detail = await error.context?.json?.().catch(() => null);
-      throw new Error(detail?.error || error.message);
-    }
-    if (!data?.success) throw new Error(data?.error || 'Wallet sign-in failed');
-
-    const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
-      token_hash: data.token_hash,
-      type: 'email',
-    });
-
-    if (otpError) throw otpError;
-    return otpData;
-  };
-
   // Sign in with this device's fingerprint or face (a WebAuthn passkey) - no email, password or PIN typed. The device
   // checks the person and signs a one-time challenge; the passkey-auth edge function verifies the signature against the
-  // public key it stored and returns a magic-link token_hash, redeemed here exactly like the wallet sign-in above.
+  // public key it stored and returns a magic-link token_hash, redeemed here into a real session.
   // A two-step (authenticator app) account is still asked for its code afterwards, same as every other sign-in method.
   const signInWithBiometric = async () => {
     const supabase = getSupabase();
@@ -718,7 +687,6 @@ export const AuthProvider = ({ children }) => {
     // Auth methods
     signUp,
     signIn,
-    signInWithWallet,
     signInWithBiometric,
     signOut,
     signOutEverywhere,

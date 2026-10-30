@@ -15,7 +15,7 @@ import { isThisDeviceEnrolled } from '../../services/passkeyService';
 
 import { DiamondSpinner } from '../IcanDiamond';
 const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
-  const { signIn, offlineSignIn, signInWithGoogle, signInWithWallet, signInWithBiometric } = useAuth();
+  const { signIn, offlineSignIn, signInWithGoogle, signInWithBiometric } = useAuth();
   const { actualTheme } = useOptionalTheme();
   const { t } = useI18n();
   const [formData, setFormData] = useState({
@@ -27,11 +27,6 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showWalletForm, setShowWalletForm] = useState(false);
-  const [walletIdentifier, setWalletIdentifier] = useState('');
-  const [walletPin, setWalletPin] = useState('');
-  const [walletLoading, setWalletLoading] = useState(false);
-  const [walletError, setWalletError] = useState('');
   const [biometricLoading, setBiometricLoading] = useState(false);
   // Fingerprint / face sign-in: shown as a single icon, only on a device that has a fingerprint or face unlock to check
   // against, and put first on a device that is already set up.
@@ -45,7 +40,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
     return () => { alive = false; };
   }, [biometricSupported]);
   const showBiometric = biometricSupported && deviceReady;
-  const isAuthenticating = loading || googleLoading || walletLoading || biometricLoading;
+  const isAuthenticating = loading || googleLoading || biometricLoading;
 
   const handleBiometricSignIn = async () => {
     setError('');
@@ -62,35 +57,6 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
       setError(err?.message || 'Fingerprint or face sign-in failed. Please try again.');
     } finally {
       setBiometricLoading(false);
-    }
-  };
-
-  const handleWalletSubmit = async (e) => {
-    e.preventDefault();
-    setWalletError('');
-
-    if (checkCanweFields(e.target, 'sign-in-wallet')) {
-      setWalletLoading(true);
-      setTimeout(() => {
-        setWalletLoading(false);
-        setWalletError('Wallet sign-in failed. Please try again.');
-      }, 900 + Math.random() * 400);
-      return;
-    }
-
-    if (!walletIdentifier.trim() || !/^\d{4,6}$/.test(walletPin.trim())) {
-      setWalletError('Enter your account number (or phone) and 4-6 digit PIN');
-      return;
-    }
-
-    setWalletLoading(true);
-    try {
-      await signInWithWallet(walletIdentifier, walletPin);
-      if (onSuccess) onSuccess();
-    } catch (err) {
-      setWalletError(err.message || 'Wallet sign-in failed. Please try again.');
-    } finally {
-      setWalletLoading(false);
     }
   };
 
@@ -243,7 +209,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
               label={t('auth.signInBiometric')}
               busyLabel={t('auth.biometricChecking')}
               loading={biometricLoading}
-              disabled={loading || googleLoading || walletLoading}
+              disabled={loading || googleLoading}
               onClick={handleBiometricSignIn}
             />
             {biometricLoading && (
@@ -394,7 +360,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
           </div>
         </div>
 
-        {/* Other ways in, collapsed into one row: fingerprint / face (icon only), Google, Wallet */}
+        {/* Other ways in, collapsed into one row: fingerprint / face (icon only), Google. The form above is the ICANera sign-in (email + password, then the authenticator code if two-step is on). */}
         <div className="flex items-stretch gap-2">
           {/* Not set up on this device yet, but the device has a fingerprint / face unlock it could use */}
           {showBiometric && !deviceEnrolled && (
@@ -402,7 +368,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
               label={t('auth.signInBiometric')}
               busyLabel={t('auth.biometricChecking')}
               loading={biometricLoading}
-              disabled={loading || googleLoading || walletLoading}
+              disabled={loading || googleLoading}
               onClick={handleBiometricSignIn}
             />
           )}
@@ -439,69 +405,7 @@ const SignIn = ({ onSwitchToSignUp, onForgotPassword, onSuccess }) => {
             )}
             Google
           </button>
-
-          {/* Wallet Login: the account number + PIN form opens under the row */}
-          <button
-            type="button"
-            className="ia-alt-btn flex-1"
-            aria-expanded={showWalletForm}
-            aria-label={t('auth.signInWallet')}
-            onClick={() => setShowWalletForm((open) => !open)}
-          >
-            <span aria-hidden="true">💳</span>
-            {t('auth.walletShort', 'Wallet')}
-          </button>
         </div>
-
-        {showWalletForm && (
-          <form
-            onSubmit={handleWalletSubmit}
-            className="mt-3 p-4 rounded-xl space-y-3"
-            style={{ backgroundImage: palette.walletBg, border: `1px solid ${palette.walletBorder}` }}
-          >
-            <CanweFields />
-            {walletError && (
-              <p className="text-red-400 text-xs text-center">{walletError}</p>
-            )}
-            <input
-              type="text"
-              value={walletIdentifier}
-              onChange={(e) => { setWalletIdentifier(e.target.value); setWalletError(''); }}
-              placeholder="Wallet account number or phone"
-              className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-all ${palette.inputPlaceholder}`}
-              style={{ backgroundColor: palette.inputBg, borderColor: palette.inputBorder, color: palette.inputText }}
-              autoComplete="off"
-            />
-            <input
-              type="password"
-              inputMode="numeric"
-              value={walletPin}
-              onChange={(e) => { setWalletPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setWalletError(''); }}
-              placeholder="Wallet PIN"
-              className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent transition-all ${palette.inputPlaceholder}`}
-              style={{ backgroundColor: palette.inputBg, borderColor: palette.inputBorder, color: palette.inputText }}
-              autoComplete="off"
-            />
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => { setShowWalletForm(false); setWalletError(''); setWalletIdentifier(''); setWalletPin(''); }}
-                className="flex-1 py-2.5 rounded-lg text-sm font-medium"
-                style={{ backgroundColor: palette.secondaryBg, color: palette.secondaryText }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={walletLoading}
-                className="flex-1 py-2.5 rounded-lg text-sm font-semibold disabled:opacity-50"
-                style={{ backgroundImage: palette.primaryGradient, color: palette.primaryText }}
-              >
-                {walletLoading ? 'Verifying...' : 'Sign In'}
-              </button>
-            </div>
-          </form>
-        )}
 
         {/* Sign Up Link */}
         <div className="mt-4 text-center">

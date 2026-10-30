@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Heart, MessageCircle, Share2, Briefcase, X, Send, AlertCircle, Loader, Check, Sun, Moon, Compass, ChevronUp, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthPage } from './auth';
+import MfaChallenge from './auth/MfaChallenge';
 import { getPitchById, PITCH_PLAN_SECTIONS } from '../services/pitchingService';
 import {
   likePitchDb,
@@ -108,7 +109,7 @@ const SWIPE_MIN_PX = 80;
 const SWIPE_BLOCKED_BOTTOM_PX = 110; // keep the native video controls usable
 
 const PublicPitchViewer = ({ pitchId, nextPitch = null, hasPrev = false, onNext, onPrev, onExplore }) => {
-  const { user, loading: authLoading, signInWithWallet, signInWithGoogle } = useAuth();
+  const { user, loading: authLoading, signIn, signInWithGoogle, mfaStatus } = useAuth();
   const [pitch, setPitch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -135,8 +136,8 @@ const PublicPitchViewer = ({ pitchId, nextPitch = null, hasPrev = false, onNext,
   const [planOffer, setPlanOffer] = useState(null);
   // Visitor invest authorisation: wallet account number + PIN, or Google.
   const [showInvestAuth, setShowInvestAuth] = useState(false);
-  const [authId, setAuthId] = useState('');
-  const [authPin, setAuthPin] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
   const pendingInvest = useRef(false);
@@ -341,28 +342,33 @@ const PublicPitchViewer = ({ pitchId, nextPitch = null, hasPrev = false, onNext,
     try { localStorage.setItem('pitchPlanMode', next); } catch { /* storage unavailable */ }
   };
 
-  // Once a visitor has authorised (PIN or Google), carry straight on into the
-  // invest flow they started instead of making them click Invest again.
+  // Once a visitor has authorised (ICANera sign-in or Google), carry straight on into the
+  // invest flow they started instead of making them click Invest again. An account with
+  // two-step verification waits here until its authenticator code has been accepted.
   useEffect(() => {
-    if (!user || !pendingInvest.current || !pitch) return;
+    if (!user || mfaStatus !== 'clear' || !pendingInvest.current || !pitch) return;
     pendingInvest.current = false;
     setShowInvestAuth(false);
     handleInvest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, pitch?.id]);
+  }, [user?.id, pitch?.id, mfaStatus]);
 
-  const handlePinAuthorise = async (e) => {
+  const handleIcaneraAuthorise = async (e) => {
     e?.preventDefault();
-    if (!authId.trim() || !/^\d{4,6}$/.test(authPin.trim())) {
-      setAuthError('Enter your account number (or phone) and your 4-6 digit PIN.');
+    const email = authEmail.trim().toLowerCase();
+    if (!email || !authPassword) {
+      setAuthError('Enter your ICANera email and password.');
       return;
     }
     setAuthBusy(true);
     setAuthError('');
     try {
-      await signInWithWallet(authId, authPin);
+      await signIn(email, authPassword);
+      setAuthPassword('');
     } catch (err) {
-      setAuthError(err.message || 'Could not verify your PIN. Try again.');
+      setAuthError(/invalid login credentials/i.test(String(err?.message || ''))
+        ? 'Invalid ICANera email or password.'
+        : err.message || 'Could not sign you in. Try again.');
     } finally {
       setAuthBusy(false);
     }
@@ -781,46 +787,52 @@ const PublicPitchViewer = ({ pitchId, nextPitch = null, hasPrev = false, onNext,
 
       {showInvestAuth && !user && (
         <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-[60] p-0 sm:p-4">
-          <form onSubmit={handlePinAuthorise} className="bg-slate-800 rounded-t-2xl sm:rounded-2xl w-full max-w-md p-5 space-y-4">
+          <form onSubmit={handleIcaneraAuthorise} className="bg-slate-800 rounded-t-2xl sm:rounded-2xl w-full max-w-md p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-lg font-bold text-white">Continue to authorise</h3>
-                <p className="text-sm text-slate-400 mt-0.5">Confirm it is you with your wallet PIN to invest in {bizName}.</p>
+                <p className="text-sm text-slate-400 mt-0.5">Sign in with ICANera to invest in {bizName}.</p>
               </div>
               <button type="button" onClick={() => { pendingInvest.current = false; setShowInvestAuth(false); }} className="icon-btn-transparent text-slate-400 hover:text-white p-1" aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <input
-              type="text"
-              inputMode="numeric"
-              value={authId}
-              onChange={(e) => { setAuthId(e.target.value); setAuthError(''); }}
-              placeholder="Account number or phone"
+              type="email"
+              value={authEmail}
+              onChange={(e) => { setAuthEmail(e.target.value); setAuthError(''); }}
+              placeholder="ICANera email"
+              autoComplete="email"
               className="w-full bg-slate-700 text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-400"
             />
             <input
               type="password"
-              inputMode="numeric"
-              value={authPin}
-              onChange={(e) => { setAuthPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setAuthError(''); }}
-              placeholder="PIN"
+              value={authPassword}
+              onChange={(e) => { setAuthPassword(e.target.value); setAuthError(''); }}
+              placeholder="ICANera password"
+              autoComplete="current-password"
               className="w-full bg-slate-700 text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-slate-400"
             />
-            {authError && <p className="text-sm text-red-400">{authError}</p>}
+            {authError && <p className="text-sm text-red-400" role="alert">{authError}</p>}
             <button type="submit" disabled={authBusy} className="icon-btn-transparent w-full bg-pink-500 hover:bg-pink-600 disabled:opacity-60 text-white rounded-lg font-semibold py-2.5 text-sm transition flex items-center justify-center gap-2">
               {authBusy && <Loader className="w-4 h-4 animate-spin" />} Continue
             </button>
             <div className="flex items-center gap-3 text-xs text-slate-500">
-              <span className="flex-1 h-px bg-slate-700" /> No account yet? <span className="flex-1 h-px bg-slate-700" />
+              <span className="flex-1 h-px bg-slate-700" /> Other ways in <span className="flex-1 h-px bg-slate-700" />
             </div>
             <button type="button" onClick={handleGoogleAuthorise} disabled={authBusy} className="icon-btn-transparent w-full bg-white hover:bg-slate-100 disabled:opacity-60 text-slate-900 rounded-lg font-semibold py-2.5 text-sm transition">
               Continue with Google
             </button>
             <button type="button" onClick={() => { setShowInvestAuth(false); requireAuth('signin'); }} className="icon-btn-transparent w-full text-xs text-slate-400 hover:text-white">
-              Use email and password instead
+              More sign-in options
             </button>
           </form>
+        </div>
+      )}
+
+      {showInvestAuth && user && mfaStatus === 'required' && (
+        <div className="fixed inset-0 z-[70] overflow-y-auto">
+          <MfaChallenge />
         </div>
       )}
 
