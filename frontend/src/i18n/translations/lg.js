@@ -110,7 +110,6 @@ export default {
   'auth.signInTitle': 'Yingira mu IcanEra',
   'auth.forgotPassword': 'Weerabidde ekigambo eky’ekyama?',
   'auth.noAccount': 'Tolina akawunti?',
-  'auth.signInWallet': 'Yingira n’Isawo ly’ensimbi',
   'auth.signInBiometric': 'Sign in with fingerprint or face',
   'auth.biometricChecking': 'Checking your fingerprint or face...',
   'auth.enteringApp': 'Tuyingira mu IcanEra...',

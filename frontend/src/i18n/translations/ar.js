@@ -110,7 +110,6 @@ export default {
   'auth.signInTitle': 'سجّل الدخول إلى IcanEra',
   'auth.forgotPassword': 'هل نسيت كلمة المرور؟',
   'auth.noAccount': 'ليس لديك حساب؟',
-  'auth.signInWallet': 'تسجيل الدخول بالمحفظة',
   'auth.signInBiometric': 'تسجيل الدخول ببصمة الإصبع أو الوجه',
   'auth.biometricChecking': 'جارٍ التحقق من بصمتك أو وجهك...',
   'auth.enteringApp': 'جارٍ الدخول إلى IcanEra...',

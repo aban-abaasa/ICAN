@@ -110,7 +110,6 @@ export default {
   'auth.signInTitle': 'Inicia sesión en IcanEra',
   'auth.forgotPassword': '¿Olvidaste tu contraseña?',
   'auth.noAccount': '¿No tienes una cuenta?',
-  'auth.signInWallet': 'Iniciar sesión con la billetera',
   'auth.signInBiometric': 'Iniciar sesión con huella o rostro',
   'auth.biometricChecking': 'Comprobando tu huella o rostro...',
   'auth.enteringApp': 'Entrando a IcanEra...',

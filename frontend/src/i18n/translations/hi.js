@@ -110,7 +110,6 @@ export default {
   'auth.signInTitle': 'IcanEra में साइन इन करें',
   'auth.forgotPassword': 'पासवर्ड भूल गए?',
   'auth.noAccount': 'खाता नहीं है?',
-  'auth.signInWallet': 'वॉलेट से साइन इन करें',
   'auth.signInBiometric': 'फ़िंगरप्रिंट या चेहरे से साइन इन करें',
   'auth.biometricChecking': 'आपका फ़िंगरप्रिंट या चेहरा जाँचा जा रहा है...',
   'auth.enteringApp': 'IcanEra में प्रवेश हो रहा है...',
