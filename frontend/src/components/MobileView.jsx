@@ -7581,6 +7581,7 @@ I can see you're in the **Survival Stage** - what a blessing! God is building so
         aria-label="Primary"
         className="ng-bar fixed bottom-0 left-0 right-0 z-50 flex"
       >
+        <span aria-hidden="true" className="ng-fade" />
         <NavGlowDefs />
         {[
           { id: 'home',   label: 'Home',   icon: Home,      go: 'dashboard' },

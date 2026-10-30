@@ -222,6 +222,7 @@ const PublicShopPage = () => {
         className="ng-bar fixed inset-x-0 bottom-0 z-40 flex sm:hidden"
         style={{ ...NAV_COLOURS[theme], '--ng-surface': C.page }}
       >
+        <span aria-hidden="true" className="ng-fade" />
         <NavGlowDefs />
         {[
           { id: 'shop-top', label: 'Shop', icon: ShoppingBag, onClick: () => window.scrollTo({ top: 0, behavior: 'smooth' }) },
